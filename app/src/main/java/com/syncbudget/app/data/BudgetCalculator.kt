@@ -95,59 +95,58 @@ object BudgetCalculator {
         budgetPeriod: BudgetPeriod
     ): Double {
         val today = LocalDate.now()
-        val oneYearAgo = today.minusYears(1)
         val oneYearAhead = today.plusYears(1)
 
-        // Generate period boundaries from -1yr to +1yr
-        val periods = generatePeriodBoundaries(oneYearAgo, oneYearAhead, budgetPeriod)
-        if (periods.size < 2) return 0.0
+        // Total income over 1 year
+        var totalIncome = 0.0
+        for (src in incomeSources) {
+            val occurrences = generateOccurrences(
+                src.repeatType, src.repeatInterval, src.startDate,
+                src.monthDay1, src.monthDay2, today, oneYearAhead
+            )
+            totalIncome += src.amount * occurrences.size
+        }
 
-        // For each period, compute net cash flow (income - expenses)
-        val netPerPeriod = DoubleArray(periods.size - 1)
+        // Number of budget periods in 1 year
+        val periodsPerYear = countPeriodsCompleted(today, oneYearAhead, budgetPeriod)
+        if (periodsPerYear <= 0) return 0.0
+
+        // Base S = smoothed annual income per period
+        val baseS = totalIncome / periodsPerYear.toDouble()
+
+        // Now apply timing safety: ensure S covers recurring expense bursts.
+        // Simulate: each period adds S, recurring expenses subtract.
+        // Find the S such that balance never goes negative over 1 year.
+        val periods = generatePeriodBoundaries(today, oneYearAhead, budgetPeriod)
+        if (periods.size < 2) return baseS
+
+        // Compute cumulative expense-only outflows per period
+        val cumulativeExpenses = DoubleArray(periods.size - 1)
+        var runningExpenses = 0.0
         for (i in 0 until periods.size - 1) {
             val pStart = periods[i]
             val pEnd = periods[i + 1].minusDays(1)
-
-            var net = 0.0
-            for (src in incomeSources) {
-                val occurrences = generateOccurrences(
-                    src.repeatType, src.repeatInterval, src.startDate,
-                    src.monthDay1, src.monthDay2, pStart, pEnd
-                )
-                net += src.amount * occurrences.size
-            }
             for (exp in recurringExpenses) {
                 val occurrences = generateOccurrences(
                     exp.repeatType, exp.repeatInterval, exp.startDate,
                     exp.monthDay1, exp.monthDay2, pStart, pEnd
                 )
-                net -= exp.amount * occurrences.size
+                runningExpenses += exp.amount * occurrences.size
             }
-            netPerPeriod[i] = net
+            cumulativeExpenses[i] = runningExpenses
         }
 
-        // Compute cumulative net from period 0
-        val cumulative = DoubleArray(netPerPeriod.size)
-        cumulative[0] = netPerPeriod[0]
-        for (i in 1 until cumulative.size) {
-            cumulative[i] = cumulative[i - 1] + netPerPeriod[i]
+        // S must satisfy: S * (t+1) >= cumulativeExpenses(t) for all t
+        // i.e. S >= cumulativeExpenses(t) / (t+1) for all t
+        var minS = 0.0
+        for (t in cumulativeExpenses.indices) {
+            val required = cumulativeExpenses[t] / (t + 1).toDouble()
+            if (required > minS) minS = required
         }
 
-        // Find the index of "today" period (first period that starts at or after today)
-        val todayIndex = periods.indexOfFirst { !it.isAfter(today) && (periods.indexOf(it) + 1 >= periods.size || periods[periods.indexOf(it) + 1].isAfter(today)) }
-            .let { if (it < 0) 0 else it }
-
-        // S = max over t in [todayIndex..end] of max(0, -cumulative(t) / (t + 1))
-        // We simulate starting from period 0 with 0 balance. S is added each period.
-        // Balance at period t = S * (t+1) + cumulative(t) >= 0
-        // S >= -cumulative(t) / (t+1)
-        var s = 0.0
-        for (t in cumulative.indices) {
-            val required = -cumulative[t] / (t + 1).toDouble()
-            if (required > s) s = required
-        }
-
-        return if (s < 0.0) 0.0 else s
+        // S is the larger of: smoothed income, or minimum to cover expense timing
+        // But cap at income (can't spend more than you earn)
+        return if (minS > baseS) minS else baseS
     }
 
     private fun generatePeriodBoundaries(

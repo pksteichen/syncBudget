@@ -113,6 +113,8 @@ fun BudgetConfigScreen(
     onManualBudgetToggle: (Boolean) -> Unit = {},
     onManualBudgetAmountChange: (Double) -> Unit = {},
     onRecalculate: () -> Unit = {},
+    onResetBudget: () -> Unit = {},
+    budgetStartDate: String? = null,
     onBack: () -> Unit,
     onHelpClick: () -> Unit = {}
 ) {
@@ -122,6 +124,7 @@ fun BudgetConfigScreen(
     var deletingSource by remember { mutableStateOf<IncomeSource?>(null) }
     var repeatSettingsSource by remember { mutableStateOf<IncomeSource?>(null) }
     var showResetDialog by remember { mutableStateOf(false) }
+    var showResetBudgetConfirm by remember { mutableStateOf(false) }
     var periodExpanded by remember { mutableStateOf(false) }
 
     val textFieldColors = OutlinedTextFieldDefaults.colors(
@@ -231,12 +234,30 @@ fun BudgetConfigScreen(
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onBackground
                 )
+                if (budgetStartDate != null) {
+                    Text(
+                        text = "Budget tracking since: $budgetStartDate",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                    )
+                }
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedButton(
-                    onClick = onRecalculate,
-                    modifier = Modifier.fillMaxWidth()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Recalculate")
+                    OutlinedButton(
+                        onClick = onRecalculate,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Recalculate")
+                    }
+                    OutlinedButton(
+                        onClick = { showResetBudgetConfirm = true },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Reset Budget")
+                    }
                 }
                 Spacer(modifier = Modifier.height(12.dp))
 
@@ -410,6 +431,27 @@ fun BudgetConfigScreen(
                 onResetDayOfWeekChange(dayOfWeek)
                 onResetDayOfMonthChange(dayOfMonth)
                 showResetDialog = false
+            }
+        )
+    }
+
+    if (showResetBudgetConfirm) {
+        AlertDialog(
+            onDismissRequest = { showResetBudgetConfirm = false },
+            title = { Text("Reset Budget?") },
+            text = {
+                Text("This will recalculate your safe budget amount, reset the budget start date to today, and set available cash to one period's budget amount. Your transactions will not be affected.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onResetBudget()
+                    showResetBudgetConfirm = false
+                }) {
+                    Text("Reset", color = Color(0xFFF44336))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetBudgetConfirm = false }) { Text("Cancel") }
             }
         )
     }

@@ -46,6 +46,7 @@ fun MainScreen(
     availableCash: Double = 0.0,
     budgetAmount: Double = 0.0,
     budgetStartDate: String? = null,
+    budgetPeriodLabel: String = "period",
     onSettingsClick: () -> Unit,
     onNavigate: (String) -> Unit
 ) {
@@ -65,11 +66,11 @@ fun MainScreen(
     val bottomLabel = if (budgetStartDate == null) {
         "Not configured"
     } else {
-        val periodLabel = when {
+        val periodText = when {
             budgetAmount == 0.0 && !isNegative -> "Recalculate budget"
-            else -> "$currencySymbol${"%.2f".format(budgetAmount)}/period"
+            else -> "$currencySymbol${"%.2f".format(budgetAmount)}/$budgetPeriodLabel"
         }
-        periodLabel
+        periodText
     }
 
     Scaffold(

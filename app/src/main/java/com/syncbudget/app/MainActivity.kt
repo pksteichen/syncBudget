@@ -252,6 +252,11 @@ class MainActivity : ComponentActivity() {
                         availableCash = availableCash,
                         budgetAmount = budgetAmount,
                         budgetStartDate = budgetStartDate?.toString(),
+                        budgetPeriodLabel = when (budgetPeriod) {
+                            BudgetPeriod.DAILY -> "day"
+                            BudgetPeriod.WEEKLY -> "week"
+                            BudgetPeriod.MONTHLY -> "month"
+                        },
                         onSettingsClick = { currentScreen = "settings" },
                         onNavigate = { currentScreen = it }
                     )
@@ -474,23 +479,47 @@ class MainActivity : ComponentActivity() {
                             manualBudgetAmount = amount
                             prefs.edit().putFloat("manualBudgetAmount", amount.toFloat()).apply()
                         },
+                        budgetStartDate = budgetStartDate?.toString(),
+                        onResetBudget = {
+                            safeBudgetAmount = BudgetCalculator.calculateSafeBudgetAmount(
+                                incomeSources, recurringExpenses, budgetPeriod
+                            )
+                            budgetStartDate = BudgetCalculator.currentPeriodStart(budgetPeriod, resetDayOfWeek, resetDayOfMonth)
+                            lastRefreshDate = LocalDate.now()
+                            val newBudgetAmount = if (isManualBudgetEnabled) {
+                                manualBudgetAmount
+                            } else {
+                                val amortDed = BudgetCalculator.activeAmortizationDeductions(amortizationEntries, budgetPeriod)
+                                val fleDed = BudgetCalculator.activeFLEDeductions(futureExpenditures, budgetPeriod)
+                                maxOf(0.0, safeBudgetAmount - amortDed - fleDed)
+                            }
+                            availableCash = newBudgetAmount
+                            prefs.edit()
+                                .putFloat("safeBudgetAmount", safeBudgetAmount.toFloat())
+                                .putString("budgetStartDate", budgetStartDate.toString())
+                                .putString("lastRefreshDate", lastRefreshDate.toString())
+                                .putFloat("availableCash", availableCash.toFloat())
+                                .apply()
+                        },
                         onRecalculate = {
                             safeBudgetAmount = BudgetCalculator.calculateSafeBudgetAmount(
                                 incomeSources, recurringExpenses, budgetPeriod
                             )
                             prefs.edit().putFloat("safeBudgetAmount", safeBudgetAmount.toFloat()).apply()
-                            if (budgetStartDate == null) {
-                                // First-time setup
+
+                            // Recompute budgetAmount with new safeBudgetAmount
+                            val newBudgetAmount = if (isManualBudgetEnabled) {
+                                manualBudgetAmount
+                            } else {
+                                val amortDed = BudgetCalculator.activeAmortizationDeductions(amortizationEntries, budgetPeriod)
+                                val fleDed = BudgetCalculator.activeFLEDeductions(futureExpenditures, budgetPeriod)
+                                maxOf(0.0, safeBudgetAmount - amortDed - fleDed)
+                            }
+
+                            if (budgetStartDate == null || availableCash == 0.0) {
+                                // First-time setup or reinitialize from buggy state
                                 budgetStartDate = BudgetCalculator.currentPeriodStart(budgetPeriod, resetDayOfWeek, resetDayOfMonth)
                                 lastRefreshDate = LocalDate.now()
-                                // Recompute budgetAmount with new safeBudgetAmount
-                                val newBudgetAmount = if (isManualBudgetEnabled) {
-                                    manualBudgetAmount
-                                } else {
-                                    val amortDed = BudgetCalculator.activeAmortizationDeductions(amortizationEntries, budgetPeriod)
-                                    val fleDed = BudgetCalculator.activeFLEDeductions(futureExpenditures, budgetPeriod)
-                                    maxOf(0.0, safeBudgetAmount - amortDed - fleDed)
-                                }
                                 availableCash = newBudgetAmount
                                 prefs.edit()
                                     .putString("budgetStartDate", budgetStartDate.toString())
