@@ -159,7 +159,7 @@ private fun isValidPercentInput(text: String): Boolean {
     return value in 0..100
 }
 
-private fun formatAmount(value: Double, decimals: Int): String {
+fun formatAmount(value: Double, decimals: Int): String {
     return "%.${decimals}f".format(value)
 }
 
@@ -182,9 +182,6 @@ fun TransactionsScreen(
     onUpdateTransaction: (Transaction) -> Unit,
     onDeleteTransaction: (Transaction) -> Unit,
     onDeleteTransactions: (Set<Int>) -> Unit,
-    autoShowAddIncome: Boolean = false,
-    autoShowAddExpense: Boolean = false,
-    onAutoShowConsumed: () -> Unit = {},
     onBack: () -> Unit,
     onHelpClick: () -> Unit = {}
 ) {
@@ -474,18 +471,6 @@ fun TransactionsScreen(
             }
         } else {
             currentImportDup = dup
-        }
-    }
-
-    // Auto-open dialogs from dashboard quick-add buttons
-    LaunchedEffect(autoShowAddIncome, autoShowAddExpense) {
-        if (autoShowAddIncome) {
-            showAddIncome = true
-            onAutoShowConsumed()
-        }
-        if (autoShowAddExpense) {
-            showAddExpense = true
-            onAutoShowConsumed()
         }
     }
 
@@ -1691,7 +1676,7 @@ fun TransactionsScreen(
 }
 
 @Composable
-private fun BudgetIncomeConfirmDialog(
+fun BudgetIncomeConfirmDialog(
     transaction: Transaction,
     incomeSource: IncomeSource,
     currencySymbol: String,
@@ -1732,7 +1717,7 @@ private fun BudgetIncomeConfirmDialog(
 }
 
 @Composable
-private fun AmortizationConfirmDialog(
+fun AmortizationConfirmDialog(
     transaction: Transaction,
     amortizationEntry: AmortizationEntry,
     currencySymbol: String,
@@ -1772,7 +1757,7 @@ private fun AmortizationConfirmDialog(
 }
 
 @Composable
-private fun RecurringExpenseConfirmDialog(
+fun RecurringExpenseConfirmDialog(
     transaction: Transaction,
     recurringExpense: RecurringExpense,
     currencySymbol: String,
@@ -1821,7 +1806,7 @@ private fun RecurringExpenseConfirmDialog(
 }
 
 @Composable
-private fun DuplicateResolutionDialog(
+fun DuplicateResolutionDialog(
     existingTransaction: Transaction,
     newTransaction: Transaction,
     currencySymbol: String,
@@ -2036,7 +2021,7 @@ private fun TransactionRow(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TransactionDialog(
+fun TransactionDialog(
     title: String,
     sourceLabel: String,
     categories: List<Category>,

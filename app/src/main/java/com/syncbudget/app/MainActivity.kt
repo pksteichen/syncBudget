@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.syncbudget.app.data.AmortizationEntry
 import com.syncbudget.app.data.BudgetCalculator
 import com.syncbudget.app.data.BudgetPeriod
 import com.syncbudget.app.data.Category
@@ -22,29 +23,44 @@ import com.syncbudget.app.data.CategoryAmount
 import com.syncbudget.app.data.CategoryRepository
 import com.syncbudget.app.data.AmortizationRepository
 import com.syncbudget.app.data.FutureExpenditureRepository
+import com.syncbudget.app.data.IncomeSource
 import com.syncbudget.app.data.IncomeSourceRepository
+import com.syncbudget.app.data.RecurringExpense
 import com.syncbudget.app.data.RecurringExpenseRepository
+import com.syncbudget.app.data.SavingsGoalRepository
+import com.syncbudget.app.data.Transaction
 import com.syncbudget.app.data.TransactionRepository
 import com.syncbudget.app.data.TransactionType
+import com.syncbudget.app.data.findAmortizationMatch
+import com.syncbudget.app.data.findBudgetIncomeMatch
+import com.syncbudget.app.data.findDuplicate
+import com.syncbudget.app.data.findRecurringExpenseMatch
+import com.syncbudget.app.data.isRecurringDateCloseEnough
 import com.syncbudget.app.sound.FlipSoundPlayer
+import com.syncbudget.app.ui.screens.AmortizationConfirmDialog
 import com.syncbudget.app.ui.screens.AmortizationHelpScreen
 import com.syncbudget.app.ui.screens.AmortizationScreen
 import com.syncbudget.app.ui.screens.BudgetConfigHelpScreen
 import com.syncbudget.app.ui.screens.BudgetConfigScreen
+import com.syncbudget.app.ui.screens.BudgetIncomeConfirmDialog
 import com.syncbudget.app.ui.screens.DashboardHelpScreen
+import com.syncbudget.app.ui.screens.DuplicateResolutionDialog
 import com.syncbudget.app.ui.screens.FutureExpendituresHelpScreen
 import com.syncbudget.app.ui.screens.FutureExpendituresScreen
 import com.syncbudget.app.ui.screens.MainScreen
+import com.syncbudget.app.ui.screens.RecurringExpenseConfirmDialog
 import com.syncbudget.app.ui.screens.RecurringExpensesHelpScreen
 import com.syncbudget.app.ui.screens.RecurringExpensesScreen
 import com.syncbudget.app.ui.screens.SavingsHelpScreen
 import com.syncbudget.app.ui.screens.SavingsScreen
 import com.syncbudget.app.ui.screens.SettingsHelpScreen
 import com.syncbudget.app.ui.screens.SettingsScreen
+import com.syncbudget.app.ui.screens.TransactionDialog
 import com.syncbudget.app.ui.screens.TransactionsHelpScreen
 import com.syncbudget.app.ui.screens.TransactionsScreen
 import com.syncbudget.app.ui.theme.SyncBudgetTheme
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
 class MainActivity : ComponentActivity() {
@@ -59,8 +75,27 @@ class MainActivity : ComponentActivity() {
             }
 
             var currentScreen by remember { mutableStateOf("main") }
-            var autoShowAddIncome by remember { mutableStateOf(false) }
-            var autoShowAddExpense by remember { mutableStateOf(false) }
+
+            // Dashboard quick-add dialog state
+            var dashboardShowAddIncome by remember { mutableStateOf(false) }
+            var dashboardShowAddExpense by remember { mutableStateOf(false) }
+
+            // Dashboard matching state
+            var dashPendingManualSave by remember { mutableStateOf<Transaction?>(null) }
+            var dashManualDuplicateMatch by remember { mutableStateOf<Transaction?>(null) }
+            var dashShowManualDuplicateDialog by remember { mutableStateOf(false) }
+
+            var dashPendingRecurringTxn by remember { mutableStateOf<Transaction?>(null) }
+            var dashPendingRecurringMatch by remember { mutableStateOf<RecurringExpense?>(null) }
+            var dashShowRecurringDialog by remember { mutableStateOf(false) }
+
+            var dashPendingAmortizationTxn by remember { mutableStateOf<Transaction?>(null) }
+            var dashPendingAmortizationMatch by remember { mutableStateOf<AmortizationEntry?>(null) }
+            var dashShowAmortizationDialog by remember { mutableStateOf(false) }
+
+            var dashPendingBudgetIncomeTxn by remember { mutableStateOf<Transaction?>(null) }
+            var dashPendingBudgetIncomeMatch by remember { mutableStateOf<IncomeSource?>(null) }
+            var dashShowBudgetIncomeDialog by remember { mutableStateOf(false) }
 
             val context = this@MainActivity
             val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
@@ -154,6 +189,10 @@ class MainActivity : ComponentActivity() {
                 mutableStateListOf(*FutureExpenditureRepository.load(context).toTypedArray())
             }
 
+            val savingsGoals = remember {
+                mutableStateListOf(*SavingsGoalRepository.load(context).toTypedArray())
+            }
+
             fun saveIncomeSources() {
                 IncomeSourceRepository.save(context, incomeSources.toList())
             }
@@ -178,6 +217,10 @@ class MainActivity : ComponentActivity() {
                 CategoryRepository.save(context, categories.toList())
             }
 
+            fun saveSavingsGoals() {
+                SavingsGoalRepository.save(context, savingsGoals.toList())
+            }
+
             fun persistAvailableCash() {
                 prefs.edit().putFloat("availableCash", availableCash.toFloat()).apply()
             }
@@ -188,8 +231,65 @@ class MainActivity : ComponentActivity() {
             } else {
                 val amortDeductions = BudgetCalculator.activeAmortizationDeductions(amortizationEntries, budgetPeriod)
                 val fleDeductions = BudgetCalculator.activeFLEDeductions(futureExpenditures, budgetPeriod)
-                maxOf(0.0, safeBudgetAmount - amortDeductions - fleDeductions)
+                val savingsDeductions = BudgetCalculator.activeSavingsDeductions(savingsGoals)
+                maxOf(0.0, safeBudgetAmount - amortDeductions - fleDeductions - savingsDeductions)
             }
+
+            // Percent tolerance for matching
+            val percentTolerance = matchPercent / 100f
+
+            // Helper to add a transaction with budget effects
+            fun addTransactionWithBudgetEffect(txn: Transaction) {
+                transactions.add(txn)
+                saveTransactions()
+                if (budgetStartDate != null && !txn.date.isBefore(budgetStartDate)) {
+                    if (txn.type == TransactionType.EXPENSE) {
+                        availableCash -= txn.amount
+                    } else if (txn.type == TransactionType.INCOME && !txn.isBudgetIncome) {
+                        availableCash += txn.amount
+                    }
+                    persistAvailableCash()
+                }
+            }
+
+            // Matching chain for dashboard-added transactions
+            fun runMatchingChain(txn: Transaction) {
+                val dup = findDuplicate(txn, transactions, percentTolerance, matchDollar, matchDays, matchChars)
+                if (dup != null) {
+                    dashPendingManualSave = txn
+                    dashManualDuplicateMatch = dup
+                    dashShowManualDuplicateDialog = true
+                } else {
+                    val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars)
+                    if (recurringMatch != null) {
+                        dashPendingRecurringTxn = txn
+                        dashPendingRecurringMatch = recurringMatch
+                        dashShowRecurringDialog = true
+                    } else {
+                        val amortizationMatch = findAmortizationMatch(txn, amortizationEntries, percentTolerance, matchDollar, matchChars)
+                        if (amortizationMatch != null) {
+                            dashPendingAmortizationTxn = txn
+                            dashPendingAmortizationMatch = amortizationMatch
+                            dashShowAmortizationDialog = true
+                        } else {
+                            val budgetMatch = findBudgetIncomeMatch(txn, incomeSources, matchChars)
+                            if (budgetMatch != null) {
+                                dashPendingBudgetIncomeTxn = txn
+                                dashPendingBudgetIncomeMatch = budgetMatch
+                                dashShowBudgetIncomeDialog = true
+                            } else {
+                                addTransactionWithBudgetEffect(txn)
+                            }
+                        }
+                    }
+                }
+            }
+
+            val dateFormatter = remember(dateFormatPattern) {
+                DateTimeFormatter.ofPattern(dateFormatPattern)
+            }
+            val existingIds = transactions.map { it.id }.toSet()
+            val categoryMap = categories.associateBy { it.id }
 
             // Period refresh on app open
             remember {
@@ -203,7 +303,8 @@ class MainActivity : ComponentActivity() {
                         } else {
                             val amortDed = BudgetCalculator.activeAmortizationDeductions(amortizationEntries, budgetPeriod)
                             val fleDed = BudgetCalculator.activeFLEDeductions(futureExpenditures, budgetPeriod)
-                            maxOf(0.0, safeBudgetAmount - amortDed - fleDed)
+                            val savDed = BudgetCalculator.activeSavingsDeductions(savingsGoals)
+                            maxOf(0.0, safeBudgetAmount - amortDed - fleDed - savDed)
                         }
                         availableCash += currentBudgetAmount * missedPeriods
                         lastRefreshDate = today
@@ -231,6 +332,24 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             saveFutureExpenditures()
+
+                            // Update savings goals savedSoFar for non-paused, incomplete goals
+                            for (period in 0 until missedPeriods) {
+                                savingsGoals.forEachIndexed { idx, goal ->
+                                    if (!goal.isPaused && goal.savedSoFar < goal.targetAmount) {
+                                        val contribution = minOf(
+                                            goal.contributionPerPeriod,
+                                            goal.targetAmount - goal.savedSoFar
+                                        )
+                                        if (contribution > 0) {
+                                            savingsGoals[idx] = goal.copy(
+                                                savedSoFar = goal.savedSoFar + contribution
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            saveSavingsGoals()
                         }
 
                         prefs.edit()
@@ -276,12 +395,10 @@ class MainActivity : ComponentActivity() {
                         onSettingsClick = { currentScreen = "settings" },
                         onNavigate = { currentScreen = it },
                         onAddIncome = {
-                            autoShowAddIncome = true
-                            currentScreen = "transactions"
+                            dashboardShowAddIncome = true
                         },
                         onAddExpense = {
-                            autoShowAddExpense = true
-                            currentScreen = "transactions"
+                            dashboardShowAddExpense = true
                         }
                     )
                     "settings" -> SettingsScreen(
@@ -375,23 +492,8 @@ class MainActivity : ComponentActivity() {
                         matchPercent = matchPercent,
                         matchDollar = matchDollar,
                         matchChars = matchChars,
-                        autoShowAddIncome = autoShowAddIncome,
-                        autoShowAddExpense = autoShowAddExpense,
-                        onAutoShowConsumed = {
-                            autoShowAddIncome = false
-                            autoShowAddExpense = false
-                        },
                         onAddTransaction = { txn ->
-                            transactions.add(txn)
-                            saveTransactions()
-                            if (budgetStartDate != null && !txn.date.isBefore(budgetStartDate)) {
-                                if (txn.type == TransactionType.EXPENSE) {
-                                    availableCash -= txn.amount
-                                } else if (txn.type == TransactionType.INCOME && !txn.isBudgetIncome) {
-                                    availableCash += txn.amount
-                                }
-                                persistAvailableCash()
-                            }
+                            addTransactionWithBudgetEffect(txn)
                         },
                         onUpdateTransaction = { updated ->
                             val old = transactions.find { it.id == updated.id }
@@ -487,6 +589,16 @@ class MainActivity : ComponentActivity() {
                         onHelpClick = { currentScreen = "recurring_expenses_help" }
                     )
                     "savings" -> SavingsScreen(
+                        savingsGoals = savingsGoals,
+                        currencySymbol = currencySymbol,
+                        budgetPeriod = budgetPeriod,
+                        isManualBudgetEnabled = isManualBudgetEnabled,
+                        onAddGoal = { savingsGoals.add(it); saveSavingsGoals() },
+                        onUpdateGoal = { updated ->
+                            val idx = savingsGoals.indexOfFirst { it.id == updated.id }
+                            if (idx >= 0) { savingsGoals[idx] = updated; saveSavingsGoals() }
+                        },
+                        onDeleteGoal = { savingsGoals.removeAll { s -> s.id == it.id }; saveSavingsGoals() },
                         onBack = { currentScreen = "main" },
                         onHelpClick = { currentScreen = "savings_help" }
                     )
@@ -533,7 +645,8 @@ class MainActivity : ComponentActivity() {
                             } else {
                                 val amortDed = BudgetCalculator.activeAmortizationDeductions(amortizationEntries, budgetPeriod)
                                 val fleDed = BudgetCalculator.activeFLEDeductions(futureExpenditures, budgetPeriod)
-                                maxOf(0.0, safeBudgetAmount - amortDed - fleDed)
+                                val savDed = BudgetCalculator.activeSavingsDeductions(savingsGoals)
+                                maxOf(0.0, safeBudgetAmount - amortDed - fleDed - savDed)
                             }
                             availableCash = newBudgetAmount
                             prefs.edit()
@@ -555,7 +668,8 @@ class MainActivity : ComponentActivity() {
                             } else {
                                 val amortDed = BudgetCalculator.activeAmortizationDeductions(amortizationEntries, budgetPeriod)
                                 val fleDed = BudgetCalculator.activeFLEDeductions(futureExpenditures, budgetPeriod)
-                                maxOf(0.0, safeBudgetAmount - amortDed - fleDed)
+                                val savDed = BudgetCalculator.activeSavingsDeductions(savingsGoals)
+                                maxOf(0.0, safeBudgetAmount - amortDed - fleDed - savDed)
                             }
 
                             if (budgetStartDate == null || availableCash == 0.0) {
@@ -596,6 +710,171 @@ class MainActivity : ComponentActivity() {
                     )
                     "budget_config_help" -> BudgetConfigHelpScreen(
                         onBack = { currentScreen = "budget_config" }
+                    )
+                }
+
+                // Dashboard quick-add dialogs (rendered over any screen)
+                if (dashboardShowAddIncome) {
+                    TransactionDialog(
+                        title = "Add New Income Transaction",
+                        sourceLabel = "Source",
+                        categories = categories,
+                        existingIds = existingIds,
+                        currencySymbol = currencySymbol,
+                        dateFormatter = dateFormatter,
+                        onDismiss = { dashboardShowAddIncome = false },
+                        onSave = { txn ->
+                            runMatchingChain(txn)
+                            dashboardShowAddIncome = false
+                        }
+                    )
+                }
+
+                if (dashboardShowAddExpense) {
+                    TransactionDialog(
+                        title = "Add New Expense Transaction",
+                        sourceLabel = "Merchant",
+                        categories = categories,
+                        existingIds = existingIds,
+                        currencySymbol = currencySymbol,
+                        dateFormatter = dateFormatter,
+                        isExpense = true,
+                        onDismiss = { dashboardShowAddExpense = false },
+                        onSave = { txn ->
+                            runMatchingChain(txn)
+                            dashboardShowAddExpense = false
+                        }
+                    )
+                }
+
+                // Dashboard duplicate resolution dialog
+                if (dashShowManualDuplicateDialog && dashPendingManualSave != null && dashManualDuplicateMatch != null) {
+                    DuplicateResolutionDialog(
+                        existingTransaction = dashManualDuplicateMatch!!,
+                        newTransaction = dashPendingManualSave!!,
+                        currencySymbol = currencySymbol,
+                        dateFormatter = dateFormatter,
+                        categoryMap = categoryMap,
+                        showIgnoreAll = false,
+                        onIgnore = {
+                            addTransactionWithBudgetEffect(dashPendingManualSave!!)
+                            dashPendingManualSave = null
+                            dashManualDuplicateMatch = null
+                            dashShowManualDuplicateDialog = false
+                        },
+                        onKeepNew = {
+                            val dup = dashManualDuplicateMatch!!
+                            transactions.removeAll { it.id == dup.id }
+                            saveTransactions()
+                            if (budgetStartDate != null && !dup.date.isBefore(budgetStartDate)) {
+                                if (dup.type == TransactionType.EXPENSE) availableCash += dup.amount
+                                else if (dup.type == TransactionType.INCOME && !dup.isBudgetIncome) availableCash -= dup.amount
+                                persistAvailableCash()
+                            }
+                            addTransactionWithBudgetEffect(dashPendingManualSave!!)
+                            dashPendingManualSave = null
+                            dashManualDuplicateMatch = null
+                            dashShowManualDuplicateDialog = false
+                        },
+                        onKeepExisting = {
+                            dashPendingManualSave = null
+                            dashManualDuplicateMatch = null
+                            dashShowManualDuplicateDialog = false
+                        },
+                        onIgnoreAll = {}
+                    )
+                }
+
+                // Dashboard recurring expense match dialog
+                if (dashShowRecurringDialog && dashPendingRecurringTxn != null && dashPendingRecurringMatch != null) {
+                    val recurringCategoryId = categories.find { it.name == "Recurring" }?.id
+                    val dateCloseEnough = isRecurringDateCloseEnough(dashPendingRecurringTxn!!.date, dashPendingRecurringMatch!!)
+                    RecurringExpenseConfirmDialog(
+                        transaction = dashPendingRecurringTxn!!,
+                        recurringExpense = dashPendingRecurringMatch!!,
+                        currencySymbol = currencySymbol,
+                        dateFormatter = dateFormatter,
+                        showDateAdvisory = !dateCloseEnough,
+                        onConfirmRecurring = {
+                            val txn = dashPendingRecurringTxn!!
+                            val updatedTxn = if (recurringCategoryId != null) {
+                                txn.copy(
+                                    categoryAmounts = listOf(CategoryAmount(recurringCategoryId, txn.amount)),
+                                    isUserCategorized = true
+                                )
+                            } else txn
+                            addTransactionWithBudgetEffect(updatedTxn)
+                            dashPendingRecurringTxn = null
+                            dashPendingRecurringMatch = null
+                            dashShowRecurringDialog = false
+                        },
+                        onNotRecurring = {
+                            addTransactionWithBudgetEffect(dashPendingRecurringTxn!!)
+                            dashPendingRecurringTxn = null
+                            dashPendingRecurringMatch = null
+                            dashShowRecurringDialog = false
+                        }
+                    )
+                }
+
+                // Dashboard amortization match dialog
+                if (dashShowAmortizationDialog && dashPendingAmortizationTxn != null && dashPendingAmortizationMatch != null) {
+                    val amortizationCategoryId = categories.find { it.name == "Amortization" }?.id
+                    AmortizationConfirmDialog(
+                        transaction = dashPendingAmortizationTxn!!,
+                        amortizationEntry = dashPendingAmortizationMatch!!,
+                        currencySymbol = currencySymbol,
+                        dateFormatter = dateFormatter,
+                        onConfirmAmortization = {
+                            val txn = dashPendingAmortizationTxn!!
+                            val updatedTxn = if (amortizationCategoryId != null) {
+                                txn.copy(
+                                    categoryAmounts = listOf(CategoryAmount(amortizationCategoryId, txn.amount)),
+                                    isUserCategorized = true
+                                )
+                            } else txn
+                            addTransactionWithBudgetEffect(updatedTxn)
+                            dashPendingAmortizationTxn = null
+                            dashPendingAmortizationMatch = null
+                            dashShowAmortizationDialog = false
+                        },
+                        onNotAmortized = {
+                            addTransactionWithBudgetEffect(dashPendingAmortizationTxn!!)
+                            dashPendingAmortizationTxn = null
+                            dashPendingAmortizationMatch = null
+                            dashShowAmortizationDialog = false
+                        }
+                    )
+                }
+
+                // Dashboard budget income match dialog
+                if (dashShowBudgetIncomeDialog && dashPendingBudgetIncomeTxn != null && dashPendingBudgetIncomeMatch != null) {
+                    BudgetIncomeConfirmDialog(
+                        transaction = dashPendingBudgetIncomeTxn!!,
+                        incomeSource = dashPendingBudgetIncomeMatch!!,
+                        currencySymbol = currencySymbol,
+                        dateFormatter = dateFormatter,
+                        onConfirmBudgetIncome = {
+                            val recurringIncomeCatId = categories.find { it.name == "Recurring Income" }?.id
+                            val baseTxn = dashPendingBudgetIncomeTxn!!
+                            val txn = baseTxn.copy(
+                                isBudgetIncome = true,
+                                categoryAmounts = if (recurringIncomeCatId != null)
+                                    listOf(CategoryAmount(recurringIncomeCatId, baseTxn.amount))
+                                else baseTxn.categoryAmounts,
+                                isUserCategorized = true
+                            )
+                            addTransactionWithBudgetEffect(txn)
+                            dashPendingBudgetIncomeTxn = null
+                            dashPendingBudgetIncomeMatch = null
+                            dashShowBudgetIncomeDialog = false
+                        },
+                        onNotBudgetIncome = {
+                            addTransactionWithBudgetEffect(dashPendingBudgetIncomeTxn!!)
+                            dashPendingBudgetIncomeTxn = null
+                            dashPendingBudgetIncomeMatch = null
+                            dashShowBudgetIncomeDialog = false
+                        }
                     )
                 }
             }

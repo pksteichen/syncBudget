@@ -218,6 +218,16 @@ object BudgetCalculator {
         return total
     }
 
+    fun activeSavingsDeductions(goals: List<SavingsGoal>): Double {
+        var total = 0.0
+        for (goal in goals) {
+            if (goal.isPaused) continue
+            if (goal.savedSoFar >= goal.targetAmount) continue
+            total += goal.contributionPerPeriod
+        }
+        return total
+    }
+
     fun activeFLEDeductions(
         expenditures: List<FutureExpenditure>,
         budgetPeriod: BudgetPeriod

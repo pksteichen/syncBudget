@@ -1,17 +1,12 @@
 package com.syncbudget.app.ui.screens
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -25,10 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -70,83 +62,73 @@ fun SavingsHelpScreen(onBack: () -> Unit) {
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
-            val textColor = MaterialTheme.colorScheme.onBackground
-            val accentColor = MaterialTheme.colorScheme.primary
-
-            HelpSectionTitle("Savings")
+            HelpSectionTitle("Savings Goals")
             HelpBodyText(
-                "The Savings feature is coming soon. It will allow you to set savings goals, " +
-                "track progress toward them, and integrate with the budget system to " +
-                "automatically set aside money each period."
+                "The Savings page lets you create savings goals with target amounts and " +
+                "per-period contributions. Each budget period, the contribution amount for each " +
+                "active goal is deducted from your budget, effectively setting aside money toward " +
+                "your goals."
             )
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
-            HelpSectionTitle("What to Expect")
+            HelpSectionTitle("Creating a Goal")
             HelpBodyText(
-                "The planned Savings feature will include:"
+                "Tap \"Add Savings Goal\" to create a new goal. You'll need to provide:"
             )
             Spacer(modifier = Modifier.height(8.dp))
-            HelpBulletText("Named savings goals with target amounts (e.g., \"Emergency Fund \u2014 \$5,000\")")
-            HelpBulletText("Progress tracking with visual indicators")
-            HelpBulletText("Automatic per-period contributions deducted from your budget")
-            HelpBulletText("Flexible contribution amounts \u2014 save more in good months, less in tight ones")
-            HelpBulletText("Goal completion celebrations")
+            HelpBulletText("A name for the goal (e.g., \"Emergency Fund\", \"Vacation\")")
+            HelpBulletText("A target amount \u2014 how much you want to save in total")
+            HelpBulletText("A contribution per period \u2014 how much to set aside each budget period")
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
-            HelpSectionTitle("In the Meantime")
+            HelpSectionTitle("Progress Tracking")
             HelpBodyText(
-                "While the Savings feature is being developed, you can use these strategies " +
-                "to track savings:"
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-
-            HelpSubSectionTitle("Using Future Expenditures")
-            HelpBodyText(
-                "Future Expenditures can serve as a savings tool for goal-based saving. " +
-                "Create an entry with the amount you want to save and a target date. The app " +
-                "will automatically deduct a small amount from your budget each period, " +
-                "effectively saving for you."
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-
-            HelpSubSectionTitle("Watching Available Cash")
-            HelpBodyText(
-                "If you consistently spend less than your budget amount, your available cash " +
-                "grows naturally. This accumulated surplus is a form of savings. The Solari " +
-                "display makes this visible \u2014 if your number keeps growing, you're saving."
+                "Each goal shows a progress bar indicating how much you've saved relative to " +
+                "the target amount. The \"Saved\" line shows the exact amounts. When a goal " +
+                "reaches its target, it displays \"Goal reached!\" and stops deducting from " +
+                "your budget."
             )
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Coming soon box
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(accentColor.copy(alpha = 0.07f))
-                    .border(1.dp, accentColor.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
-                    .padding(14.dp)
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        "Coming Soon",
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = textColor
-                    )
-                    Text(
-                        "The Savings feature is actively being developed and will be available " +
-                        "in a future update. Stay tuned!",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = textColor,
-                        lineHeight = 18.sp
-                    )
-                }
-            }
+            HelpDividerLine()
 
+            HelpSectionTitle("Budget Deductions")
+            HelpBodyText(
+                "For each active (non-paused) goal that hasn't reached its target, the " +
+                "contribution per period is subtracted from your budget amount each period. " +
+                "This works the same way as Future Large Expenditure deductions \u2014 your " +
+                "available spending money is reduced, and the difference is tracked as savings."
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            HelpBodyText(
+                "When a new budget period starts, the contribution is automatically added to " +
+                "the goal's saved amount (capped at the target). If manual budget override is " +
+                "active, deductions are disabled but goals still track progress."
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDividerLine()
+
+            HelpSectionTitle("Pause & Resume")
+            HelpBodyText(
+                "Tap the pause/play button next to a goal to pause or resume its contributions. " +
+                "Paused goals do not deduct from your budget and do not accumulate savings. " +
+                "Use the pause-all button in the top bar to pause or resume all goals at once."
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDividerLine()
+
+            HelpSectionTitle("Editing & Deleting")
+            HelpBodyText(
+                "Tap a goal to edit its name, target amount, or contribution. Tap the trash " +
+                "icon to delete a goal. Deleting a goal removes it permanently \u2014 the saved " +
+                "amount is not returned to your available cash."
+            )
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
