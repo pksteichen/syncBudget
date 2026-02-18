@@ -59,6 +59,8 @@ class MainActivity : ComponentActivity() {
             }
 
             var currentScreen by remember { mutableStateOf("main") }
+            var autoShowAddIncome by remember { mutableStateOf(false) }
+            var autoShowAddExpense by remember { mutableStateOf(false) }
 
             val context = this@MainActivity
             val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
@@ -272,7 +274,15 @@ class MainActivity : ComponentActivity() {
                             BudgetPeriod.MONTHLY -> "month"
                         },
                         onSettingsClick = { currentScreen = "settings" },
-                        onNavigate = { currentScreen = it }
+                        onNavigate = { currentScreen = it },
+                        onAddIncome = {
+                            autoShowAddIncome = true
+                            currentScreen = "transactions"
+                        },
+                        onAddExpense = {
+                            autoShowAddExpense = true
+                            currentScreen = "transactions"
+                        }
                     )
                     "settings" -> SettingsScreen(
                         currencySymbol = currencySymbol,
@@ -365,6 +375,12 @@ class MainActivity : ComponentActivity() {
                         matchPercent = matchPercent,
                         matchDollar = matchDollar,
                         matchChars = matchChars,
+                        autoShowAddIncome = autoShowAddIncome,
+                        autoShowAddExpense = autoShowAddExpense,
+                        onAutoShowConsumed = {
+                            autoShowAddIncome = false
+                            autoShowAddExpense = false
+                        },
                         onAddTransaction = { txn ->
                             transactions.add(txn)
                             saveTransactions()

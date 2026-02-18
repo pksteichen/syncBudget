@@ -1,7 +1,9 @@
 package com.syncbudget.app.ui.screens
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,13 +13,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DatePicker
@@ -34,6 +39,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
@@ -48,11 +54,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.syncbudget.app.data.RecurringExpense
 import com.syncbudget.app.data.RepeatType
 import com.syncbudget.app.data.generateRecurringExpenseId
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.TextStyle
 import java.util.Locale
@@ -80,7 +89,6 @@ fun RecurringExpensesScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var editingExpense by remember { mutableStateOf<RecurringExpense?>(null) }
     var deletingExpense by remember { mutableStateOf<RecurringExpense?>(null) }
-    var repeatSettingsExpense by remember { mutableStateOf<RecurringExpense?>(null) }
 
     Scaffold(
         topBar = {
@@ -169,10 +177,10 @@ fun RecurringExpensesScreen(
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                         )
                     }
-                    IconButton(onClick = { repeatSettingsExpense = expense }) {
+                    IconButton(onClick = { editingExpense = expense }) {
                         Icon(
-                            imageVector = Icons.Filled.Sync,
-                            contentDescription = "Repeat Settings",
+                            imageVector = Icons.Filled.Edit,
+                            contentDescription = "Edit",
                             tint = MaterialTheme.colorScheme.onBackground
                         )
                     }
@@ -190,13 +198,11 @@ fun RecurringExpensesScreen(
 
     if (showAddDialog) {
         AddEditExpenseDialog(
-            title = "Add Recurring Expense",
-            initialSource = "",
-            initialAmount = "",
+            existingExpense = null,
             onDismiss = { showAddDialog = false },
-            onSave = { name, amount ->
+            onSave = { expense ->
                 val id = generateRecurringExpenseId(recurringExpenses.map { it.id }.toSet())
-                onAddRecurringExpense(RecurringExpense(id = id, source = name, amount = amount))
+                onAddRecurringExpense(expense.copy(id = id))
                 showAddDialog = false
             }
         )
@@ -204,12 +210,10 @@ fun RecurringExpensesScreen(
 
     editingExpense?.let { expense ->
         AddEditExpenseDialog(
-            title = "Edit Recurring Expense",
-            initialSource = expense.source,
-            initialAmount = expense.amount.toString(),
+            existingExpense = expense,
             onDismiss = { editingExpense = null },
-            onSave = { name, amount ->
-                onUpdateRecurringExpense(expense.copy(source = name, amount = amount))
+            onSave = { updated ->
+                onUpdateRecurringExpense(updated)
                 editingExpense = null
             }
         )
@@ -233,95 +237,34 @@ fun RecurringExpensesScreen(
             }
         )
     }
-
-    repeatSettingsExpense?.let { expense ->
-        RecurringRepeatSettingsDialog(
-            expense = expense,
-            onDismiss = { repeatSettingsExpense = null },
-            onSave = { updated ->
-                onUpdateRecurringExpense(updated)
-                repeatSettingsExpense = null
-            }
-        )
-    }
-}
-
-@Composable
-private fun AddEditExpenseDialog(
-    title: String,
-    initialSource: String,
-    initialAmount: String,
-    onDismiss: () -> Unit,
-    onSave: (String, Double) -> Unit
-) {
-    var sourceName by remember { mutableStateOf(initialSource) }
-    var amountText by remember { mutableStateOf(if (initialAmount == "0.0") "" else initialAmount) }
-
-    val textFieldColors = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = MaterialTheme.colorScheme.onBackground,
-        unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
-        focusedBorderColor = MaterialTheme.colorScheme.primary,
-        unfocusedBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
-        focusedLabelColor = MaterialTheme.colorScheme.primary,
-        unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-    )
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = sourceName,
-                    onValueChange = { sourceName = it },
-                    label = { Text("Source Name") },
-                    singleLine = true,
-                    colors = textFieldColors,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = amountText,
-                    onValueChange = { amountText = it },
-                    label = { Text("Amount") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    colors = textFieldColors,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    val amount = amountText.toDoubleOrNull()
-                    if (sourceName.isNotBlank() && amount != null && amount > 0) {
-                        onSave(sourceName.trim(), amount)
-                    }
-                }
-            ) {
-                Text("Save")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
-    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun RecurringRepeatSettingsDialog(
-    expense: RecurringExpense,
+private fun AddEditExpenseDialog(
+    existingExpense: RecurringExpense?,
     onDismiss: () -> Unit,
     onSave: (RecurringExpense) -> Unit
 ) {
-    var repeatType by remember { mutableStateOf(expense.repeatType) }
-    var intervalText by remember { mutableStateOf(expense.repeatInterval.toString()) }
-    var startDate by remember { mutableStateOf(expense.startDate) }
-    var monthDay1Text by remember { mutableStateOf(expense.monthDay1?.toString() ?: "") }
-    var monthDay2Text by remember { mutableStateOf(expense.monthDay2?.toString() ?: "") }
+    val isEdit = existingExpense != null
+    val title = if (isEdit) "Edit Recurring Expense" else "Add Recurring Expense"
+
+    var sourceName by remember { mutableStateOf(existingExpense?.source ?: "") }
+    var amountText by remember {
+        mutableStateOf(
+            if (existingExpense != null && existingExpense.amount > 0.0)
+                existingExpense.amount.toString()
+            else ""
+        )
+    }
+    var repeatType by remember { mutableStateOf(existingExpense?.repeatType ?: RepeatType.MONTHS) }
+    var intervalText by remember { mutableStateOf(existingExpense?.repeatInterval?.toString() ?: "1") }
+    var startDate by remember { mutableStateOf(existingExpense?.startDate) }
+    var monthDay1Text by remember { mutableStateOf(existingExpense?.monthDay1?.toString() ?: "") }
+    var monthDay2Text by remember { mutableStateOf(existingExpense?.monthDay2?.toString() ?: "") }
     var typeExpanded by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var showValidation by remember { mutableStateOf(false) }
 
     val textFieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = MaterialTheme.colorScheme.onBackground,
@@ -332,11 +275,15 @@ private fun RecurringRepeatSettingsDialog(
         unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
     )
 
+    val amount = amountText.toDoubleOrNull()
     val interval = intervalText.toIntOrNull()
     val monthDay1 = monthDay1Text.toIntOrNull()
     val monthDay2 = monthDay2Text.toIntOrNull()
 
-    val isValid = when (repeatType) {
+    val isSourceValid = sourceName.isNotBlank()
+    val isAmountValid = amount != null && amount > 0
+
+    val isRepeatValid = when (repeatType) {
         RepeatType.DAYS -> interval != null && interval in 1..60 && startDate != null
         RepeatType.WEEKS -> interval != null && interval in 1..18 && startDate != null
         RepeatType.BI_WEEKLY -> startDate != null
@@ -344,189 +291,292 @@ private fun RecurringRepeatSettingsDialog(
         RepeatType.BI_MONTHLY -> monthDay1 != null && monthDay1 in 1..28 && monthDay2 != null && monthDay2 in 1..28
     }
 
-    AlertDialog(
+    val isValid = isSourceValid && isAmountValid && isRepeatValid
+
+    Dialog(
         onDismissRequest = onDismiss,
-        title = { Text("Repeat Settings") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                ExposedDropdownMenuBox(
-                    expanded = typeExpanded,
-                    onExpandedChange = { typeExpanded = it }
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.92f),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     OutlinedTextField(
-                        value = REPEAT_TYPE_LABELS[repeatType] ?: "",
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Repeat Type") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeExpanded) },
+                        value = sourceName,
+                        onValueChange = { sourceName = it },
+                        label = { Text("Source Name") },
+                        singleLine = true,
+                        isError = showValidation && !isSourceValid,
                         colors = textFieldColors,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor()
+                        modifier = Modifier.fillMaxWidth()
                     )
-                    ExposedDropdownMenu(
+                    OutlinedTextField(
+                        value = amountText,
+                        onValueChange = { amountText = it },
+                        label = { Text("Amount") },
+                        singleLine = true,
+                        isError = showValidation && !isAmountValid,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        colors = textFieldColors,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    HorizontalDivider()
+
+                    ExposedDropdownMenuBox(
                         expanded = typeExpanded,
-                        onDismissRequest = { typeExpanded = false }
+                        onExpandedChange = { typeExpanded = it }
                     ) {
-                        RepeatType.entries.forEach { type ->
-                            DropdownMenuItem(
-                                text = { Text(REPEAT_TYPE_LABELS[type] ?: type.name) },
-                                onClick = {
-                                    repeatType = type
-                                    typeExpanded = false
-                                    when (type) {
-                                        RepeatType.DAYS -> { intervalText = "1"; monthDay1Text = ""; monthDay2Text = "" }
-                                        RepeatType.WEEKS -> { intervalText = "1"; monthDay1Text = ""; monthDay2Text = "" }
-                                        RepeatType.BI_WEEKLY -> { monthDay1Text = ""; monthDay2Text = "" }
-                                        RepeatType.MONTHS -> { intervalText = "1"; startDate = null; monthDay2Text = "" }
-                                        RepeatType.BI_MONTHLY -> { intervalText = "1"; startDate = null }
+                        OutlinedTextField(
+                            value = REPEAT_TYPE_LABELS[repeatType] ?: "",
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Repeat Type") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeExpanded) },
+                            colors = textFieldColors,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = typeExpanded,
+                            onDismissRequest = { typeExpanded = false }
+                        ) {
+                            RepeatType.entries.forEach { type ->
+                                DropdownMenuItem(
+                                    text = { Text(REPEAT_TYPE_LABELS[type] ?: type.name) },
+                                    onClick = {
+                                        repeatType = type
+                                        typeExpanded = false
+                                        when (type) {
+                                            RepeatType.DAYS -> { intervalText = "1"; monthDay1Text = ""; monthDay2Text = "" }
+                                            RepeatType.WEEKS -> { intervalText = "1"; monthDay1Text = ""; monthDay2Text = "" }
+                                            RepeatType.BI_WEEKLY -> { monthDay1Text = ""; monthDay2Text = "" }
+                                            RepeatType.MONTHS -> { intervalText = "1"; startDate = null; monthDay2Text = "" }
+                                            RepeatType.BI_MONTHLY -> { intervalText = "1"; startDate = null }
+                                        }
                                     }
+                                )
+                            }
+                        }
+                    }
+
+                    when (repeatType) {
+                        RepeatType.DAYS -> {
+                            OutlinedTextField(
+                                value = intervalText,
+                                onValueChange = { intervalText = it },
+                                label = { Text("Every X Days (1-60)") },
+                                singleLine = true,
+                                isError = showValidation && (interval == null || interval !in 1..60),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                colors = textFieldColors,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Box(
+                                modifier = if (showValidation && startDate == null)
+                                    Modifier.border(1.dp, Color.Red, RoundedCornerShape(4.dp))
+                                else Modifier
+                            ) {
+                                OutlinedButton(
+                                    onClick = { showDatePicker = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(if (startDate != null) "Start Date: $startDate" else "Pick Start Date")
                                 }
+                            }
+                        }
+                        RepeatType.WEEKS -> {
+                            OutlinedTextField(
+                                value = intervalText,
+                                onValueChange = { intervalText = it },
+                                label = { Text("Interval (1-18)") },
+                                singleLine = true,
+                                isError = showValidation && (interval == null || interval !in 1..18),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                colors = textFieldColors,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Box(
+                                modifier = if (showValidation && startDate == null)
+                                    Modifier.border(1.dp, Color.Red, RoundedCornerShape(4.dp))
+                                else Modifier
+                            ) {
+                                OutlinedButton(
+                                    onClick = { showDatePicker = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(if (startDate != null) "Start Date: $startDate" else "Pick Start Date")
+                                }
+                            }
+                            if (startDate != null) {
+                                val dayName = startDate!!.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
+                                Text(
+                                    text = "Day of week: $dayName",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                                )
+                            }
+                        }
+                        RepeatType.BI_WEEKLY -> {
+                            Box(
+                                modifier = if (showValidation && startDate == null)
+                                    Modifier.border(1.dp, Color.Red, RoundedCornerShape(4.dp))
+                                else Modifier
+                            ) {
+                                OutlinedButton(
+                                    onClick = { showDatePicker = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(if (startDate != null) "Start Date: $startDate" else "Pick Start Date")
+                                }
+                            }
+                            if (startDate != null) {
+                                val dayName = startDate!!.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
+                                Text(
+                                    text = "Day of week: $dayName",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                                )
+                            }
+                        }
+                        RepeatType.MONTHS -> {
+                            OutlinedTextField(
+                                value = intervalText,
+                                onValueChange = { intervalText = it },
+                                label = { Text("Every X Months (1-3)") },
+                                singleLine = true,
+                                isError = showValidation && (interval == null || interval !in 1..3),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                colors = textFieldColors,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            OutlinedTextField(
+                                value = monthDay1Text,
+                                onValueChange = { monthDay1Text = it },
+                                label = { Text("Day of Month (1-28)") },
+                                singleLine = true,
+                                isError = showValidation && (monthDay1 == null || monthDay1 !in 1..28),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                colors = textFieldColors,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        RepeatType.BI_MONTHLY -> {
+                            OutlinedTextField(
+                                value = monthDay1Text,
+                                onValueChange = { monthDay1Text = it },
+                                label = { Text("First Day of Month (1-28)") },
+                                singleLine = true,
+                                isError = showValidation && (monthDay1 == null || monthDay1 !in 1..28),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                colors = textFieldColors,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            OutlinedTextField(
+                                value = monthDay2Text,
+                                onValueChange = { monthDay2Text = it },
+                                label = { Text("Second Day of Month (1-28)") },
+                                singleLine = true,
+                                isError = showValidation && (monthDay2 == null || monthDay2 !in 1..28),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                colors = textFieldColors,
+                                modifier = Modifier.fillMaxWidth()
                             )
                         }
                     }
                 }
 
-                when (repeatType) {
-                    RepeatType.DAYS -> {
-                        OutlinedTextField(
-                            value = intervalText,
-                            onValueChange = { intervalText = it },
-                            label = { Text("Every X Days (1-60)") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            colors = textFieldColors,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        OutlinedButton(
-                            onClick = { showDatePicker = true },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(if (startDate != null) "Start Date: $startDate" else "Pick Start Date")
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    TextButton(
+                        onClick = {
+                            if (isValid) {
+                                val result = when (repeatType) {
+                                    RepeatType.DAYS -> RecurringExpense(
+                                        id = existingExpense?.id ?: 0,
+                                        source = sourceName.trim(),
+                                        amount = amount!!,
+                                        repeatType = repeatType,
+                                        repeatInterval = interval!!,
+                                        startDate = startDate,
+                                        monthDay1 = null,
+                                        monthDay2 = null
+                                    )
+                                    RepeatType.WEEKS -> RecurringExpense(
+                                        id = existingExpense?.id ?: 0,
+                                        source = sourceName.trim(),
+                                        amount = amount!!,
+                                        repeatType = repeatType,
+                                        repeatInterval = interval!!,
+                                        startDate = startDate,
+                                        monthDay1 = null,
+                                        monthDay2 = null
+                                    )
+                                    RepeatType.BI_WEEKLY -> RecurringExpense(
+                                        id = existingExpense?.id ?: 0,
+                                        source = sourceName.trim(),
+                                        amount = amount!!,
+                                        repeatType = repeatType,
+                                        repeatInterval = 1,
+                                        startDate = startDate,
+                                        monthDay1 = null,
+                                        monthDay2 = null
+                                    )
+                                    RepeatType.MONTHS -> RecurringExpense(
+                                        id = existingExpense?.id ?: 0,
+                                        source = sourceName.trim(),
+                                        amount = amount!!,
+                                        repeatType = repeatType,
+                                        repeatInterval = interval!!,
+                                        startDate = null,
+                                        monthDay1 = monthDay1,
+                                        monthDay2 = null
+                                    )
+                                    RepeatType.BI_MONTHLY -> RecurringExpense(
+                                        id = existingExpense?.id ?: 0,
+                                        source = sourceName.trim(),
+                                        amount = amount!!,
+                                        repeatType = repeatType,
+                                        repeatInterval = 1,
+                                        startDate = null,
+                                        monthDay1 = monthDay1,
+                                        monthDay2 = monthDay2
+                                    )
+                                }
+                                onSave(result)
+                            } else {
+                                showValidation = true
+                            }
                         }
-                    }
-                    RepeatType.WEEKS -> {
-                        OutlinedTextField(
-                            value = intervalText,
-                            onValueChange = { intervalText = it },
-                            label = { Text("Interval (1-18)") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            colors = textFieldColors,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        OutlinedButton(
-                            onClick = { showDatePicker = true },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(if (startDate != null) "Start Date: $startDate" else "Pick Start Date")
-                        }
-                        if (startDate != null) {
-                            val dayName = startDate!!.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
-                            Text(
-                                text = "Day of week: $dayName",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
-                            )
-                        }
-                    }
-                    RepeatType.BI_WEEKLY -> {
-                        OutlinedButton(
-                            onClick = { showDatePicker = true },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(if (startDate != null) "Start Date: $startDate" else "Pick Start Date")
-                        }
-                        if (startDate != null) {
-                            val dayName = startDate!!.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
-                            Text(
-                                text = "Day of week: $dayName",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
-                            )
-                        }
-                    }
-                    RepeatType.MONTHS -> {
-                        OutlinedTextField(
-                            value = intervalText,
-                            onValueChange = { intervalText = it },
-                            label = { Text("Every X Months (1-3)") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            colors = textFieldColors,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        OutlinedTextField(
-                            value = monthDay1Text,
-                            onValueChange = { monthDay1Text = it },
-                            label = { Text("Day of Month (1-28)") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            colors = textFieldColors,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                    RepeatType.BI_MONTHLY -> {
-                        OutlinedTextField(
-                            value = monthDay1Text,
-                            onValueChange = { monthDay1Text = it },
-                            label = { Text("First Day of Month (1-28)") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            colors = textFieldColors,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        OutlinedTextField(
-                            value = monthDay2Text,
-                            onValueChange = { monthDay2Text = it },
-                            label = { Text("Second Day of Month (1-28)") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            colors = textFieldColors,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                    ) {
+                        Text("Save")
                     }
                 }
             }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    if (isValid) {
-                        val updated = when (repeatType) {
-                            RepeatType.DAYS -> expense.copy(
-                                repeatType = repeatType, repeatInterval = interval!!,
-                                startDate = startDate, monthDay1 = null, monthDay2 = null
-                            )
-                            RepeatType.WEEKS -> expense.copy(
-                                repeatType = repeatType, repeatInterval = interval!!,
-                                startDate = startDate, monthDay1 = null, monthDay2 = null
-                            )
-                            RepeatType.BI_WEEKLY -> expense.copy(
-                                repeatType = repeatType, repeatInterval = 1,
-                                startDate = startDate, monthDay1 = null, monthDay2 = null
-                            )
-                            RepeatType.MONTHS -> expense.copy(
-                                repeatType = repeatType, repeatInterval = interval!!,
-                                startDate = null, monthDay1 = monthDay1, monthDay2 = null
-                            )
-                            RepeatType.BI_MONTHLY -> expense.copy(
-                                repeatType = repeatType, repeatInterval = 1,
-                                startDate = null, monthDay1 = monthDay1, monthDay2 = monthDay2
-                            )
-                        }
-                        onSave(updated)
-                    }
-                },
-                enabled = isValid
-            ) {
-                Text("Save")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
         }
-    )
+    }
 
     if (showDatePicker) {
         val datePickerState = rememberDatePickerState(

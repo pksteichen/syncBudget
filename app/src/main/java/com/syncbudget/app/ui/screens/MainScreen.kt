@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -16,6 +17,10 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -27,6 +32,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.syncbudget.app.sound.FlipSoundPlayer
@@ -48,7 +54,9 @@ fun MainScreen(
     budgetStartDate: String? = null,
     budgetPeriodLabel: String = "period",
     onSettingsClick: () -> Unit,
-    onNavigate: (String) -> Unit
+    onNavigate: (String) -> Unit,
+    onAddIncome: () -> Unit = {},
+    onAddExpense: () -> Unit = {}
 ) {
     val customColors = LocalSyncBudgetColors.current
 
@@ -132,6 +140,42 @@ fun MainScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = onAddIncome,
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = customColors.displayBackground
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Add,
+                        contentDescription = "Add Income",
+                        tint = Color(0xFF4CAF50),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                Button(
+                    onClick = onAddExpense,
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = customColors.displayBackground
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Remove,
+                        contentDescription = "Add Expense",
+                        tint = Color(0xFFF44336),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 24.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
@@ -143,7 +187,7 @@ fun MainScreen(
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.List,
                         contentDescription = "Transactions",
-                        tint = MaterialTheme.colorScheme.onBackground,
+                        tint = customColors.headerBackground,
                         modifier = Modifier.size(32.dp)
                     )
                 }
@@ -154,7 +198,7 @@ fun MainScreen(
                     Icon(
                         imageVector = Icons.Filled.Savings,
                         contentDescription = "Savings",
-                        tint = MaterialTheme.colorScheme.onBackground,
+                        tint = customColors.headerBackground,
                         modifier = Modifier.size(32.dp)
                     )
                 }
@@ -165,7 +209,7 @@ fun MainScreen(
                     Icon(
                         imageVector = Icons.Filled.CalendarMonth,
                         contentDescription = "Future Large Expenditures",
-                        tint = MaterialTheme.colorScheme.onBackground,
+                        tint = customColors.headerBackground,
                         modifier = Modifier.size(32.dp)
                     )
                 }
@@ -176,7 +220,7 @@ fun MainScreen(
                     Icon(
                         imageVector = Icons.Filled.Schedule,
                         contentDescription = "Amortization",
-                        tint = MaterialTheme.colorScheme.onBackground,
+                        tint = customColors.headerBackground,
                         modifier = Modifier.size(32.dp)
                     )
                 }
@@ -187,7 +231,7 @@ fun MainScreen(
                     Icon(
                         imageVector = Icons.Filled.Sync,
                         contentDescription = "Recurring Expenses",
-                        tint = MaterialTheme.colorScheme.onBackground,
+                        tint = customColors.headerBackground,
                         modifier = Modifier.size(32.dp)
                     )
                 }

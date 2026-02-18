@@ -182,6 +182,9 @@ fun TransactionsScreen(
     onUpdateTransaction: (Transaction) -> Unit,
     onDeleteTransaction: (Transaction) -> Unit,
     onDeleteTransactions: (Set<Int>) -> Unit,
+    autoShowAddIncome: Boolean = false,
+    autoShowAddExpense: Boolean = false,
+    onAutoShowConsumed: () -> Unit = {},
     onBack: () -> Unit,
     onHelpClick: () -> Unit = {}
 ) {
@@ -285,11 +288,14 @@ fun TransactionsScreen(
     ) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
-            val csvContent = serializeTransactionsCsv(transactions)
+            val toSave = if (selectionMode && selectedIds.any { it.value }) {
+                transactions.filter { selectedIds[it.id] == true }
+            } else { transactions }
+            val csvContent = serializeTransactionsCsv(toSave)
             context.contentResolver.openOutputStream(uri)?.use { os ->
                 os.write(csvContent.toByteArray())
             }
-            Toast.makeText(context, "Saved ${transactions.size} transactions", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Saved ${toSave.size} transactions", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Toast.makeText(context, "Save failed: ${e.message}", Toast.LENGTH_SHORT).show()
         }
@@ -300,7 +306,10 @@ fun TransactionsScreen(
     ) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
-            val csvContent = serializeTransactionsCsv(transactions)
+            val toSave = if (selectionMode && selectedIds.any { it.value }) {
+                transactions.filter { selectedIds[it.id] == true }
+            } else { transactions }
+            val csvContent = serializeTransactionsCsv(toSave)
             val encrypted = CryptoHelper.encrypt(
                 csvContent.toByteArray(),
                 savePassword.toCharArray()
@@ -310,7 +319,7 @@ fun TransactionsScreen(
             }
             savePassword = ""
             savePasswordConfirm = ""
-            Toast.makeText(context, "Encrypted save: ${transactions.size} transactions", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Encrypted save: ${toSave.size} transactions", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Toast.makeText(context, "Encrypted save failed: ${e.message}", Toast.LENGTH_SHORT).show()
         }
@@ -465,6 +474,18 @@ fun TransactionsScreen(
             }
         } else {
             currentImportDup = dup
+        }
+    }
+
+    // Auto-open dialogs from dashboard quick-add buttons
+    LaunchedEffect(autoShowAddIncome, autoShowAddExpense) {
+        if (autoShowAddIncome) {
+            showAddIncome = true
+            onAutoShowConsumed()
+        }
+        if (autoShowAddExpense) {
+            showAddExpense = true
+            onAutoShowConsumed()
         }
     }
 
@@ -733,7 +754,7 @@ fun TransactionsScreen(
                         Icon(
                             imageVector = Icons.Filled.Category,
                             contentDescription = "Change category",
-                            tint = MaterialTheme.colorScheme.onBackground
+                            tint = customColors.headerBackground
                         )
                     }
                     IconButton(onClick = {
@@ -744,7 +765,7 @@ fun TransactionsScreen(
                         Icon(
                             imageVector = Icons.Filled.Edit,
                             contentDescription = "Edit merchant",
-                            tint = MaterialTheme.colorScheme.onBackground
+                            tint = customColors.headerBackground
                         )
                     }
                     IconButton(onClick = {
@@ -1233,9 +1254,16 @@ fun TransactionsScreen(
                         }
                     }
 
-                    Text("${transactions.size} transactions will be saved.",
+                    val transactionsToSave = if (selectionMode && selectedIds.any { it.value })
+                        transactions.filter { selectedIds[it.id] == true } else transactions
+                    Text("${transactionsToSave.size} transactions will be saved.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
+                    if (selectionMode && selectedIds.any { it.value }) {
+                        Text("Only the selected transactions will be saved.",
+                            color = Color(0xFFF44336),
+                            style = MaterialTheme.typography.bodySmall)
+                    }
 
                     if (selectedSaveFormat == SaveFormat.ENCRYPTED) {
                         val pwFieldColors = OutlinedTextFieldDefaults.colors(
@@ -1884,7 +1912,7 @@ private fun TransactionRow(
     val singleCategory = if (transaction.categoryAmounts.size == 1)
         categoryMap[transaction.categoryAmounts[0].categoryId] else null
     val customColors = LocalSyncBudgetColors.current
-    val categoryIconTint = if (transaction.isUserCategorized) customColors.headerBackground
+    val categoryIconTint = if (transaction.isUserCategorized) customColors.userCategoryIconTint
         else MaterialTheme.colorScheme.onBackground
 
     Column {
@@ -1973,7 +2001,7 @@ private fun TransactionRow(
                         Icon(
                             imageVector = getCategoryIcon(cat.iconName),
                             contentDescription = cat.name,
-                            tint = if (transaction.isUserCategorized) customColors.headerBackground.copy(alpha = 0.7f)
+                            tint = if (transaction.isUserCategorized) customColors.userCategoryIconTint.copy(alpha = 0.7f)
                                    else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                             modifier = Modifier
                                 .size(18.dp)
