@@ -59,7 +59,9 @@ import com.syncbudget.app.data.getCategoryIcon
 import com.syncbudget.app.ui.components.CURRENCY_OPTIONS
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 import androidx.compose.foundation.background
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.ui.text.input.KeyboardType
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -90,6 +92,14 @@ fun SettingsScreen(
     onDateFormatChange: (String) -> Unit,
     isPaidUser: Boolean = false,
     onPaidUserChange: (Boolean) -> Unit = {},
+    matchDays: Int = 7,
+    onMatchDaysChange: (Int) -> Unit = {},
+    matchPercent: Float = 1.0f,
+    onMatchPercentChange: (Float) -> Unit = {},
+    matchDollar: Int = 1,
+    onMatchDollarChange: (Int) -> Unit = {},
+    matchChars: Int = 5,
+    onMatchCharsChange: (Int) -> Unit = {},
     categories: List<Category>,
     transactions: List<Transaction> = emptyList(),
     onAddCategory: (Category) -> Unit,
@@ -290,6 +300,88 @@ fun SettingsScreen(
                 }
             }
 
+            // Matching Configuration section
+            item {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Text(
+                    text = "Matching Configuration",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+            }
+
+            item {
+                var matchDaysText by remember { mutableStateOf(matchDays.toString()) }
+                OutlinedTextField(
+                    value = matchDaysText,
+                    onValueChange = { text ->
+                        if (text.isEmpty() || text.all { it.isDigit() }) {
+                            matchDaysText = text
+                            text.toIntOrNull()?.let { onMatchDaysChange(it) }
+                        }
+                    },
+                    label = { Text("Match Days (±N)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    colors = textFieldColors,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            item {
+                var matchPercentText by remember { mutableStateOf(matchPercent.toString()) }
+                OutlinedTextField(
+                    value = matchPercentText,
+                    onValueChange = { text ->
+                        if (text.isEmpty() || text.matches(Regex("^\\d*\\.?\\d*$"))) {
+                            matchPercentText = text
+                            text.toFloatOrNull()?.let { onMatchPercentChange(it) }
+                        }
+                    },
+                    label = { Text("Match Percent (±%)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    colors = textFieldColors,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            item {
+                var matchDollarText by remember { mutableStateOf(matchDollar.toString()) }
+                OutlinedTextField(
+                    value = matchDollarText,
+                    onValueChange = { text ->
+                        if (text.isEmpty() || text.all { it.isDigit() }) {
+                            matchDollarText = text
+                            text.toIntOrNull()?.let { onMatchDollarChange(it) }
+                        }
+                    },
+                    label = { Text("Match Dollar (±\$)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    colors = textFieldColors,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            item {
+                var matchCharsText by remember { mutableStateOf(matchChars.toString()) }
+                OutlinedTextField(
+                    value = matchCharsText,
+                    onValueChange = { text ->
+                        if (text.isEmpty() || text.all { it.isDigit() }) {
+                            matchCharsText = text
+                            text.toIntOrNull()?.let { if (it >= 1) onMatchCharsChange(it) }
+                        }
+                    },
+                    label = { Text("Match Characters") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    colors = textFieldColors,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
             // Paid User checkbox
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -320,7 +412,7 @@ fun SettingsScreen(
             }
 
             items(categories) { category ->
-                val isProtected = category.name == "Other" || category.name == "Recurring" || category.name == "Amortization"
+                val isProtected = category.name == "Other" || category.name == "Recurring" || category.name == "Amortization" || category.name == "Recurring Income"
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -534,7 +626,7 @@ private fun EditCategoryDialog(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Edit Category", modifier = Modifier.weight(1f))
-                if (category.name != "Other" && category.name != "Recurring" && category.name != "Amortization") {
+                if (category.name != "Other" && category.name != "Recurring" && category.name != "Amortization" && category.name != "Recurring Income") {
                     IconButton(onClick = {
                         if (txnCount > 0) {
                             showReassignDialog = true

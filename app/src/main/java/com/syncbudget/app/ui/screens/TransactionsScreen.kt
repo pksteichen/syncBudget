@@ -174,6 +174,10 @@ fun TransactionsScreen(
     recurringExpenses: List<RecurringExpense> = emptyList(),
     amortizationEntries: List<AmortizationEntry> = emptyList(),
     incomeSources: List<IncomeSource> = emptyList(),
+    matchDays: Int = 7,
+    matchPercent: Float = 1.0f,
+    matchDollar: Int = 1,
+    matchChars: Int = 5,
     onAddTransaction: (Transaction) -> Unit,
     onUpdateTransaction: (Transaction) -> Unit,
     onDeleteTransaction: (Transaction) -> Unit,
@@ -185,6 +189,9 @@ fun TransactionsScreen(
     val dateFormatter = remember(dateFormatPattern) {
         DateTimeFormatter.ofPattern(dateFormatPattern)
     }
+
+    // Convert user-facing percent (e.g. 1.0 = 1%) to fraction (0.01)
+    val percentTolerance = matchPercent / 100f
 
     var viewFilter by remember { mutableStateOf(ViewFilter.ALL) }
     var showAddIncome by remember { mutableStateOf(false) }
@@ -427,11 +434,11 @@ fun TransactionsScreen(
         val txn = parsedTransactions[importIndex]
         if (ignoreAllDuplicates) {
             // Still check recurring/amortization even when ignoring duplicates
-            val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses)
+            val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars)
             if (recurringMatch != null) {
                 currentImportRecurring = recurringMatch
             } else {
-                val amortizationMatch = findAmortizationMatch(txn, amortizationEntries)
+                val amortizationMatch = findAmortizationMatch(txn, amortizationEntries, percentTolerance, matchDollar, matchChars)
                 if (amortizationMatch != null) {
                     currentImportAmortization = amortizationMatch
                 } else {
@@ -442,13 +449,13 @@ fun TransactionsScreen(
             return@LaunchedEffect
         }
 
-        val dup = findDuplicate(txn, transactions + importApproved)
+        val dup = findDuplicate(txn, transactions + importApproved, percentTolerance, matchDollar, matchDays, matchChars)
         if (dup == null) {
-            val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses)
+            val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars)
             if (recurringMatch != null) {
                 currentImportRecurring = recurringMatch
             } else {
-                val amortizationMatch = findAmortizationMatch(txn, amortizationEntries)
+                val amortizationMatch = findAmortizationMatch(txn, amortizationEntries, percentTolerance, matchDollar, matchChars)
                 if (amortizationMatch != null) {
                     currentImportAmortization = amortizationMatch
                 } else {
@@ -823,28 +830,28 @@ fun TransactionsScreen(
             dateFormatter = dateFormatter,
             onDismiss = { showAddIncome = false },
             onSave = { txn ->
-                val dup = findDuplicate(txn, transactions)
+                val dup = findDuplicate(txn, transactions, percentTolerance, matchDollar, matchDays, matchChars)
                 if (dup != null) {
                     pendingManualSave = txn
                     manualDuplicateMatch = dup
                     pendingManualIsEdit = false
                     showManualDuplicateDialog = true
                 } else {
-                    val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses)
+                    val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars)
                     if (recurringMatch != null) {
                         pendingRecurringTxn = txn
                         pendingRecurringMatch = recurringMatch
                         pendingRecurringIsEdit = false
                         showRecurringDialog = true
                     } else {
-                        val amortizationMatch = findAmortizationMatch(txn, amortizationEntries)
+                        val amortizationMatch = findAmortizationMatch(txn, amortizationEntries, percentTolerance, matchDollar, matchChars)
                         if (amortizationMatch != null) {
                             pendingAmortizationTxn = txn
                             pendingAmortizationMatch = amortizationMatch
                             pendingAmortizationIsEdit = false
                             showAmortizationDialog = true
                         } else {
-                            val budgetMatch = findBudgetIncomeMatch(txn, incomeSources)
+                            val budgetMatch = findBudgetIncomeMatch(txn, incomeSources, matchChars)
                             if (budgetMatch != null) {
                                 pendingBudgetIncomeTxn = txn
                                 pendingBudgetIncomeMatch = budgetMatch
@@ -873,21 +880,21 @@ fun TransactionsScreen(
             isExpense = true,
             onDismiss = { showAddExpense = false },
             onSave = { txn ->
-                val dup = findDuplicate(txn, transactions)
+                val dup = findDuplicate(txn, transactions, percentTolerance, matchDollar, matchDays, matchChars)
                 if (dup != null) {
                     pendingManualSave = txn
                     manualDuplicateMatch = dup
                     pendingManualIsEdit = false
                     showManualDuplicateDialog = true
                 } else {
-                    val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses)
+                    val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars)
                     if (recurringMatch != null) {
                         pendingRecurringTxn = txn
                         pendingRecurringMatch = recurringMatch
                         pendingRecurringIsEdit = false
                         showRecurringDialog = true
                     } else {
-                        val amortizationMatch = findAmortizationMatch(txn, amortizationEntries)
+                        val amortizationMatch = findAmortizationMatch(txn, amortizationEntries, percentTolerance, matchDollar, matchChars)
                         if (amortizationMatch != null) {
                             pendingAmortizationTxn = txn
                             pendingAmortizationMatch = amortizationMatch
@@ -916,28 +923,28 @@ fun TransactionsScreen(
             editTransaction = txn,
             onDismiss = { editingTransaction = null },
             onSave = { updated ->
-                val dup = findDuplicate(updated, transactions.filter { it.id != updated.id })
+                val dup = findDuplicate(updated, transactions.filter { it.id != updated.id }, percentTolerance, matchDollar, matchDays, matchChars)
                 if (dup != null) {
                     pendingManualSave = updated
                     manualDuplicateMatch = dup
                     pendingManualIsEdit = true
                     showManualDuplicateDialog = true
                 } else {
-                    val recurringMatch = findRecurringExpenseMatch(updated, recurringExpenses)
+                    val recurringMatch = findRecurringExpenseMatch(updated, recurringExpenses, percentTolerance, matchDollar, matchChars)
                     if (recurringMatch != null) {
                         pendingRecurringTxn = updated
                         pendingRecurringMatch = recurringMatch
                         pendingRecurringIsEdit = true
                         showRecurringDialog = true
                     } else {
-                        val amortizationMatch = findAmortizationMatch(updated, amortizationEntries)
+                        val amortizationMatch = findAmortizationMatch(updated, amortizationEntries, percentTolerance, matchDollar, matchChars)
                         if (amortizationMatch != null) {
                             pendingAmortizationTxn = updated
                             pendingAmortizationMatch = amortizationMatch
                             pendingAmortizationIsEdit = true
                             showAmortizationDialog = true
                         } else {
-                            val budgetMatch = findBudgetIncomeMatch(updated, incomeSources)
+                            val budgetMatch = findBudgetIncomeMatch(updated, incomeSources, matchChars)
                             if (budgetMatch != null) {
                                 pendingBudgetIncomeTxn = updated
                                 pendingBudgetIncomeMatch = budgetMatch
@@ -1628,7 +1635,15 @@ fun TransactionsScreen(
             currencySymbol = currencySymbol,
             dateFormatter = dateFormatter,
             onConfirmBudgetIncome = {
-                val txn = pendingBudgetIncomeTxn!!.copy(isBudgetIncome = true)
+                val recurringIncomeCatId = categories.find { it.name == "Recurring Income" }?.id
+                val baseTxn = pendingBudgetIncomeTxn!!
+                val txn = baseTxn.copy(
+                    isBudgetIncome = true,
+                    categoryAmounts = if (recurringIncomeCatId != null)
+                        listOf(CategoryAmount(recurringIncomeCatId, baseTxn.amount))
+                    else baseTxn.categoryAmounts,
+                    isUserCategorized = true
+                )
                 if (pendingBudgetIncomeIsEdit) onUpdateTransaction(txn)
                 else onAddTransaction(txn)
                 pendingBudgetIncomeTxn = null

@@ -41,6 +41,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.isSystemInDarkTheme
 import com.syncbudget.app.data.Category
 import kotlin.math.abs
 import kotlin.math.atan2
@@ -48,7 +49,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-private val PIE_COLORS = listOf(
+private val PIE_COLORS_LIGHT = listOf(
     Color(0xFF4CAF50), // Green
     Color(0xFF2196F3), // Blue
     Color(0xFFF44336), // Red
@@ -61,7 +62,22 @@ private val PIE_COLORS = listOf(
     Color(0xFF607D8B)  // Blue Grey
 )
 
-private fun colorForIndex(index: Int): Color = PIE_COLORS[index % PIE_COLORS.size]
+private val PIE_COLORS_DARK = listOf(
+    Color(0xFF2E7D32), // Green
+    Color(0xFF1565C0), // Blue
+    Color(0xFFC62828), // Red
+    Color(0xFFE65100), // Orange
+    Color(0xFF6A1B9A), // Purple
+    Color(0xFF00838F), // Cyan
+    Color(0xFFF9A825), // Yellow
+    Color(0xFF4E342E), // Brown
+    Color(0xFFAD1457), // Pink
+    Color(0xFF455A64)  // Blue Grey
+)
+
+@Composable
+private fun pieColors(): List<Color> =
+    if (isSystemInDarkTheme()) PIE_COLORS_DARK else PIE_COLORS_LIGHT
 
 /** Clockwise sweep from [from] to [to] in degrees, always >= 0. */
 private fun sweepBetween(from: Float, to: Float): Float {
@@ -150,6 +166,8 @@ fun PieChartEditor(
 ) {
     val n = categories.size
     if (n < 2 || totalAmount <= 0) return
+
+    val colors = pieColors()
 
     val handleAngles = remember { mutableStateListOf<Float>() }
     var draggedIndex by remember { mutableIntStateOf(-1) }
@@ -328,7 +346,7 @@ fun PieChartEditor(
                     val sweep = sweepBetween(handleAngles[i], handleAngles[(i + 1) % n])
                     if (sweep > 0.01f) {
                         drawArc(
-                            color = colorForIndex(i),
+                            color = colors[i % colors.size],
                             startAngle = startAngle,
                             sweepAngle = sweep,
                             useCenter = true,
@@ -403,7 +421,7 @@ fun PieChartEditor(
                     Box(
                         modifier = Modifier
                             .size(14.dp)
-                            .background(colorForIndex(index), shape = CircleShape)
+                            .background(colors[index % colors.size], shape = CircleShape)
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(

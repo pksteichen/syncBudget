@@ -7,21 +7,27 @@ import kotlin.math.roundToLong
 
 fun findRecurringExpenseMatch(
     incoming: Transaction,
-    recurringExpenses: List<RecurringExpense>
+    recurringExpenses: List<RecurringExpense>,
+    percentTolerance: Float = 0.01f,
+    dollarTolerance: Int = 1,
+    minChars: Int = 5
 ): RecurringExpense? {
     return recurringExpenses.find { re ->
-        amountMatches(incoming.amount, re.amount) &&
-        merchantMatches(incoming.source, re.source)
+        amountMatches(incoming.amount, re.amount, percentTolerance, dollarTolerance) &&
+        merchantMatches(incoming.source, re.source, minChars)
     }
 }
 
 fun findAmortizationMatch(
     incoming: Transaction,
-    entries: List<AmortizationEntry>
+    entries: List<AmortizationEntry>,
+    percentTolerance: Float = 0.01f,
+    dollarTolerance: Int = 1,
+    minChars: Int = 5
 ): AmortizationEntry? {
     return entries.find { entry ->
-        amountMatches(incoming.amount, entry.amount) &&
-        merchantMatches(incoming.source, entry.source)
+        amountMatches(incoming.amount, entry.amount, percentTolerance, dollarTolerance) &&
+        merchantMatches(incoming.source, entry.source, minChars)
     }
 }
 
@@ -43,48 +49,60 @@ fun isRecurringDateCloseEnough(transactionDate: LocalDate, re: RecurringExpense)
 
 fun findBudgetIncomeMatch(
     incoming: Transaction,
-    incomeSources: List<IncomeSource>
+    incomeSources: List<IncomeSource>,
+    minChars: Int = 5
 ): IncomeSource? {
     if (incoming.type != TransactionType.INCOME) return null
     return incomeSources.find { source ->
-        amountMatches(incoming.amount, source.amount) &&
-        merchantMatches(incoming.source, source.source)
+        merchantMatches(incoming.source, source.source, minChars)
     }
 }
 
-fun findDuplicate(incoming: Transaction, existing: List<Transaction>): Transaction? {
+fun findDuplicate(
+    incoming: Transaction,
+    existing: List<Transaction>,
+    percentTolerance: Float = 0.01f,
+    dollarTolerance: Int = 1,
+    dayWindow: Int = 7,
+    minChars: Int = 5
+): Transaction? {
     return existing.find { ex ->
-        amountMatches(incoming.amount, ex.amount) &&
-        dateMatches(incoming, ex) &&
-        merchantMatches(incoming.source, ex.source)
+        amountMatches(incoming.amount, ex.amount, percentTolerance, dollarTolerance) &&
+        dateMatches(incoming, ex, dayWindow) &&
+        merchantMatches(incoming.source, ex.source, minChars)
     }
 }
 
-internal fun amountMatches(a1: Double, a2: Double): Boolean {
+internal fun amountMatches(
+    a1: Double,
+    a2: Double,
+    percentTolerance: Float = 0.01f,
+    dollarTolerance: Int = 1
+): Boolean {
     val maxVal = maxOf(abs(a1), abs(a2))
     if (maxVal == 0.0) return true
-    val withinPercent = abs(a1 - a2) / maxVal <= 0.01
-    val withinRounded = abs(a1.roundToLong() - a2.roundToLong()) <= 1
+    val withinPercent = abs(a1 - a2) / maxVal <= percentTolerance
+    val withinRounded = abs(a1.roundToLong() - a2.roundToLong()) <= dollarTolerance
     return withinPercent || withinRounded
 }
 
-private fun dateMatches(t1: Transaction, t2: Transaction): Boolean {
+private fun dateMatches(t1: Transaction, t2: Transaction, dayWindow: Int = 7): Boolean {
     val daysBetween = abs(ChronoUnit.DAYS.between(t1.date, t2.date))
-    return daysBetween <= 7
+    return daysBetween <= dayWindow
 }
 
-internal fun merchantMatches(s1: String, s2: String): Boolean {
+internal fun merchantMatches(s1: String, s2: String, minChars: Int = 5): Boolean {
     val a = s1.lowercase()
     val b = s2.lowercase()
-    if (a.length < 5 || b.length < 5) {
+    if (a.length < minChars || b.length < minChars) {
         return a == b
     }
     val substrings = mutableSetOf<String>()
-    for (i in 0..a.length - 5) {
-        substrings.add(a.substring(i, i + 5))
+    for (i in 0..a.length - minChars) {
+        substrings.add(a.substring(i, i + minChars))
     }
-    for (i in 0..b.length - 5) {
-        if (b.substring(i, i + 5) in substrings) return true
+    for (i in 0..b.length - minChars) {
+        if (b.substring(i, i + minChars) in substrings) return true
     }
     return false
 }

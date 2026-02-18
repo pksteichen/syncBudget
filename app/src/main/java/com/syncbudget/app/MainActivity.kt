@@ -9,6 +9,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -66,6 +67,12 @@ class MainActivity : ComponentActivity() {
             var showDecimals by remember { mutableStateOf(prefs.getBoolean("showDecimals", false)) }
             var dateFormatPattern by remember { mutableStateOf(prefs.getString("dateFormatPattern", "yyyy-MM-dd") ?: "yyyy-MM-dd") }
             var isPaidUser by remember { mutableStateOf(prefs.getBoolean("isPaidUser", false)) }
+
+            // Matching configuration
+            var matchDays by remember { mutableIntStateOf(prefs.getInt("matchDays", 7)) }
+            var matchPercent by remember { mutableFloatStateOf(prefs.getFloat("matchPercent", 1.0f)) }
+            var matchDollar by remember { mutableIntStateOf(prefs.getInt("matchDollar", 1)) }
+            var matchChars by remember { mutableIntStateOf(prefs.getInt("matchChars", 5)) }
             var budgetPeriod by remember {
                 mutableStateOf(
                     try { BudgetPeriod.valueOf(prefs.getString("budgetPeriod", "MONTHLY") ?: "MONTHLY") }
@@ -117,6 +124,13 @@ class MainActivity : ComponentActivity() {
                     var id: Int
                     do { id = (0..65535).random() } while (id in usedIds)
                     loaded.add(Category(id, "Amortization", "Schedule"))
+                    CategoryRepository.save(context, loaded)
+                }
+                if (loaded.none { it.name == "Recurring Income" }) {
+                    val usedIds = loaded.map { it.id }.toSet()
+                    var id: Int
+                    do { id = (0..65535).random() } while (id in usedIds)
+                    loaded.add(Category(id, "Recurring Income", "Payments"))
                     CategoryRepository.save(context, loaded)
                 }
                 mutableStateListOf(*loaded.toTypedArray())
@@ -263,6 +277,14 @@ class MainActivity : ComponentActivity() {
                     "settings" -> SettingsScreen(
                         currencySymbol = currencySymbol,
                         onNavigateToBudgetConfig = { currentScreen = "budget_config" },
+                        matchDays = matchDays,
+                        onMatchDaysChange = { matchDays = it; prefs.edit().putInt("matchDays", it).apply() },
+                        matchPercent = matchPercent,
+                        onMatchPercentChange = { matchPercent = it; prefs.edit().putFloat("matchPercent", it).apply() },
+                        matchDollar = matchDollar,
+                        onMatchDollarChange = { matchDollar = it; prefs.edit().putInt("matchDollar", it).apply() },
+                        matchChars = matchChars,
+                        onMatchCharsChange = { matchChars = it; prefs.edit().putInt("matchChars", it).apply() },
                         onCurrencyChange = {
                             currencySymbol = it
                             prefs.edit().putString("currencySymbol", it).apply()
@@ -339,6 +361,10 @@ class MainActivity : ComponentActivity() {
                         recurringExpenses = recurringExpenses,
                         amortizationEntries = amortizationEntries,
                         incomeSources = incomeSources,
+                        matchDays = matchDays,
+                        matchPercent = matchPercent,
+                        matchDollar = matchDollar,
+                        matchChars = matchChars,
                         onAddTransaction = { txn ->
                             transactions.add(txn)
                             saveTransactions()

@@ -530,41 +530,74 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
                 contentAlignment = Alignment.Center
             ) {
                 Canvas(modifier = Modifier.size(140.dp)) {
-                    val strokeWidth = 28f
-                    val radius = (size.minDimension - strokeWidth) / 2
+                    val radius = size.minDimension / 2
                     val center = Offset(size.width / 2, size.height / 2)
                     val arcSize = Size(radius * 2, radius * 2)
                     val topLeft = Offset(center.x - radius, center.y - radius)
 
-                    // Slice 1: 55% - Green
+                    // Slice 1: 55% - Green (filled)
                     drawArc(
                         color = Color(0xFF4CAF50),
                         startAngle = -90f,
                         sweepAngle = 198f,
-                        useCenter = false,
+                        useCenter = true,
                         topLeft = topLeft,
-                        size = arcSize,
-                        style = Stroke(width = strokeWidth)
+                        size = arcSize
                     )
-                    // Slice 2: 30% - Blue
+                    // Slice 2: 30% - Blue (filled)
                     drawArc(
                         color = Color(0xFF2196F3),
                         startAngle = 108f,
                         sweepAngle = 108f,
-                        useCenter = false,
+                        useCenter = true,
                         topLeft = topLeft,
-                        size = arcSize,
-                        style = Stroke(width = strokeWidth)
+                        size = arcSize
                     )
-                    // Slice 3: 15% - Orange
+                    // Slice 3: 15% - Orange (filled)
                     drawArc(
                         color = Color(0xFFFF9800),
                         startAngle = 216f,
                         sweepAngle = 54f,
-                        useCenter = false,
+                        useCenter = true,
                         topLeft = topLeft,
-                        size = arcSize,
-                        style = Stroke(width = strokeWidth)
+                        size = arcSize
+                    )
+
+                    // White outline and division lines
+                    drawCircle(
+                        color = Color.White.copy(alpha = 0.5f),
+                        radius = radius,
+                        center = center,
+                        style = Stroke(width = 1.5f)
+                    )
+                    // Division line at -90° (top)
+                    drawLine(
+                        color = Color.White,
+                        start = center,
+                        end = Offset(center.x, center.y - radius),
+                        strokeWidth = 2f
+                    )
+                    // Division line at 108°
+                    val rad108 = Math.toRadians(108.0)
+                    drawLine(
+                        color = Color.White,
+                        start = center,
+                        end = Offset(
+                            center.x + radius * kotlin.math.cos(rad108).toFloat(),
+                            center.y + radius * kotlin.math.sin(rad108).toFloat()
+                        ),
+                        strokeWidth = 2f
+                    )
+                    // Division line at 216°
+                    val rad216 = Math.toRadians(216.0)
+                    drawLine(
+                        color = Color.White,
+                        start = center,
+                        end = Offset(
+                            center.x + radius * kotlin.math.cos(rad216).toFloat(),
+                            center.y + radius * kotlin.math.sin(rad216).toFloat()
+                        ),
+                        strokeWidth = 2f
                     )
                 }
             }
