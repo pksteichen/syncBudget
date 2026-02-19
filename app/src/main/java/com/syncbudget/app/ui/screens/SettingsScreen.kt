@@ -87,8 +87,6 @@ private val DATE_FORMAT_OPTIONS = listOf(
 fun SettingsScreen(
     currencySymbol: String,
     onCurrencyChange: (String) -> Unit,
-    digitCount: Int,
-    onDigitCountChange: (Int) -> Unit,
     showDecimals: Boolean,
     onDecimalsChange: (Boolean) -> Unit,
     dateFormatPattern: String,
@@ -109,6 +107,8 @@ fun SettingsScreen(
     onUpdateCategory: (Category) -> Unit = {},
     onDeleteCategory: (Category) -> Unit,
     onReassignCategory: (fromId: Int, toId: Int) -> Unit = { _, _ -> },
+    chartPalette: String = "Bright",
+    onChartPaletteChange: (String) -> Unit = {},
     weekStartSunday: Boolean = true,
     onWeekStartChange: (Boolean) -> Unit = {},
     onNavigateToBudgetConfig: () -> Unit = {},
@@ -214,41 +214,6 @@ fun SettingsScreen(
                 }
             }
 
-            // Digits dropdown
-            item {
-                var digitsExpanded by remember { mutableStateOf(false) }
-                ExposedDropdownMenuBox(
-                    expanded = digitsExpanded,
-                    onExpandedChange = { digitsExpanded = it }
-                ) {
-                    OutlinedTextField(
-                        value = digitCount.toString(),
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Digits") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = digitsExpanded) },
-                        colors = textFieldColors,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor()
-                    )
-                    ExposedDropdownMenu(
-                        expanded = digitsExpanded,
-                        onDismissRequest = { digitsExpanded = false }
-                    ) {
-                        (2..5).forEach { count ->
-                            DropdownMenuItem(
-                                text = { Text(count.toString()) },
-                                onClick = {
-                                    onDigitCountChange(count)
-                                    digitsExpanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-
             // Decimals checkbox
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -341,6 +306,41 @@ fun SettingsScreen(
                                 weekStartExpanded = false
                             }
                         )
+                    }
+                }
+            }
+
+            // Chart Palette dropdown
+            item {
+                var paletteExpanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = paletteExpanded,
+                    onExpandedChange = { paletteExpanded = it }
+                ) {
+                    OutlinedTextField(
+                        value = chartPalette,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Chart Palette") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = paletteExpanded) },
+                        colors = textFieldColors,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = paletteExpanded,
+                        onDismissRequest = { paletteExpanded = false }
+                    ) {
+                        listOf("Bright", "Pastel", "Sunset").forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option) },
+                                onClick = {
+                                    onChartPaletteChange(option)
+                                    paletteExpanded = false
+                                }
+                            )
+                        }
                     }
                 }
             }

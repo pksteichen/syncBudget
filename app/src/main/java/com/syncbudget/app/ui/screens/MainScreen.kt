@@ -69,6 +69,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -118,18 +119,82 @@ private val PIE_COLORS_LIGHT = listOf(
 
 // Low-luminance muted colors for dark mode
 private val PIE_COLORS_DARK = listOf(
-    Color(0xFF2E7D32),
-    Color(0xFF1565C0),
-    Color(0xFFC62828),
-    Color(0xFFE65100),
-    Color(0xFF6A1B9A),
-    Color(0xFF00838F),
-    Color(0xFFF9A825),
-    Color(0xFF4E342E),
-    Color(0xFFAD1457),
-    Color(0xFF455A64),
-    Color(0xFF558B2F),
-    Color(0xFF283593)
+    Color(0xFF1B5E20),
+    Color(0xFF0D47A1),
+    Color(0xFF7F1D1D),
+    Color(0xFF8B3A00),
+    Color(0xFF4A148C),
+    Color(0xFF004D40),
+    Color(0xFF8C6D00),
+    Color(0xFF3E2723),
+    Color(0xFF6A0035),
+    Color(0xFF263238),
+    Color(0xFF33691E),
+    Color(0xFF1A237E)
+)
+
+// Pastel palette for light mode
+private val PIE_COLORS_PASTEL_LIGHT = listOf(
+    Color(0xFFA5D6A7), // green
+    Color(0xFF90CAF9), // blue
+    Color(0xFFEF9A9A), // red
+    Color(0xFFFFCC80), // orange
+    Color(0xFFCE93D8), // purple
+    Color(0xFF80DEEA), // teal
+    Color(0xFFFFF59D), // yellow
+    Color(0xFFBCAAA4), // brown
+    Color(0xFFF48FB1), // pink
+    Color(0xFFB0BEC5), // gray
+    Color(0xFFC5E1A5), // lime
+    Color(0xFF9FA8DA)  // indigo
+)
+
+// Pastel palette for dark mode
+private val PIE_COLORS_PASTEL_DARK = listOf(
+    Color(0xFF2E5E30), // green
+    Color(0xFF1E4976), // blue
+    Color(0xFF6D3434), // red
+    Color(0xFF7A5020), // orange
+    Color(0xFF5A3070), // purple
+    Color(0xFF1A5055), // teal
+    Color(0xFF6B5E1A), // yellow
+    Color(0xFF4A3530), // brown
+    Color(0xFF6B2845), // pink
+    Color(0xFF37474F), // gray
+    Color(0xFF3A5420), // lime
+    Color(0xFF2A3570)  // indigo
+)
+
+// Sunset palette for light mode
+private val PIE_COLORS_SUNSET_LIGHT = listOf(
+    Color(0xFF4D1D46), // plum
+    Color(0xFFDC7049), // burnt orange
+    Color(0xFFEBB865), // golden yellow
+    Color(0xFF35506E), // steel blue
+    Color(0xFF8F5050), // dusty rose
+    Color(0xFF563060), // purple
+    Color(0xFF313967), // navy
+    Color(0xFFC25D5D), // coral
+    Color(0xFFD4956A), // peach
+    Color(0xFF2D6B6B), // teal
+    Color(0xFF7A5A3A), // sienna
+    Color(0xFF8B7BA8)  // lavender
+)
+
+// Sunset palette for dark mode
+private val PIE_COLORS_SUNSET_DARK = listOf(
+    Color(0xFF2E1129), // plum
+    Color(0xFF8A4530), // burnt orange
+    Color(0xFF8A6D2E), // golden yellow
+    Color(0xFF1E3045), // steel blue
+    Color(0xFF5A3232), // dusty rose
+    Color(0xFF331C39), // purple
+    Color(0xFF1C2140), // navy
+    Color(0xFF7A3A3A), // coral
+    Color(0xFF7A5540), // peach
+    Color(0xFF1A4040), // teal
+    Color(0xFF4A3622), // sienna
+    Color(0xFF524968)  // lavender
 )
 
 private data class PieWedge(
@@ -161,7 +226,8 @@ fun MainScreen(
     onAddIncome: () -> Unit = {},
     onAddExpense: () -> Unit = {},
     onSupercharge: (Map<Int, Double>) -> Unit = {},
-    weekStartDay: DayOfWeek = DayOfWeek.SUNDAY
+    weekStartDay: DayOfWeek = DayOfWeek.SUNDAY,
+    chartPalette: String = "Bright"
 ) {
     val customColors = LocalSyncBudgetColors.current
 
@@ -212,6 +278,7 @@ fun MainScreen(
 
     var showSuperchargeDialog by remember { mutableStateOf(false) }
     var selectedRange by remember { mutableStateOf(SpendingRange.ROLLING_7) }
+    var showBarChart by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -284,13 +351,62 @@ fun MainScreen(
                 }
             }
 
-            // Chart title
-            Text(
-                text = "Spending",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-            )
+            // Chart title bar
+            val isDarkTheme = isSystemInDarkTheme()
+            val chartBarBg = customColors.headerBackground
+            val chartBarFg = customColors.headerText
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(chartBarBg)
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Range selector button
+                Text(
+                    text = selectedRange.label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = chartBarFg,
+                    fontSize = 11.sp,
+                    modifier = Modifier
+                        .background(
+                            chartBarFg.copy(alpha = 0.15f),
+                            RoundedCornerShape(6.dp)
+                        )
+                        .clickable {
+                            val values = SpendingRange.entries.toTypedArray()
+                            val next = (selectedRange.ordinal + 1) % values.size
+                            selectedRange = values[next]
+                        }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+
+                // Centered title
+                Text(
+                    text = "Spending",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = chartBarFg,
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Center
+                )
+
+                // Chart type toggle icon
+                Icon(
+                    imageVector = if (showBarChart) Icons.Filled.PieChart else Icons.Filled.BarChart,
+                    contentDescription = if (showBarChart) "Switch to pie chart" else "Switch to bar chart",
+                    tint = chartBarFg,
+                    modifier = Modifier
+                        .background(
+                            chartBarFg.copy(alpha = 0.15f),
+                            RoundedCornerShape(6.dp)
+                        )
+                        .clickable { showBarChart = !showBarChart }
+                        .padding(4.dp)
+                        .size(18.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
 
             // Chart area
             SpendingPieChart(
@@ -300,11 +416,15 @@ fun MainScreen(
                 onRangeChange = { selectedRange = it },
                 currencySymbol = currencySymbol,
                 weekStartDay = weekStartDay,
+                chartPalette = chartPalette,
+                showBarChart = showBarChart,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp)
             )
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             // +/- buttons
             Row(
@@ -324,7 +444,7 @@ fun MainScreen(
                         imageVector = Icons.Filled.Add,
                         contentDescription = "Add Income",
                         tint = Color(0xFF4CAF50),
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(48.dp)
                     )
                 }
                 Button(
@@ -338,7 +458,7 @@ fun MainScreen(
                         imageVector = Icons.Filled.Remove,
                         contentDescription = "Add Expense",
                         tint = Color(0xFFF44336),
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(48.dp)
                     )
                 }
             }
@@ -347,7 +467,7 @@ fun MainScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 24.dp),
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -389,6 +509,8 @@ private fun SpendingPieChart(
     onRangeChange: (SpendingRange) -> Unit,
     currencySymbol: String,
     weekStartDay: DayOfWeek = DayOfWeek.SUNDAY,
+    chartPalette: String = "Bright",
+    showBarChart: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -430,9 +552,13 @@ private fun SpendingPieChart(
         .filter { it.value > 0 }
         .sortedByDescending { it.value }
 
-    // Select color palette based on theme
+    // Select color palette based on theme and user preference
     val isDark = isSystemInDarkTheme()
-    val chartColors = if (isDark) PIE_COLORS_DARK else PIE_COLORS_LIGHT
+    val chartColors = when (chartPalette) {
+        "Pastel" -> if (isDark) PIE_COLORS_PASTEL_DARK else PIE_COLORS_PASTEL_LIGHT
+        "Sunset" -> if (isDark) PIE_COLORS_SUNSET_DARK else PIE_COLORS_SUNSET_LIGHT
+        else -> if (isDark) PIE_COLORS_DARK else PIE_COLORS_LIGHT
+    }
 
     // Build wedge data
     val wedges = mutableListOf<PieWedge>()
@@ -453,8 +579,6 @@ private fun SpendingPieChart(
         )
         currentAngle += sweep
     }
-
-    var showBarChart by remember { mutableStateOf(false) }
 
     Box(modifier = modifier) {
         if (wedges.isEmpty()) {
@@ -578,43 +702,6 @@ private fun SpendingPieChart(
             }
         }
 
-        // Time range toggle in top-left
-        Text(
-            text = selectedRange.label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onBackground,
-            fontSize = 11.sp,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(4.dp)
-                .background(
-                    MaterialTheme.colorScheme.onBackground.copy(alpha = 0.08f),
-                    RoundedCornerShape(6.dp)
-                )
-                .clickable {
-                    val values = SpendingRange.entries.toTypedArray()
-                    val next = (selectedRange.ordinal + 1) % values.size
-                    onRangeChange(values[next])
-                }
-                .padding(horizontal = 8.dp, vertical = 4.dp)
-        )
-
-        // Chart type toggle in top-right
-        Icon(
-            imageVector = if (showBarChart) Icons.Filled.PieChart else Icons.Filled.BarChart,
-            contentDescription = if (showBarChart) "Switch to pie chart" else "Switch to bar chart",
-            tint = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(4.dp)
-                .background(
-                    MaterialTheme.colorScheme.onBackground.copy(alpha = 0.08f),
-                    RoundedCornerShape(6.dp)
-                )
-                .clickable { showBarChart = !showBarChart }
-                .padding(4.dp)
-                .size(18.dp)
-        )
     }
 }
 

@@ -162,28 +162,7 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
 
             HelpDividerLine()
 
-            // ─── SECTION 4: DIGITS ───
-            HelpSectionTitle("Digits")
-            HelpBodyText(
-                "Controls how many digit positions the Solari display shows, from 2 to 5. " +
-                "This affects the maximum value the display can show:"
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            HelpBulletText("2 digits \u2014 up to 99 (or 99.99 with decimals)")
-            HelpBulletText("3 digits \u2014 up to 999")
-            HelpBulletText("4 digits \u2014 up to 9,999")
-            HelpBulletText("5 digits \u2014 up to 99,999")
-            Spacer(modifier = Modifier.height(8.dp))
-            HelpBodyText(
-                "Choose based on your typical budget range. For daily budgets, 3 digits " +
-                "is usually sufficient. For weekly or monthly budgets, 4 or 5 may be needed.",
-                italic = true
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-
-            HelpDividerLine()
-
-            // ─── SECTION 5: DECIMALS ───
+            // ─── SECTION 4: DECIMALS ───
             HelpSectionTitle("Show Decimal Places")
             HelpBodyText(
                 "When checked, the Solari display shows cents/pence after a decimal point. " +
@@ -195,7 +174,7 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
 
             HelpDividerLine()
 
-            // ─── SECTION 6: DATE FORMAT ───
+            // ─── SECTION 5: DATE FORMAT ───
             HelpSectionTitle("Date Format")
             HelpBodyText(
                 "Choose how dates are displayed throughout the app, including the transaction " +
@@ -218,7 +197,59 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
 
             HelpDividerLine()
 
-            // ─── SECTION 7: PAID USER ───
+            // ─── SECTION 6: WEEK STARTS ON ───
+            HelpSectionTitle("Week Starts On")
+            HelpBodyText(
+                "Choose whether the week begins on Sunday or Monday. This affects the spending " +
+                "chart's weekly grouping and any weekly budget period calculations."
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDividerLine()
+
+            // ─── SECTION 7: CHART PALETTE ───
+            HelpSectionTitle("Chart Palette")
+            HelpBodyText(
+                "Choose the color palette used for pie charts and bar charts throughout the app. " +
+                "Three options are available:"
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            HelpBulletText("Bright \u2014 vivid, saturated colors for maximum contrast")
+            HelpBulletText("Pastel \u2014 softer, muted tones for a gentler look")
+            HelpBulletText("Sunset \u2014 warm earth tones inspired by a sunset palette (default)")
+            Spacer(modifier = Modifier.height(8.dp))
+            HelpBodyText(
+                "Each palette automatically adjusts for light and dark mode. The palette " +
+                "applies to the dashboard spending chart, the transaction pie chart editor, " +
+                "and all other chart displays.",
+                italic = true
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDividerLine()
+
+            // ─── SECTION 8: MATCHING CONFIGURATION ───
+            HelpSectionTitle("Matching Configuration")
+            HelpBodyText(
+                "These settings control how the app detects duplicate transactions and matches " +
+                "transactions to recurring expenses, amortization entries, and budget income sources:"
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            HelpBulletText("Match Days (\u00b1N) \u2014 how many days apart two transactions can be and still be considered a match")
+            HelpBulletText("Match Percent (\u00b1%) \u2014 percentage tolerance for amount matching")
+            HelpBulletText("Match Dollar (\u00b1\$) \u2014 absolute dollar tolerance for amount matching")
+            HelpBulletText("Match Characters \u2014 minimum shared substring length for merchant name matching")
+            Spacer(modifier = Modifier.height(8.dp))
+            HelpBodyText(
+                "The defaults work well for most users. Increase the tolerances if you find " +
+                "the app is missing matches, or decrease them if you're seeing too many false positives.",
+                italic = true
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDividerLine()
+
+            // ─── SECTION 9: PAID USER ───
             HelpSectionTitle("Paid User")
             HelpBodyText(
                 "When checked, this unlocks premium features:"
@@ -236,7 +267,7 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
 
             HelpDividerLine()
 
-            // ─── SECTION 8: CATEGORIES ───
+            // ─── SECTION 10: CATEGORIES ───
             HelpSectionTitle("Categories")
             HelpBodyText(
                 "Categories let you classify your transactions for better spending insight. " +
@@ -310,7 +341,7 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
 
             HelpDividerLine()
 
-            // ─── SECTION 9: TIPS ───
+            // ─── SECTION 11: TIPS ───
             HelpSectionTitle("Tips")
             HelpBulletText("Set up categories before importing transactions \u2014 the auto-categorization uses your existing transaction history to match merchants.")
             HelpBulletText("Create categories that match your spending habits. Common examples: Food, Transport, Entertainment, Health, Housing, Utilities, Shopping.")

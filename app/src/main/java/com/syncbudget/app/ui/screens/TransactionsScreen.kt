@@ -183,6 +183,7 @@ fun TransactionsScreen(
     onUpdateTransaction: (Transaction) -> Unit,
     onDeleteTransaction: (Transaction) -> Unit,
     onDeleteTransactions: (Set<Int>) -> Unit,
+    chartPalette: String = "Bright",
     onBack: () -> Unit,
     onHelpClick: () -> Unit = {}
 ) {
@@ -772,7 +773,7 @@ fun TransactionsScreen(
                         Icon(
                             imageVector = Icons.Filled.Close,
                             contentDescription = "Cancel selection",
-                            tint = MaterialTheme.colorScheme.onBackground
+                            tint = customColors.headerBackground
                         )
                     }
                 }
@@ -835,6 +836,7 @@ fun TransactionsScreen(
             existingIds = existingIds,
             currencySymbol = currencySymbol,
             dateFormatter = dateFormatter,
+            chartPalette = chartPalette,
             onDismiss = { showAddIncome = false },
             onSave = { txn ->
                 val dup = findDuplicate(txn, transactions, percentTolerance, matchDollar, matchDays, matchChars)
@@ -885,6 +887,7 @@ fun TransactionsScreen(
             currencySymbol = currencySymbol,
             dateFormatter = dateFormatter,
             isExpense = true,
+            chartPalette = chartPalette,
             onDismiss = { showAddExpense = false },
             onSave = { txn ->
                 val dup = findDuplicate(txn, transactions, percentTolerance, matchDollar, matchDays, matchChars)
@@ -928,6 +931,7 @@ fun TransactionsScreen(
             dateFormatter = dateFormatter,
             isExpense = txn.type == TransactionType.EXPENSE,
             editTransaction = txn,
+            chartPalette = chartPalette,
             onDismiss = { editingTransaction = null },
             onSave = { updated ->
                 val dup = findDuplicate(updated, transactions.filter { it.id != updated.id }, percentTolerance, matchDollar, matchDays, matchChars)
@@ -2083,6 +2087,7 @@ fun TransactionDialog(
     dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd"),
     isExpense: Boolean = false,
     editTransaction: Transaction? = null,
+    chartPalette: String = "Bright",
     onDismiss: () -> Unit,
     onSave: (Transaction) -> Unit,
     onDelete: (() -> Unit)? = null
@@ -2462,7 +2467,8 @@ fun TransactionDialog(
                                 newAmounts.forEach { (catId, amount) ->
                                     categoryAmountTexts[catId] = formatAmount(amount, maxDecimals)
                                 }
-                            }
+                            },
+                            chartPalette = chartPalette
                         )
                     } else {
                         // Per-category fields

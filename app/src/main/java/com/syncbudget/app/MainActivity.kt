@@ -108,6 +108,7 @@ class MainActivity : ComponentActivity() {
             var matchDollar by remember { mutableIntStateOf(prefs.getInt("matchDollar", 1)) }
             var matchChars by remember { mutableIntStateOf(prefs.getInt("matchChars", 5)) }
             var weekStartSunday by remember { mutableStateOf(prefs.getBoolean("weekStartSunday", true)) }
+            var chartPalette by remember { mutableStateOf(prefs.getString("chartPalette", "Sunset") ?: "Sunset") }
             var budgetPeriod by remember {
                 mutableStateOf(
                     try { BudgetPeriod.valueOf(prefs.getString("budgetPeriod", "MONTHLY") ?: "MONTHLY") }
@@ -407,6 +408,7 @@ class MainActivity : ComponentActivity() {
                             dashboardShowAddExpense = true
                         },
                         weekStartDay = if (weekStartSunday) java.time.DayOfWeek.SUNDAY else java.time.DayOfWeek.MONDAY,
+                        chartPalette = chartPalette,
                         onSupercharge = { allocations ->
                             var totalDeducted = 0.0
                             for ((goalId, amount) in allocations) {
@@ -441,16 +443,13 @@ class MainActivity : ComponentActivity() {
                         onMatchDollarChange = { matchDollar = it; prefs.edit().putInt("matchDollar", it).apply() },
                         matchChars = matchChars,
                         onMatchCharsChange = { matchChars = it; prefs.edit().putInt("matchChars", it).apply() },
+                        chartPalette = chartPalette,
+                        onChartPaletteChange = { chartPalette = it; prefs.edit().putString("chartPalette", it).apply() },
                         weekStartSunday = weekStartSunday,
                         onWeekStartChange = { weekStartSunday = it; prefs.edit().putBoolean("weekStartSunday", it).apply() },
                         onCurrencyChange = {
                             currencySymbol = it
                             prefs.edit().putString("currencySymbol", it).apply()
-                        },
-                        digitCount = digitCount,
-                        onDigitCountChange = {
-                            digitCount = it
-                            prefs.edit().putInt("digitCount", it).apply()
                         },
                         showDecimals = showDecimals,
                         onDecimalsChange = {
@@ -523,6 +522,7 @@ class MainActivity : ComponentActivity() {
                         matchPercent = matchPercent,
                         matchDollar = matchDollar,
                         matchChars = matchChars,
+                        chartPalette = chartPalette,
                         onAddTransaction = { txn ->
                             addTransactionWithBudgetEffect(txn)
                         },
@@ -735,6 +735,7 @@ class MainActivity : ComponentActivity() {
                         existingIds = existingIds,
                         currencySymbol = currencySymbol,
                         dateFormatter = dateFormatter,
+                        chartPalette = chartPalette,
                         onDismiss = { dashboardShowAddIncome = false },
                         onSave = { txn ->
                             runMatchingChain(txn)
@@ -752,6 +753,7 @@ class MainActivity : ComponentActivity() {
                         currencySymbol = currencySymbol,
                         dateFormatter = dateFormatter,
                         isExpense = true,
+                        chartPalette = chartPalette,
                         onDismiss = { dashboardShowAddExpense = false },
                         onSave = { txn ->
                             runMatchingChain(txn)

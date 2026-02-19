@@ -20,10 +20,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Savings
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Toll
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -229,7 +232,7 @@ fun DashboardHelpScreen(onBack: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(Icons.AutoMirrored.Filled.List, contentDescription = null, tint = textColor, modifier = Modifier.size(28.dp))
-                    Icon(Icons.Filled.Savings, contentDescription = null, tint = textColor, modifier = Modifier.size(28.dp))
+                    Icon(Icons.Filled.Toll, contentDescription = null, tint = textColor, modifier = Modifier.size(28.dp))
                     Icon(Icons.Filled.Schedule, contentDescription = null, tint = textColor, modifier = Modifier.size(28.dp))
                     Icon(Icons.Filled.Sync, contentDescription = null, tint = textColor, modifier = Modifier.size(28.dp))
                 }
@@ -237,14 +240,97 @@ fun DashboardHelpScreen(onBack: () -> Unit) {
             Spacer(modifier = Modifier.height(10.dp))
 
             HelpIconRow(Icons.AutoMirrored.Filled.List, "Transactions", "Record and manage your income and expenses. Import bank statements, search, filter, and categorize.")
-            HelpIconRow(Icons.Filled.Savings, "Savings Goals", "Plan and save for future expenses or financial targets. Choose a target date or fixed per-period contribution.")
+            HelpIconRow(Icons.Filled.Toll, "Savings Goals", "Plan and save for future expenses or financial targets. Choose a target date or fixed per-period contribution.")
             HelpIconRow(Icons.Filled.Schedule, "Amortization", "Spread a past large expense across multiple budget periods so it doesn't hit your budget all at once.")
             HelpIconRow(Icons.Filled.Sync, "Recurring Expenses", "Register bills, subscriptions, and loan payments so the budget calculator accounts for them automatically.")
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
-            // ─── SECTION 5: HOW IT ALL WORKS ───
+            // ─── SECTION 5: SPENDING CHART ───
+            HelpSectionTitle("Spending Chart")
+            HelpBodyText(
+                "Below the Solari display, a spending chart visualizes how your expenses are " +
+                "distributed across categories. A title bar above the chart provides controls:"
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            HelpSubSectionTitle("Chart Title Bar")
+            HelpBulletText("Range button (left) \u2014 cycles through time ranges: 7 days, 30 days, 90 days, or All Time")
+            HelpBulletText("\"Spending\" title (center) \u2014 the chart label")
+            HelpBulletText("Chart type toggle (right) \u2014 switch between pie chart and bar chart views")
+            Spacer(modifier = Modifier.height(10.dp))
+
+            HelpSubSectionTitle("Chart Palette")
+            HelpBodyText(
+                "The colors used in the chart can be changed in Settings under \"Chart Palette\". " +
+                "Three palettes are available: Bright, Pastel, and Sunset. Each palette automatically " +
+                "adjusts for light and dark mode."
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDividerLine()
+
+            // ─── SECTION 6: QUICK TRANSACTION BUTTONS ───
+            HelpSectionTitle("Quick Transaction Buttons")
+            HelpBodyText(
+                "Below the chart, two large buttons let you quickly add transactions without " +
+                "leaving the dashboard:"
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Visual button mockup
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .border(1.dp, dimColor.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
+                    .padding(horizontal = 32.dp, vertical = 10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(48.dp))
+                    Icon(Icons.Filled.Remove, contentDescription = null, tint = Color(0xFFF44336), modifier = Modifier.size(48.dp))
+                }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+
+            HelpIconRow(Icons.Filled.Add, "Add Income", "Opens the Add Income dialog. The transaction is saved and available cash increases.", Color(0xFF4CAF50))
+            HelpIconRow(Icons.Filled.Remove, "Add Expense", "Opens the Add Expense dialog. The transaction is saved and available cash decreases.", Color(0xFFF44336))
+            Spacer(modifier = Modifier.height(8.dp))
+            HelpBodyText(
+                "Transactions added from the dashboard go through the same matching checks as " +
+                "the Transactions screen: duplicate detection, recurring expense matching, " +
+                "amortization matching, and budget income detection.",
+                italic = true
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDividerLine()
+
+            // ─── SECTION 7: SUPERCHARGE ───
+            HelpSectionTitle("Supercharge")
+            HelpBodyText(
+                "The bolt icon in the lower-right corner of the dashboard opens Supercharge. " +
+                "This feature lets you make extra one-time contributions to your Savings Goals " +
+                "from your available cash."
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            HelpIconRow(Icons.Filled.Bolt, "Supercharge", "Allocate extra funds to one or more Savings Goals from your current available cash.")
+            Spacer(modifier = Modifier.height(8.dp))
+            HelpBodyText(
+                "In the Supercharge dialog, enter an amount for each goal you want to boost. " +
+                "The total is deducted from your available cash and added to the goals' saved amounts. " +
+                "This is useful when you have surplus cash and want to reach a goal faster."
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDividerLine()
+
+            // ─── SECTION 8: HOW IT ALL WORKS ───
             HelpSectionTitle("How the Budget Works")
             HelpBodyText(
                 "The budget engine runs a cash flow simulation using your income schedule and " +

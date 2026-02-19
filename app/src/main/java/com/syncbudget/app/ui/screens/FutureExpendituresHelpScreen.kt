@@ -113,10 +113,11 @@ fun FutureExpendituresHelpScreen(onBack: () -> Unit) {
                         color = textColor
                     )
                     Text(
-                        "You need new tires in 6 months, estimated cost: \$600. " +
-                        "On a daily budget, the app deducts about \$3.29/day from your budget. " +
-                        "You barely notice the daily reduction, but when tire day arrives, " +
-                        "the money is ready. No surprise, no stress.",
+                        "You want to build a \$3,000 emergency fund. Create a fixed contribution " +
+                        "goal of \$5/day. On a daily budget, you barely notice the deduction, " +
+                        "but after 20 months your emergency fund is fully funded. Or set a " +
+                        "target date of 6 months to save \$600 for new tires \u2014 the app " +
+                        "deducts about \$3.29/day automatically. No surprise, no stress.",
                         style = MaterialTheme.typography.bodySmall,
                         color = textColor,
                         lineHeight = 18.sp
