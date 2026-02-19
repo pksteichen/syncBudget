@@ -22,12 +22,11 @@ import com.syncbudget.app.data.Category
 import com.syncbudget.app.data.CategoryAmount
 import com.syncbudget.app.data.CategoryRepository
 import com.syncbudget.app.data.AmortizationRepository
-import com.syncbudget.app.data.FutureExpenditureRepository
+import com.syncbudget.app.data.SavingsGoalRepository
 import com.syncbudget.app.data.IncomeSource
 import com.syncbudget.app.data.IncomeSourceRepository
 import com.syncbudget.app.data.RecurringExpense
 import com.syncbudget.app.data.RecurringExpenseRepository
-import com.syncbudget.app.data.SavingsGoalRepository
 import com.syncbudget.app.data.Transaction
 import com.syncbudget.app.data.TransactionRepository
 import com.syncbudget.app.data.TransactionType
@@ -51,8 +50,6 @@ import com.syncbudget.app.ui.screens.MainScreen
 import com.syncbudget.app.ui.screens.RecurringExpenseConfirmDialog
 import com.syncbudget.app.ui.screens.RecurringExpensesHelpScreen
 import com.syncbudget.app.ui.screens.RecurringExpensesScreen
-import com.syncbudget.app.ui.screens.SavingsHelpScreen
-import com.syncbudget.app.ui.screens.SavingsScreen
 import com.syncbudget.app.ui.screens.SettingsHelpScreen
 import com.syncbudget.app.ui.screens.SettingsScreen
 import com.syncbudget.app.ui.screens.TransactionDialog
@@ -110,6 +107,7 @@ class MainActivity : ComponentActivity() {
             var matchPercent by remember { mutableFloatStateOf(prefs.getFloat("matchPercent", 1.0f)) }
             var matchDollar by remember { mutableIntStateOf(prefs.getInt("matchDollar", 1)) }
             var matchChars by remember { mutableIntStateOf(prefs.getInt("matchChars", 5)) }
+            var weekStartSunday by remember { mutableStateOf(prefs.getBoolean("weekStartSunday", true)) }
             var budgetPeriod by remember {
                 mutableStateOf(
                     try { BudgetPeriod.valueOf(prefs.getString("budgetPeriod", "MONTHLY") ?: "MONTHLY") }
@@ -185,10 +183,6 @@ class MainActivity : ComponentActivity() {
                 mutableStateListOf(*AmortizationRepository.load(context).toTypedArray())
             }
 
-            val futureExpenditures = remember {
-                mutableStateListOf(*FutureExpenditureRepository.load(context).toTypedArray())
-            }
-
             val savingsGoals = remember {
                 mutableStateListOf(*SavingsGoalRepository.load(context).toTypedArray())
             }
@@ -205,8 +199,8 @@ class MainActivity : ComponentActivity() {
                 AmortizationRepository.save(context, amortizationEntries.toList())
             }
 
-            fun saveFutureExpenditures() {
-                FutureExpenditureRepository.save(context, futureExpenditures.toList())
+            fun saveSavingsGoals() {
+                SavingsGoalRepository.save(context, savingsGoals.toList())
             }
 
             fun saveTransactions() {
@@ -217,12 +211,15 @@ class MainActivity : ComponentActivity() {
                 CategoryRepository.save(context, categories.toList())
             }
 
-            fun saveSavingsGoals() {
-                SavingsGoalRepository.save(context, savingsGoals.toList())
-            }
-
             fun persistAvailableCash() {
                 prefs.edit().putFloat("availableCash", availableCash.toFloat()).apply()
+            }
+
+            fun recalculateBudget() {
+                safeBudgetAmount = BudgetCalculator.calculateSafeBudgetAmount(
+                    incomeSources, recurringExpenses, budgetPeriod
+                )
+                prefs.edit().putFloat("safeBudgetAmount", safeBudgetAmount.toFloat()).apply()
             }
 
             // Derived budgetAmount
@@ -230,20 +227,30 @@ class MainActivity : ComponentActivity() {
                 manualBudgetAmount
             } else {
                 val amortDeductions = BudgetCalculator.activeAmortizationDeductions(amortizationEntries, budgetPeriod)
-                val fleDeductions = BudgetCalculator.activeFLEDeductions(futureExpenditures, budgetPeriod)
-                val savingsDeductions = BudgetCalculator.activeSavingsDeductions(savingsGoals)
-                maxOf(0.0, safeBudgetAmount - amortDeductions - fleDeductions - savingsDeductions)
+                val savingsDeductions = BudgetCalculator.activeSavingsGoalDeductions(savingsGoals, budgetPeriod)
+                maxOf(0.0, safeBudgetAmount - amortDeductions - savingsDeductions)
             }
 
             // Percent tolerance for matching
             val percentTolerance = matchPercent / 100f
+
+            // Check if an expense transaction is already accounted for in the budget
+            // (recurring expenses and amortization are built into the safe budget amount)
+            fun isBudgetAccountedExpense(txn: Transaction): Boolean {
+                if (txn.type != TransactionType.EXPENSE) return false
+                val recurringCatId = categories.find { it.name == "Recurring" }?.id
+                val amortCatId = categories.find { it.name == "Amortization" }?.id
+                return txn.categoryAmounts.any {
+                    it.categoryId == recurringCatId || it.categoryId == amortCatId
+                }
+            }
 
             // Helper to add a transaction with budget effects
             fun addTransactionWithBudgetEffect(txn: Transaction) {
                 transactions.add(txn)
                 saveTransactions()
                 if (budgetStartDate != null && !txn.date.isBefore(budgetStartDate)) {
-                    if (txn.type == TransactionType.EXPENSE) {
+                    if (txn.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(txn)) {
                         availableCash -= txn.amount
                     } else if (txn.type == TransactionType.INCOME && !txn.isBudgetIncome) {
                         availableCash += txn.amount
@@ -302,49 +309,46 @@ class MainActivity : ComponentActivity() {
                             manualBudgetAmount
                         } else {
                             val amortDed = BudgetCalculator.activeAmortizationDeductions(amortizationEntries, budgetPeriod)
-                            val fleDed = BudgetCalculator.activeFLEDeductions(futureExpenditures, budgetPeriod)
-                            val savDed = BudgetCalculator.activeSavingsDeductions(savingsGoals)
-                            maxOf(0.0, safeBudgetAmount - amortDed - fleDed - savDed)
+                            val savDed = BudgetCalculator.activeSavingsGoalDeductions(savingsGoals, budgetPeriod)
+                            maxOf(0.0, safeBudgetAmount - amortDed - savDed)
                         }
                         availableCash += currentBudgetAmount * missedPeriods
                         lastRefreshDate = today
 
-                        // Update FLE totalSavedSoFar for non-paused, non-complete items
+                        // Update savings goals totalSavedSoFar for non-paused, non-complete items
                         if (!isManualBudgetEnabled) {
                             for (period in 0 until missedPeriods) {
-                                futureExpenditures.forEachIndexed { idx, exp ->
-                                    if (!exp.isPaused) {
-                                        val remaining = exp.amount - exp.totalSavedSoFar
-                                        if (remaining > 0 && LocalDate.now().isBefore(exp.targetDate)) {
-                                            val periods = when (budgetPeriod) {
-                                                BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(LocalDate.now(), exp.targetDate)
-                                                BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(LocalDate.now(), exp.targetDate)
-                                                BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(LocalDate.now(), exp.targetDate)
-                                            }
-                                            if (periods > 0) {
-                                                val deduction = minOf(remaining / periods.toDouble(), remaining)
-                                                futureExpenditures[idx] = exp.copy(
-                                                    totalSavedSoFar = exp.totalSavedSoFar + deduction
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            saveFutureExpenditures()
-
-                            // Update savings goals savedSoFar for non-paused, incomplete goals
-                            for (period in 0 until missedPeriods) {
                                 savingsGoals.forEachIndexed { idx, goal ->
-                                    if (!goal.isPaused && goal.savedSoFar < goal.targetAmount) {
-                                        val contribution = minOf(
-                                            goal.contributionPerPeriod,
-                                            goal.targetAmount - goal.savedSoFar
-                                        )
-                                        if (contribution > 0) {
-                                            savingsGoals[idx] = goal.copy(
-                                                savedSoFar = goal.savedSoFar + contribution
-                                            )
+                                    if (!goal.isPaused) {
+                                        val remaining = goal.targetAmount - goal.totalSavedSoFar
+                                        if (remaining > 0) {
+                                            if (goal.targetDate != null) {
+                                                // Target-date type: recalculate dynamically
+                                                if (LocalDate.now().isBefore(goal.targetDate)) {
+                                                    val periods = when (budgetPeriod) {
+                                                        BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(LocalDate.now(), goal.targetDate)
+                                                        BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(LocalDate.now(), goal.targetDate)
+                                                        BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(LocalDate.now(), goal.targetDate)
+                                                    }
+                                                    if (periods > 0) {
+                                                        val deduction = minOf(remaining / periods.toDouble(), remaining)
+                                                        savingsGoals[idx] = goal.copy(
+                                                            totalSavedSoFar = goal.totalSavedSoFar + deduction
+                                                        )
+                                                    }
+                                                }
+                                            } else {
+                                                // Fixed contribution type: add contributionPerPeriod capped at target
+                                                val contribution = minOf(
+                                                    goal.contributionPerPeriod,
+                                                    remaining
+                                                )
+                                                if (contribution > 0) {
+                                                    savingsGoals[idx] = goal.copy(
+                                                        totalSavedSoFar = goal.totalSavedSoFar + contribution
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -372,7 +376,6 @@ class MainActivity : ComponentActivity() {
                             "recurring_expenses_help" -> "recurring_expenses"
                             "budget_config_help" -> "budget_config"
                             "budget_config" -> "settings"
-                            "savings_help" -> "savings"
                             else -> "main"
                         }
                     }
@@ -392,6 +395,9 @@ class MainActivity : ComponentActivity() {
                             BudgetPeriod.WEEKLY -> "week"
                             BudgetPeriod.MONTHLY -> "month"
                         },
+                        savingsGoals = savingsGoals,
+                        transactions = transactions,
+                        categories = categories,
                         onSettingsClick = { currentScreen = "settings" },
                         onNavigate = { currentScreen = it },
                         onAddIncome = {
@@ -399,6 +405,29 @@ class MainActivity : ComponentActivity() {
                         },
                         onAddExpense = {
                             dashboardShowAddExpense = true
+                        },
+                        weekStartDay = if (weekStartSunday) java.time.DayOfWeek.SUNDAY else java.time.DayOfWeek.MONDAY,
+                        onSupercharge = { allocations ->
+                            var totalDeducted = 0.0
+                            for ((goalId, amount) in allocations) {
+                                val idx = savingsGoals.indexOfFirst { it.id == goalId }
+                                if (idx >= 0) {
+                                    val goal = savingsGoals[idx]
+                                    val remaining = goal.targetAmount - goal.totalSavedSoFar
+                                    val capped = minOf(amount, remaining)
+                                    if (capped > 0) {
+                                        savingsGoals[idx] = goal.copy(
+                                            totalSavedSoFar = goal.totalSavedSoFar + capped
+                                        )
+                                        totalDeducted += capped
+                                    }
+                                }
+                            }
+                            if (totalDeducted > 0) {
+                                saveSavingsGoals()
+                                availableCash -= totalDeducted
+                                persistAvailableCash()
+                            }
                         }
                     )
                     "settings" -> SettingsScreen(
@@ -412,6 +441,8 @@ class MainActivity : ComponentActivity() {
                         onMatchDollarChange = { matchDollar = it; prefs.edit().putInt("matchDollar", it).apply() },
                         matchChars = matchChars,
                         onMatchCharsChange = { matchChars = it; prefs.edit().putInt("matchChars", it).apply() },
+                        weekStartSunday = weekStartSunday,
+                        onWeekStartChange = { weekStartSunday = it; prefs.edit().putBoolean("weekStartSunday", it).apply() },
                         onCurrencyChange = {
                             currencySymbol = it
                             prefs.edit().putString("currencySymbol", it).apply()
@@ -505,12 +536,12 @@ class MainActivity : ComponentActivity() {
                             if (budgetStartDate != null && old != null) {
                                 // Reverse old effect
                                 if (!old.date.isBefore(budgetStartDate)) {
-                                    if (old.type == TransactionType.EXPENSE) availableCash += old.amount
+                                    if (old.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(old)) availableCash += old.amount
                                     else if (old.type == TransactionType.INCOME && !old.isBudgetIncome) availableCash -= old.amount
                                 }
                                 // Apply new effect
                                 if (!updated.date.isBefore(budgetStartDate)) {
-                                    if (updated.type == TransactionType.EXPENSE) availableCash -= updated.amount
+                                    if (updated.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(updated)) availableCash -= updated.amount
                                     else if (updated.type == TransactionType.INCOME && !updated.isBudgetIncome) availableCash += updated.amount
                                 }
                                 persistAvailableCash()
@@ -520,7 +551,7 @@ class MainActivity : ComponentActivity() {
                             transactions.removeAll { it.id == txn.id }
                             saveTransactions()
                             if (budgetStartDate != null && !txn.date.isBefore(budgetStartDate)) {
-                                if (txn.type == TransactionType.EXPENSE) {
+                                if (txn.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(txn)) {
                                     availableCash += txn.amount
                                 } else if (txn.type == TransactionType.INCOME && !txn.isBudgetIncome) {
                                     availableCash -= txn.amount
@@ -535,7 +566,7 @@ class MainActivity : ComponentActivity() {
                             if (budgetStartDate != null) {
                                 for (txn in deletedTxns) {
                                     if (!txn.date.isBefore(budgetStartDate)) {
-                                        if (txn.type == TransactionType.EXPENSE) {
+                                        if (txn.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(txn)) {
                                             availableCash += txn.amount
                                         } else if (txn.type == TransactionType.INCOME && !txn.isBudgetIncome) {
                                             availableCash -= txn.amount
@@ -549,16 +580,16 @@ class MainActivity : ComponentActivity() {
                         onHelpClick = { currentScreen = "transactions_help" }
                     )
                     "future_expenditures" -> FutureExpendituresScreen(
-                        futureExpenditures = futureExpenditures,
+                        savingsGoals = savingsGoals,
                         currencySymbol = currencySymbol,
                         budgetPeriod = budgetPeriod,
                         isManualBudgetEnabled = isManualBudgetEnabled,
-                        onAddExpenditure = { futureExpenditures.add(it); saveFutureExpenditures() },
-                        onUpdateExpenditure = { updated ->
-                            val idx = futureExpenditures.indexOfFirst { it.id == updated.id }
-                            if (idx >= 0) { futureExpenditures[idx] = updated; saveFutureExpenditures() }
+                        onAddGoal = { savingsGoals.add(it); saveSavingsGoals() },
+                        onUpdateGoal = { updated ->
+                            val idx = savingsGoals.indexOfFirst { it.id == updated.id }
+                            if (idx >= 0) { savingsGoals[idx] = updated; saveSavingsGoals() }
                         },
-                        onDeleteExpenditure = { futureExpenditures.removeAll { s -> s.id == it.id }; saveFutureExpenditures() },
+                        onDeleteGoal = { savingsGoals.removeAll { s -> s.id == it.id }; saveSavingsGoals() },
                         onBack = { currentScreen = "main" },
                         onHelpClick = { currentScreen = "future_expenditures_help" }
                     )
@@ -579,41 +610,28 @@ class MainActivity : ComponentActivity() {
                     "recurring_expenses" -> RecurringExpensesScreen(
                         recurringExpenses = recurringExpenses,
                         currencySymbol = currencySymbol,
-                        onAddRecurringExpense = { recurringExpenses.add(it); saveRecurringExpenses() },
+                        onAddRecurringExpense = { recurringExpenses.add(it); saveRecurringExpenses(); recalculateBudget() },
                         onUpdateRecurringExpense = { updated ->
                             val idx = recurringExpenses.indexOfFirst { it.id == updated.id }
-                            if (idx >= 0) { recurringExpenses[idx] = updated; saveRecurringExpenses() }
+                            if (idx >= 0) { recurringExpenses[idx] = updated; saveRecurringExpenses(); recalculateBudget() }
                         },
-                        onDeleteRecurringExpense = { recurringExpenses.removeAll { s -> s.id == it.id }; saveRecurringExpenses() },
+                        onDeleteRecurringExpense = { recurringExpenses.removeAll { s -> s.id == it.id }; saveRecurringExpenses(); recalculateBudget() },
                         onBack = { currentScreen = "main" },
                         onHelpClick = { currentScreen = "recurring_expenses_help" }
-                    )
-                    "savings" -> SavingsScreen(
-                        savingsGoals = savingsGoals,
-                        currencySymbol = currencySymbol,
-                        budgetPeriod = budgetPeriod,
-                        isManualBudgetEnabled = isManualBudgetEnabled,
-                        onAddGoal = { savingsGoals.add(it); saveSavingsGoals() },
-                        onUpdateGoal = { updated ->
-                            val idx = savingsGoals.indexOfFirst { it.id == updated.id }
-                            if (idx >= 0) { savingsGoals[idx] = updated; saveSavingsGoals() }
-                        },
-                        onDeleteGoal = { savingsGoals.removeAll { s -> s.id == it.id }; saveSavingsGoals() },
-                        onBack = { currentScreen = "main" },
-                        onHelpClick = { currentScreen = "savings_help" }
                     )
                     "budget_config" -> BudgetConfigScreen(
                         incomeSources = incomeSources,
                         currencySymbol = currencySymbol,
-                        onAddIncomeSource = { incomeSources.add(it); saveIncomeSources() },
+                        onAddIncomeSource = { incomeSources.add(it); saveIncomeSources(); recalculateBudget() },
                         onUpdateIncomeSource = { updated ->
                             val idx = incomeSources.indexOfFirst { it.id == updated.id }
                             if (idx >= 0) {
                                 incomeSources[idx] = updated
                                 saveIncomeSources()
+                                recalculateBudget()
                             }
                         },
-                        onDeleteIncomeSource = { incomeSources.removeAll { s -> s.id == it.id }; saveIncomeSources() },
+                        onDeleteIncomeSource = { incomeSources.removeAll { s -> s.id == it.id }; saveIncomeSources(); recalculateBudget() },
                         budgetPeriod = budgetPeriod,
                         onBudgetPeriodChange = { budgetPeriod = it; prefs.edit().putString("budgetPeriod", it.name).apply() },
                         resetHour = resetHour,
@@ -644,9 +662,8 @@ class MainActivity : ComponentActivity() {
                                 manualBudgetAmount
                             } else {
                                 val amortDed = BudgetCalculator.activeAmortizationDeductions(amortizationEntries, budgetPeriod)
-                                val fleDed = BudgetCalculator.activeFLEDeductions(futureExpenditures, budgetPeriod)
-                                val savDed = BudgetCalculator.activeSavingsDeductions(savingsGoals)
-                                maxOf(0.0, safeBudgetAmount - amortDed - fleDed - savDed)
+                                val savDed = BudgetCalculator.activeSavingsGoalDeductions(savingsGoals, budgetPeriod)
+                                maxOf(0.0, safeBudgetAmount - amortDed - savDed)
                             }
                             availableCash = newBudgetAmount
                             prefs.edit()
@@ -667,9 +684,8 @@ class MainActivity : ComponentActivity() {
                                 manualBudgetAmount
                             } else {
                                 val amortDed = BudgetCalculator.activeAmortizationDeductions(amortizationEntries, budgetPeriod)
-                                val fleDed = BudgetCalculator.activeFLEDeductions(futureExpenditures, budgetPeriod)
-                                val savDed = BudgetCalculator.activeSavingsDeductions(savingsGoals)
-                                maxOf(0.0, safeBudgetAmount - amortDed - fleDed - savDed)
+                                val savDed = BudgetCalculator.activeSavingsGoalDeductions(savingsGoals, budgetPeriod)
+                                maxOf(0.0, safeBudgetAmount - amortDed - savDed)
                             }
 
                             if (budgetStartDate == null || availableCash == 0.0) {
@@ -704,9 +720,6 @@ class MainActivity : ComponentActivity() {
                     )
                     "recurring_expenses_help" -> RecurringExpensesHelpScreen(
                         onBack = { currentScreen = "recurring_expenses" }
-                    )
-                    "savings_help" -> SavingsHelpScreen(
-                        onBack = { currentScreen = "savings" }
                     )
                     "budget_config_help" -> BudgetConfigHelpScreen(
                         onBack = { currentScreen = "budget_config" }
@@ -767,7 +780,7 @@ class MainActivity : ComponentActivity() {
                             transactions.removeAll { it.id == dup.id }
                             saveTransactions()
                             if (budgetStartDate != null && !dup.date.isBefore(budgetStartDate)) {
-                                if (dup.type == TransactionType.EXPENSE) availableCash += dup.amount
+                                if (dup.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(dup)) availableCash += dup.amount
                                 else if (dup.type == TransactionType.INCOME && !dup.isBudgetIncome) availableCash -= dup.amount
                                 persistAvailableCash()
                             }

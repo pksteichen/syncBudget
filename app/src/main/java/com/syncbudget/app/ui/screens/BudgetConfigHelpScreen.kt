@@ -112,7 +112,7 @@ fun BudgetConfigHelpScreen(onBack: () -> Unit) {
             Spacer(modifier = Modifier.height(10.dp))
 
             HelpBodyText(
-                "The period also affects how Future Expenditure and Amortization deductions are calculated, " +
+                "The period also affects how Savings Goal and Amortization deductions are calculated, " +
                 "since they deduct a fixed amount per period.",
                 italic = true
             )
@@ -275,7 +275,7 @@ fun BudgetConfigHelpScreen(onBack: () -> Unit) {
             Spacer(modifier = Modifier.height(4.dp))
             HelpBulletText("A text field appears where you enter your desired amount per period")
             HelpBulletText("The safe budget calculation is ignored")
-            HelpBulletText("Amortization and Future Expenditure deductions are disabled")
+            HelpBulletText("Amortization and Savings Goal deductions are disabled")
             Spacer(modifier = Modifier.height(8.dp))
 
             Box(
@@ -295,9 +295,9 @@ fun BudgetConfigHelpScreen(onBack: () -> Unit) {
                     )
                     Text(
                         "Manual override disables the safety net provided by the budget calculator. " +
-                        "Amortization and Future Expenditure deductions will not be subtracted " +
+                        "Amortization and Savings Goal deductions will not be subtracted " +
                         "from your budget. Red warning banners will appear on the Amortization " +
-                        "and Future Expenditures screens when manual override is active.",
+                        "and Savings Goals screens when manual override is active.",
                         style = MaterialTheme.typography.bodySmall,
                         color = textColor,
                         lineHeight = 18.sp

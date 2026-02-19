@@ -121,12 +121,12 @@ fun AmortizationHelpScreen(onBack: () -> Unit) {
             }
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpSubSectionTitle("Amortization vs. Future Expenditures")
+            HelpSubSectionTitle("Amortization vs. Savings Goals")
             HelpBodyText(
                 "These two features are complementary:"
             )
             Spacer(modifier = Modifier.height(4.dp))
-            HelpBulletText("Future Expenditures \u2014 save BEFORE a planned expense (proactive)")
+            HelpBulletText("Savings Goals \u2014 save BEFORE a planned expense (proactive)")
             HelpBulletText("Amortization \u2014 spread AFTER an unplanned or past expense (reactive)")
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -205,7 +205,7 @@ fun AmortizationHelpScreen(onBack: () -> Unit) {
 
             HelpBodyText(
                 "This deduction is subtracted from your Safe Budget Amount (along with any " +
-                "FLE deductions) to produce your actual Budget Amount. The deduction remains " +
+                "Savings Goal deductions) to produce your actual Budget Amount. The deduction remains " +
                 "constant for the full amortization period, then stops automatically."
             )
             Spacer(modifier = Modifier.height(16.dp))
@@ -289,7 +289,7 @@ fun AmortizationHelpScreen(onBack: () -> Unit) {
             HelpBulletText("Use amortization for any expense that would otherwise devastate your budget: medical bills, car repairs, appliance replacements, emergency travel.")
             HelpBulletText("Completed entries (all periods elapsed) can be deleted to keep the list clean.")
             HelpBulletText("Remember to also record the actual transaction \u2014 amortization only adjusts your budget rate, it doesn't record the expense itself.")
-            HelpBulletText("If you knew about the expense in advance, Future Expenditures would have been the better tool. Use Amortization for surprises.")
+            HelpBulletText("If you knew about the expense in advance, Savings Goals would have been the better tool. Use Amortization for surprises.")
 
             Spacer(modifier = Modifier.height(32.dp))
         }

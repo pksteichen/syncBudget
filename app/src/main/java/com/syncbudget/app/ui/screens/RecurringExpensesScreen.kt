@@ -22,7 +22,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DatePicker
@@ -177,13 +176,6 @@ fun RecurringExpensesScreen(
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                         )
                     }
-                    IconButton(onClick = { editingExpense = expense }) {
-                        Icon(
-                            imageVector = Icons.Filled.Edit,
-                            contentDescription = "Edit",
-                            tint = MaterialTheme.colorScheme.onBackground
-                        )
-                    }
                     IconButton(onClick = { deletingExpense = expense }) {
                         Icon(
                             imageVector = Icons.Filled.Delete,
@@ -253,7 +245,7 @@ private fun AddEditExpenseDialog(
     var amountText by remember {
         mutableStateOf(
             if (existingExpense != null && existingExpense.amount > 0.0)
-                existingExpense.amount.toString()
+                "%.2f".format(existingExpense.amount)
             else ""
         )
     }
@@ -323,6 +315,9 @@ private fun AddEditExpenseDialog(
                         label = { Text("Source Name") },
                         singleLine = true,
                         isError = showValidation && !isSourceValid,
+                        supportingText = if (showValidation && !isSourceValid) ({
+                            Text("Required, e.g. Netflix", color = Color(0xFFF44336))
+                        }) else null,
                         colors = textFieldColors,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -332,6 +327,9 @@ private fun AddEditExpenseDialog(
                         label = { Text("Amount") },
                         singleLine = true,
                         isError = showValidation && !isAmountValid,
+                        supportingText = if (showValidation && !isAmountValid) ({
+                            Text("e.g. 150.00", color = Color(0xFFF44336))
+                        }) else null,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         colors = textFieldColors,
                         modifier = Modifier.fillMaxWidth()
@@ -385,6 +383,9 @@ private fun AddEditExpenseDialog(
                                 label = { Text("Every X Days (1-60)") },
                                 singleLine = true,
                                 isError = showValidation && (interval == null || interval !in 1..60),
+                                supportingText = if (showValidation && (interval == null || interval !in 1..60)) ({
+                                    Text("e.g. 14", color = Color(0xFFF44336))
+                                }) else null,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 colors = textFieldColors,
                                 modifier = Modifier.fillMaxWidth()
@@ -401,6 +402,9 @@ private fun AddEditExpenseDialog(
                                     Text(if (startDate != null) "Start Date: $startDate" else "Pick Start Date")
                                 }
                             }
+                            if (showValidation && startDate == null) {
+                                Text("Select a start date", style = MaterialTheme.typography.bodySmall, color = Color(0xFFF44336))
+                            }
                         }
                         RepeatType.WEEKS -> {
                             OutlinedTextField(
@@ -409,6 +413,9 @@ private fun AddEditExpenseDialog(
                                 label = { Text("Interval (1-18)") },
                                 singleLine = true,
                                 isError = showValidation && (interval == null || interval !in 1..18),
+                                supportingText = if (showValidation && (interval == null || interval !in 1..18)) ({
+                                    Text("e.g. 2", color = Color(0xFFF44336))
+                                }) else null,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 colors = textFieldColors,
                                 modifier = Modifier.fillMaxWidth()
@@ -424,6 +431,9 @@ private fun AddEditExpenseDialog(
                                 ) {
                                     Text(if (startDate != null) "Start Date: $startDate" else "Pick Start Date")
                                 }
+                            }
+                            if (showValidation && startDate == null) {
+                                Text("Select a start date", style = MaterialTheme.typography.bodySmall, color = Color(0xFFF44336))
                             }
                             if (startDate != null) {
                                 val dayName = startDate!!.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
@@ -447,6 +457,9 @@ private fun AddEditExpenseDialog(
                                     Text(if (startDate != null) "Start Date: $startDate" else "Pick Start Date")
                                 }
                             }
+                            if (showValidation && startDate == null) {
+                                Text("Select a start date", style = MaterialTheme.typography.bodySmall, color = Color(0xFFF44336))
+                            }
                             if (startDate != null) {
                                 val dayName = startDate!!.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
                                 Text(
@@ -463,6 +476,9 @@ private fun AddEditExpenseDialog(
                                 label = { Text("Every X Months (1-3)") },
                                 singleLine = true,
                                 isError = showValidation && (interval == null || interval !in 1..3),
+                                supportingText = if (showValidation && (interval == null || interval !in 1..3)) ({
+                                    Text("e.g. 1", color = Color(0xFFF44336))
+                                }) else null,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 colors = textFieldColors,
                                 modifier = Modifier.fillMaxWidth()
@@ -473,6 +489,9 @@ private fun AddEditExpenseDialog(
                                 label = { Text("Day of Month (1-28)") },
                                 singleLine = true,
                                 isError = showValidation && (monthDay1 == null || monthDay1 !in 1..28),
+                                supportingText = if (showValidation && (monthDay1 == null || monthDay1 !in 1..28)) ({
+                                    Text("e.g. 15", color = Color(0xFFF44336))
+                                }) else null,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 colors = textFieldColors,
                                 modifier = Modifier.fillMaxWidth()
@@ -485,6 +504,9 @@ private fun AddEditExpenseDialog(
                                 label = { Text("First Day of Month (1-28)") },
                                 singleLine = true,
                                 isError = showValidation && (monthDay1 == null || monthDay1 !in 1..28),
+                                supportingText = if (showValidation && (monthDay1 == null || monthDay1 !in 1..28)) ({
+                                    Text("e.g. 1", color = Color(0xFFF44336))
+                                }) else null,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 colors = textFieldColors,
                                 modifier = Modifier.fillMaxWidth()
@@ -495,6 +517,9 @@ private fun AddEditExpenseDialog(
                                 label = { Text("Second Day of Month (1-28)") },
                                 singleLine = true,
                                 isError = showValidation && (monthDay2 == null || monthDay2 !in 1..28),
+                                supportingText = if (showValidation && (monthDay2 == null || monthDay2 !in 1..28)) ({
+                                    Text("e.g. 15", color = Color(0xFFF44336))
+                                }) else null,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 colors = textFieldColors,
                                 modifier = Modifier.fillMaxWidth()

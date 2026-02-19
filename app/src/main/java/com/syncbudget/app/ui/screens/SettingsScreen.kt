@@ -2,6 +2,8 @@ package com.syncbudget.app.ui.screens
 
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,6 +51,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
@@ -106,6 +109,8 @@ fun SettingsScreen(
     onUpdateCategory: (Category) -> Unit = {},
     onDeleteCategory: (Category) -> Unit,
     onReassignCategory: (fromId: Int, toId: Int) -> Unit = { _, _ -> },
+    weekStartSunday: Boolean = true,
+    onWeekStartChange: (Boolean) -> Unit = {},
     onNavigateToBudgetConfig: () -> Unit = {},
     onBack: () -> Unit,
     onHelpClick: () -> Unit = {}
@@ -296,6 +301,46 @@ fun SettingsScreen(
                                 }
                             )
                         }
+                    }
+                }
+            }
+
+            // Week start day dropdown
+            item {
+                var weekStartExpanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = weekStartExpanded,
+                    onExpandedChange = { weekStartExpanded = it }
+                ) {
+                    OutlinedTextField(
+                        value = if (weekStartSunday) "Sunday" else "Monday",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Week Starts On") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = weekStartExpanded) },
+                        colors = textFieldColors,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = weekStartExpanded,
+                        onDismissRequest = { weekStartExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Sunday") },
+                            onClick = {
+                                onWeekStartChange(true)
+                                weekStartExpanded = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Monday") },
+                            onClick = {
+                                onWeekStartChange(false)
+                                weekStartExpanded = false
+                            }
+                        )
                     }
                 }
             }
@@ -500,17 +545,25 @@ private fun AddCategoryDialog(
     var name by remember { mutableStateOf("") }
     var selectedIcon by remember { mutableStateOf<String?>(null) }
     val iconEntries = remember { CATEGORY_ICON_MAP.entries.toList() }
+    var showValidation by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add Category") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("Category Name") },
                     singleLine = true,
+                    isError = showValidation && name.isBlank(),
+                    supportingText = if (showValidation && name.isBlank()) ({
+                        Text("Required, e.g. Groceries", color = Color(0xFFF44336))
+                    }) else null,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = MaterialTheme.colorScheme.onBackground,
                         unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
@@ -523,9 +576,10 @@ private fun AddCategoryDialog(
                 )
 
                 Text(
-                    text = "Choose Icon:",
+                    text = if (showValidation && selectedIcon == null) "Choose Icon: (required)" else "Choose Icon:",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onBackground
+                    color = if (showValidation && selectedIcon == null) Color(0xFFF44336)
+                        else MaterialTheme.colorScheme.onBackground
                 )
 
                 LazyVerticalGrid(
@@ -573,6 +627,8 @@ private fun AddCategoryDialog(
                             id = (0..65535).random()
                         } while (id in existingIds)
                         onSave(Category(id, name.trim(), selectedIcon!!))
+                    } else {
+                        showValidation = true
                     }
                 }
             ) {
@@ -644,7 +700,10 @@ private fun EditCategoryDialog(
             }
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },

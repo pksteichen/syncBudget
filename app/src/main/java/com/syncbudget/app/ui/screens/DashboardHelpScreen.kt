@@ -20,7 +20,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
@@ -231,7 +230,6 @@ fun DashboardHelpScreen(onBack: () -> Unit) {
                 ) {
                     Icon(Icons.AutoMirrored.Filled.List, contentDescription = null, tint = textColor, modifier = Modifier.size(28.dp))
                     Icon(Icons.Filled.Savings, contentDescription = null, tint = textColor, modifier = Modifier.size(28.dp))
-                    Icon(Icons.Filled.CalendarMonth, contentDescription = null, tint = textColor, modifier = Modifier.size(28.dp))
                     Icon(Icons.Filled.Schedule, contentDescription = null, tint = textColor, modifier = Modifier.size(28.dp))
                     Icon(Icons.Filled.Sync, contentDescription = null, tint = textColor, modifier = Modifier.size(28.dp))
                 }
@@ -239,8 +237,7 @@ fun DashboardHelpScreen(onBack: () -> Unit) {
             Spacer(modifier = Modifier.height(10.dp))
 
             HelpIconRow(Icons.AutoMirrored.Filled.List, "Transactions", "Record and manage your income and expenses. Import bank statements, search, filter, and categorize.")
-            HelpIconRow(Icons.Filled.Savings, "Savings", "Track your savings goals. (Coming soon)")
-            HelpIconRow(Icons.Filled.CalendarMonth, "Future Expenditures", "Plan for large upcoming purchases. The app automatically sets aside money each period so you're ready when the expense arrives.")
+            HelpIconRow(Icons.Filled.Savings, "Savings Goals", "Plan and save for future expenses or financial targets. Choose a target date or fixed per-period contribution.")
             HelpIconRow(Icons.Filled.Schedule, "Amortization", "Spread a past large expense across multiple budget periods so it doesn't hit your budget all at once.")
             HelpIconRow(Icons.Filled.Sync, "Recurring Expenses", "Register bills, subscriptions, and loan payments so the budget calculator accounts for them automatically.")
             Spacer(modifier = Modifier.height(16.dp))
@@ -271,7 +268,7 @@ fun DashboardHelpScreen(onBack: () -> Unit) {
                 "Your actual per-period budget is the Safe Budget Amount minus any active deductions:"
             )
             Spacer(modifier = Modifier.height(4.dp))
-            HelpBulletText("Future Expenditure deductions \u2014 money set aside for planned purchases")
+            HelpBulletText("Savings Goal deductions \u2014 money set aside for planned purchases and savings targets")
             HelpBulletText("Amortization deductions \u2014 spreading past large expenses over time")
             Spacer(modifier = Modifier.height(8.dp))
             HelpBodyText(
@@ -344,7 +341,7 @@ fun DashboardHelpScreen(onBack: () -> Unit) {
 
             FinancialTipBox(
                 title = "Plan for the Unexpected",
-                body = "Use Future Large Expenditures to plan for things like car tires, appliance " +
+                body = "Use Savings Goals to plan for things like car tires, appliance " +
                     "replacements, holiday gifts, or vacations. When you save a little each period, " +
                     "these expenses don't become emergencies. The key to financial peace is " +
                     "eliminating surprises.",
@@ -380,7 +377,7 @@ fun DashboardHelpScreen(onBack: () -> Unit) {
             HelpBulletText("Real-time budget tracking with a beautiful Solari flip display")
             HelpBulletText("Smart budget calculation that accounts for irregular income and expense timing")
             HelpBulletText("Automatic recurring expense and income recognition from bank imports")
-            HelpBulletText("Future expenditure planning \u2014 save for big purchases automatically")
+            HelpBulletText("Savings Goals \u2014 save for big purchases and financial targets automatically")
             HelpBulletText("Amortization \u2014 spread large past purchases over time")
             HelpBulletText("Multi-category transaction splitting with pie chart, calculator, or percentage modes")
             HelpBulletText("Encrypted transaction backup and restore")

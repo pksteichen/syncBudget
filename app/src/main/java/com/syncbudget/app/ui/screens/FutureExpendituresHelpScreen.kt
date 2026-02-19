@@ -20,10 +20,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -52,7 +52,7 @@ fun FutureExpendituresHelpScreen(onBack: () -> Unit) {
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = "Future Expenditures Help",
+                        text = "Savings Goals Help",
                         style = MaterialTheme.typography.titleLarge,
                         color = customColors.headerText
                     )
@@ -86,13 +86,13 @@ fun FutureExpendituresHelpScreen(onBack: () -> Unit) {
             val accentColor = MaterialTheme.colorScheme.primary
             val headerBg = customColors.headerBackground
 
-            // ─── SECTION 1: WHAT ARE FLEs ───
-            HelpSectionTitle("What Are Future Large Expenditures?")
+            // ─── SECTION 1: WHAT ARE SAVINGS GOALS ───
+            HelpSectionTitle("What Are Savings Goals?")
             HelpBodyText(
-                "Future Large Expenditures (FLEs) let you plan and save for big upcoming " +
-                "expenses without blowing your budget. Instead of a large expense hitting " +
-                "your available cash all at once, the app automatically reduces your daily " +
-                "budget by a small amount to save up over time."
+                "Savings Goals let you plan and save for future expenses or financial " +
+                "targets without blowing your budget. Instead of a large expense hitting " +
+                "your available cash all at once, the app automatically reduces your budget " +
+                "by a small amount each period to save up over time."
             )
             Spacer(modifier = Modifier.height(10.dp))
 
@@ -127,7 +127,32 @@ fun FutureExpendituresHelpScreen(onBack: () -> Unit) {
 
             HelpDividerLine()
 
-            // ─── SECTION 2: HEADER BAR ───
+            // ─── SECTION 2: TWO GOAL TYPES ───
+            HelpSectionTitle("Two Goal Types")
+            HelpBodyText(
+                "Savings Goals supports two different approaches to saving:"
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            HelpSubSectionTitle("Target Date")
+            HelpBodyText(
+                "Set a date by which you need the money. The app automatically calculates " +
+                "how much to deduct each period based on the remaining amount and remaining " +
+                "time. As you get closer to the date, the deduction adjusts dynamically."
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            HelpSubSectionTitle("Fixed Contribution")
+            HelpBodyText(
+                "Set a fixed amount to contribute each budget period. There's no target date \u2014 " +
+                "the app simply deducts your chosen amount every period until the goal is " +
+                "reached. This is ideal for open-ended savings like an emergency fund."
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDividerLine()
+
+            // ─── SECTION 3: HEADER BAR ───
             HelpSectionTitle("Header Bar")
             HelpBodyText("The header provides navigation and bulk actions:")
             Spacer(modifier = Modifier.height(8.dp))
@@ -147,7 +172,7 @@ fun FutureExpendituresHelpScreen(onBack: () -> Unit) {
                     Spacer(modifier = Modifier.width(8.dp))
                     Icon(Icons.Filled.Pause, contentDescription = null, tint = customColors.headerText, modifier = Modifier.size(22.dp))
                     Spacer(modifier = Modifier.weight(1f))
-                    Text("Future Large Expenditures", style = MaterialTheme.typography.titleMedium, color = customColors.headerText)
+                    Text("Savings Goals", style = MaterialTheme.typography.titleMedium, color = customColors.headerText)
                     Spacer(modifier = Modifier.weight(1f))
                     Icon(Icons.AutoMirrored.Filled.Help, contentDescription = null, tint = customColors.headerText, modifier = Modifier.size(22.dp))
                 }
@@ -155,39 +180,44 @@ fun FutureExpendituresHelpScreen(onBack: () -> Unit) {
             Spacer(modifier = Modifier.height(10.dp))
 
             HelpIconRow(Icons.AutoMirrored.Filled.ArrowBack, "Back", "Return to the dashboard.")
-            HelpIconRow(Icons.Filled.Pause, "Pause All", "Pause all active expenditures at once. Toggles to Play when all are paused.")
+            HelpIconRow(Icons.Filled.Pause, "Pause All", "Pause all active goals at once. Toggles to Play when all are paused.")
             HelpIconRow(Icons.AutoMirrored.Filled.Help, "Help", "Opens this help page.")
             Spacer(modifier = Modifier.height(8.dp))
             HelpBodyText(
-                "The Pause All button only appears when you have at least one expenditure.",
+                "The Pause All button only appears when you have at least one goal.",
                 italic = true
             )
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
-            // ─── SECTION 3: ADDING AN EXPENDITURE ───
-            HelpSectionTitle("Adding a Future Expenditure")
+            // ─── SECTION 4: ADDING A GOAL ───
+            HelpSectionTitle("Adding a Savings Goal")
             HelpBodyText(
-                "Tap \"Add Future Expenditure\" and fill in:"
+                "Tap \"Add Savings Goal\" and fill in:"
             )
             Spacer(modifier = Modifier.height(8.dp))
-            HelpNumberedItem(1, "Description", "What you're saving for (e.g., \"New Tires\", \"Vacation to Hawaii\", \"Holiday Gifts\").")
+            HelpNumberedItem(1, "Name", "What you're saving for (e.g., \"New Tires\", \"Vacation to Hawaii\", \"Emergency Fund\").")
             Spacer(modifier = Modifier.height(4.dp))
-            HelpNumberedItem(2, "Amount", "The total cost you need to save.")
+            HelpNumberedItem(2, "Target Amount", "The total cost you need to save.")
             Spacer(modifier = Modifier.height(4.dp))
-            HelpNumberedItem(3, "Target Date", "When you need the money by. Tap to open a date picker.")
+            HelpNumberedItem(3, "Starting Saved Amount", "Optional. If you already have some money saved toward this goal, enter it here to pre-fill the progress bar.")
+            Spacer(modifier = Modifier.height(4.dp))
+            HelpNumberedItem(4, "Goal Type", "Choose \"Target Date\" to set a deadline, or \"Fixed Contribution\" for a regular per-period amount.")
+            Spacer(modifier = Modifier.height(4.dp))
+            HelpNumberedItem(5, "Target Date / Contribution", "Depending on the goal type, select a target date or enter a contribution per period.")
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
-            // ─── SECTION 4: HOW DEDUCTIONS WORK ───
+            // ─── SECTION 5: HOW DEDUCTIONS WORK ───
             HelpSectionTitle("How Budget Deductions Work")
             HelpBodyText(
-                "For each active (non-paused) expenditure, the app calculates a per-period deduction:"
+                "For each active (non-paused) goal, the app calculates a per-period deduction:"
             )
             Spacer(modifier = Modifier.height(8.dp))
 
+            HelpSubSectionTitle("Target Date Goals")
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -197,7 +227,7 @@ fun FutureExpendituresHelpScreen(onBack: () -> Unit) {
                     .padding(14.dp)
             ) {
                 Text(
-                    "Deduction = (Amount \u2212 Total Saved So Far) \u00f7 Remaining Periods until Target Date",
+                    "Deduction = (Target Amount \u2212 Saved So Far) \u00f7 Remaining Periods until Target Date",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = textColor,
@@ -206,43 +236,46 @@ fun FutureExpendituresHelpScreen(onBack: () -> Unit) {
             }
             Spacer(modifier = Modifier.height(10.dp))
 
+            HelpSubSectionTitle("Fixed Contribution Goals")
             HelpBodyText(
-                "This deduction is subtracted from your Safe Budget Amount to produce " +
-                "your actual Budget Amount. As you approach the target date, if you've been " +
-                "saving consistently, the remaining amount and remaining periods both decrease, " +
-                "keeping the deduction stable."
+                "The deduction equals the contribution per period you set when creating the goal. " +
+                "It stays constant until the goal is reached."
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
+
             HelpBodyText(
-                "The \"Total Saved So Far\" automatically increases each budget period based " +
-                "on the deduction amount. You don't need to manually track savings.",
+                "These deductions are subtracted from your Safe Budget Amount to produce " +
+                "your actual Budget Amount. The \"Saved So Far\" automatically increases each " +
+                "budget period based on the deduction amount.",
                 italic = true
             )
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
-            // ─── SECTION 5: EXPENDITURE LIST ───
-            HelpSectionTitle("Expenditure List")
-            HelpBodyText("Each expenditure in the list shows:")
+            // ─── SECTION 6: PROGRESS TRACKING ───
+            HelpSectionTitle("Progress Tracking")
+            HelpBodyText("Each goal in the list shows:")
             Spacer(modifier = Modifier.height(6.dp))
-            HelpBulletText("Description \u2014 what you're saving for")
-            HelpBulletText("Total amount and target date")
-            HelpBulletText("Budget reduction \u2014 how much is deducted per period (or \"Paused\" / \"Fully Saved!\")")
-            HelpBulletText("Total Saved So Far \u2014 green text showing accumulated savings")
+            HelpBulletText("Name \u2014 what you're saving for")
+            HelpBulletText("Target amount (and target date for date-based goals)")
+            HelpBulletText("Budget deduction or contribution per period")
+            HelpBulletText("Progress bar \u2014 visual indicator of how close you are to the target")
+            HelpBulletText("Saved amount \u2014 green text showing accumulated savings vs. target")
+            HelpBulletText("\"Goal reached!\" label when fully saved")
             Spacer(modifier = Modifier.height(10.dp))
 
             HelpSubSectionTitle("Actions")
-            HelpIconRow(Icons.Filled.Pause, "Pause", "Temporarily stop deductions for this item. Budget returns to normal while paused.")
+            HelpIconRow(Icons.Filled.Pause, "Pause", "Temporarily stop deductions for this goal. Budget returns to normal while paused.")
             HelpIconRow(Icons.Filled.PlayArrow, "Resume", "Resume deductions. The per-period amount recalculates based on remaining time and savings.")
-            HelpIconRow(Icons.Filled.Delete, "Delete", "Permanently remove the expenditure.", Color(0xFFF44336))
+            HelpIconRow(Icons.Filled.Delete, "Delete", "Permanently remove the savings goal.", Color(0xFFF44336))
             Spacer(modifier = Modifier.height(8.dp))
-            HelpBodyText("Tap any expenditure to edit its description, amount, or target date.")
+            HelpBodyText("Tap any goal to edit its name, target amount, goal type, or other settings.")
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
-            // ─── SECTION 6: STATUSES ───
+            // ─── SECTION 7: STATUSES ───
             HelpSectionTitle("Status Indicators")
 
             HelpSubSectionTitle("Active")
@@ -253,41 +286,42 @@ fun FutureExpendituresHelpScreen(onBack: () -> Unit) {
 
             HelpSubSectionTitle("Paused")
             HelpBodyText(
-                "Deductions are temporarily stopped. The item appears dimmed. Pausing is useful " +
+                "Deductions are temporarily stopped. The goal appears dimmed. Pausing is useful " +
                 "when you have a tight month and need the full budget temporarily. Savings progress " +
                 "is preserved. When you resume, the deduction recalculates with the reduced remaining " +
-                "time, so it will be slightly higher."
+                "time (for target-date goals), so it will be slightly higher."
             )
             Spacer(modifier = Modifier.height(8.dp))
 
-            HelpSubSectionTitle("Fully Saved")
+            HelpSubSectionTitle("Goal Reached")
             HelpBodyText(
-                "Shows \"Fully Saved!\" in green when Total Saved So Far meets or exceeds the amount. " +
-                "No further deductions are taken. You can delete the item or keep it as a record."
+                "Shows \"Goal reached!\" in green when Saved So Far meets or exceeds the target. " +
+                "No further deductions are taken. You can delete the goal or keep it as a record."
             )
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
-            // ─── SECTION 7: MANUAL OVERRIDE WARNING ───
+            // ─── SECTION 8: MANUAL OVERRIDE WARNING ───
             HelpSectionTitle("Manual Budget Override")
             HelpBodyText(
                 "If Manual Budget Override is enabled in Budget Configuration, a red warning " +
                 "banner appears at the top of this screen. When manual override is active, " +
-                "FLE deductions are NOT subtracted from your budget \u2014 you must account " +
+                "Savings Goal deductions are NOT subtracted from your budget \u2014 you must account " +
                 "for these expenses yourself."
             )
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
-            // ─── SECTION 8: TIPS ───
+            // ─── SECTION 9: TIPS ───
             HelpSectionTitle("Tips")
-            HelpBulletText("Create expenditures as early as possible \u2014 the more time you have, the smaller each period's deduction.")
+            HelpBulletText("Create target-date goals as early as possible \u2014 the more time you have, the smaller each period's deduction.")
+            HelpBulletText("Use fixed contribution goals for open-ended savings like emergency funds or general savings.")
             HelpBulletText("Use Pause strategically during tight months, but resume promptly to avoid a spike in deductions as the target date approaches.")
-            HelpBulletText("Common uses: car maintenance, medical procedures, holiday gifts, vacations, electronics, furniture, annual subscriptions.")
-            HelpBulletText("If an expenditure's target date passes and it's not fully saved, the remaining amount shows as the deduction amount.")
-            HelpBulletText("Pair this with Amortization: use FLE to save before a purchase, and Amortization to spread costs after an unexpected purchase.")
+            HelpBulletText("Enter a starting saved amount when creating a goal if you already have money set aside.")
+            HelpBulletText("Common uses: car maintenance, medical procedures, holiday gifts, vacations, electronics, furniture, annual subscriptions, emergency fund.")
+            HelpBulletText("Pair this with Amortization: use Savings Goals to save before a purchase, and Amortization to spread costs after an unexpected purchase.")
 
             Spacer(modifier = Modifier.height(32.dp))
         }

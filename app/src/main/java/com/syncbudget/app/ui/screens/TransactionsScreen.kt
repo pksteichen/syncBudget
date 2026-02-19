@@ -85,6 +85,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.window.Dialog
@@ -1149,7 +1150,10 @@ fun TransactionsScreen(
             onDismissRequest = { showBulkMerchantEdit = false },
             title = { Text("Edit Merchant/Source") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.verticalScroll(rememberScrollState())
+                ) {
                     Text(
                         text = "Set merchant/source for $count transaction${if (count != 1) "s" else ""}:",
                         style = MaterialTheme.typography.bodyMedium
@@ -1208,7 +1212,10 @@ fun TransactionsScreen(
             },
             title = { Text("Save Transactions") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.verticalScroll(rememberScrollState())
+                ) {
                     Text("Format:", style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onBackground)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1334,7 +1341,10 @@ fun TransactionsScreen(
             },
             title = { Text("Import / Load") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.verticalScroll(rememberScrollState())
+                ) {
                     Text("Format:", style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onBackground)
                     Box {
@@ -1900,75 +1910,118 @@ private fun TransactionRow(
     val categoryIconTint = if (transaction.isUserCategorized) customColors.userCategoryIconTint
         else MaterialTheme.colorScheme.onBackground
 
+    val fontScale = LocalDensity.current.fontScale
+    val useExpandedLayout = fontScale > 1.1f
+
     Column {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .combinedClickable(
                     onClick = onTap,
                     onLongClick = onLongPress
                 )
-                .padding(horizontal = 12.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 12.dp, vertical = if (useExpandedLayout) 10.dp else 12.dp)
         ) {
-            // Category icon
-            if (transaction.categoryAmounts.isNotEmpty()) {
-                if (hasMultipleCategories) {
-                    IconButton(
-                        onClick = onToggleExpand,
-                        modifier = Modifier.size(28.dp)
-                    ) {
+            // Line 1: icon + source + amount (+ checkbox if expanded layout)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                // Category icon
+                if (transaction.categoryAmounts.isNotEmpty()) {
+                    if (hasMultipleCategories) {
+                        IconButton(
+                            onClick = onToggleExpand,
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.List,
+                                contentDescription = "Categories",
+                                tint = categoryIconTint,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    } else if (singleCategory != null) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.List,
-                            contentDescription = "Categories",
+                            imageVector = getCategoryIcon(singleCategory.iconName),
+                            contentDescription = singleCategory.name,
                             tint = categoryIconTint,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier
+                                .size(22.dp)
+                                .clickable { onCategoryFilter(singleCategory.id) }
                         )
                     }
-                } else if (singleCategory != null) {
-                    Icon(
-                        imageVector = getCategoryIcon(singleCategory.iconName),
-                        contentDescription = singleCategory.name,
-                        tint = categoryIconTint,
-                        modifier = Modifier
-                            .size(22.dp)
-                            .clickable { onCategoryFilter(singleCategory.id) }
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+
+                if (!useExpandedLayout) {
+                    // Normal layout: date, source, amount all on one line
+                    Text(
+                        text = transaction.date.format(dateFormatter),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                }
+
+                Text(
+                    text = transaction.source,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.weight(1f),
+                    maxLines = if (useExpandedLayout) 2 else 1
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = formattedAmount,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = amountColor,
+                    textAlign = TextAlign.End
+                )
+
+                if (selectionMode && !useExpandedLayout) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Checkbox(
+                        checked = isSelected,
+                        onCheckedChange = onToggleSelection,
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = MaterialTheme.colorScheme.primary,
+                            uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                        )
                     )
                 }
-                Spacer(modifier = Modifier.width(8.dp))
             }
 
-            Text(
-                text = transaction.date.format(dateFormatter),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                text = transaction.source,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.weight(1f)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                text = formattedAmount,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = amountColor,
-                textAlign = TextAlign.End
-            )
-
-            if (selectionMode) {
-                Spacer(modifier = Modifier.width(8.dp))
-                Checkbox(
-                    checked = isSelected,
-                    onCheckedChange = onToggleSelection,
-                    colors = CheckboxDefaults.colors(
-                        checkedColor = MaterialTheme.colorScheme.primary,
-                        uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+            // Line 2 (expanded layout only): date + checkbox
+            if (useExpandedLayout) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            start = if (transaction.categoryAmounts.isNotEmpty()) 30.dp else 0.dp,
+                            top = 2.dp
+                        )
+                ) {
+                    Text(
+                        text = transaction.date.format(dateFormatter),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                     )
-                )
+                    Spacer(modifier = Modifier.weight(1f))
+                    if (selectionMode) {
+                        Checkbox(
+                            checked = isSelected,
+                            onCheckedChange = onToggleSelection,
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = MaterialTheme.colorScheme.primary,
+                                uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                            )
+                        )
+                    }
+                }
             }
         }
 
@@ -2043,6 +2096,7 @@ fun TransactionDialog(
     var source by remember { mutableStateOf(editTransaction?.source ?: "") }
     var showDatePicker by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showValidation by remember { mutableStateOf(false) }
 
     // Category selection
     val selectedCategoryIds = remember {
@@ -2182,6 +2236,10 @@ fun TransactionDialog(
                         value = source,
                         onValueChange = { source = it },
                         label = { Text(sourceLabel) },
+                        isError = showValidation && source.isBlank(),
+                        supportingText = if (showValidation && source.isBlank()) ({
+                            Text("Required, e.g. Grocery Store", color = Color(0xFFF44336))
+                        }) else null,
                         colors = textFieldColors,
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
@@ -2237,10 +2295,15 @@ fun TransactionDialog(
                             singleAmountText = ""
                         }
                     }
+                    val singleAmountInvalid = showValidation && (singleAmountText.toDoubleOrNull()?.let { it <= 0 } != false)
                     OutlinedTextField(
                         value = singleAmountText,
                         onValueChange = { singleAmountText = it },
                         label = { Text("Amount") },
+                        isError = singleAmountInvalid,
+                        supportingText = if (singleAmountInvalid) ({
+                            Text("e.g. 42.50", color = Color(0xFFF44336))
+                        }) else null,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = if (maxDecimals > 0) KeyboardType.Decimal else KeyboardType.Number
                         ),
@@ -2551,14 +2614,14 @@ fun TransactionDialog(
                     Spacer(modifier = Modifier.width(8.dp))
                     TextButton(
                         onClick = {
-                            if (source.isBlank()) return@TextButton
+                            if (source.isBlank()) { showValidation = true; return@TextButton }
                             val type = if (isExpense) TransactionType.EXPENSE else TransactionType.INCOME
                             val catAmounts: List<CategoryAmount>
                             val totalAmount: Double
 
                             if (selectedCats.size <= 1) {
-                                val amt = singleAmountText.toDoubleOrNull() ?: return@TextButton
-                                if (amt <= 0) return@TextButton
+                                val amt = singleAmountText.toDoubleOrNull()
+                                if (amt == null || amt <= 0) { showValidation = true; return@TextButton }
                                 totalAmount = amt
                                 catAmounts = if (selectedCats.size == 1) {
                                     listOf(CategoryAmount(selectedCats[0].id, amt))

@@ -97,7 +97,10 @@ object BudgetCalculator {
         val today = LocalDate.now()
         val oneYearAhead = today.plusYears(1)
 
-        // Total income over 1 year
+        val periodsPerYear = countPeriodsCompleted(today, oneYearAhead, budgetPeriod)
+        if (periodsPerYear <= 0) return 0.0
+
+        // Total income over the next year
         var totalIncome = 0.0
         for (src in incomeSources) {
             val occurrences = generateOccurrences(
@@ -107,64 +110,18 @@ object BudgetCalculator {
             totalIncome += src.amount * occurrences.size
         }
 
-        // Number of budget periods in 1 year
-        val periodsPerYear = countPeriodsCompleted(today, oneYearAhead, budgetPeriod)
-        if (periodsPerYear <= 0) return 0.0
-
-        // Base S = smoothed annual income per period
-        val baseS = totalIncome / periodsPerYear.toDouble()
-
-        // Now apply timing safety: ensure S covers recurring expense bursts.
-        // Simulate: each period adds S, recurring expenses subtract.
-        // Find the S such that balance never goes negative over 1 year.
-        val periods = generatePeriodBoundaries(today, oneYearAhead, budgetPeriod)
-        if (periods.size < 2) return baseS
-
-        // Compute cumulative expense-only outflows per period
-        val cumulativeExpenses = DoubleArray(periods.size - 1)
-        var runningExpenses = 0.0
-        for (i in 0 until periods.size - 1) {
-            val pStart = periods[i]
-            val pEnd = periods[i + 1].minusDays(1)
-            for (exp in recurringExpenses) {
-                val occurrences = generateOccurrences(
-                    exp.repeatType, exp.repeatInterval, exp.startDate,
-                    exp.monthDay1, exp.monthDay2, pStart, pEnd
-                )
-                runningExpenses += exp.amount * occurrences.size
-            }
-            cumulativeExpenses[i] = runningExpenses
+        // Total recurring expenses over the next year
+        var totalExpenses = 0.0
+        for (exp in recurringExpenses) {
+            val occurrences = generateOccurrences(
+                exp.repeatType, exp.repeatInterval, exp.startDate,
+                exp.monthDay1, exp.monthDay2, today, oneYearAhead
+            )
+            totalExpenses += exp.amount * occurrences.size
         }
 
-        // S must satisfy: S * (t+1) >= cumulativeExpenses(t) for all t
-        // i.e. S >= cumulativeExpenses(t) / (t+1) for all t
-        var minS = 0.0
-        for (t in cumulativeExpenses.indices) {
-            val required = cumulativeExpenses[t] / (t + 1).toDouble()
-            if (required > minS) minS = required
-        }
-
-        // S is the larger of: smoothed income, or minimum to cover expense timing
-        // But cap at income (can't spend more than you earn)
-        return if (minS > baseS) minS else baseS
-    }
-
-    private fun generatePeriodBoundaries(
-        from: LocalDate,
-        to: LocalDate,
-        budgetPeriod: BudgetPeriod
-    ): List<LocalDate> {
-        val boundaries = mutableListOf<LocalDate>()
-        var current = from
-        while (!current.isAfter(to)) {
-            boundaries.add(current)
-            current = when (budgetPeriod) {
-                BudgetPeriod.DAILY -> current.plusDays(1)
-                BudgetPeriod.WEEKLY -> current.plusWeeks(1)
-                BudgetPeriod.MONTHLY -> current.plusMonths(1)
-            }
-        }
-        return boundaries
+        // Discretionary budget per period = surplus spread evenly
+        return maxOf(0.0, (totalIncome - totalExpenses) / periodsPerYear)
     }
 
     fun countPeriodsCompleted(from: LocalDate, to: LocalDate, budgetPeriod: BudgetPeriod): Int {
@@ -218,34 +175,31 @@ object BudgetCalculator {
         return total
     }
 
-    fun activeSavingsDeductions(goals: List<SavingsGoal>): Double {
-        var total = 0.0
-        for (goal in goals) {
-            if (goal.isPaused) continue
-            if (goal.savedSoFar >= goal.targetAmount) continue
-            total += goal.contributionPerPeriod
-        }
-        return total
-    }
-
-    fun activeFLEDeductions(
-        expenditures: List<FutureExpenditure>,
+    fun activeSavingsGoalDeductions(
+        goals: List<SavingsGoal>,
         budgetPeriod: BudgetPeriod
     ): Double {
         val today = LocalDate.now()
         var total = 0.0
-        for (exp in expenditures) {
-            if (exp.isPaused) continue
-            val remaining = exp.amount - exp.totalSavedSoFar
+        for (goal in goals) {
+            if (goal.isPaused) continue
+            val remaining = goal.targetAmount - goal.totalSavedSoFar
             if (remaining <= 0) continue
-            if (!today.isBefore(exp.targetDate)) continue
-            val periods = when (budgetPeriod) {
-                BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(today, exp.targetDate)
-                BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(today, exp.targetDate)
-                BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(today, exp.targetDate)
+
+            if (goal.targetDate != null) {
+                // Target-date type: auto-calculate deduction from remaining time
+                if (!today.isBefore(goal.targetDate)) continue
+                val periods = when (budgetPeriod) {
+                    BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(today, goal.targetDate)
+                    BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(today, goal.targetDate)
+                    BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(today, goal.targetDate)
+                }
+                if (periods <= 0) continue
+                total += remaining / periods.toDouble()
+            } else {
+                // Fixed contribution type: use contributionPerPeriod
+                total += goal.contributionPerPeriod
             }
-            if (periods <= 0) continue
-            total += remaining / periods.toDouble()
         }
         return total
     }

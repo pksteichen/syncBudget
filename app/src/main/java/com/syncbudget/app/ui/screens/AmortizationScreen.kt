@@ -1,6 +1,8 @@
 package com.syncbudget.app.ui.screens
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -282,6 +284,15 @@ private fun AddEditAmortizationDialog(
     var periodsText by remember { mutableStateOf(initialTotalPeriods) }
     var startDate by remember { mutableStateOf(initialStartDate) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var showValidation by remember { mutableStateOf(false) }
+
+    val amount = amountText.toDoubleOrNull()
+    val periods = periodsText.toIntOrNull()
+    val isSourceValid = source.isNotBlank()
+    val isAmountValid = amount != null && amount > 0
+    val isPeriodsValid = periods != null && periods > 0
+    val isDateValid = startDate != null
+    val isValid = isSourceValid && isAmountValid && isPeriodsValid && isDateValid
 
     val textFieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = MaterialTheme.colorScheme.onBackground,
@@ -296,12 +307,19 @@ private fun AddEditAmortizationDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
                 OutlinedTextField(
                     value = source,
                     onValueChange = { source = it },
                     label = { Text("Source Name") },
                     singleLine = true,
+                    isError = showValidation && !isSourceValid,
+                    supportingText = if (showValidation && !isSourceValid) ({
+                        Text("Required, e.g. New Laptop", color = Color(0xFFF44336))
+                    }) else null,
                     colors = textFieldColors,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -314,6 +332,10 @@ private fun AddEditAmortizationDialog(
                     },
                     label = { Text("Total Amount") },
                     singleLine = true,
+                    isError = showValidation && !isAmountValid,
+                    supportingText = if (showValidation && !isAmountValid) ({
+                        Text("e.g. 1200.00", color = Color(0xFFF44336))
+                    }) else null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     colors = textFieldColors,
                     modifier = Modifier.fillMaxWidth()
@@ -327,6 +349,10 @@ private fun AddEditAmortizationDialog(
                     },
                     label = { Text("Budget Periods (${periodLabel(budgetPeriod)})") },
                     singleLine = true,
+                    isError = showValidation && !isPeriodsValid,
+                    supportingText = if (showValidation && !isPeriodsValid) ({
+                        Text("e.g. 12", color = Color(0xFFF44336))
+                    }) else null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     colors = textFieldColors,
                     modifier = Modifier.fillMaxWidth()
@@ -340,15 +366,22 @@ private fun AddEditAmortizationDialog(
                         else "Select Start Date"
                     )
                 }
+                if (showValidation && !isDateValid) {
+                    Text(
+                        text = "Select a start date",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFFF44336)
+                    )
+                }
             }
         },
         confirmButton = {
             TextButton(
                 onClick = {
-                    val amount = amountText.toDoubleOrNull()
-                    val periods = periodsText.toIntOrNull()
-                    if (source.isNotBlank() && amount != null && amount > 0 && periods != null && periods > 0 && startDate != null) {
-                        onSave(source.trim(), amount, periods, startDate!!)
+                    if (isValid) {
+                        onSave(source.trim(), amount!!, periods!!, startDate!!)
+                    } else {
+                        showValidation = true
                     }
                 }
             ) {
