@@ -24,6 +24,8 @@ import com.syncbudget.app.data.CategoryRepository
 import com.syncbudget.app.data.AmortizationRepository
 import com.syncbudget.app.data.SavingsGoalRepository
 import com.syncbudget.app.data.SuperchargeMode
+import com.syncbudget.app.data.calculatePerPeriodDeduction
+import kotlin.math.ceil
 import com.syncbudget.app.data.IncomeSource
 import com.syncbudget.app.data.IncomeSourceRepository
 import com.syncbudget.app.data.RecurringExpense
@@ -427,12 +429,35 @@ class MainActivity : ComponentActivity() {
                                     val capped = minOf(amount, remaining)
                                     if (capped > 0) {
                                         val newRemaining = remaining - capped
+                                        val mode = modes[goalId]
                                         val updatedGoal = if (
+                                            goal.targetDate != null &&
+                                            mode == SuperchargeMode.ACHIEVE_SOONER
+                                        ) {
+                                            // Target-date goal, Achieve Sooner: move target date earlier
+                                            val currentContribution = calculatePerPeriodDeduction(goal, budgetPeriod)
+                                            if (currentContribution > 0 && newRemaining > 0) {
+                                                val periodsNeeded = ceil(newRemaining / currentContribution).toLong()
+                                                val today = LocalDate.now()
+                                                val newTargetDate = when (budgetPeriod) {
+                                                    BudgetPeriod.DAILY -> today.plusDays(periodsNeeded)
+                                                    BudgetPeriod.WEEKLY -> today.plusWeeks(periodsNeeded)
+                                                    BudgetPeriod.MONTHLY -> today.plusMonths(periodsNeeded)
+                                                }
+                                                goal.copy(
+                                                    totalSavedSoFar = goal.totalSavedSoFar + capped,
+                                                    targetDate = newTargetDate
+                                                )
+                                            } else {
+                                                goal.copy(totalSavedSoFar = goal.totalSavedSoFar + capped)
+                                            }
+                                        } else if (
                                             goal.targetDate == null &&
                                             goal.contributionPerPeriod > 0 &&
-                                            modes[goalId] == SuperchargeMode.REDUCE_CONTRIBUTIONS
+                                            mode == SuperchargeMode.REDUCE_CONTRIBUTIONS
                                         ) {
-                                            val currentPeriodsRemaining = kotlin.math.ceil(
+                                            // Fixed-contribution goal, Reduce: lower contribution rate
+                                            val currentPeriodsRemaining = ceil(
                                                 remaining / goal.contributionPerPeriod
                                             ).toLong()
                                             val newContribution = if (currentPeriodsRemaining > 0 && newRemaining > 0)

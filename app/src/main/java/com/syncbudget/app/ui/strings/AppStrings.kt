@@ -96,7 +96,8 @@ data class DashboardStrings(
     val superchargeNewContribution: (String, String) -> String,
     val superchargeNewPayoff: (String) -> String,
     val superchargeNewCompletion: (String) -> String,
-    val superchargeAutoAdjust: String
+    val superchargeAutoAdjust: String,
+    val superchargeTargetDateNote: String
 )
 
 data class SettingsStrings(

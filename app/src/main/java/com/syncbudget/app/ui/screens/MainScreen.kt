@@ -494,6 +494,7 @@ fun MainScreen(
         SavingsSuperchargeDialog(
             savingsGoals = savingsGoals,
             currencySymbol = currencySymbol,
+            showDecimals = showDecimals,
             availableExtra = availableCash,
             budgetPeriod = budgetPeriod,
             dateFormatPattern = dateFormatPattern,
@@ -716,6 +717,7 @@ private fun SpendingPieChart(
 private fun SavingsSuperchargeDialog(
     savingsGoals: List<SavingsGoal>,
     currencySymbol: String,
+    showDecimals: Boolean,
     availableExtra: Double,
     budgetPeriod: BudgetPeriod = BudgetPeriod.DAILY,
     dateFormatPattern: String = "yyyy-MM-dd",
@@ -723,16 +725,19 @@ private fun SavingsSuperchargeDialog(
     onDismiss: () -> Unit,
     onApply: (Map<Int, Double>, Map<Int, SuperchargeMode>) -> Unit
 ) {
+    val maxDecimalPlaces = if (showDecimals) (CURRENCY_DECIMALS[currencySymbol] ?: 2) else 0
     val S = LocalStrings.current
     val dateFormatter = remember(dateFormatPattern) { DateTimeFormatter.ofPattern(dateFormatPattern) }
     val eligibleGoals = savingsGoals.filter { it.totalSavedSoFar < it.targetAmount }
     val amounts = remember { mutableStateMapOf<Int, String>() }
     val modes = remember { mutableStateMapOf<Int, SuperchargeMode>() }
 
-    // Initialize default modes (only fixed-contribution goals use the toggle)
+    // Initialize default modes
     eligibleGoals.forEach { goal ->
         if (goal.id !in modes) {
-            modes[goal.id] = SuperchargeMode.ACHIEVE_SOONER
+            modes[goal.id] = if (goal.targetDate != null)
+                SuperchargeMode.REDUCE_CONTRIBUTIONS
+            else SuperchargeMode.ACHIEVE_SOONER
         }
     }
 
@@ -909,38 +914,37 @@ private fun SavingsSuperchargeDialog(
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
 
-                                if (goal.targetDate != null) {
-                                    // Target-date goals: contributions auto-adjust
-                                    Text(
-                                        text = S.dashboard.superchargeAutoAdjust,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-                                    )
-                                } else {
-                                    // Fixed-contribution goals: mode toggle
-                                    Text(
-                                        text = S.dashboard.superchargeExtraShouldLabel,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                                    )
+                                // Mode toggle
+                                Text(
+                                    text = S.dashboard.superchargeExtraShouldLabel,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = if (mode == SuperchargeMode.REDUCE_CONTRIBUTIONS)
+                                        S.dashboard.superchargeReduceContributions
+                                    else S.dashboard.superchargeAchieveSooner,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier
+                                        .background(
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                            RoundedCornerShape(16.dp)
+                                        )
+                                        .clickable {
+                                            modes[goal.id] = if (mode == SuperchargeMode.REDUCE_CONTRIBUTIONS)
+                                                SuperchargeMode.ACHIEVE_SOONER
+                                            else SuperchargeMode.REDUCE_CONTRIBUTIONS
+                                        }
+                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                                if (goal.targetDate != null && mode == SuperchargeMode.ACHIEVE_SOONER) {
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = if (mode == SuperchargeMode.REDUCE_CONTRIBUTIONS)
-                                            S.dashboard.superchargeReduceContributions
-                                        else S.dashboard.superchargeAchieveSooner,
+                                        text = S.dashboard.superchargeTargetDateNote,
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier
-                                            .background(
-                                                MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                                RoundedCornerShape(16.dp)
-                                            )
-                                            .clickable {
-                                                modes[goal.id] = if (mode == SuperchargeMode.REDUCE_CONTRIBUTIONS)
-                                                    SuperchargeMode.ACHIEVE_SOONER
-                                                else SuperchargeMode.REDUCE_CONTRIBUTIONS
-                                            }
-                                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                                        color = Color(0xFFF9A825)
                                     )
                                 }
 
@@ -961,8 +965,8 @@ private fun SavingsSuperchargeDialog(
                                 // Live preview (above text field so it stays visible when keyboard is open)
                                 if (enteredAmount > 0 && !exceedsGoal) {
                                     val newRemaining = remaining - enteredAmount
-                                    if (goal.targetDate != null) {
-                                        // Target-date goal: always show new reduced contribution
+                                    if (goal.targetDate != null && mode == SuperchargeMode.REDUCE_CONTRIBUTIONS) {
+                                        // Target-date goal, Reduce mode: show new lower contribution
                                         val today = LocalDate.now()
                                         val newDeduction = if (!today.isBefore(goal.targetDate)) 0.0
                                         else {
@@ -981,6 +985,29 @@ private fun SavingsSuperchargeDialog(
                                             style = MaterialTheme.typography.bodySmall,
                                             color = previewPulseColor
                                         )
+                                    } else if (goal.targetDate != null && mode == SuperchargeMode.ACHIEVE_SOONER) {
+                                        // Target-date goal, Achieve Sooner mode: show new earlier target date
+                                        val today = LocalDate.now()
+                                        val currentContribution = calculatePerPeriodDeduction(goal, budgetPeriod)
+                                        if (currentContribution > 0 && newRemaining > 0) {
+                                            val periodsNeeded = ceil(newRemaining / currentContribution).toLong()
+                                            val newTargetDate = when (budgetPeriod) {
+                                                BudgetPeriod.DAILY -> today.plusDays(periodsNeeded)
+                                                BudgetPeriod.WEEKLY -> today.plusWeeks(periodsNeeded)
+                                                BudgetPeriod.MONTHLY -> today.plusMonths(periodsNeeded)
+                                            }
+                                            Text(
+                                                text = S.dashboard.superchargeNewPayoff(newTargetDate.format(dateFormatter)),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = previewPulseColor
+                                            )
+                                        } else if (newRemaining <= 0) {
+                                            Text(
+                                                text = S.futureExpenditures.goalReached,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = previewPulseColor
+                                            )
+                                        }
                                     } else if (mode == SuperchargeMode.REDUCE_CONTRIBUTIONS) {
                                         // Fixed-contribution, Reduce mode: show new lower per-period amount
                                         if (goal.contributionPerPeriod > 0 && remaining > 0) {
@@ -1024,14 +1051,22 @@ private fun SavingsSuperchargeDialog(
                                 OutlinedTextField(
                                     value = amounts[goal.id] ?: "",
                                     onValueChange = { newVal ->
-                                        if (newVal.isEmpty() || newVal.toDoubleOrNull() != null || newVal == ".") {
-                                            amounts[goal.id] = newVal
+                                        if (newVal.isEmpty() || newVal == "." || newVal.toDoubleOrNull() != null) {
+                                            val dotIndex = newVal.indexOf('.')
+                                            val decimals = if (dotIndex >= 0) newVal.length - dotIndex - 1 else 0
+                                            if (maxDecimalPlaces == 0 && dotIndex >= 0) {
+                                                // No decimals allowed
+                                            } else if (decimals <= maxDecimalPlaces) {
+                                                amounts[goal.id] = newVal
+                                            }
                                         }
                                     },
                                     label = { Text(S.dashboard.superchargeAllocate) },
                                     singleLine = true,
                                     isError = exceedsGoal,
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = if (maxDecimalPlaces > 0) KeyboardType.Decimal else KeyboardType.Number
+                                    ),
                                     colors = textFieldColors,
                                     modifier = Modifier.fillMaxWidth()
                                 )

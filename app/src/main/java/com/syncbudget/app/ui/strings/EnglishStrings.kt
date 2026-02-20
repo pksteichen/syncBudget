@@ -80,7 +80,8 @@ object EnglishStrings : AppStrings {
         superchargeNewContribution = { amount, period -> "New: $amount/$period" },
         superchargeNewPayoff = { date -> "New payoff: $date" },
         superchargeNewCompletion = { date -> "Completes: $date" },
-        superchargeAutoAdjust = "Contributions adjust automatically"
+        superchargeAutoAdjust = "Contributions adjust automatically",
+        superchargeTargetDateNote = "This will change your target date"
     )
 
     override val settings = SettingsStrings(
