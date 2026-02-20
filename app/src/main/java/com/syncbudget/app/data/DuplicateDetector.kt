@@ -5,6 +5,62 @@ import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 import kotlin.math.roundToLong
 
+fun filterAlreadyLoadedDays(
+    fileTransactions: List<Transaction>,
+    appTransactions: List<Transaction>
+): List<Transaction> {
+    val fileByDate = fileTransactions.groupBy { it.date }
+    val appByDate = appTransactions.groupBy { it.date }
+    val result = mutableListOf<Transaction>()
+
+    for ((date, fileTxns) in fileByDate) {
+        val appTxns = appByDate[date]
+        if (appTxns == null) {
+            // No app transactions for this day — keep all file transactions
+            result.addAll(fileTxns)
+            continue
+        }
+
+        // Build a mutable pool of app amounts (rounded to cents)
+        val appPool = appTxns.map { Math.round(it.amount * 100) }.toMutableList()
+        val matched = mutableListOf<Transaction>()
+        val unmatched = mutableListOf<Transaction>()
+
+        for (txn in fileTxns) {
+            val fileCents = Math.round(txn.amount * 100)
+            val idx = appPool.indexOf(fileCents)
+            if (idx >= 0) {
+                appPool.removeAt(idx)
+                matched.add(txn)
+            } else {
+                unmatched.add(txn)
+            }
+        }
+
+        val total = fileTxns.size
+        val matchCount = matched.size
+
+        if (total <= 5) {
+            // Require 100% match to skip the day
+            if (matchCount == total) {
+                // Day already loaded — skip all
+            } else {
+                result.addAll(fileTxns)
+            }
+        } else {
+            // Require >= 80% match to consider the day already loaded
+            if (matchCount.toDouble() / total >= 0.8) {
+                // Day already loaded — keep only unmatched transactions
+                result.addAll(unmatched)
+            } else {
+                result.addAll(fileTxns)
+            }
+        }
+    }
+
+    return result
+}
+
 fun findRecurringExpenseMatch(
     incoming: Transaction,
     recurringExpenses: List<RecurringExpense>,

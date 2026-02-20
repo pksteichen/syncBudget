@@ -104,6 +104,7 @@ import com.syncbudget.app.data.Transaction
 import com.syncbudget.app.data.TransactionType
 import com.syncbudget.app.data.autoCategorize
 import com.syncbudget.app.data.IncomeSource
+import com.syncbudget.app.data.filterAlreadyLoadedDays
 import com.syncbudget.app.data.findAmortizationMatch
 import com.syncbudget.app.data.findBudgetIncomeMatch
 import com.syncbudget.app.data.findDuplicate
@@ -116,6 +117,7 @@ import com.syncbudget.app.data.parseUsBank
 import com.syncbudget.app.data.serializeTransactionsCsv
 import com.syncbudget.app.ui.components.CURRENCY_DECIMALS
 import com.syncbudget.app.ui.components.PieChartEditor
+import com.syncbudget.app.ui.strings.LocalStrings
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -187,6 +189,7 @@ fun TransactionsScreen(
     onBack: () -> Unit,
     onHelpClick: () -> Unit = {}
 ) {
+    val S = LocalStrings.current
     val customColors = LocalSyncBudgetColors.current
     val dateFormatter = remember(dateFormatPattern) {
         DateTimeFormatter.ofPattern(dateFormatPattern)
@@ -294,7 +297,7 @@ fun TransactionsScreen(
             context.contentResolver.openOutputStream(uri)?.use { os ->
                 os.write(csvContent.toByteArray())
             }
-            Toast.makeText(context, "Saved ${toSave.size} transactions", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, S.transactions.savedSuccessfully(toSave.size), Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Toast.makeText(context, "Save failed: ${e.message}", Toast.LENGTH_SHORT).show()
         }
@@ -318,7 +321,7 @@ fun TransactionsScreen(
             }
             savePassword = ""
             savePasswordConfirm = ""
-            Toast.makeText(context, "Encrypted save: ${toSave.size} transactions", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, S.transactions.savedSuccessfully(toSave.size), Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Toast.makeText(context, "Encrypted save failed: ${e.message}", Toast.LENGTH_SHORT).show()
         }
@@ -412,6 +415,11 @@ fun TransactionsScreen(
                 parsedTransactions.clear()
                 parsedTransactions.addAll(processed)
 
+                // Pre-filter days that are already fully loaded (date+amount multiset match)
+                val filtered = filterAlreadyLoadedDays(parsedTransactions.toList(), transactions)
+                parsedTransactions.clear()
+                parsedTransactions.addAll(filtered)
+
                 importApproved.clear()
                 importIndex = 0
                 ignoreAllDuplicates = false
@@ -431,10 +439,11 @@ fun TransactionsScreen(
             // All done — add approved transactions
             importApproved.forEach { txn -> onAddTransaction(txn) }
             val count = importApproved.size
+            val totalParsed = parsedTransactions.size
             importApproved.clear()
             parsedTransactions.clear()
             importStage = ImportStage.COMPLETE
-            Toast.makeText(context, "Imported $count transactions", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, S.transactions.loadedSuccessfully(count, totalParsed), Toast.LENGTH_SHORT).show()
             importStage = null
             return@LaunchedEffect
         }
@@ -457,7 +466,7 @@ fun TransactionsScreen(
             return@LaunchedEffect
         }
 
-        val dup = findDuplicate(txn, transactions + importApproved, percentTolerance, matchDollar, matchDays, matchChars)
+        val dup = findDuplicate(txn, transactions, percentTolerance, matchDollar, matchDays, matchChars)
         if (dup == null) {
             val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars)
             if (recurringMatch != null) {
@@ -508,7 +517,7 @@ fun TransactionsScreen(
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = "Transactions",
+                        text = S.transactions.title,
                         style = MaterialTheme.typography.titleLarge,
                         color = customColors.headerText
                     )
@@ -524,7 +533,7 @@ fun TransactionsScreen(
                     }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = S.common.back,
                             tint = customColors.headerText
                         )
                     }
@@ -533,7 +542,7 @@ fun TransactionsScreen(
                     IconButton(onClick = { if (isPaidUser) showSaveDialog = true }) {
                         Icon(
                             imageVector = Icons.Filled.Save,
-                            contentDescription = "Save",
+                            contentDescription = S.transactions.save,
                             tint = if (isPaidUser) customColors.headerText
                                    else customColors.headerText.copy(alpha = 0.35f)
                         )
@@ -541,7 +550,7 @@ fun TransactionsScreen(
                     IconButton(onClick = { if (isPaidUser) showImportFormatDialog = true }) {
                         Icon(
                             imageVector = Icons.Filled.MoveToInbox,
-                            contentDescription = "Load",
+                            contentDescription = S.transactions.load,
                             tint = if (isPaidUser) customColors.headerText
                                    else customColors.headerText.copy(alpha = 0.35f)
                         )
@@ -549,7 +558,7 @@ fun TransactionsScreen(
                     IconButton(onClick = onHelpClick) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Help,
-                            contentDescription = "Help",
+                            contentDescription = S.common.help,
                             tint = customColors.headerText
                         )
                     }
@@ -586,7 +595,11 @@ fun TransactionsScreen(
                         contentColor = MaterialTheme.colorScheme.onBackground
                     )
                 ) {
-                    Text(viewFilter.label)
+                    Text(when (viewFilter) {
+                        ViewFilter.ALL -> S.transactions.all
+                        ViewFilter.EXPENSES -> S.transactions.expensesFilter
+                        ViewFilter.INCOME -> S.transactions.incomeFilter
+                    })
                 }
 
                 IconButton(
@@ -595,7 +608,7 @@ fun TransactionsScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Add,
-                        contentDescription = "Add Income",
+                        contentDescription = S.transactions.addIncome,
                         tint = Color(0xFF4CAF50),
                         modifier = Modifier.size(36.dp)
                     )
@@ -607,7 +620,7 @@ fun TransactionsScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Remove,
-                        contentDescription = "Add Expense",
+                        contentDescription = S.transactions.addExpense,
                         tint = Color(0xFFF44336),
                         modifier = Modifier.size(36.dp)
                     )
@@ -620,7 +633,7 @@ fun TransactionsScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Search,
-                            contentDescription = "Search",
+                            contentDescription = S.transactions.search,
                             tint = MaterialTheme.colorScheme.onBackground,
                             modifier = Modifier.size(28.dp)
                         )
@@ -630,21 +643,21 @@ fun TransactionsScreen(
                         onDismissRequest = { showSearchMenu = false }
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Date Search") },
+                            text = { Text(S.transactions.dateSearch) },
                             onClick = {
                                 showSearchMenu = false
                                 showDateSearchStart = true
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Text Search") },
+                            text = { Text(S.transactions.textSearch) },
                             onClick = {
                                 showSearchMenu = false
                                 showTextSearch = true
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Amount Search") },
+                            text = { Text(S.transactions.amountSearch) },
                             onClick = {
                                 showSearchMenu = false
                                 showAmountSearch = true
@@ -672,7 +685,7 @@ fun TransactionsScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Search Results \u2014 Tap to Clear",
+                        text = "${S.transactions.searchResults} \u2014 ${S.transactions.tapToClearSearch}",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onBackground
@@ -696,7 +709,7 @@ fun TransactionsScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "$filterCatName \u2014 Tap to Clear",
+                        text = "${S.transactions.filterByCategory(filterCatName)} \u2014 ${S.transactions.tapToClearFilter}",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onBackground
@@ -728,7 +741,7 @@ fun TransactionsScreen(
                         )
                     )
                     Text(
-                        text = "Select All",
+                        text = S.transactions.selectAll,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.weight(1f)
@@ -740,7 +753,7 @@ fun TransactionsScreen(
                     }) {
                         Icon(
                             imageVector = Icons.Filled.Category,
-                            contentDescription = "Change category",
+                            contentDescription = S.transactions.changeCategory,
                             tint = customColors.headerBackground
                         )
                     }
@@ -751,7 +764,7 @@ fun TransactionsScreen(
                     }) {
                         Icon(
                             imageVector = Icons.Filled.Edit,
-                            contentDescription = "Edit merchant",
+                            contentDescription = S.transactions.editMerchant,
                             tint = customColors.headerBackground
                         )
                     }
@@ -762,7 +775,7 @@ fun TransactionsScreen(
                     }) {
                         Icon(
                             imageVector = Icons.Filled.Delete,
-                            contentDescription = "Delete selected",
+                            contentDescription = S.transactions.deleteSelected,
                             tint = Color(0xFFF44336)
                         )
                     }
@@ -772,7 +785,7 @@ fun TransactionsScreen(
                     }) {
                         Icon(
                             imageVector = Icons.Filled.Close,
-                            contentDescription = "Cancel selection",
+                            contentDescription = S.common.close,
                             tint = customColors.headerBackground
                         )
                     }
@@ -830,8 +843,8 @@ fun TransactionsScreen(
     // Add Income dialog
     if (showAddIncome) {
         TransactionDialog(
-            title = "Add New Income Transaction",
-            sourceLabel = "Source",
+            title = S.common.addNewIncomeTransaction,
+            sourceLabel = S.common.sourceLabel,
             categories = categories,
             existingIds = existingIds,
             currencySymbol = currencySymbol,
@@ -880,8 +893,8 @@ fun TransactionsScreen(
     // Add Expense dialog
     if (showAddExpense) {
         TransactionDialog(
-            title = "Add New Expense Transaction",
-            sourceLabel = "Merchant",
+            title = S.common.addNewExpenseTransaction,
+            sourceLabel = S.common.merchantLabel,
             categories = categories,
             existingIds = existingIds,
             currencySymbol = currencySymbol,
@@ -923,8 +936,8 @@ fun TransactionsScreen(
     // Edit dialog
     editingTransaction?.let { txn ->
         TransactionDialog(
-            title = if (txn.type == TransactionType.EXPENSE) "Edit Expense" else "Edit Income",
-            sourceLabel = if (txn.type == TransactionType.EXPENSE) "Merchant" else "Source",
+            title = S.transactions.editTransaction,
+            sourceLabel = if (txn.type == TransactionType.EXPENSE) S.common.merchantLabel else S.common.sourceLabel,
             categories = categories,
             existingIds = existingIds,
             currencySymbol = currencySymbol,
@@ -1002,7 +1015,7 @@ fun TransactionsScreen(
     // Date search - start
     if (showDateSearchStart) {
         SearchDatePickerDialog(
-            title = "Select Start Date",
+            title = S.transactions.startDate,
             onDismiss = { showDateSearchStart = false },
             onDateSelected = { date ->
                 dateSearchStart = date
@@ -1015,7 +1028,7 @@ fun TransactionsScreen(
     // Date search - end
     if (showDateSearchEnd) {
         SearchDatePickerDialog(
-            title = "Select End Date",
+            title = S.transactions.endDate,
             onDismiss = { showDateSearchEnd = false; dateSearchStart = null },
             onDateSelected = { endDate ->
                 val start = dateSearchStart
@@ -1038,7 +1051,7 @@ fun TransactionsScreen(
             onDismissRequest = { showBulkDeleteConfirm = false },
             title = {
                 Text(
-                    if (isAllWithoutSearch) "WARNING" else "Delete Transactions?"
+                    if (isAllWithoutSearch) "WARNING" else "${S.common.delete}?"
                 )
             },
             text = {
@@ -1046,7 +1059,7 @@ fun TransactionsScreen(
                     if (isAllWithoutSearch)
                         "This will permanently delete ALL selected transactions in the current view. This action cannot be undone."
                     else
-                        "Delete $count selected transaction${if (count != 1) "s" else ""}?"
+                        S.transactions.selectedCount(count)
                 )
             },
             confirmButton = {
@@ -1057,12 +1070,12 @@ fun TransactionsScreen(
                     selectionMode = false
                     showBulkDeleteConfirm = false
                 }) {
-                    Text("Delete", color = Color(0xFFF44336))
+                    Text(S.common.delete, color = Color(0xFFF44336))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showBulkDeleteConfirm = false }) {
-                    Text("Cancel")
+                    Text(S.common.cancel)
                 }
             }
         )
@@ -1075,12 +1088,12 @@ fun TransactionsScreen(
             onDismissRequest = {
                 showBulkCategoryChange = false
             },
-            title = { Text("Change Category") },
+            title = { Text(S.transactions.changeCategory) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     val count = selectedIds.count { it.value }
                     Text(
-                        text = "Set category for $count transaction${if (count != 1) "s" else ""}:",
+                        text = S.transactions.selectedCount(count),
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Spacer(modifier = Modifier.height(4.dp))
@@ -1135,12 +1148,12 @@ fun TransactionsScreen(
                     },
                     enabled = bulkSelectedCatId != null
                 ) {
-                    Text("Apply")
+                    Text(S.common.save)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showBulkCategoryChange = false }) {
-                    Text("Cancel")
+                    Text(S.common.cancel)
                 }
             }
         )
@@ -1152,20 +1165,20 @@ fun TransactionsScreen(
         val count = selectedIds.count { it.value }
         AlertDialog(
             onDismissRequest = { showBulkMerchantEdit = false },
-            title = { Text("Edit Merchant/Source") },
+            title = { Text(S.transactions.editMerchant) },
             text = {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.verticalScroll(rememberScrollState())
                 ) {
                     Text(
-                        text = "Set merchant/source for $count transaction${if (count != 1) "s" else ""}:",
+                        text = S.transactions.selectedCount(count),
                         style = MaterialTheme.typography.bodyMedium
                     )
                     OutlinedTextField(
                         value = newMerchant,
                         onValueChange = { newMerchant = it },
-                        label = { Text("Merchant/Source") },
+                        label = { Text(S.transactions.newMerchantName) },
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = MaterialTheme.colorScheme.onBackground,
@@ -1194,12 +1207,12 @@ fun TransactionsScreen(
                     },
                     enabled = newMerchant.isNotBlank()
                 ) {
-                    Text("Apply")
+                    Text(S.common.save)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showBulkMerchantEdit = false }) {
-                    Text("Cancel")
+                    Text(S.common.cancel)
                 }
             }
         )
@@ -1214,13 +1227,13 @@ fun TransactionsScreen(
                 savePasswordConfirm = ""
                 saveError = null
             },
-            title = { Text("Save Transactions") },
+            title = { Text(S.transactions.saveTransactions) },
             text = {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.verticalScroll(rememberScrollState())
                 ) {
-                    Text("Format:", style = MaterialTheme.typography.labelMedium,
+                    Text(S.transactions.format, style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onBackground)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         SaveFormat.entries.forEach { format ->
@@ -1245,21 +1258,19 @@ fun TransactionsScreen(
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                 }
-                                Text(format.label)
+                                Text(when (format) {
+                                    SaveFormat.CSV -> S.transactions.csv
+                                    SaveFormat.ENCRYPTED -> S.transactions.encrypted
+                                })
                             }
                         }
                     }
 
                     val transactionsToSave = if (selectionMode && selectedIds.any { it.value })
                         transactions.filter { selectedIds[it.id] == true } else transactions
-                    Text("${transactionsToSave.size} transactions will be saved.",
+                    Text(S.transactions.selectedCount(transactionsToSave.size),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
-                    if (selectionMode && selectedIds.any { it.value }) {
-                        Text("Only the selected transactions will be saved.",
-                            color = Color(0xFFF44336),
-                            style = MaterialTheme.typography.bodySmall)
-                    }
 
                     if (selectedSaveFormat == SaveFormat.ENCRYPTED) {
                         val pwFieldColors = OutlinedTextFieldDefaults.colors(
@@ -1273,7 +1284,7 @@ fun TransactionsScreen(
                         OutlinedTextField(
                             value = savePassword,
                             onValueChange = { savePassword = it; saveError = null },
-                            label = { Text("Password (min 8 chars)") },
+                            label = { Text(S.transactions.passwordMinLength) },
                             singleLine = true,
                             visualTransformation = PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -1283,7 +1294,7 @@ fun TransactionsScreen(
                         OutlinedTextField(
                             value = savePasswordConfirm,
                             onValueChange = { savePasswordConfirm = it; saveError = null },
-                            label = { Text("Confirm Password") },
+                            label = { Text(S.transactions.confirmPassword) },
                             singleLine = true,
                             visualTransformation = PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -1310,10 +1321,10 @@ fun TransactionsScreen(
                         SaveFormat.ENCRYPTED -> {
                             when {
                                 savePassword.length < 8 -> {
-                                    saveError = "Password must be at least 8 characters"
+                                    saveError = S.transactions.passwordMinLength
                                 }
                                 savePassword != savePasswordConfirm -> {
-                                    saveError = "Passwords do not match"
+                                    saveError = S.transactions.passwordsMustMatch
                                 }
                                 else -> {
                                     showSaveDialog = false
@@ -1322,7 +1333,7 @@ fun TransactionsScreen(
                             }
                         }
                     }
-                }) { Text("Save") }
+                }) { Text(S.common.save) }
             },
             dismissButton = {
                 TextButton(onClick = {
@@ -1330,7 +1341,7 @@ fun TransactionsScreen(
                     savePassword = ""
                     savePasswordConfirm = ""
                     saveError = null
-                }) { Text("Cancel") }
+                }) { Text(S.common.cancel) }
             }
         )
     }
@@ -1343,13 +1354,13 @@ fun TransactionsScreen(
                 showImportFormatDialog = false
                 encryptedLoadPassword = ""
             },
-            title = { Text("Import / Load") },
+            title = { Text(S.transactions.loadTransactions) },
             text = {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.verticalScroll(rememberScrollState())
                 ) {
-                    Text("Format:", style = MaterialTheme.typography.labelMedium,
+                    Text(S.transactions.format, style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onBackground)
                     Box {
                         OutlinedButton(onClick = { formatDropdownExpanded = true }) {
@@ -1376,7 +1387,7 @@ fun TransactionsScreen(
                         OutlinedTextField(
                             value = encryptedLoadPassword,
                             onValueChange = { encryptedLoadPassword = it },
-                            label = { Text("Password") },
+                            label = { Text(S.transactions.password) },
                             singleLine = true,
                             visualTransformation = PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -1404,13 +1415,13 @@ fun TransactionsScreen(
                         filePickerLauncher.launch(arrayOf("text/*", "*/*"))
                     },
                     enabled = canProceed
-                ) { Text("Select File") }
+                ) { Text(S.transactions.selectFile) }
             },
             dismissButton = {
                 TextButton(onClick = {
                     showImportFormatDialog = false
                     encryptedLoadPassword = ""
-                }) { Text("Cancel") }
+                }) { Text(S.common.cancel) }
             }
         )
     }
@@ -1423,12 +1434,12 @@ fun TransactionsScreen(
                 parsedTransactions.clear()
                 importError = null
             },
-            title = { Text("Parse Error") },
+            title = { Text(S.transactions.parseError) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(importError ?: "Unknown error")
+                    Text(importError ?: S.transactions.unknownError)
                     if (parsedTransactions.isNotEmpty()) {
-                        Text("${parsedTransactions.size} transactions parsed before error.")
+                        Text(S.transactions.parsedBeforeError(parsedTransactions.size))
                     }
                 }
             },
@@ -1440,12 +1451,15 @@ fun TransactionsScreen(
                         }
                         parsedTransactions.clear()
                         parsedTransactions.addAll(categorized)
+                        val filtered = filterAlreadyLoadedDays(parsedTransactions.toList(), transactions)
+                        parsedTransactions.clear()
+                        parsedTransactions.addAll(filtered)
                         importApproved.clear()
                         importIndex = 0
                         ignoreAllDuplicates = false
                         importError = null
                         importStage = ImportStage.DUPLICATE_CHECK
-                    }) { Text("Keep") }
+                    }) { Text(S.transactions.keep) }
                 }
             },
             dismissButton = {
@@ -1453,7 +1467,7 @@ fun TransactionsScreen(
                     parsedTransactions.clear()
                     importError = null
                     importStage = null
-                }) { Text("Delete") }
+                }) { Text(S.common.delete) }
             }
         )
     }
@@ -1698,33 +1712,31 @@ fun BudgetIncomeConfirmDialog(
     onConfirmBudgetIncome: () -> Unit,
     onNotBudgetIncome: () -> Unit
 ) {
+    val S = LocalStrings.current
     AlertDialog(
         onDismissRequest = onNotBudgetIncome,
-        title = { Text("Budget Income Detected") },
+        title = { Text(S.transactions.budgetIncomeMatchTitle(transaction.source)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Transaction:", fontWeight = FontWeight.SemiBold)
-                Text("${transaction.source} — $currencySymbol${formatAmount(transaction.amount, 2)}")
+                Text("${transaction.source} \u2014 $currencySymbol${formatAmount(transaction.amount, 2)}", fontWeight = FontWeight.SemiBold)
                 Text(transaction.date.format(dateFormatter))
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("Matched Income Source:", fontWeight = FontWeight.SemiBold)
-                Text("${incomeSource.source} — $currencySymbol${formatAmount(incomeSource.amount, 2)}")
+                Text("${incomeSource.source} \u2014 $currencySymbol${formatAmount(incomeSource.amount, 2)}", fontWeight = FontWeight.SemiBold)
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    "This appears to be expected income from your budget configuration. " +
-                    "Budget income is already included in your budget calculation and will not increase your available cash.",
+                    S.transactions.budgetIncomeMatchBody(transaction.source, incomeSource.source),
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
         },
         confirmButton = {
             TextButton(onClick = onConfirmBudgetIncome) {
-                Text("Yes, Budget Income")
+                Text(S.transactions.yesBudgetIncome)
             }
         },
         dismissButton = {
             TextButton(onClick = onNotBudgetIncome) {
-                Text("No, Extra Income")
+                Text(S.transactions.noExtraIncome)
             }
         }
     )
@@ -1739,32 +1751,31 @@ fun AmortizationConfirmDialog(
     onConfirmAmortization: () -> Unit,
     onNotAmortized: () -> Unit
 ) {
+    val S = LocalStrings.current
     AlertDialog(
         onDismissRequest = onNotAmortized,
-        title = { Text("Amortization Transaction Detected") },
+        title = { Text(S.transactions.amortizationMatchTitle(transaction.source)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Transaction:", fontWeight = FontWeight.SemiBold)
-                Text("${transaction.source} — $currencySymbol${formatAmount(transaction.amount, 2)}")
+                Text("${transaction.source} \u2014 $currencySymbol${formatAmount(transaction.amount, 2)}", fontWeight = FontWeight.SemiBold)
                 Text(transaction.date.format(dateFormatter))
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("Matched Amortization Entry:", fontWeight = FontWeight.SemiBold)
-                Text("${amortizationEntry.source} — $currencySymbol${formatAmount(amortizationEntry.amount, 2)}")
+                Text("${amortizationEntry.source} \u2014 $currencySymbol${formatAmount(amortizationEntry.amount, 2)}", fontWeight = FontWeight.SemiBold)
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    "Is this an amortized expense that is configured on the Amortization page and should be spread across multiple budget periods?",
+                    S.transactions.amortizationMatchBody(transaction.source, amortizationEntry.source),
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
         },
         confirmButton = {
             TextButton(onClick = onConfirmAmortization) {
-                Text("Yes, Amortized")
+                Text(S.transactions.yesAmortization)
             }
         },
         dismissButton = {
             TextButton(onClick = onNotAmortized) {
-                Text("No, Not Amortized")
+                Text(S.transactions.noRegularAmort)
             }
         }
     )
@@ -1780,26 +1791,25 @@ fun RecurringExpenseConfirmDialog(
     onConfirmRecurring: () -> Unit,
     onNotRecurring: () -> Unit
 ) {
+    val S = LocalStrings.current
     AlertDialog(
         onDismissRequest = onNotRecurring,
-        title = { Text("Recurring Transaction Detected") },
+        title = { Text(S.transactions.recurringMatchTitle(transaction.source)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Transaction:", fontWeight = FontWeight.SemiBold)
-                Text("${transaction.source} — $currencySymbol${formatAmount(transaction.amount, 2)}")
+                Text("${transaction.source} \u2014 $currencySymbol${formatAmount(transaction.amount, 2)}", fontWeight = FontWeight.SemiBold)
                 Text(transaction.date.format(dateFormatter))
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("Matched Recurring Expense:", fontWeight = FontWeight.SemiBold)
-                Text("${recurringExpense.source} — $currencySymbol${formatAmount(recurringExpense.amount, 2)}")
+                Text("${recurringExpense.source} \u2014 $currencySymbol${formatAmount(recurringExpense.amount, 2)}", fontWeight = FontWeight.SemiBold)
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    "Is this a recurring transaction that is configured on the Recurring Expenses page and should not count against your budget?",
+                    S.transactions.recurringMatchBody(transaction.source, recurringExpense.source),
                     style = MaterialTheme.typography.bodyMedium
                 )
                 if (showDateAdvisory) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        "Note: This transaction's date differs from the expected schedule by more than 2 days. Consider updating your recurring expense configuration.",
+                        S.transactions.dateAdvisory,
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFFFF9800)
                     )
@@ -1808,12 +1818,12 @@ fun RecurringExpenseConfirmDialog(
         },
         confirmButton = {
             TextButton(onClick = onConfirmRecurring) {
-                Text("Yes, Recurring")
+                Text(S.transactions.yesRecurring)
             }
         },
         dismissButton = {
             TextButton(onClick = onNotRecurring) {
-                Text("No, Not Recurring")
+                Text(S.transactions.noRegularExpense)
             }
         }
     )
@@ -1832,12 +1842,13 @@ fun DuplicateResolutionDialog(
     onKeepExisting: () -> Unit,
     onIgnoreAll: () -> Unit
 ) {
+    val S = LocalStrings.current
     AlertDialog(
         onDismissRequest = onKeepExisting,
-        title = { Text("Possible Duplicate") },
+        title = { Text(S.transactions.duplicateDetected) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Existing:", fontWeight = FontWeight.SemiBold)
+                Text(S.transactions.duplicateExisting, fontWeight = FontWeight.SemiBold)
                 Text(
                     "${existingTransaction.date.format(dateFormatter)}  ${existingTransaction.source}  $currencySymbol${"%.2f".format(existingTransaction.amount)}",
                     style = MaterialTheme.typography.bodySmall
@@ -1850,7 +1861,7 @@ fun DuplicateResolutionDialog(
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
                 }
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("New:", fontWeight = FontWeight.SemiBold)
+                Text(S.transactions.duplicateNew, fontWeight = FontWeight.SemiBold)
                 Text(
                     "${newTransaction.date.format(dateFormatter)}  ${newTransaction.source}  $currencySymbol${"%.2f".format(newTransaction.amount)}",
                     style = MaterialTheme.typography.bodySmall
@@ -1867,16 +1878,16 @@ fun DuplicateResolutionDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    TextButton(onClick = onIgnore) { Text("Ignore") }
-                    TextButton(onClick = onKeepNew) { Text("Keep New") }
+                    TextButton(onClick = onIgnore) { Text(S.transactions.ignore) }
+                    TextButton(onClick = onKeepNew) { Text(S.transactions.keepNew) }
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    TextButton(onClick = onKeepExisting) { Text("Keep Existing") }
+                    TextButton(onClick = onKeepExisting) { Text(S.transactions.keepExisting) }
                     if (showIgnoreAll) {
-                        TextButton(onClick = onIgnoreAll) { Text("Ignore All") }
+                        TextButton(onClick = onIgnoreAll) { Text(S.transactions.ignoreAll) }
                     }
                 }
             }
@@ -1902,6 +1913,7 @@ private fun TransactionRow(
     onToggleExpand: () -> Unit,
     onCategoryFilter: (Int) -> Unit = {}
 ) {
+    val S = LocalStrings.current
     val isExpense = transaction.type == TransactionType.EXPENSE
     val amountColor = if (isExpense) Color(0xFFF44336) else Color(0xFF4CAF50)
     val amountPrefix = if (isExpense) "-" else ""
@@ -1941,7 +1953,7 @@ private fun TransactionRow(
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.List,
-                                contentDescription = "Categories",
+                                contentDescription = S.transactions.category,
                                 tint = categoryIconTint,
                                 modifier = Modifier.size(22.dp)
                             )
@@ -2092,6 +2104,7 @@ fun TransactionDialog(
     onSave: (Transaction) -> Unit,
     onDelete: (() -> Unit)? = null
 ) {
+    val S = LocalStrings.current
     val maxDecimals = CURRENCY_DECIMALS[currencySymbol] ?: 2
     val context = LocalContext.current
     val isEdit = editTransaction != null
@@ -2197,7 +2210,7 @@ fun TransactionDialog(
                         IconButton(onClick = { showDeleteConfirm = true }) {
                             Icon(
                                 imageVector = Icons.Filled.Delete,
-                                contentDescription = "Delete",
+                                contentDescription = S.common.delete,
                                 tint = Color(0xFFF44336)
                             )
                         }
@@ -2223,12 +2236,12 @@ fun TransactionDialog(
                         value = selectedDate.format(dateFormatter),
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Date") },
+                        label = { Text(S.transactions.date) },
                         trailingIcon = {
                             IconButton(onClick = { showDatePicker = true }) {
                                 Icon(
                                     imageVector = Icons.Filled.CalendarMonth,
-                                    contentDescription = "Select date"
+                                    contentDescription = S.transactions.date
                                 )
                             }
                         },
@@ -2243,7 +2256,7 @@ fun TransactionDialog(
                         label = { Text(sourceLabel) },
                         isError = showValidation && source.isBlank(),
                         supportingText = if (showValidation && source.isBlank()) ({
-                            Text("Required, e.g. Grocery Store", color = Color(0xFFF44336))
+                            Text(S.transactions.requiredMerchantExample, color = Color(0xFFF44336))
                         }) else null,
                         colors = textFieldColors,
                         singleLine = true,
@@ -2274,7 +2287,7 @@ fun TransactionDialog(
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Text(
-                                    text = "Select categories...",
+                                    text = "${S.transactions.category}...",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                                 )
@@ -2304,7 +2317,7 @@ fun TransactionDialog(
                     OutlinedTextField(
                         value = singleAmountText,
                         onValueChange = { singleAmountText = it },
-                        label = { Text("Amount") },
+                        label = { Text(S.transactions.amount) },
                         isError = singleAmountInvalid,
                         supportingText = if (singleAmountInvalid) ({
                             Text("e.g. 42.50", color = Color(0xFFF44336))
@@ -2341,7 +2354,7 @@ fun TransactionDialog(
                         }) {
                             Icon(
                                 imageVector = Icons.Filled.PieChart,
-                                contentDescription = "Pie chart mode",
+                                contentDescription = S.transactions.pieChart,
                                 tint = if (showPieChart) activeColor else inactiveColor,
                                 modifier = Modifier.size(modeIconSize)
                             )
@@ -2373,7 +2386,7 @@ fun TransactionDialog(
                         }) {
                             Icon(
                                 imageVector = Icons.Filled.Calculate,
-                                contentDescription = "Amount mode",
+                                contentDescription = S.transactions.calculator,
                                 tint = if (!showPieChart && !usePercentage) activeColor else inactiveColor,
                                 modifier = Modifier.size(modeIconSize)
                             )
@@ -2405,7 +2418,7 @@ fun TransactionDialog(
                         }) {
                             Icon(
                                 imageVector = Icons.Filled.Percent,
-                                contentDescription = "Percentage mode",
+                                contentDescription = S.transactions.percentage,
                                 tint = if (usePercentage) activeColor else inactiveColor,
                                 modifier = Modifier.size(modeIconSize)
                             )
@@ -2442,7 +2455,7 @@ fun TransactionDialog(
                                 }
                             }
                         },
-                        label = { Text("Total") },
+                        label = { Text(S.transactions.total) },
                         keyboardOptions = KeyboardOptions(
                             keyboardType = if (maxDecimals > 0) KeyboardType.Decimal else KeyboardType.Number
                         ),
@@ -2616,7 +2629,7 @@ fun TransactionDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    TextButton(onClick = onDismiss) { Text(S.common.cancel) }
                     Spacer(modifier = Modifier.width(8.dp))
                     TextButton(
                         onClick = {
@@ -2682,7 +2695,7 @@ fun TransactionDialog(
                             )
                         }
                     ) {
-                        Text("Save")
+                        Text(S.common.save)
                     }
                 }
             }
@@ -2693,7 +2706,7 @@ fun TransactionDialog(
     if (showCategoryPicker) {
         AlertDialog(
             onDismissRequest = { showCategoryPicker = false },
-            title = { Text("Select Categories") },
+            title = { Text(S.transactions.category) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     categories.forEach { cat ->
@@ -2756,7 +2769,7 @@ fun TransactionDialog(
                             if (isSelected) {
                                 Icon(
                                     imageVector = Icons.Filled.Close,
-                                    contentDescription = "Deselect",
+                                    contentDescription = S.common.close,
                                     tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
                                     modifier = Modifier.size(18.dp)
                                 )
@@ -2767,7 +2780,7 @@ fun TransactionDialog(
             },
             confirmButton = {
                 TextButton(onClick = { showCategoryPicker = false }) {
-                    Text("Done")
+                    Text(S.common.ok)
                 }
             }
         )
@@ -2790,10 +2803,10 @@ fun TransactionDialog(
                             .toLocalDate()
                     }
                     showDatePicker = false
-                }) { Text("OK") }
+                }) { Text(S.common.ok) }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+                TextButton(onClick = { showDatePicker = false }) { Text(S.common.cancel) }
             }
         ) {
             DatePicker(state = datePickerState)
@@ -2803,16 +2816,16 @@ fun TransactionDialog(
     if (showDeleteConfirm && onDelete != null) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Delete Transaction?") },
-            text = { Text("This action cannot be undone.") },
+            title = { Text("${S.common.delete}?") },
+            text = { Text("") },
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteConfirm = false
                     onDelete()
-                }) { Text("Delete", color = Color(0xFFF44336)) }
+                }) { Text(S.common.delete, color = Color(0xFFF44336)) }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+                TextButton(onClick = { showDeleteConfirm = false }) { Text(S.common.cancel) }
             }
         )
     }
@@ -2829,7 +2842,7 @@ fun TransactionDialog(
                 pendingDeselect = null
                 moveTargetCatId = null
             },
-            title = { Text("Move Category Value") },
+            title = { Text(S.transactions.moveCategoryValue) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
@@ -2908,7 +2921,7 @@ fun TransactionDialog(
                     },
                     enabled = moveTargetCatId != null
                 ) {
-                    Text("Move to")
+                    Text(S.common.save)
                 }
             },
             dismissButton = {
@@ -2917,7 +2930,7 @@ fun TransactionDialog(
                     pendingDeselect = null
                     moveTargetCatId = null
                 }) {
-                    Text("Cancel")
+                    Text(S.common.cancel)
                 }
             }
         )
@@ -2932,7 +2945,7 @@ fun TransactionDialog(
 
         AlertDialog(
             onDismissRequest = { showSumMismatchDialog = false; adjustTargetId = null },
-            title = { Text("Sum Mismatch") },
+            title = { Text(S.transactions.sumMismatch) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
@@ -2959,7 +2972,7 @@ fun TransactionDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "Total",
+                            S.transactions.total,
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -3016,7 +3029,7 @@ fun TransactionDialog(
                     },
                     enabled = adjustTargetId != null
                 ) {
-                    Text("Auto-Adjust")
+                    Text(S.common.save)
                 }
             },
             dismissButton = {
@@ -3024,7 +3037,7 @@ fun TransactionDialog(
                     showSumMismatchDialog = false
                     adjustTargetId = null
                 }) {
-                    Text("I'll adjust them")
+                    Text(S.common.cancel)
                 }
             }
         )
@@ -3036,16 +3049,17 @@ private fun TextSearchDialog(
     onDismiss: () -> Unit,
     onSearch: (String) -> Unit
 ) {
+    val S = LocalStrings.current
     var query by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Text Search") },
+        title = { Text(S.transactions.textSearch) },
         text = {
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                label = { Text("Search terms") },
+                label = { Text(S.transactions.searchText) },
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = MaterialTheme.colorScheme.onBackground,
@@ -3061,10 +3075,10 @@ private fun TextSearchDialog(
         confirmButton = {
             TextButton(onClick = {
                 if (query.isNotBlank()) onSearch(query.trim())
-            }) { Text("Search") }
+            }) { Text(S.transactions.search) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(S.common.cancel) }
         }
     )
 }
@@ -3074,6 +3088,7 @@ private fun AmountSearchDialog(
     onDismiss: () -> Unit,
     onSearch: (Double, Double) -> Unit
 ) {
+    val S = LocalStrings.current
     var minText by remember { mutableStateOf("") }
     var maxText by remember { mutableStateOf("") }
     val textFieldColors = OutlinedTextFieldDefaults.colors(
@@ -3087,13 +3102,13 @@ private fun AmountSearchDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Amount Search") },
+        title = { Text(S.transactions.amountSearch) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = minText,
                     onValueChange = { minText = it },
-                    label = { Text("Min Amount") },
+                    label = { Text(S.transactions.minAmount) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     colors = textFieldColors,
                     singleLine = true,
@@ -3102,7 +3117,7 @@ private fun AmountSearchDialog(
                 OutlinedTextField(
                     value = maxText,
                     onValueChange = { maxText = it },
-                    label = { Text("Max Amount") },
+                    label = { Text(S.transactions.maxAmount) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     colors = textFieldColors,
                     singleLine = true,
@@ -3115,10 +3130,10 @@ private fun AmountSearchDialog(
                 val min = minText.toDoubleOrNull() ?: 0.0
                 val max = maxText.toDoubleOrNull() ?: Double.MAX_VALUE
                 onSearch(min, max)
-            }) { Text("Search") }
+            }) { Text(S.transactions.search) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(S.common.cancel) }
         }
     )
 }
@@ -3130,6 +3145,7 @@ private fun SearchDatePickerDialog(
     onDismiss: () -> Unit,
     onDateSelected: (LocalDate) -> Unit
 ) {
+    val S = LocalStrings.current
     val datePickerState = rememberDatePickerState()
 
     DatePickerDialog(
@@ -3142,10 +3158,10 @@ private fun SearchDatePickerDialog(
                         .toLocalDate()
                     onDateSelected(date)
                 }
-            }) { Text("OK") }
+            }) { Text(S.common.ok) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(S.common.cancel) }
         }
     ) {
         Column {
