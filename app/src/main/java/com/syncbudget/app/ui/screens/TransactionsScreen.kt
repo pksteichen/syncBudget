@@ -1301,6 +1301,13 @@ fun TransactionsScreen(
                                 focusedLabelColor = MaterialTheme.colorScheme.primary,
                                 unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                             )
+                            if (saveError != null) {
+                                Text(
+                                    text = saveError!!,
+                                    color = Color(0xFFF44336),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
                             OutlinedTextField(
                                 value = savePassword,
                                 onValueChange = { savePassword = it; saveError = null },
@@ -1321,13 +1328,6 @@ fun TransactionsScreen(
                                 colors = pwFieldColors,
                                 modifier = Modifier.fillMaxWidth()
                             )
-                            if (saveError != null) {
-                                Text(
-                                    text = saveError!!,
-                                    color = Color(0xFFF44336),
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
                         }
                     }
 

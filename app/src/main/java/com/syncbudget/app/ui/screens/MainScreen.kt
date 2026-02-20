@@ -914,28 +914,10 @@ private fun SavingsSuperchargeDialog(
                                 Spacer(modifier = Modifier.height(6.dp))
                                 val enteredAmount = (amounts[goal.id] ?: "").toDoubleOrNull() ?: 0.0
                                 val exceedsGoal = enteredAmount > remaining
-                                OutlinedTextField(
-                                    value = amounts[goal.id] ?: "",
-                                    onValueChange = { newVal ->
-                                        if (newVal.isEmpty() || newVal.toDoubleOrNull() != null || newVal == ".") {
-                                            amounts[goal.id] = newVal
-                                        }
-                                    },
-                                    label = { Text(S.dashboard.superchargeAllocate) },
-                                    singleLine = true,
-                                    isError = exceedsGoal,
-                                    supportingText = if (exceedsGoal) ({
-                                        Text(S.transactions.maxAmount2("$currencySymbol${"%.2f".format(remaining)}"), color = Color(0xFFF44336))
-                                    }) else null,
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                    colors = textFieldColors,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
 
-                                // Live preview
+                                // Live preview (above text field so it stays visible when keyboard is open)
                                 if (enteredAmount > 0 && !exceedsGoal) {
                                     val newRemaining = remaining - enteredAmount
-                                    Spacer(modifier = Modifier.height(4.dp))
                                     if (mode == SuperchargeMode.REDUCE_CONTRIBUTIONS) {
                                         // Show new per-period contribution
                                         val today = LocalDate.now()
@@ -1005,7 +987,26 @@ private fun SavingsSuperchargeDialog(
                                             }
                                         }
                                     }
+                                    Spacer(modifier = Modifier.height(4.dp))
                                 }
+
+                                OutlinedTextField(
+                                    value = amounts[goal.id] ?: "",
+                                    onValueChange = { newVal ->
+                                        if (newVal.isEmpty() || newVal.toDoubleOrNull() != null || newVal == ".") {
+                                            amounts[goal.id] = newVal
+                                        }
+                                    },
+                                    label = { Text(S.dashboard.superchargeAllocate) },
+                                    singleLine = true,
+                                    isError = exceedsGoal,
+                                    supportingText = if (exceedsGoal) ({
+                                        Text(S.transactions.maxAmount2("$currencySymbol${"%.2f".format(remaining)}"), color = Color(0xFFF44336))
+                                    }) else null,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    colors = textFieldColors,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
                             }
                         }
                     }

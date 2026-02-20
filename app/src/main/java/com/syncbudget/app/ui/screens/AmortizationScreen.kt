@@ -1,13 +1,16 @@
 package com.syncbudget.app.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -185,6 +188,11 @@ fun AmortizationScreen(
                 val elapsed = calculateElapsedPeriods(entry.startDate, budgetPeriod, entry.totalPeriods)
                 val isCompleted = elapsed >= entry.totalPeriods
                 val perPeriod = entry.amount / entry.totalPeriods
+                val progress = if (entry.totalPeriods > 0) {
+                    (elapsed.toFloat() / entry.totalPeriods).coerceIn(0f, 1f)
+                } else 0f
+                val amountPaid = perPeriod * elapsed
+                val contentAlpha = if (isCompleted) 0.6f else 1f
 
                 Row(
                     modifier = Modifier
@@ -197,7 +205,7 @@ fun AmortizationScreen(
                         Text(
                             text = entry.source,
                             style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onBackground
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = contentAlpha)
                         )
                         Text(
                             text = S.amortization.totalPerPeriod(
@@ -207,7 +215,7 @@ fun AmortizationScreen(
                                 periodLabelSingular
                             ),
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f * contentAlpha)
                         )
                         Text(
                             text = if (isCompleted) S.amortization.completed
@@ -215,6 +223,26 @@ fun AmortizationScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = if (isCompleted) Color(0xFF4CAF50)
                                     else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(14.dp)
+                                .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f))
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(progress)
+                                    .fillMaxHeight()
+                                    .background(Color(0xFF4CAF50).copy(alpha = contentAlpha))
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "$currencySymbol${"%.2f".format(amountPaid)} / $currencySymbol${"%.2f".format(entry.amount)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF4CAF50).copy(alpha = contentAlpha)
                         )
                     }
                     IconButton(onClick = { deletingEntry = entry }) {

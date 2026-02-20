@@ -289,7 +289,7 @@ fun FutureExpendituresScreen(
                         } else {
                             Text(
                                 text = if (goal.targetDate != null) {
-                                    S.futureExpenditures.budgetReduction(
+                                    S.futureExpenditures.contributionLabel(
                                         "$currencySymbol${"%.2f".format(deduction)}",
                                         periodLabel
                                     )
