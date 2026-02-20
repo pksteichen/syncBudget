@@ -1163,18 +1163,24 @@ fun TransactionsScreen(
     if (showBulkMerchantEdit) {
         var newMerchant by remember { mutableStateOf("") }
         val count = selectedIds.count { it.value }
-        AlertDialog(
+        Dialog(
             onDismissRequest = { showBulkMerchantEdit = false },
-            title = { Text(S.transactions.editMerchant) },
-            text = {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.verticalScroll(rememberScrollState())
-                ) {
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 6.dp
+            ) {
+                Column(modifier = Modifier.padding(24.dp)) {
+                    Text(S.transactions.editMerchant, style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = S.transactions.selectedCount(count),
                         style = MaterialTheme.typography.bodyMedium
                     )
+                    Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
                         value = newMerchant,
                         onValueChange = { newMerchant = it },
@@ -1190,240 +1196,276 @@ fun TransactionsScreen(
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        if (newMerchant.isNotBlank()) {
-                            val idsToChange = selectedIds.filter { it.value }.keys
-                            transactions.filter { it.id in idsToChange }.forEach { txn ->
-                                onUpdateTransaction(txn.copy(source = newMerchant.trim()))
-                            }
-                            selectedIds.clear()
-                            selectionMode = false
-                            showBulkMerchantEdit = false
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = { showBulkMerchantEdit = false }) {
+                            Text(S.common.cancel)
                         }
-                    },
-                    enabled = newMerchant.isNotBlank()
-                ) {
-                    Text(S.common.save)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showBulkMerchantEdit = false }) {
-                    Text(S.common.cancel)
+                        TextButton(
+                            onClick = {
+                                if (newMerchant.isNotBlank()) {
+                                    val idsToChange = selectedIds.filter { it.value }.keys
+                                    transactions.filter { it.id in idsToChange }.forEach { txn ->
+                                        onUpdateTransaction(txn.copy(source = newMerchant.trim()))
+                                    }
+                                    selectedIds.clear()
+                                    selectionMode = false
+                                    showBulkMerchantEdit = false
+                                }
+                            },
+                            enabled = newMerchant.isNotBlank()
+                        ) {
+                            Text(S.common.save)
+                        }
+                    }
                 }
             }
-        )
+        }
     }
 
     // Save dialog
     if (showSaveDialog) {
-        AlertDialog(
+        Dialog(
             onDismissRequest = {
                 showSaveDialog = false
                 savePassword = ""
                 savePasswordConfirm = ""
                 saveError = null
             },
-            title = { Text(S.transactions.saveTransactions) },
-            text = {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.verticalScroll(rememberScrollState())
-                ) {
-                    Text(S.transactions.format, style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onBackground)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SaveFormat.entries.forEach { format ->
-                            OutlinedButton(
-                                onClick = {
-                                    selectedSaveFormat = format
-                                    savePassword = ""
-                                    savePasswordConfirm = ""
-                                    saveError = null
-                                },
-                                colors = if (selectedSaveFormat == format)
-                                    ButtonDefaults.outlinedButtonColors(
-                                        containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                                    )
-                                else ButtonDefaults.outlinedButtonColors()
-                            ) {
-                                if (format == SaveFormat.ENCRYPTED) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Lock,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                }
-                                Text(when (format) {
-                                    SaveFormat.CSV -> S.transactions.csv
-                                    SaveFormat.ENCRYPTED -> S.transactions.encrypted
-                                })
-                            }
-                        }
-                    }
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 6.dp
+            ) {
+                Column(modifier = Modifier.padding(24.dp)) {
+                    Text(S.transactions.saveTransactions, style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                    val transactionsToSave = if (selectionMode && selectedIds.any { it.value })
-                        transactions.filter { selectedIds[it.id] == true } else transactions
-                    Text(S.transactions.selectedCount(transactionsToSave.size),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
-
-                    if (selectedSaveFormat == SaveFormat.ENCRYPTED) {
-                        val pwFieldColors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = MaterialTheme.colorScheme.onBackground,
-                            unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
-                            focusedLabelColor = MaterialTheme.colorScheme.primary,
-                            unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                        )
-                        OutlinedTextField(
-                            value = savePassword,
-                            onValueChange = { savePassword = it; saveError = null },
-                            label = { Text(S.transactions.passwordMinLength) },
-                            singleLine = true,
-                            visualTransformation = PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                            colors = pwFieldColors,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        OutlinedTextField(
-                            value = savePasswordConfirm,
-                            onValueChange = { savePasswordConfirm = it; saveError = null },
-                            label = { Text(S.transactions.confirmPassword) },
-                            singleLine = true,
-                            visualTransformation = PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                            colors = pwFieldColors,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        if (saveError != null) {
-                            Text(
-                                text = saveError!!,
-                                color = Color(0xFFF44336),
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    when (selectedSaveFormat) {
-                        SaveFormat.CSV -> {
-                            showSaveDialog = false
-                            csvSaveLauncher.launch("syncbudget_transactions.csv")
-                        }
-                        SaveFormat.ENCRYPTED -> {
-                            when {
-                                savePassword.length < 8 -> {
-                                    saveError = S.transactions.passwordMinLength
-                                }
-                                savePassword != savePasswordConfirm -> {
-                                    saveError = S.transactions.passwordsMustMatch
-                                }
-                                else -> {
-                                    showSaveDialog = false
-                                    encryptedSaveLauncher.launch("syncbudget_transactions.enc")
-                                }
-                            }
-                        }
-                    }
-                }) { Text(S.common.save) }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showSaveDialog = false
-                    savePassword = ""
-                    savePasswordConfirm = ""
-                    saveError = null
-                }) { Text(S.common.cancel) }
-            }
-        )
-    }
-
-    // Import / Load format selection dialog
-    if (showImportFormatDialog) {
-        var formatDropdownExpanded by remember { mutableStateOf(false) }
-        AlertDialog(
-            onDismissRequest = {
-                showImportFormatDialog = false
-                encryptedLoadPassword = ""
-            },
-            title = { Text(S.transactions.loadTransactions) },
-            text = {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.verticalScroll(rememberScrollState())
-                ) {
-                    Text(S.transactions.format, style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onBackground)
-                    Box {
-                        OutlinedButton(onClick = { formatDropdownExpanded = true }) {
-                            Text(selectedBankFormat.displayName)
-                        }
-                        DropdownMenu(
-                            expanded = formatDropdownExpanded,
-                            onDismissRequest = { formatDropdownExpanded = false }
-                        ) {
-                            BankFormat.entries.forEach { format ->
-                                DropdownMenuItem(
-                                    text = { Text(format.displayName) },
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        Text(S.transactions.format, style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onBackground)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            SaveFormat.entries.forEach { format ->
+                                OutlinedButton(
                                     onClick = {
-                                        selectedBankFormat = format
-                                        formatDropdownExpanded = false
-                                        encryptedLoadPassword = ""
+                                        selectedSaveFormat = format
+                                        savePassword = ""
+                                        savePasswordConfirm = ""
+                                        saveError = null
+                                    },
+                                    colors = if (selectedSaveFormat == format)
+                                        ButtonDefaults.outlinedButtonColors(
+                                            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                        )
+                                    else ButtonDefaults.outlinedButtonColors()
+                                ) {
+                                    if (format == SaveFormat.ENCRYPTED) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Lock,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
                                     }
-                                )
+                                    Text(when (format) {
+                                        SaveFormat.CSV -> S.transactions.csv
+                                        SaveFormat.ENCRYPTED -> S.transactions.encrypted
+                                    })
+                                }
                             }
                         }
-                    }
 
-                    if (selectedBankFormat == BankFormat.SECURESYNC_ENCRYPTED) {
-                        OutlinedTextField(
-                            value = encryptedLoadPassword,
-                            onValueChange = { encryptedLoadPassword = it },
-                            label = { Text(S.transactions.password) },
-                            singleLine = true,
-                            visualTransformation = PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                            colors = OutlinedTextFieldDefaults.colors(
+                        val transactionsToSave = if (selectionMode && selectedIds.any { it.value })
+                            transactions.filter { selectedIds[it.id] == true } else transactions
+                        Text(S.transactions.selectedCount(transactionsToSave.size),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
+
+                        if (selectedSaveFormat == SaveFormat.ENCRYPTED) {
+                            val pwFieldColors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = MaterialTheme.colorScheme.onBackground,
                                 unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
                                 focusedBorderColor = MaterialTheme.colorScheme.primary,
                                 unfocusedBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
                                 focusedLabelColor = MaterialTheme.colorScheme.primary,
                                 unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                            )
+                            OutlinedTextField(
+                                value = savePassword,
+                                onValueChange = { savePassword = it; saveError = null },
+                                label = { Text(S.transactions.passwordMinLength) },
+                                singleLine = true,
+                                visualTransformation = PasswordVisualTransformation(),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                colors = pwFieldColors,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            OutlinedTextField(
+                                value = savePasswordConfirm,
+                                onValueChange = { savePasswordConfirm = it; saveError = null },
+                                label = { Text(S.transactions.confirmPassword) },
+                                singleLine = true,
+                                visualTransformation = PasswordVisualTransformation(),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                colors = pwFieldColors,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            if (saveError != null) {
+                                Text(
+                                    text = saveError!!,
+                                    color = Color(0xFFF44336),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = {
+                            showSaveDialog = false
+                            savePassword = ""
+                            savePasswordConfirm = ""
+                            saveError = null
+                        }) { Text(S.common.cancel) }
+                        TextButton(onClick = {
+                            when (selectedSaveFormat) {
+                                SaveFormat.CSV -> {
+                                    showSaveDialog = false
+                                    csvSaveLauncher.launch("syncbudget_transactions.csv")
+                                }
+                                SaveFormat.ENCRYPTED -> {
+                                    when {
+                                        savePassword.length < 8 -> {
+                                            saveError = S.transactions.passwordMinLength
+                                        }
+                                        savePassword != savePasswordConfirm -> {
+                                            saveError = S.transactions.passwordsMustMatch
+                                        }
+                                        else -> {
+                                            showSaveDialog = false
+                                            encryptedSaveLauncher.launch("syncbudget_transactions.enc")
+                                        }
+                                    }
+                                }
+                            }
+                        }) { Text(S.common.save) }
                     }
                 }
-            },
-            confirmButton = {
-                val canProceed = when (selectedBankFormat) {
-                    BankFormat.SECURESYNC_ENCRYPTED -> encryptedLoadPassword.length >= 8
-                    else -> true
-                }
-                TextButton(
-                    onClick = {
-                        showImportFormatDialog = false
-                        filePickerLauncher.launch(arrayOf("text/*", "*/*"))
-                    },
-                    enabled = canProceed
-                ) { Text(S.transactions.selectFile) }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showImportFormatDialog = false
-                    encryptedLoadPassword = ""
-                }) { Text(S.common.cancel) }
             }
-        )
+        }
+    }
+
+    // Import / Load format selection dialog
+    if (showImportFormatDialog) {
+        var formatDropdownExpanded by remember { mutableStateOf(false) }
+        Dialog(
+            onDismissRequest = {
+                showImportFormatDialog = false
+                encryptedLoadPassword = ""
+            },
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 6.dp
+            ) {
+                Column(modifier = Modifier.padding(24.dp)) {
+                    Text(S.transactions.loadTransactions, style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        Text(S.transactions.format, style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onBackground)
+                        Box {
+                            OutlinedButton(onClick = { formatDropdownExpanded = true }) {
+                                Text(selectedBankFormat.displayName)
+                            }
+                            DropdownMenu(
+                                expanded = formatDropdownExpanded,
+                                onDismissRequest = { formatDropdownExpanded = false }
+                            ) {
+                                BankFormat.entries.forEach { format ->
+                                    DropdownMenuItem(
+                                        text = { Text(format.displayName) },
+                                        onClick = {
+                                            selectedBankFormat = format
+                                            formatDropdownExpanded = false
+                                            encryptedLoadPassword = ""
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        if (selectedBankFormat == BankFormat.SECURESYNC_ENCRYPTED) {
+                            OutlinedTextField(
+                                value = encryptedLoadPassword,
+                                onValueChange = { encryptedLoadPassword = it },
+                                label = { Text(S.transactions.password) },
+                                singleLine = true,
+                                visualTransformation = PasswordVisualTransformation(),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                                    unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+                                    focusedLabelColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = {
+                            showImportFormatDialog = false
+                            encryptedLoadPassword = ""
+                        }) { Text(S.common.cancel) }
+                        val canProceed = when (selectedBankFormat) {
+                            BankFormat.SECURESYNC_ENCRYPTED -> encryptedLoadPassword.length >= 8
+                            else -> true
+                        }
+                        TextButton(
+                            onClick = {
+                                showImportFormatDialog = false
+                                filePickerLauncher.launch(arrayOf("text/*", "*/*"))
+                            },
+                            enabled = canProceed
+                        ) { Text(S.transactions.selectFile) }
+                    }
+                }
+            }
+        }
     }
 
     // Parse error dialog
@@ -3052,35 +3094,47 @@ private fun TextSearchDialog(
     val S = LocalStrings.current
     var query by remember { mutableStateOf("") }
 
-    AlertDialog(
+    Dialog(
         onDismissRequest = onDismiss,
-        title = { Text(S.transactions.textSearch) },
-        text = {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                label = { Text(S.transactions.searchText) },
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = MaterialTheme.colorScheme.onBackground,
-                    unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
-                    focusedLabelColor = MaterialTheme.colorScheme.primary,
-                    unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                ),
-                modifier = Modifier.fillMaxWidth()
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                if (query.isNotBlank()) onSearch(query.trim())
-            }) { Text(S.transactions.search) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(S.common.cancel) }
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Text(S.transactions.textSearch, style = MaterialTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    label = { Text(S.transactions.searchText) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+                        focusedLabelColor = MaterialTheme.colorScheme.primary,
+                        unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) { Text(S.common.cancel) }
+                    TextButton(onClick = {
+                        if (query.isNotBlank()) onSearch(query.trim())
+                    }) { Text(S.transactions.search) }
+                }
+            }
         }
-    )
+    }
 }
 
 @Composable
@@ -3100,42 +3154,54 @@ private fun AmountSearchDialog(
         unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
     )
 
-    AlertDialog(
+    Dialog(
         onDismissRequest = onDismiss,
-        title = { Text(S.transactions.amountSearch) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = minText,
-                    onValueChange = { minText = it },
-                    label = { Text(S.transactions.minAmount) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    colors = textFieldColors,
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = maxText,
-                    onValueChange = { maxText = it },
-                    label = { Text(S.transactions.maxAmount) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    colors = textFieldColors,
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Text(S.transactions.amountSearch, style = MaterialTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(16.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = minText,
+                        onValueChange = { minText = it },
+                        label = { Text(S.transactions.minAmount) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        colors = textFieldColors,
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = maxText,
+                        onValueChange = { maxText = it },
+                        label = { Text(S.transactions.maxAmount) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        colors = textFieldColors,
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) { Text(S.common.cancel) }
+                    TextButton(onClick = {
+                        val min = minText.toDoubleOrNull() ?: 0.0
+                        val max = maxText.toDoubleOrNull() ?: Double.MAX_VALUE
+                        onSearch(min, max)
+                    }) { Text(S.transactions.search) }
+                }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                val min = minText.toDoubleOrNull() ?: 0.0
-                val max = maxText.toDoubleOrNull() ?: Double.MAX_VALUE
-                onSearch(min, max)
-            }) { Text(S.transactions.search) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(S.common.cancel) }
         }
-    )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

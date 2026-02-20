@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,7 +43,6 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -51,6 +51,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
@@ -73,6 +74,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.syncbudget.app.data.BudgetPeriod
 import com.syncbudget.app.data.Category
 import com.syncbudget.app.data.SavingsGoal
@@ -763,48 +766,62 @@ private fun SavingsSuperchargeDialog(
         label = "previewPulseColor"
     )
 
-    AlertDialog(
+    Dialog(
         onDismissRequest = onDismiss,
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Filled.Bolt,
-                    contentDescription = null,
-                    tint = Color(0xFFFFEB3B),
-                    modifier = Modifier.size(28.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(S.dashboard.superchargeTitle)
-            }
-        },
-        text = {
-            Column {
-                Text(
-                    text = S.dashboard.superchargeRemaining("$currencySymbol${"%.2f".format(availableExtra)}"),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                if (isOverBudget) {
-                    Text(
-                        text = "Total ($currencySymbol${"%.2f".format(totalAllocated)}) exceeds available cash",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFFF44336)
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Bolt,
+                        contentDescription = null,
+                        tint = Color(0xFFFFEB3B),
+                        modifier = Modifier.size(28.dp)
                     )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(S.dashboard.superchargeTitle, style = MaterialTheme.typography.titleMedium)
                 }
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                if (eligibleGoals.isEmpty()) {
-                    Text(
-                        text = S.dashboard.noDataAvailable,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-                    )
-                } else {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.weight(1f, fill = false)
-                    ) {
+                LazyColumn(
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    item {
+                        Text(
+                            text = S.dashboard.superchargeRemaining("$currencySymbol${"%.2f".format(availableExtra)}"),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        if (isOverBudget) {
+                            Text(
+                                text = "Total ($currencySymbol${"%.2f".format(totalAllocated)}) exceeds available cash",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFFF44336)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    if (eligibleGoals.isEmpty()) {
+                        item {
+                            Text(
+                                text = S.dashboard.noDataAvailable,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                            )
+                        }
+                    } else {
                         items(eligibleGoals) { goal ->
                             val remaining = goal.targetAmount - goal.totalSavedSoFar
                             val progress = if (goal.targetAmount > 0) {
@@ -813,7 +830,7 @@ private fun SavingsSuperchargeDialog(
                             val contentAlpha = if (goal.isPaused) 0.5f else 1f
                             val mode = modes[goal.id] ?: SuperchargeMode.ACHIEVE_SOONER
 
-                            Column {
+                            Column(modifier = Modifier.padding(bottom = 12.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
                                         text = goal.name,
@@ -868,45 +885,31 @@ private fun SavingsSuperchargeDialog(
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
 
-                                // Mode selection
+                                // Mode toggle
                                 Text(
                                     text = S.dashboard.superchargeExtraShouldLabel,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    val reduceSelected = mode == SuperchargeMode.REDUCE_CONTRIBUTIONS
-                                    val soonerSelected = mode == SuperchargeMode.ACHIEVE_SOONER
-                                    Text(
-                                        text = S.dashboard.superchargeReduceContributions,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (reduceSelected) MaterialTheme.colorScheme.primary
-                                            else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
-                                        modifier = Modifier
-                                            .background(
-                                                if (reduceSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                                                else Color.Transparent,
-                                                RoundedCornerShape(16.dp)
-                                            )
-                                            .clickable { modes[goal.id] = SuperchargeMode.REDUCE_CONTRIBUTIONS }
-                                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                                    )
-                                    Text(
-                                        text = S.dashboard.superchargeAchieveSooner,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (soonerSelected) MaterialTheme.colorScheme.primary
-                                            else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
-                                        modifier = Modifier
-                                            .background(
-                                                if (soonerSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                                                else Color.Transparent,
-                                                RoundedCornerShape(16.dp)
-                                            )
-                                            .clickable { modes[goal.id] = SuperchargeMode.ACHIEVE_SOONER }
-                                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                                    )
-                                }
+                                Text(
+                                    text = if (mode == SuperchargeMode.REDUCE_CONTRIBUTIONS)
+                                        S.dashboard.superchargeReduceContributions
+                                    else S.dashboard.superchargeAchieveSooner,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier
+                                        .background(
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                            RoundedCornerShape(16.dp)
+                                        )
+                                        .clickable {
+                                            modes[goal.id] = if (mode == SuperchargeMode.REDUCE_CONTRIBUTIONS)
+                                                SuperchargeMode.ACHIEVE_SOONER
+                                            else SuperchargeMode.REDUCE_CONTRIBUTIONS
+                                        }
+                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
 
                                 Spacer(modifier = Modifier.height(6.dp))
                                 val enteredAmount = (amounts[goal.id] ?: "").toDoubleOrNull() ?: 0.0
@@ -1007,29 +1010,33 @@ private fun SavingsSuperchargeDialog(
                         }
                     }
                 }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    val allocations = mutableMapOf<Int, Double>()
-                    for ((id, text) in amounts) {
-                        val value = text.toDoubleOrNull()
-                        if (value != null && value > 0.0) {
-                            allocations[id] = value
-                        }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) { Text(S.common.cancel) }
+                    TextButton(
+                        onClick = {
+                            val allocations = mutableMapOf<Int, Double>()
+                            for ((id, text) in amounts) {
+                                val value = text.toDoubleOrNull()
+                                if (value != null && value > 0.0) {
+                                    allocations[id] = value
+                                }
+                            }
+                            if (allocations.isNotEmpty()) {
+                                onApply(allocations)
+                            }
+                        },
+                        enabled = hasAnyAmount && !isOverBudget && !anyExceedsRemaining
+                    ) {
+                        Text(S.common.ok)
                     }
-                    if (allocations.isNotEmpty()) {
-                        onApply(allocations)
-                    }
-                },
-                enabled = hasAnyAmount && !isOverBudget && !anyExceedsRemaining
-            ) {
-                Text(S.common.ok)
+                }
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(S.common.cancel) }
         }
-    )
+    }
 }

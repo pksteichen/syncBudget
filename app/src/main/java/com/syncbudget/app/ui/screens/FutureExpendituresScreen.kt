@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -40,6 +41,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
@@ -53,6 +55,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.syncbudget.app.data.BudgetPeriod
@@ -454,149 +458,166 @@ private fun AddEditSavingsGoalDialog(
         unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
     )
 
-    AlertDialog(
+    Dialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.verticalScroll(rememberScrollState())
-            ) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text(S.futureExpenditures.name) },
-                    singleLine = true,
-                    isError = showValidation && !isNameValid,
-                    supportingText = if (showValidation && !isNameValid) ({
-                        Text(S.futureExpenditures.requiredNameExample, color = Color(0xFFF44336))
-                    }) else null,
-                    colors = textFieldColors,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = targetAmountText,
-                    onValueChange = { newVal ->
-                        if (newVal.isEmpty() || newVal.toDoubleOrNull() != null || newVal == ".") {
-                            targetAmountText = newVal
-                        }
-                    },
-                    label = { Text(S.futureExpenditures.targetAmount) },
-                    singleLine = true,
-                    isError = showValidation && !isTargetAmountValid,
-                    supportingText = if (showValidation && !isTargetAmountValid) ({
-                        Text(S.futureExpenditures.exampleTargetAmount, color = Color(0xFFF44336))
-                    }) else null,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    colors = textFieldColors,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                if (isAddMode) {
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState())
+                ) {
                     OutlinedTextField(
-                        value = startingSavedText,
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text(S.futureExpenditures.name) },
+                        singleLine = true,
+                        isError = showValidation && !isNameValid,
+                        supportingText = if (showValidation && !isNameValid) ({
+                            Text(S.futureExpenditures.requiredNameExample, color = Color(0xFFF44336))
+                        }) else null,
+                        colors = textFieldColors,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = targetAmountText,
                         onValueChange = { newVal ->
                             if (newVal.isEmpty() || newVal.toDoubleOrNull() != null || newVal == ".") {
-                                startingSavedText = newVal
+                                targetAmountText = newVal
                             }
                         },
-                        label = { Text(S.futureExpenditures.startingSavedAmount) },
+                        label = { Text(S.futureExpenditures.targetAmount) },
                         singleLine = true,
-                        isError = showValidation && !isStartingSavedValid,
-                        supportingText = if (showValidation && !isStartingSavedValid) ({
-                            Text(S.futureExpenditures.mustBeLessThanTarget, color = Color(0xFFF44336))
+                        isError = showValidation && !isTargetAmountValid,
+                        supportingText = if (showValidation && !isTargetAmountValid) ({
+                            Text(S.futureExpenditures.exampleTargetAmount, color = Color(0xFFF44336))
                         }) else null,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         colors = textFieldColors,
                         modifier = Modifier.fillMaxWidth()
                     )
-                }
-
-                // Goal type toggle
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    FilterChip(
-                        selected = isTargetDateType,
-                        onClick = { isTargetDateType = true },
-                        label = { Text(S.futureExpenditures.targetDate) }
-                    )
-                    FilterChip(
-                        selected = !isTargetDateType,
-                        onClick = { isTargetDateType = false },
-                        label = { Text(S.futureExpenditures.fixedContribution) }
-                    )
-                }
-
-                if (isTargetDateType) {
-                    Box(
-                        modifier = if (showValidation && !isTargetDateValid)
-                            Modifier.border(1.dp, Color(0xFFF44336), RoundedCornerShape(4.dp))
-                        else Modifier
-                    ) {
-                        OutlinedButton(
-                            onClick = { showDatePicker = true },
+                    if (isAddMode) {
+                        OutlinedTextField(
+                            value = startingSavedText,
+                            onValueChange = { newVal ->
+                                if (newVal.isEmpty() || newVal.toDoubleOrNull() != null || newVal == ".") {
+                                    startingSavedText = newVal
+                                }
+                            },
+                            label = { Text(S.futureExpenditures.startingSavedAmount) },
+                            singleLine = true,
+                            isError = showValidation && !isStartingSavedValid,
+                            supportingText = if (showValidation && !isStartingSavedValid) ({
+                                Text(S.futureExpenditures.mustBeLessThanTarget, color = Color(0xFFF44336))
+                            }) else null,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            colors = textFieldColors,
                             modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                if (targetDate != null) S.futureExpenditures.targetDateLabel(targetDate!!.format(dateFormatter))
-                                else S.futureExpenditures.selectTargetDate
-                            )
-                        }
-                    }
-                    if (showValidation && !isTargetDateValid) {
-                        Text(
-                            text = S.futureExpenditures.selectAFutureDate,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFFF44336)
                         )
                     }
-                } else {
-                    OutlinedTextField(
-                        value = contributionText,
-                        onValueChange = { newVal ->
-                            if (newVal.isEmpty() || newVal.toDoubleOrNull() != null || newVal == ".") {
-                                contributionText = newVal
-                            }
-                        },
-                        label = { Text(S.futureExpenditures.contributionPerPeriod) },
-                        singleLine = true,
-                        isError = showValidation && !isContributionValid,
-                        supportingText = if (showValidation && !isContributionValid) ({
-                            Text(S.futureExpenditures.exampleContribution, color = Color(0xFFF44336))
-                        }) else null,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        colors = textFieldColors,
+
+                    // Goal type toggle
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    val isTypeValid = if (isTargetDateType) isTargetDateValid else isContributionValid
-                    val isValid = isNameValid && isTargetAmountValid && isStartingSavedValid && isTypeValid
-                    if (isValid) {
-                        val amount = targetAmount!!
-                        val saved = startingSavedText.toDoubleOrNull() ?: 0.0
-                        if (isTargetDateType) {
-                            onSave(name.trim(), amount, saved, targetDate, 0.0)
-                        } else {
-                            onSave(name.trim(), amount, saved, null, contribution!!)
+                    ) {
+                        FilterChip(
+                            selected = isTargetDateType,
+                            onClick = { isTargetDateType = true },
+                            label = { Text(S.futureExpenditures.targetDate) }
+                        )
+                        FilterChip(
+                            selected = !isTargetDateType,
+                            onClick = { isTargetDateType = false },
+                            label = { Text(S.futureExpenditures.fixedContribution) }
+                        )
+                    }
+
+                    if (isTargetDateType) {
+                        Box(
+                            modifier = if (showValidation && !isTargetDateValid)
+                                Modifier.border(1.dp, Color(0xFFF44336), RoundedCornerShape(4.dp))
+                            else Modifier
+                        ) {
+                            OutlinedButton(
+                                onClick = { showDatePicker = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    if (targetDate != null) S.futureExpenditures.targetDateLabel(targetDate!!.format(dateFormatter))
+                                    else S.futureExpenditures.selectTargetDate
+                                )
+                            }
+                        }
+                        if (showValidation && !isTargetDateValid) {
+                            Text(
+                                text = S.futureExpenditures.selectAFutureDate,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFFF44336)
+                            )
                         }
                     } else {
-                        showValidation = true
+                        OutlinedTextField(
+                            value = contributionText,
+                            onValueChange = { newVal ->
+                                if (newVal.isEmpty() || newVal.toDoubleOrNull() != null || newVal == ".") {
+                                    contributionText = newVal
+                                }
+                            },
+                            label = { Text(S.futureExpenditures.contributionPerPeriod) },
+                            singleLine = true,
+                            isError = showValidation && !isContributionValid,
+                            supportingText = if (showValidation && !isContributionValid) ({
+                                Text(S.futureExpenditures.exampleContribution, color = Color(0xFFF44336))
+                            }) else null,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            colors = textFieldColors,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
-            ) {
-                Text(S.common.save)
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) { Text(S.common.cancel) }
+                    TextButton(
+                        onClick = {
+                            val isTypeValid = if (isTargetDateType) isTargetDateValid else isContributionValid
+                            val isValid = isNameValid && isTargetAmountValid && isStartingSavedValid && isTypeValid
+                            if (isValid) {
+                                val amount = targetAmount!!
+                                val saved = startingSavedText.toDoubleOrNull() ?: 0.0
+                                if (isTargetDateType) {
+                                    onSave(name.trim(), amount, saved, targetDate, 0.0)
+                                } else {
+                                    onSave(name.trim(), amount, saved, null, contribution!!)
+                                }
+                            } else {
+                                showValidation = true
+                            }
+                        }
+                    ) {
+                        Text(S.common.save)
+                    }
+                }
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(S.common.cancel) }
         }
-    )
+    }
 
     if (showDatePicker) {
         val datePickerState = rememberDatePickerState(

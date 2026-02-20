@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -42,6 +43,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
@@ -55,6 +57,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.syncbudget.app.data.Category
 import com.syncbudget.app.data.CATEGORY_ICON_MAP
 import com.syncbudget.app.data.Transaction
@@ -597,98 +601,115 @@ private fun AddCategoryDialog(
     val iconEntries = remember { CATEGORY_ICON_MAP.entries.toList() }
     var showValidation by remember { mutableStateOf(false) }
 
-    AlertDialog(
+    Dialog(
         onDismissRequest = onDismiss,
-        title = { Text(S.settings.addCategory) },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.verticalScroll(rememberScrollState())
-            ) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text(S.settings.categoryName) },
-                    singleLine = true,
-                    isError = showValidation && name.isBlank(),
-                    supportingText = if (showValidation && name.isBlank()) ({
-                        Text(S.settings.categoryName, color = Color(0xFFF44336))
-                    }) else null,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = MaterialTheme.colorScheme.onBackground,
-                        unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
-                        focusedLabelColor = MaterialTheme.colorScheme.primary,
-                        unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Text(S.settings.addCategory, style = MaterialTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(16.dp))
 
-                Text(
-                    text = if (showValidation && selectedIcon == null) "${S.settings.chooseIcon}: (required)" else "${S.settings.chooseIcon}:",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (showValidation && selectedIcon == null) Color(0xFFF44336)
-                        else MaterialTheme.colorScheme.onBackground
-                )
-
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(5),
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(240.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState())
                 ) {
-                    items(iconEntries) { (iconName, iconVector) ->
-                        val isSelected = iconName == selectedIcon
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .then(
-                                    if (isSelected) Modifier.border(
-                                        2.dp,
-                                        MaterialTheme.colorScheme.primary,
-                                        RoundedCornerShape(8.dp)
-                                    ) else Modifier
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text(S.settings.categoryName) },
+                        singleLine = true,
+                        isError = showValidation && name.isBlank(),
+                        supportingText = if (showValidation && name.isBlank()) ({
+                            Text(S.settings.categoryName, color = Color(0xFFF44336))
+                        }) else null,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+                            focusedLabelColor = MaterialTheme.colorScheme.primary,
+                            unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Text(
+                        text = if (showValidation && selectedIcon == null) "${S.settings.chooseIcon}: (required)" else "${S.settings.chooseIcon}:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (showValidation && selectedIcon == null) Color(0xFFF44336)
+                            else MaterialTheme.colorScheme.onBackground
+                    )
+
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(5),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(240.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(iconEntries) { (iconName, iconVector) ->
+                            val isSelected = iconName == selectedIcon
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .then(
+                                        if (isSelected) Modifier.border(
+                                            2.dp,
+                                            MaterialTheme.colorScheme.primary,
+                                            RoundedCornerShape(8.dp)
+                                        ) else Modifier
+                                    )
+                                    .clickable { selectedIcon = iconName },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = iconVector,
+                                    contentDescription = iconName,
+                                    tint = if (isSelected) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(28.dp)
                                 )
-                                .clickable { selectedIcon = iconName },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = iconVector,
-                                contentDescription = iconName,
-                                tint = if (isSelected) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-                                modifier = Modifier.size(28.dp)
-                            )
+                            }
                         }
                     }
                 }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    if (name.isNotBlank() && selectedIcon != null) {
-                        var id: Int
-                        do {
-                            id = (0..65535).random()
-                        } while (id in existingIds)
-                        onSave(Category(id, name.trim(), selectedIcon!!))
-                    } else {
-                        showValidation = true
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) { Text(S.common.cancel) }
+                    TextButton(
+                        onClick = {
+                            if (name.isNotBlank() && selectedIcon != null) {
+                                var id: Int
+                                do {
+                                    id = (0..65535).random()
+                                } while (id in existingIds)
+                                onSave(Category(id, name.trim(), selectedIcon!!))
+                            } else {
+                                showValidation = true
+                            }
+                        }
+                    ) {
+                        Text(S.common.save)
                     }
                 }
-            ) {
-                Text(S.common.save)
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(S.common.cancel) }
         }
-    )
+    }
 }
 
 @Composable
@@ -725,109 +746,124 @@ private fun EditCategoryDialog(
         return
     }
 
-    AlertDialog(
+    Dialog(
         onDismissRequest = onDismiss,
-        title = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(S.settings.editCategory, modifier = Modifier.weight(1f))
-                if (category.name != "Other" && category.name != "Recurring" && category.name != "Amortization" && category.name != "Recurring Income") {
-                    IconButton(onClick = {
-                        if (txnCount > 0) {
-                            showReassignDialog = true
-                        } else {
-                            onDelete()
-                        }
-                    }) {
-                        Icon(
-                            imageVector = Icons.Filled.Delete,
-                            contentDescription = S.common.delete,
-                            tint = androidx.compose.ui.graphics.Color(0xFFF44336)
-                        )
-                    }
-                }
-            }
-        },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.verticalScroll(rememberScrollState())
-            ) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text(S.settings.categoryName) },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = MaterialTheme.colorScheme.onBackground,
-                        unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
-                        focusedLabelColor = MaterialTheme.colorScheme.primary,
-                        unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Text(
-                    text = "${S.settings.chooseIcon}:",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(5),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(240.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    items(iconEntries) { (iconName, iconVector) ->
-                        val isSelected = iconName == selectedIcon
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .then(
-                                    if (isSelected) Modifier.border(
-                                        2.dp,
-                                        MaterialTheme.colorScheme.primary,
-                                        RoundedCornerShape(8.dp)
-                                    ) else Modifier
-                                )
-                                .clickable { selectedIcon = iconName },
-                            contentAlignment = Alignment.Center
-                        ) {
+                    Text(S.settings.editCategory, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                    if (category.name != "Other" && category.name != "Recurring" && category.name != "Amortization" && category.name != "Recurring Income") {
+                        IconButton(onClick = {
+                            if (txnCount > 0) {
+                                showReassignDialog = true
+                            } else {
+                                onDelete()
+                            }
+                        }) {
                             Icon(
-                                imageVector = iconVector,
-                                contentDescription = iconName,
-                                tint = if (isSelected) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-                                modifier = Modifier.size(28.dp)
+                                imageVector = Icons.Filled.Delete,
+                                contentDescription = S.common.delete,
+                                tint = Color(0xFFF44336)
                             )
                         }
                     }
                 }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    if (name.isNotBlank()) {
-                        onSave(category.copy(name = name.trim(), iconName = selectedIcon))
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text(S.settings.categoryName) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+                            focusedLabelColor = MaterialTheme.colorScheme.primary,
+                            unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Text(
+                        text = "${S.settings.chooseIcon}:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(5),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(240.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(iconEntries) { (iconName, iconVector) ->
+                            val isSelected = iconName == selectedIcon
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .then(
+                                        if (isSelected) Modifier.border(
+                                            2.dp,
+                                            MaterialTheme.colorScheme.primary,
+                                            RoundedCornerShape(8.dp)
+                                        ) else Modifier
+                                    )
+                                    .clickable { selectedIcon = iconName },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = iconVector,
+                                    contentDescription = iconName,
+                                    tint = if (isSelected) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                        }
                     }
                 }
-            ) {
-                Text(S.common.save)
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) { Text(S.common.cancel) }
+                    TextButton(
+                        onClick = {
+                            if (name.isNotBlank()) {
+                                onSave(category.copy(name = name.trim(), iconName = selectedIcon))
+                            }
+                        }
+                    ) {
+                        Text(S.common.save)
+                    }
+                }
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(S.common.cancel) }
         }
-    )
+    }
 }
 
 @Composable

@@ -2,6 +2,7 @@ package com.syncbudget.app.ui.screens
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -32,6 +34,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
@@ -46,6 +49,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.syncbudget.app.data.AmortizationEntry
 import com.syncbudget.app.data.BudgetPeriod
 import com.syncbudget.app.data.generateAmortizationEntryId
@@ -324,95 +329,112 @@ private fun AddEditAmortizationDialog(
         unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
     )
 
-    AlertDialog(
+    Dialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.verticalScroll(rememberScrollState())
-            ) {
-                OutlinedTextField(
-                    value = source,
-                    onValueChange = { source = it },
-                    label = { Text(S.amortization.sourceName) },
-                    singleLine = true,
-                    isError = showValidation && !isSourceValid,
-                    supportingText = if (showValidation && !isSourceValid) ({
-                        Text(S.amortization.requiredLaptopExample, color = Color(0xFFF44336))
-                    }) else null,
-                    colors = textFieldColors,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = amountText,
-                    onValueChange = { newVal ->
-                        if (newVal.isEmpty() || newVal.toDoubleOrNull() != null || newVal == ".") {
-                            amountText = newVal
-                        }
-                    },
-                    label = { Text(S.amortization.totalAmount) },
-                    singleLine = true,
-                    isError = showValidation && !isAmountValid,
-                    supportingText = if (showValidation && !isAmountValid) ({
-                        Text(S.amortization.exampleTotalAmount, color = Color(0xFFF44336))
-                    }) else null,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    colors = textFieldColors,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = periodsText,
-                    onValueChange = { newVal ->
-                        if (newVal.isEmpty() || newVal.all { it.isDigit() }) {
-                            periodsText = newVal
-                        }
-                    },
-                    label = { Text(S.amortization.budgetPeriods(periodLabelPlural)) },
-                    singleLine = true,
-                    isError = showValidation && !isPeriodsValid,
-                    supportingText = if (showValidation && !isPeriodsValid) ({
-                        Text(S.amortization.examplePeriods, color = Color(0xFFF44336))
-                    }) else null,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    colors = textFieldColors,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedButton(
-                    onClick = { showDatePicker = true },
-                    modifier = Modifier.fillMaxWidth()
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState())
                 ) {
-                    Text(
-                        if (startDate != null) S.amortization.startDateLabel(startDate!!.format(dateFormatter))
-                        else S.amortization.selectStartDate
+                    OutlinedTextField(
+                        value = source,
+                        onValueChange = { source = it },
+                        label = { Text(S.amortization.sourceName) },
+                        singleLine = true,
+                        isError = showValidation && !isSourceValid,
+                        supportingText = if (showValidation && !isSourceValid) ({
+                            Text(S.amortization.requiredLaptopExample, color = Color(0xFFF44336))
+                        }) else null,
+                        colors = textFieldColors,
+                        modifier = Modifier.fillMaxWidth()
                     )
-                }
-                if (showValidation && !isDateValid) {
-                    Text(
-                        text = S.amortization.selectAStartDate,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFFF44336)
+                    OutlinedTextField(
+                        value = amountText,
+                        onValueChange = { newVal ->
+                            if (newVal.isEmpty() || newVal.toDoubleOrNull() != null || newVal == ".") {
+                                amountText = newVal
+                            }
+                        },
+                        label = { Text(S.amortization.totalAmount) },
+                        singleLine = true,
+                        isError = showValidation && !isAmountValid,
+                        supportingText = if (showValidation && !isAmountValid) ({
+                            Text(S.amortization.exampleTotalAmount, color = Color(0xFFF44336))
+                        }) else null,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        colors = textFieldColors,
+                        modifier = Modifier.fillMaxWidth()
                     )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    if (isValid) {
-                        onSave(source.trim(), amount!!, periods!!, startDate!!)
-                    } else {
-                        showValidation = true
+                    OutlinedTextField(
+                        value = periodsText,
+                        onValueChange = { newVal ->
+                            if (newVal.isEmpty() || newVal.all { it.isDigit() }) {
+                                periodsText = newVal
+                            }
+                        },
+                        label = { Text(S.amortization.budgetPeriods(periodLabelPlural)) },
+                        singleLine = true,
+                        isError = showValidation && !isPeriodsValid,
+                        supportingText = if (showValidation && !isPeriodsValid) ({
+                            Text(S.amortization.examplePeriods, color = Color(0xFFF44336))
+                        }) else null,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        colors = textFieldColors,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedButton(
+                        onClick = { showDatePicker = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            if (startDate != null) S.amortization.startDateLabel(startDate!!.format(dateFormatter))
+                            else S.amortization.selectStartDate
+                        )
+                    }
+                    if (showValidation && !isDateValid) {
+                        Text(
+                            text = S.amortization.selectAStartDate,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFF44336)
+                        )
                     }
                 }
-            ) {
-                Text(S.common.save)
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) { Text(S.common.cancel) }
+                    TextButton(
+                        onClick = {
+                            if (isValid) {
+                                onSave(source.trim(), amount!!, periods!!, startDate!!)
+                            } else {
+                                showValidation = true
+                            }
+                        }
+                    ) {
+                        Text(S.common.save)
+                    }
+                }
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(S.common.cancel) }
         }
-    )
+    }
 
     if (showDatePicker) {
         val datePickerState = rememberDatePickerState(

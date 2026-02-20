@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -502,11 +503,12 @@ private fun AddEditIncomeDialog(
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
         Surface(
             modifier = Modifier
-                .fillMaxWidth(0.92f),
+                .fillMaxWidth(0.92f)
+                .imePadding(),
             shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
@@ -897,40 +899,96 @@ private fun BudgetResetDialog(
     val selectedDayOfWeekName = DayOfWeek.of(selectedDayOfWeek)
         .getDisplayName(TextStyle.FULL, Locale.getDefault())
 
-    AlertDialog(
+    Dialog(
         onDismissRequest = onDismiss,
-        title = { Text(S.budgetConfig.resetSettingsTitle) },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.verticalScroll(rememberScrollState())
-            ) {
-                if (budgetPeriod == BudgetPeriod.WEEKLY) {
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Text(S.budgetConfig.resetSettingsTitle, style = MaterialTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    if (budgetPeriod == BudgetPeriod.WEEKLY) {
+                        ExposedDropdownMenuBox(
+                            expanded = dayOfWeekExpanded,
+                            onExpandedChange = { dayOfWeekExpanded = it }
+                        ) {
+                            OutlinedTextField(
+                                value = selectedDayOfWeekName,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text(S.budgetConfig.dayOfWeekLabel) },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dayOfWeekExpanded) },
+                                colors = textFieldColors,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .menuAnchor()
+                            )
+                            ExposedDropdownMenu(
+                                expanded = dayOfWeekExpanded,
+                                onDismissRequest = { dayOfWeekExpanded = false }
+                            ) {
+                                DAY_OF_WEEK_ORDER.forEach { day ->
+                                    DropdownMenuItem(
+                                        text = { Text(day.getDisplayName(TextStyle.FULL, Locale.getDefault())) },
+                                        onClick = {
+                                            selectedDayOfWeek = day.value
+                                            dayOfWeekExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (budgetPeriod == BudgetPeriod.MONTHLY) {
+                        OutlinedTextField(
+                            value = dayOfMonthText,
+                            onValueChange = { dayOfMonthText = it },
+                            label = { Text(S.budgetConfig.dayOfMonthReset) },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            colors = textFieldColors,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
                     ExposedDropdownMenuBox(
-                        expanded = dayOfWeekExpanded,
-                        onExpandedChange = { dayOfWeekExpanded = it }
+                        expanded = hourExpanded,
+                        onExpandedChange = { hourExpanded = it }
                     ) {
                         OutlinedTextField(
-                            value = selectedDayOfWeekName,
+                            value = HOUR_LABELS[selectedHour],
                             onValueChange = {},
                             readOnly = true,
-                            label = { Text(S.budgetConfig.dayOfWeekLabel) },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dayOfWeekExpanded) },
+                            label = { Text(S.budgetConfig.resetHour) },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = hourExpanded) },
                             colors = textFieldColors,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .menuAnchor()
                         )
                         ExposedDropdownMenu(
-                            expanded = dayOfWeekExpanded,
-                            onDismissRequest = { dayOfWeekExpanded = false }
+                            expanded = hourExpanded,
+                            onDismissRequest = { hourExpanded = false }
                         ) {
-                            DAY_OF_WEEK_ORDER.forEach { day ->
+                            HOUR_LABELS.forEachIndexed { index, label ->
                                 DropdownMenuItem(
-                                    text = { Text(day.getDisplayName(TextStyle.FULL, Locale.getDefault())) },
+                                    text = { Text(label) },
                                     onClick = {
-                                        selectedDayOfWeek = day.value
-                                        dayOfWeekExpanded = false
+                                        selectedHour = index
+                                        hourExpanded = false
                                     }
                                 )
                             }
@@ -938,64 +996,25 @@ private fun BudgetResetDialog(
                     }
                 }
 
-                if (budgetPeriod == BudgetPeriod.MONTHLY) {
-                    OutlinedTextField(
-                        value = dayOfMonthText,
-                        onValueChange = { dayOfMonthText = it },
-                        label = { Text(S.budgetConfig.dayOfMonthReset) },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        colors = textFieldColors,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
+                Spacer(modifier = Modifier.height(16.dp))
 
-                ExposedDropdownMenuBox(
-                    expanded = hourExpanded,
-                    onExpandedChange = { hourExpanded = it }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
                 ) {
-                    OutlinedTextField(
-                        value = HOUR_LABELS[selectedHour],
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text(S.budgetConfig.resetHour) },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = hourExpanded) },
-                        colors = textFieldColors,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor()
-                    )
-                    ExposedDropdownMenu(
-                        expanded = hourExpanded,
-                        onDismissRequest = { hourExpanded = false }
+                    TextButton(onClick = onDismiss) { Text(S.common.cancel) }
+                    TextButton(
+                        onClick = {
+                            if (isValid) {
+                                onSave(selectedHour, selectedDayOfWeek, dayOfMonth ?: resetDayOfMonth)
+                            }
+                        },
+                        enabled = isValid
                     ) {
-                        HOUR_LABELS.forEachIndexed { index, label ->
-                            DropdownMenuItem(
-                                text = { Text(label) },
-                                onClick = {
-                                    selectedHour = index
-                                    hourExpanded = false
-                                }
-                            )
-                        }
+                        Text(S.common.save)
                     }
                 }
             }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    if (isValid) {
-                        onSave(selectedHour, selectedDayOfWeek, dayOfMonth ?: resetDayOfMonth)
-                    }
-                },
-                enabled = isValid
-            ) {
-                Text(S.common.save)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(S.common.cancel) }
         }
-    )
+    }
 }
