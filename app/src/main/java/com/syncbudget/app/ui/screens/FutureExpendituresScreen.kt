@@ -61,6 +61,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.syncbudget.app.data.BudgetPeriod
 import com.syncbudget.app.data.SavingsGoal
+import com.syncbudget.app.data.calculatePerPeriodDeduction
 import com.syncbudget.app.data.generateSavingsGoalId
 import com.syncbudget.app.ui.strings.LocalStrings
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
@@ -70,27 +71,6 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import kotlin.math.ceil
-
-private fun calculatePerPeriodDeduction(
-    goal: SavingsGoal,
-    budgetPeriod: BudgetPeriod
-): Double {
-    val remaining = goal.targetAmount - goal.totalSavedSoFar
-    if (remaining <= 0) return 0.0
-    if (goal.targetDate != null) {
-        val today = LocalDate.now()
-        if (!today.isBefore(goal.targetDate)) return remaining
-        val periods = when (budgetPeriod) {
-            BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(today, goal.targetDate)
-            BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(today, goal.targetDate)
-            BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(today, goal.targetDate)
-        }
-        if (periods <= 0) return remaining
-        return remaining / periods.toDouble()
-    } else {
-        return minOf(goal.contributionPerPeriod, remaining)
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

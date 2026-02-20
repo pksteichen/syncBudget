@@ -79,7 +79,8 @@ object SpanishStrings : AppStrings {
         superchargeExtraShouldLabel = "La contribuci\u00f3n extra debe...",
         superchargeNewContribution = { amount, period -> "Nuevo: $amount/$period" },
         superchargeNewPayoff = { date -> "Nuevo pago final: $date" },
-        superchargeNewCompletion = { date -> "Se completa: $date" }
+        superchargeNewCompletion = { date -> "Se completa: $date" },
+        superchargeAutoAdjust = "Las contribuciones se ajustan automáticamente"
     )
 
     override val settings = SettingsStrings(

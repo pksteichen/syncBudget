@@ -23,6 +23,7 @@ import com.syncbudget.app.data.CategoryAmount
 import com.syncbudget.app.data.CategoryRepository
 import com.syncbudget.app.data.AmortizationRepository
 import com.syncbudget.app.data.SavingsGoalRepository
+import com.syncbudget.app.data.SuperchargeMode
 import com.syncbudget.app.data.IncomeSource
 import com.syncbudget.app.data.IncomeSourceRepository
 import com.syncbudget.app.data.RecurringExpense
@@ -416,7 +417,7 @@ class MainActivity : ComponentActivity() {
                         chartPalette = chartPalette,
                         dateFormatPattern = dateFormatPattern,
                         budgetPeriod = budgetPeriod,
-                        onSupercharge = { allocations ->
+                        onSupercharge = { allocations, modes ->
                             var totalDeducted = 0.0
                             for ((goalId, amount) in allocations) {
                                 val idx = savingsGoals.indexOfFirst { it.id == goalId }
@@ -425,9 +426,28 @@ class MainActivity : ComponentActivity() {
                                     val remaining = goal.targetAmount - goal.totalSavedSoFar
                                     val capped = minOf(amount, remaining)
                                     if (capped > 0) {
-                                        savingsGoals[idx] = goal.copy(
-                                            totalSavedSoFar = goal.totalSavedSoFar + capped
-                                        )
+                                        val newRemaining = remaining - capped
+                                        val updatedGoal = if (
+                                            goal.targetDate == null &&
+                                            goal.contributionPerPeriod > 0 &&
+                                            modes[goalId] == SuperchargeMode.REDUCE_CONTRIBUTIONS
+                                        ) {
+                                            val currentPeriodsRemaining = kotlin.math.ceil(
+                                                remaining / goal.contributionPerPeriod
+                                            ).toLong()
+                                            val newContribution = if (currentPeriodsRemaining > 0 && newRemaining > 0)
+                                                newRemaining / currentPeriodsRemaining.toDouble()
+                                            else 0.0
+                                            goal.copy(
+                                                totalSavedSoFar = goal.totalSavedSoFar + capped,
+                                                contributionPerPeriod = newContribution
+                                            )
+                                        } else {
+                                            goal.copy(
+                                                totalSavedSoFar = goal.totalSavedSoFar + capped
+                                            )
+                                        }
+                                        savingsGoals[idx] = updatedGoal
                                         totalDeducted += capped
                                     }
                                 }

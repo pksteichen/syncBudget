@@ -95,7 +95,8 @@ data class DashboardStrings(
     val superchargeExtraShouldLabel: String,
     val superchargeNewContribution: (String, String) -> String,
     val superchargeNewPayoff: (String) -> String,
-    val superchargeNewCompletion: (String) -> String
+    val superchargeNewCompletion: (String) -> String,
+    val superchargeAutoAdjust: String
 )
 
 data class SettingsStrings(
