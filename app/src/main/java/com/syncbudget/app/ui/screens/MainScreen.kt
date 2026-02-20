@@ -870,11 +870,34 @@ private fun SavingsSuperchargeDialog(
                                         BudgetPeriod.MONTHLY -> today.plusMonths(periodsToPayoff)
                                     }
                                     Text(
-                                        text = S.dashboard.superchargeNewPayoff(payoffDate.format(dateFormatter)),
+                                        text = S.futureExpenditures.payoffDate(payoffDate.format(dateFormatter)),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f * contentAlpha)
                                     )
                                 }
+                                // Current per-period contribution
+                                val currentContribution = if (goal.targetDate != null) {
+                                    val today = LocalDate.now()
+                                    if (remaining <= 0 || !today.isBefore(goal.targetDate)) 0.0
+                                    else {
+                                        val periods = when (budgetPeriod) {
+                                            BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(today, goal.targetDate)
+                                            BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(today, goal.targetDate)
+                                            BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(today, goal.targetDate)
+                                        }
+                                        if (periods <= 0) remaining else remaining / periods.toDouble()
+                                    }
+                                } else {
+                                    if (remaining > 0) minOf(goal.contributionPerPeriod, remaining) else 0.0
+                                }
+                                Text(
+                                    text = S.futureExpenditures.contributionLabel(
+                                        "$currencySymbol${"%.2f".format(currentContribution)}",
+                                        budgetPeriodLabel
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f * contentAlpha)
+                                )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Box(
                                     modifier = Modifier
