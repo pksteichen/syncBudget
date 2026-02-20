@@ -54,7 +54,7 @@ object EnglishStrings : AppStrings {
     )
 
     override val dashboard = DashboardStrings(
-        appTitle = "SecureSync Daily Budget",
+        appTitle = "SecureSync Budget",
         notConfigured = "Not configured",
         spending = "Spending",
         settings = "Settings",
