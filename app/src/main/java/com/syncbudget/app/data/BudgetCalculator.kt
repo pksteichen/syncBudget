@@ -197,8 +197,8 @@ object BudgetCalculator {
                 if (periods <= 0) continue
                 total += remaining / periods.toDouble()
             } else {
-                // Fixed contribution type: use contributionPerPeriod
-                total += goal.contributionPerPeriod
+                // Fixed contribution type: use contributionPerPeriod capped at remaining
+                total += minOf(goal.contributionPerPeriod, remaining)
             }
         }
         return total

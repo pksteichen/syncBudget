@@ -64,19 +64,21 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.syncbudget.app.ui.strings.LocalStrings
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransactionsHelpScreen(onBack: () -> Unit) {
     val customColors = LocalSyncBudgetColors.current
+    val S = LocalStrings.current
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = "Transactions Help",
+                        text = S.transactionsHelp.title,
                         style = MaterialTheme.typography.titleLarge,
                         color = customColors.headerText
                     )
@@ -85,7 +87,7 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = S.common.back,
                             tint = customColors.headerText
                         )
                     }
@@ -111,16 +113,13 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
             val headerBg = customColors.headerBackground
 
             // ─── SECTION 1: OVERVIEW ───
-            SectionTitle("Overview")
-            BodyText(
-                "The Transactions screen is where you manage all income and expenses. " +
-                "You can add, edit, delete, search, filter, import, and export transactions."
-            )
+            SectionTitle(S.transactionsHelp.overviewTitle)
+            BodyText(S.transactionsHelp.overviewBody)
             Spacer(modifier = Modifier.height(12.dp))
 
             // ─── SECTION 2: HEADER BAR ───
-            SectionTitle("Header Bar")
-            BodyText("The header bar contains navigation and action icons:")
+            SectionTitle(S.transactionsHelp.headerTitle)
+            BodyText(S.transactionsHelp.headerBody)
             Spacer(modifier = Modifier.height(8.dp))
 
             // Visual header bar mockup
@@ -143,7 +142,7 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
                     )
                     Spacer(modifier = Modifier.weight(1f))
                     Text(
-                        "Transactions",
+                        S.transactions.title,
                         style = MaterialTheme.typography.titleMedium,
                         color = customColors.headerText
                     )
@@ -172,13 +171,13 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
             }
             Spacer(modifier = Modifier.height(10.dp))
 
-            IconExplanationRow(Icons.AutoMirrored.Filled.ArrowBack, "Back", "Return to the main screen.")
-            IconExplanationRow(Icons.Filled.Save, "Save", "Save all transactions to a file. Requires Paid User.")
-            IconExplanationRow(Icons.Filled.MoveToInbox, "Load", "Import or load transactions from a file. Requires Paid User.")
-            IconExplanationRow(Icons.AutoMirrored.Filled.Help, "Help", "Opens this help page.")
+            IconExplanationRow(Icons.AutoMirrored.Filled.ArrowBack, S.common.back, S.transactionsHelp.backDesc)
+            IconExplanationRow(Icons.Filled.Save, S.transactions.save, S.transactionsHelp.saveDesc)
+            IconExplanationRow(Icons.Filled.MoveToInbox, S.transactions.load, S.transactionsHelp.loadDesc)
+            IconExplanationRow(Icons.AutoMirrored.Filled.Help, S.common.help, S.transactionsHelp.helpDesc)
             Spacer(modifier = Modifier.height(4.dp))
             BodyText(
-                "The Save and Load icons appear dimmed if Paid User is not enabled in Settings.",
+                S.transactionsHelp.saveLoadNote,
                 italic = true
             )
             Spacer(modifier = Modifier.height(16.dp))
@@ -186,8 +185,8 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
             HelpDivider()
 
             // ─── SECTION 3: ACTION BAR ───
-            SectionTitle("Action Bar")
-            BodyText("Below the header, the action bar provides quick access to common operations:")
+            SectionTitle(S.transactionsHelp.actionBarTitle)
+            BodyText(S.transactionsHelp.actionBarBody)
             Spacer(modifier = Modifier.height(8.dp))
 
             // Visual action bar mockup
@@ -209,7 +208,7 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
                             .border(1.dp, dimColor.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
                             .padding(horizontal = 14.dp, vertical = 6.dp)
                     ) {
-                        Text("All", style = MaterialTheme.typography.bodyMedium, color = textColor)
+                        Text(S.transactions.all, style = MaterialTheme.typography.bodyMedium, color = textColor)
                     }
                     Icon(
                         Icons.Filled.Add, contentDescription = null,
@@ -235,37 +234,34 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
                         .border(1.dp, dimColor.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
                         .padding(horizontal = 10.dp, vertical = 4.dp)
                 ) {
-                    Text("All", style = MaterialTheme.typography.bodySmall, color = textColor)
+                    Text(S.transactions.all, style = MaterialTheme.typography.bodySmall, color = textColor)
                 }
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    "Filter toggle \u2014 cycles through: All, Expenses, Income.",
+                    S.transactionsHelp.filterDesc,
                     style = MaterialTheme.typography.bodyMedium,
                     color = textColor
                 )
             }
             Spacer(modifier = Modifier.height(6.dp))
-            IconExplanationRow(Icons.Filled.Add, "Add Income", "Create a new income transaction.", Color(0xFF4CAF50))
-            IconExplanationRow(Icons.Filled.Remove, "Add Expense", "Create a new expense transaction.", Color(0xFFF44336))
-            IconExplanationRow(Icons.Filled.Search, "Search", "Open search menu with three options:")
+            IconExplanationRow(Icons.Filled.Add, S.transactions.addIncome, S.transactionsHelp.addIncomeDesc, Color(0xFF4CAF50))
+            IconExplanationRow(Icons.Filled.Remove, S.transactions.addExpense, S.transactionsHelp.addExpenseDesc, Color(0xFFF44336))
+            IconExplanationRow(Icons.Filled.Search, S.transactions.search, S.transactionsHelp.searchDesc)
             Spacer(modifier = Modifier.height(4.dp))
             Column(modifier = Modifier.padding(start = 40.dp)) {
-                BulletText("Date Search \u2014 pick a start and end date")
-                BulletText("Text Search \u2014 search by merchant/source name")
-                BulletText("Amount Search \u2014 search by amount range")
+                BulletText(S.transactionsHelp.dateSearchBullet)
+                BulletText(S.transactionsHelp.textSearchBullet)
+                BulletText(S.transactionsHelp.amountSearchBullet)
             }
             Spacer(modifier = Modifier.height(4.dp))
-            BodyText("While search results are active, a banner appears at the top. Tap the banner to clear the search.", italic = true)
+            BodyText(S.transactionsHelp.searchNote, italic = true)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDivider()
 
             // ─── SECTION 4: TRANSACTION LIST ───
-            SectionTitle("Transaction List")
-            BodyText(
-                "Transactions are displayed in a scrollable list, sorted by date (newest first). " +
-                "Each row shows:"
-            )
+            SectionTitle(S.transactionsHelp.listTitle)
+            BodyText(S.transactionsHelp.listBody)
             Spacer(modifier = Modifier.height(8.dp))
 
             // Mock transaction row
@@ -300,14 +296,14 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
             }
             Spacer(modifier = Modifier.height(10.dp))
 
-            BulletText("Category icon (left) \u2014 colored to indicate the category")
-            BulletText("Date \u2014 formatted per your Settings preference")
-            BulletText("Merchant/Source \u2014 the name of the payee or payer")
-            BulletText("Amount \u2014 red for expenses, green for income")
+            BulletText(S.transactionsHelp.listIconBullet)
+            BulletText(S.transactionsHelp.listDateBullet)
+            BulletText(S.transactionsHelp.listMerchantBullet)
+            BulletText(S.transactionsHelp.listAmountBullet)
             Spacer(modifier = Modifier.height(10.dp))
 
             // Category icon tinting explanation
-            SubSectionTitle("Category Icon Colors")
+            SubSectionTitle(S.transactionsHelp.iconColorsTitle)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(vertical = 4.dp)
@@ -321,8 +317,8 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
                     buildAnnotatedString {
-                        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append("Colored") }
-                        append(" \u2014 category was set or confirmed by you")
+                        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(S.transactionsHelp.coloredLabel) }
+                        append(" \u2014 ${S.transactionsHelp.coloredDesc}")
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = textColor
@@ -341,19 +337,19 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
                     buildAnnotatedString {
-                        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append("Default") }
-                        append(" \u2014 auto-assigned during import (not yet confirmed)")
+                        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(S.transactionsHelp.defaultLabel) }
+                        append(" \u2014 ${S.transactionsHelp.defaultDesc}")
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = textColor
                 )
             }
             Spacer(modifier = Modifier.height(6.dp))
-            BodyText("Tap a category icon to filter the list to only that category. A filter banner will appear; tap it to clear.")
+            BodyText(S.transactionsHelp.filterByIconNote)
             Spacer(modifier = Modifier.height(10.dp))
 
             // Multi-category rows
-            SubSectionTitle("Multi-Category Transactions")
+            SubSectionTitle(S.transactionsHelp.multiCategoryTitle)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(vertical = 4.dp)
@@ -366,8 +362,7 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    "A list icon indicates the transaction is split across multiple categories. " +
-                    "Tap it to expand and see the per-category breakdown.",
+                    S.transactionsHelp.multiCategoryBody,
                     style = MaterialTheme.typography.bodyMedium,
                     color = textColor
                 )
@@ -412,16 +407,16 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
             HelpDivider()
 
             // ─── SECTION 5: TAP & LONG PRESS ───
-            SectionTitle("Tapping & Editing")
-            BulletText("Tap a transaction to open the Edit dialog")
-            BulletText("Long-press a transaction to enter selection mode")
+            SectionTitle(S.transactionsHelp.tapEditTitle)
+            BulletText(S.transactionsHelp.tapBullet)
+            BulletText(S.transactionsHelp.longPressBullet)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDivider()
 
             // ─── SECTION 6: SELECTION MODE ───
-            SectionTitle("Selection Mode")
-            BodyText("Long-press any transaction to enter selection mode. A toolbar appears with bulk actions:")
+            SectionTitle(S.transactionsHelp.selectionTitle)
+            BodyText(S.transactionsHelp.selectionBody)
             Spacer(modifier = Modifier.height(8.dp))
 
             // Mock selection bar
@@ -443,7 +438,7 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
                             .border(2.dp, accentColor, RoundedCornerShape(3.dp))
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Select All", style = MaterialTheme.typography.bodyMedium, color = textColor, modifier = Modifier.weight(1f))
+                    Text(S.transactions.selectAll, style = MaterialTheme.typography.bodyMedium, color = textColor, modifier = Modifier.weight(1f))
                     Icon(Icons.Filled.Category, contentDescription = null, tint = textColor, modifier = Modifier.size(22.dp))
                     Spacer(modifier = Modifier.width(14.dp))
                     Icon(Icons.Filled.Edit, contentDescription = null, tint = textColor, modifier = Modifier.size(22.dp))
@@ -458,38 +453,33 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(modifier = Modifier.size(18.dp).border(2.dp, accentColor, RoundedCornerShape(3.dp)))
                 Spacer(modifier = Modifier.width(10.dp))
-                Text("Select All \u2014 toggle all visible transactions", style = MaterialTheme.typography.bodyMedium, color = textColor)
+                Text(S.transactionsHelp.selectAllDesc, style = MaterialTheme.typography.bodyMedium, color = textColor)
             }
             Spacer(modifier = Modifier.height(4.dp))
-            IconExplanationRow(Icons.Filled.Category, "Change Category", "Set a single category for all selected transactions.")
-            IconExplanationRow(Icons.Filled.Edit, "Edit Merchant", "Replace the merchant/source name on all selected transactions.")
-            IconExplanationRow(Icons.Filled.Delete, "Delete", "Delete all selected transactions.", Color(0xFFF44336))
-            IconExplanationRow(Icons.Filled.Close, "Close", "Exit selection mode without changes.")
+            IconExplanationRow(Icons.Filled.Category, S.transactions.changeCategory, S.transactionsHelp.changeCategoryDesc)
+            IconExplanationRow(Icons.Filled.Edit, S.transactions.editMerchant, S.transactionsHelp.editMerchantDesc)
+            IconExplanationRow(Icons.Filled.Delete, S.common.delete, S.transactionsHelp.deleteDesc, Color(0xFFF44336))
+            IconExplanationRow(Icons.Filled.Close, S.common.close, S.transactionsHelp.closeDesc)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDivider()
 
             // ─── SECTION 7: ADD / EDIT DIALOG ───
-            SectionTitle("Add / Edit Transaction Dialog")
-            BodyText(
-                "When adding or editing a transaction, a full-screen dialog appears with these fields:"
-            )
+            SectionTitle(S.transactionsHelp.addEditTitle)
+            BodyText(S.transactionsHelp.addEditBody)
             Spacer(modifier = Modifier.height(8.dp))
-            NumberedItem(1, "Date", "Tap the calendar icon to pick a date.")
-            NumberedItem(2, "Merchant / Source", "Type the name of the payee (expenses) or income source.")
-            NumberedItem(3, "Category", "Tap to open the category picker. You can select one or multiple categories.")
-            NumberedItem(4, "Amount", "Enter the transaction amount.")
+            NumberedItem(1, S.transactionsHelp.fieldDate, S.transactionsHelp.fieldDateDesc)
+            NumberedItem(2, S.transactionsHelp.fieldMerchant, S.transactionsHelp.fieldMerchantDesc)
+            NumberedItem(3, S.transactionsHelp.fieldCategory, S.transactionsHelp.fieldCategoryDesc)
+            NumberedItem(4, S.transactionsHelp.fieldAmount, S.transactionsHelp.fieldAmountDesc)
             Spacer(modifier = Modifier.height(10.dp))
 
-            SubSectionTitle("Single Category")
-            BodyText("With one category selected, simply enter the total amount in the Amount field.")
+            SubSectionTitle(S.transactionsHelp.singleCatTitle)
+            BodyText(S.transactionsHelp.singleCatBody)
             Spacer(modifier = Modifier.height(10.dp))
 
-            SubSectionTitle("Multiple Categories")
-            BodyText(
-                "When two or more categories are selected, you unlock three entry modes. " +
-                "First enter the Total amount, then choose a mode:"
-            )
+            SubSectionTitle(S.transactionsHelp.multiCatTitle)
+            BodyText(S.transactionsHelp.multiCatBody)
             Spacer(modifier = Modifier.height(8.dp))
 
             // Entry mode icons mockup
@@ -512,14 +502,14 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
             }
             Spacer(modifier = Modifier.height(10.dp))
 
-            IconExplanationRow(Icons.Filled.PieChart, "Pie Chart", "Drag slices on an interactive pie chart to distribute the total across categories.")
-            IconExplanationRow(Icons.Filled.Calculate, "Calculator", "Enter a specific dollar amount for each category. The last empty field auto-fills.")
-            IconExplanationRow(Icons.Filled.Percent, "Percentage", "Enter a percentage for each category. Percentages auto-adjust to total 100%.")
+            IconExplanationRow(Icons.Filled.PieChart, S.transactions.pieChart, S.transactionsHelp.pieChartDesc)
+            IconExplanationRow(Icons.Filled.Calculate, S.transactions.calculator, S.transactionsHelp.calculatorDesc)
+            IconExplanationRow(Icons.Filled.Percent, S.transactions.percentage, S.transactionsHelp.percentageDesc)
             Spacer(modifier = Modifier.height(10.dp))
 
             // Pie Chart illustration
-            SubSectionTitle("Pie Chart Mode")
-            BodyText("The interactive pie chart lets you visually distribute a transaction across categories by dragging the divider lines between slices.")
+            SubSectionTitle(S.transactionsHelp.pieChartModeTitle)
+            BodyText(S.transactionsHelp.pieChartModeBody)
             Spacer(modifier = Modifier.height(8.dp))
 
             // Mini pie chart illustration
@@ -615,47 +605,38 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
             }
             Spacer(modifier = Modifier.height(6.dp))
             BodyText(
-                "Drag the boundary between any two slices to redistribute. " +
-                "The category labels and dollar amounts update in real time beneath the chart.",
+                S.transactionsHelp.pieChartDragNote,
                 italic = true
             )
             Spacer(modifier = Modifier.height(10.dp))
 
-            SubSectionTitle("Auto-Fill Behavior")
-            BodyText(
-                "In both Calculator and Percentage modes, when all fields except one are filled, " +
-                "the remaining field automatically fills with the balance. " +
-                "For example, with a \$100 total and two categories, entering \$60 for Food " +
-                "will automatically set Shopping to \$40."
-            )
+            SubSectionTitle(S.transactionsHelp.autoFillTitle)
+            BodyText(S.transactionsHelp.autoFillBody)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDivider()
 
             // ─── SECTION 8: DUPLICATE DETECTION ───
-            SectionTitle("Duplicate Detection")
-            BodyText(
-                "When you save a new transaction or import from a file, the app checks for possible duplicates. " +
-                "A transaction is flagged if it matches an existing one on all three criteria:"
-            )
+            SectionTitle(S.transactionsHelp.duplicateTitle)
+            BodyText(S.transactionsHelp.duplicateBody)
             Spacer(modifier = Modifier.height(6.dp))
-            BulletText("Amount within 1% of each other")
-            BulletText("Date within 7 days of each other")
-            BulletText("Merchant name shares a common substring")
+            BulletText(S.transactionsHelp.dupAmountBullet)
+            BulletText(S.transactionsHelp.dupDateBullet)
+            BulletText(S.transactionsHelp.dupMerchantBullet)
             Spacer(modifier = Modifier.height(8.dp))
-            BodyText("When a duplicate is detected, you'll see a dialog with four options:")
+            BodyText(S.transactionsHelp.dupDialogBody)
             Spacer(modifier = Modifier.height(4.dp))
-            BulletText("Ignore \u2014 keep both transactions")
-            BulletText("Keep New \u2014 replace the existing with the new one")
-            BulletText("Keep Existing \u2014 discard the new transaction")
-            BulletText("Ignore All \u2014 keep all remaining duplicates (import only)")
+            BulletText(S.transactionsHelp.dupIgnore)
+            BulletText(S.transactionsHelp.dupKeepNew)
+            BulletText(S.transactionsHelp.dupKeepExisting)
+            BulletText(S.transactionsHelp.dupIgnoreAll)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDivider()
 
             // ─── SECTION 9: SAVE ───
-            SectionTitle("Saving Transactions")
-            BodyText("Tap the Save icon in the header to export all transactions to a file. Two formats are available:")
+            SectionTitle(S.transactionsHelp.savingTitle)
+            BodyText(S.transactionsHelp.savingBody)
             Spacer(modifier = Modifier.height(10.dp))
 
             // Save format mockup
@@ -667,7 +648,7 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
                     .padding(16.dp)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Save Transactions", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall, color = textColor)
+                    Text(S.transactions.saveTransactions, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall, color = textColor)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Box(
                             modifier = Modifier
@@ -676,7 +657,7 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
                                 .border(1.dp, accentColor.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
                                 .padding(horizontal = 16.dp, vertical = 6.dp)
                         ) {
-                            Text("CSV", style = MaterialTheme.typography.bodyMedium, color = textColor)
+                            Text(S.transactions.csv, style = MaterialTheme.typography.bodyMedium, color = textColor)
                         }
                         Box(
                             modifier = Modifier
@@ -687,7 +668,7 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Filled.Lock, contentDescription = null, modifier = Modifier.size(14.dp), tint = textColor)
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Encrypted", style = MaterialTheme.typography.bodyMedium, color = textColor)
+                                Text(S.transactions.encrypted, style = MaterialTheme.typography.bodyMedium, color = textColor)
                             }
                         }
                     }
@@ -695,20 +676,12 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
             }
             Spacer(modifier = Modifier.height(10.dp))
 
-            SubSectionTitle("CSV Format")
-            BodyText(
-                "Saves your transactions as a plain-text CSV file (syncbudget_transactions.csv). " +
-                "This file preserves all data including categories and can be loaded back into the app. " +
-                "It can also be opened in spreadsheet software like Excel or Google Sheets for review."
-            )
+            SubSectionTitle(S.transactionsHelp.csvFormatTitle)
+            BodyText(S.transactionsHelp.csvFormatBody)
             Spacer(modifier = Modifier.height(10.dp))
 
-            SubSectionTitle("Encrypted Format")
-            BodyText(
-                "Saves your transactions in an encrypted file (syncbudget_transactions.enc) " +
-                "protected with a password you choose. This is the recommended format for backups " +
-                "and transferring data between devices, as it keeps your financial information private."
-            )
+            SubSectionTitle(S.transactionsHelp.encryptedFormatTitle)
+            BodyText(S.transactionsHelp.encryptedFormatBody)
             Spacer(modifier = Modifier.height(10.dp))
 
             // Encryption details box
@@ -724,13 +697,10 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.Lock, contentDescription = null, tint = accentColor, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Encryption Details", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, color = textColor)
+                        Text(S.transactionsHelp.encryptionDetailsTitle, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, color = textColor)
                     }
                     Text(
-                        "Your file is protected with ChaCha20-Poly1305 authenticated encryption \u2014 " +
-                        "the same family of ciphers used by modern messaging apps and VPNs. " +
-                        "Your password is never stored; instead, it is transformed into an encryption key " +
-                        "using PBKDF2 with 100,000 iterations, making brute-force attacks extremely slow.",
+                        S.transactionsHelp.encryptionDetailsBody,
                         style = MaterialTheme.typography.bodySmall,
                         color = textColor,
                         lineHeight = 18.sp
@@ -739,24 +709,15 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
             }
             Spacer(modifier = Modifier.height(14.dp))
 
-            SubSectionTitle("Why Your Password Matters")
-            BodyText(
-                "Encryption is only as strong as your password. A short or common password " +
-                "can be guessed quickly, even with strong encryption. Here's what a modern high-end " +
-                "graphics card (capable of testing billions of simple hashes per second) could achieve:"
-            )
+            SubSectionTitle(S.transactionsHelp.passwordImportanceTitle)
+            BodyText(S.transactionsHelp.passwordImportanceBody)
             Spacer(modifier = Modifier.height(8.dp))
 
             // Password strength table
-            PasswordStrengthTable()
+            PasswordStrengthTable(S)
             Spacer(modifier = Modifier.height(10.dp))
 
-            BodyText(
-                "Because your password goes through 100,000 rounds of PBKDF2 before being used as an " +
-                "encryption key, each guess is deliberately made very expensive. A single high-end GPU " +
-                "can only attempt roughly 100,000\u2013500,000 passwords per second against this file \u2014 " +
-                "millions of times slower than attacking a simple hash."
-            )
+            BodyText(S.transactionsHelp.pbkdfNote)
             Spacer(modifier = Modifier.height(10.dp))
 
             Box(
@@ -768,13 +729,9 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
                     .padding(14.dp)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Recommended Password Strategy", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, color = textColor)
+                    Text(S.transactionsHelp.recommendedTitle, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, color = textColor)
                     Text(
-                        "Use 12 or more characters combining uppercase letters, lowercase letters, " +
-                        "numbers, and symbols. A passphrase of 4\u20135 random words (e.g., \"correct horse battery staple\") " +
-                        "is also excellent. With a strong password of this kind, " +
-                        "even a nation-state adversary with thousands of GPUs " +
-                        "would need trillions of years to crack your file.",
+                        S.transactionsHelp.recommendedBody,
                         style = MaterialTheme.typography.bodySmall,
                         color = textColor,
                         lineHeight = 18.sp
@@ -783,10 +740,7 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
             }
             Spacer(modifier = Modifier.height(6.dp))
             BodyText(
-                "The minimum required length is 8 characters, but longer is always better. " +
-                "You must enter your password twice to confirm it before saving. " +
-                "There is no password recovery \u2014 if you forget your password, " +
-                "the file cannot be opened.",
+                S.transactionsHelp.passwordMinNote,
                 italic = true
             )
             Spacer(modifier = Modifier.height(16.dp))
@@ -794,51 +748,35 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
             HelpDivider()
 
             // ─── SECTION 10: LOAD / IMPORT ───
-            SectionTitle("Loading & Importing")
-            BodyText("Tap the Load icon in the header to import transactions from a file. Three formats are supported:")
+            SectionTitle(S.transactionsHelp.loadingTitle)
+            BodyText(S.transactionsHelp.loadingBody)
             Spacer(modifier = Modifier.height(8.dp))
 
-            NumberedItem(1, "US Bank", "Import transactions from a US Bank CSV export file. " +
-                    "Transactions are automatically categorized based on your existing merchant history.")
+            NumberedItem(1, S.transactionsHelp.loadUsBank, S.transactionsHelp.loadUsBankDesc)
             Spacer(modifier = Modifier.height(4.dp))
-            NumberedItem(2, "SecureSync CSV Save File", "Load a CSV file previously saved from this app. " +
-                    "All categories and data are preserved exactly as they were.")
+            NumberedItem(2, S.transactionsHelp.loadCsv, S.transactionsHelp.loadCsvDesc)
             Spacer(modifier = Modifier.height(4.dp))
-            NumberedItem(3, "SecureSync Encrypted Save File", "Load a previously encrypted save file. " +
-                    "You must enter the password used when the file was saved.")
+            NumberedItem(3, S.transactionsHelp.loadEncrypted, S.transactionsHelp.loadEncryptedDesc)
             Spacer(modifier = Modifier.height(10.dp))
 
-            BodyText(
-                "For encrypted files, the password field appears automatically when you select the " +
-                "encrypted format. The \"Select File\" button is disabled until you enter at least 8 characters."
-            )
+            BodyText(S.transactionsHelp.loadPasswordNote)
             Spacer(modifier = Modifier.height(8.dp))
-            BodyText(
-                "After loading, each imported transaction is checked for duplicates against your " +
-                "existing transactions. If duplicates are found, you'll be prompted to resolve them " +
-                "one at a time (see Duplicate Detection above)."
-            )
+            BodyText(S.transactionsHelp.loadDuplicateNote)
             Spacer(modifier = Modifier.height(8.dp))
 
-            SubSectionTitle("Auto-Categorization (Bank Imports)")
-            BodyText(
-                "When importing from a bank CSV, the app looks at your existing transactions from the " +
-                "past 6 months to find matching merchants. If a match is found, the most frequently used " +
-                "category is assigned automatically. Transactions without a match are assigned to \"Other\". " +
-                "Auto-categorized transactions show a default-colored icon until you manually confirm " +
-                "or change the category."
-            )
+            SubSectionTitle(S.transactionsHelp.autoCatTitle)
+            BodyText(S.transactionsHelp.autoCatBody)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDivider()
 
             // ─── SECTION 11: TIPS ───
-            SectionTitle("Tips")
-            BulletText("Use CSV saves for spreadsheet-compatible backups that you can review on a computer.")
-            BulletText("Use Encrypted saves for secure backups and transferring data between devices.")
-            BulletText("The same file can be loaded as many times as needed \u2014 duplicate detection prevents accidental double-entries.")
-            BulletText("Use the category filter (tap any category icon) combined with selection mode for efficient bulk edits.")
-            BulletText("After a bank import, review auto-categorized transactions and use bulk Change Category to correct any misassignments.")
+            SectionTitle(S.transactionsHelp.tipsTitle)
+            BulletText(S.transactionsHelp.tip1)
+            BulletText(S.transactionsHelp.tip2)
+            BulletText(S.transactionsHelp.tip3)
+            BulletText(S.transactionsHelp.tip4)
+            BulletText(S.transactionsHelp.tip5)
 
             Spacer(modifier = Modifier.height(32.dp))
         }
@@ -977,7 +915,7 @@ private fun PieLegendItem(color: Color, label: String) {
 }
 
 @Composable
-private fun PasswordStrengthTable() {
+private fun PasswordStrengthTable(S: com.syncbudget.app.ui.strings.AppStrings) {
     val textColor = MaterialTheme.colorScheme.onBackground
     val dimColor = textColor.copy(alpha = 0.6f)
     val headerColor = MaterialTheme.colorScheme.primary
@@ -995,23 +933,23 @@ private fun PasswordStrengthTable() {
                 .background(headerColor.copy(alpha = 0.1f))
                 .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
-            Text("Password", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium, color = textColor, modifier = Modifier.weight(1.2f))
-            Text("Example", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium, color = textColor, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
-            Text("Time to Crack", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium, color = textColor, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
+            Text(S.transactionsHelp.passwordTableHeader, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium, color = textColor, modifier = Modifier.weight(1.2f))
+            Text(S.transactionsHelp.passwordTableExample, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium, color = textColor, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+            Text(S.transactionsHelp.passwordTableTime, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium, color = textColor, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
         }
         HorizontalDivider(color = dimColor.copy(alpha = 0.2f))
 
-        PasswordTableRow("8 chars, lowercase", "password", "minutes", Color(0xFFF44336))
+        PasswordTableRow(S.transactionsHelp.pw8Lower, S.transactionsHelp.pw8LowerEx, S.transactionsHelp.pw8LowerTime, Color(0xFFF44336))
         HorizontalDivider(color = dimColor.copy(alpha = 0.1f))
-        PasswordTableRow("8 chars, mixed", "Pa\$sw0rd", "hours", Color(0xFFF44336))
+        PasswordTableRow(S.transactionsHelp.pw8Mixed, S.transactionsHelp.pw8MixedEx, S.transactionsHelp.pw8MixedTime, Color(0xFFF44336))
         HorizontalDivider(color = dimColor.copy(alpha = 0.1f))
-        PasswordTableRow("10 chars, mixed", "K9#mP2x!qL", "months", Color(0xFFFF9800))
+        PasswordTableRow(S.transactionsHelp.pw10Mixed, S.transactionsHelp.pw10MixedEx, S.transactionsHelp.pw10MixedTime, Color(0xFFFF9800))
         HorizontalDivider(color = dimColor.copy(alpha = 0.1f))
-        PasswordTableRow("12 chars, mixed", "7hR!q2Lp#9Zk", "millennia", Color(0xFF4CAF50))
+        PasswordTableRow(S.transactionsHelp.pw12Mixed, S.transactionsHelp.pw12MixedEx, S.transactionsHelp.pw12MixedTime, Color(0xFF4CAF50))
         HorizontalDivider(color = dimColor.copy(alpha = 0.1f))
-        PasswordTableRow("16+ chars, mixed", "cT8!nQ#2mK@5rW9j", "trillions of years", Color(0xFF4CAF50))
+        PasswordTableRow(S.transactionsHelp.pw16Mixed, S.transactionsHelp.pw16MixedEx, S.transactionsHelp.pw16MixedTime, Color(0xFF4CAF50))
         HorizontalDivider(color = dimColor.copy(alpha = 0.1f))
-        PasswordTableRow("4-word phrase", "maple cloud river fox", "trillions of years", Color(0xFF4CAF50))
+        PasswordTableRow(S.transactionsHelp.pw4Word, S.transactionsHelp.pw4WordEx, S.transactionsHelp.pw4WordTime, Color(0xFF4CAF50))
     }
 }
 

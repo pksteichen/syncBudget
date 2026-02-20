@@ -38,19 +38,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.syncbudget.app.ui.strings.LocalStrings
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BudgetConfigHelpScreen(onBack: () -> Unit) {
     val customColors = LocalSyncBudgetColors.current
+    val S = LocalStrings.current
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = "Budget Configuration Help",
+                        text = S.budgetConfigHelp.title,
                         style = MaterialTheme.typography.titleLarge,
                         color = customColors.headerText
                     )
@@ -59,7 +61,7 @@ fun BudgetConfigHelpScreen(onBack: () -> Unit) {
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = S.common.back,
                             tint = customColors.headerText
                         )
                     }
@@ -85,35 +87,26 @@ fun BudgetConfigHelpScreen(onBack: () -> Unit) {
             val headerBg = customColors.headerBackground
 
             // ─── SECTION 1: OVERVIEW ───
-            HelpSectionTitle("Overview")
-            HelpBodyText(
-                "Budget Configuration is the core setup screen where you define your income " +
-                "sources, choose your budget period, and calculate your safe spending amount. " +
-                "The budget engine uses this information to determine how much you can safely " +
-                "spend each period."
-            )
+            HelpSectionTitle(S.budgetConfigHelp.overviewTitle)
+            HelpBodyText(S.budgetConfigHelp.overviewBody)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
             // ─── SECTION 2: BUDGET PERIOD ───
-            HelpSectionTitle("Budget Period")
-            HelpBodyText(
-                "The budget period determines how often your available cash is replenished. " +
-                "Choose the period that best matches how you think about spending:"
-            )
+            HelpSectionTitle(S.budgetConfigHelp.periodTitle)
+            HelpBodyText(S.budgetConfigHelp.periodBody)
             Spacer(modifier = Modifier.height(8.dp))
 
-            HelpNumberedItem(1, "Daily", "Your budget is calculated per day. Best for tight budgets or people who want maximum daily awareness.")
+            HelpNumberedItem(1, S.budgetConfigHelp.periodDaily, S.budgetConfigHelp.periodDailyDesc)
             Spacer(modifier = Modifier.height(4.dp))
-            HelpNumberedItem(2, "Weekly", "Your budget is calculated per week. Good for people who plan expenses by the week.")
+            HelpNumberedItem(2, S.budgetConfigHelp.periodWeekly, S.budgetConfigHelp.periodWeeklyDesc)
             Spacer(modifier = Modifier.height(4.dp))
-            HelpNumberedItem(3, "Monthly", "Your budget is calculated per month. Suits people with monthly pay who prefer monthly planning.")
+            HelpNumberedItem(3, S.budgetConfigHelp.periodMonthly, S.budgetConfigHelp.periodMonthlyDesc)
             Spacer(modifier = Modifier.height(10.dp))
 
             HelpBodyText(
-                "The period also affects how Savings Goal and Amortization deductions are calculated, " +
-                "since they deduct a fixed amount per period.",
+                S.budgetConfigHelp.periodNote,
                 italic = true
             )
             Spacer(modifier = Modifier.height(16.dp))
@@ -121,57 +114,37 @@ fun BudgetConfigHelpScreen(onBack: () -> Unit) {
             HelpDividerLine()
 
             // ─── SECTION 3: RESET SETTINGS ───
-            HelpSectionTitle("Reset Settings")
-            HelpBodyText(
-                "Tap the \"Reset\" button next to the Budget Period selector to configure " +
-                "when your budget period rolls over:"
-            )
+            HelpSectionTitle(S.budgetConfigHelp.resetSettingsTitle)
+            HelpBodyText(S.budgetConfigHelp.resetSettingsBody)
             Spacer(modifier = Modifier.height(8.dp))
 
-            HelpSubSectionTitle("Reset Hour")
-            HelpBodyText(
-                "The hour of the day when a new period begins and your budget amount is " +
-                "added to available cash. Default is 12 AM (midnight). Set this to when " +
-                "you typically start your day \u2014 for example, 6 AM if you're an early riser."
-            )
+            HelpSubSectionTitle(S.budgetConfigHelp.resetHourTitle)
+            HelpBodyText(S.budgetConfigHelp.resetHourBody)
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpSubSectionTitle("Day of Week (Weekly)")
-            HelpBodyText(
-                "For weekly budgets, choose which day the new week starts. For example, " +
-                "if you set Monday, your budget resets every Monday at the configured reset hour."
-            )
+            HelpSubSectionTitle(S.budgetConfigHelp.dayOfWeekTitle)
+            HelpBodyText(S.budgetConfigHelp.dayOfWeekBody)
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpSubSectionTitle("Day of Month (Monthly)")
-            HelpBodyText(
-                "For monthly budgets, choose which day of the month the new period starts " +
-                "(1\u201328). If you're paid on the 1st, set this to 1. If paid on the 15th, " +
-                "set it to 15. The maximum is 28 to ensure the date exists in all months."
-            )
+            HelpSubSectionTitle(S.budgetConfigHelp.dayOfMonthTitle)
+            HelpBodyText(S.budgetConfigHelp.dayOfMonthBody)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
             // ─── SECTION 4: SAFE BUDGET AMOUNT ───
-            HelpSectionTitle("Safe Budget Amount")
-            HelpBodyText(
-                "The Safe Budget Amount is the calculated maximum you can spend per period " +
-                "while still covering all your recurring expenses. It is displayed at the top " +
-                "of the configuration screen."
-            )
+            HelpSectionTitle(S.budgetConfigHelp.safeBudgetTitle)
+            HelpBodyText(S.budgetConfigHelp.safeBudgetBody)
             Spacer(modifier = Modifier.height(8.dp))
 
-            HelpSubSectionTitle("How It's Calculated")
-            HelpBodyText(
-                "The engine projects your income and expenses forward one year:"
-            )
+            HelpSubSectionTitle(S.budgetConfigHelp.howCalculatedTitle)
+            HelpBodyText(S.budgetConfigHelp.howCalculatedBody)
             Spacer(modifier = Modifier.height(4.dp))
-            HelpNumberedItem(1, "Income summing", "All income source occurrences are generated for the next 12 months based on their repeat schedules. Total annual income is computed.")
+            HelpNumberedItem(1, S.budgetConfigHelp.calcStep1, S.budgetConfigHelp.calcStep1Desc)
             Spacer(modifier = Modifier.height(4.dp))
-            HelpNumberedItem(2, "Base amount", "The base budget is annual income divided by the number of budget periods in a year (e.g., 365 for daily, 52 for weekly, 12 for monthly).")
+            HelpNumberedItem(2, S.budgetConfigHelp.calcStep2, S.budgetConfigHelp.calcStep2Desc)
             Spacer(modifier = Modifier.height(4.dp))
-            HelpNumberedItem(3, "Timing safety", "The engine simulates each period and checks that cumulative expenses never exceed the budget. If bills cluster in certain periods, the budget amount is increased to cover the worst case.")
+            HelpNumberedItem(3, S.budgetConfigHelp.calcStep3, S.budgetConfigHelp.calcStep3Desc)
             Spacer(modifier = Modifier.height(10.dp))
 
             Box(
@@ -184,16 +157,13 @@ fun BudgetConfigHelpScreen(onBack: () -> Unit) {
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        "Important",
+                        S.budgetConfigHelp.importantTitle,
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.titleSmall,
                         color = textColor
                     )
                     Text(
-                        "The Safe Budget Amount only considers income sources and recurring expenses " +
-                        "that have complete repeat schedule configurations. If a source has no repeat " +
-                        "settings, it will be excluded from the calculation. Make sure to configure " +
-                        "repeat schedules for all your income sources.",
+                        S.budgetConfigHelp.importantBody,
                         style = MaterialTheme.typography.bodySmall,
                         color = textColor,
                         lineHeight = 18.sp
@@ -205,34 +175,28 @@ fun BudgetConfigHelpScreen(onBack: () -> Unit) {
             HelpDividerLine()
 
             // ─── SECTION 5: RECALCULATE & RESET ───
-            HelpSectionTitle("Recalculate & Reset Budget")
+            HelpSectionTitle(S.budgetConfigHelp.recalcResetTitle)
 
-            HelpSubSectionTitle("Recalculate")
-            HelpBodyText(
-                "Tap \"Recalculate\" to recompute the Safe Budget Amount based on your current " +
-                "income sources and recurring expenses. Do this whenever you:"
-            )
+            HelpSubSectionTitle(S.budgetConfigHelp.recalcTitle)
+            HelpBodyText(S.budgetConfigHelp.recalcBody)
             Spacer(modifier = Modifier.height(4.dp))
-            HelpBulletText("Add, remove, or change an income source")
-            HelpBulletText("Add, remove, or change a recurring expense")
-            HelpBulletText("Change the budget period")
+            HelpBulletText(S.budgetConfigHelp.recalcBullet1)
+            HelpBulletText(S.budgetConfigHelp.recalcBullet2)
+            HelpBulletText(S.budgetConfigHelp.recalcBullet3)
             Spacer(modifier = Modifier.height(8.dp))
             HelpBodyText(
-                "On first use, Recalculate also initializes your budget tracking \u2014 it sets " +
-                "the budget start date and gives you one period's budget as starting available cash.",
+                S.budgetConfigHelp.recalcNote,
                 italic = true
             )
             Spacer(modifier = Modifier.height(12.dp))
 
-            HelpSubSectionTitle("Reset Budget")
-            HelpBodyText(
-                "Tap \"Reset Budget\" when you need a fresh start. This:"
-            )
+            HelpSubSectionTitle(S.budgetConfigHelp.resetBudgetTitle)
+            HelpBodyText(S.budgetConfigHelp.resetBudgetBody)
             Spacer(modifier = Modifier.height(4.dp))
-            HelpBulletText("Recalculates the safe budget amount")
-            HelpBulletText("Resets the budget start date to today")
-            HelpBulletText("Sets available cash to one period's budget amount")
-            HelpBulletText("Does NOT delete your transactions")
+            HelpBulletText(S.budgetConfigHelp.resetBullet1)
+            HelpBulletText(S.budgetConfigHelp.resetBullet2)
+            HelpBulletText(S.budgetConfigHelp.resetBullet3)
+            HelpBulletText(S.budgetConfigHelp.resetBullet4)
             Spacer(modifier = Modifier.height(8.dp))
 
             Box(
@@ -245,17 +209,13 @@ fun BudgetConfigHelpScreen(onBack: () -> Unit) {
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        "When to Reset",
+                        S.budgetConfigHelp.whenToResetTitle,
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.titleSmall,
                         color = textColor
                     )
                     Text(
-                        "Use Reset Budget when your available cash has drifted from reality " +
-                        "(e.g., after a major life change like a new job or move), or when " +
-                        "you've made significant changes to your income sources or expenses " +
-                        "and want to start fresh. Resetting will lose your accumulated surplus " +
-                        "or deficit, so use it deliberately.",
+                        S.budgetConfigHelp.whenToResetBody,
                         style = MaterialTheme.typography.bodySmall,
                         color = textColor,
                         lineHeight = 18.sp
@@ -267,15 +227,12 @@ fun BudgetConfigHelpScreen(onBack: () -> Unit) {
             HelpDividerLine()
 
             // ─── SECTION 6: MANUAL OVERRIDE ───
-            HelpSectionTitle("Manual Budget Override")
-            HelpBodyText(
-                "Check \"Manual Budget Override\" to set your own per-period budget amount " +
-                "instead of using the calculated value. When enabled:"
-            )
+            HelpSectionTitle(S.budgetConfigHelp.manualTitle)
+            HelpBodyText(S.budgetConfigHelp.manualBody)
             Spacer(modifier = Modifier.height(4.dp))
-            HelpBulletText("A text field appears where you enter your desired amount per period")
-            HelpBulletText("The safe budget calculation is ignored")
-            HelpBulletText("Amortization and Savings Goal deductions are disabled")
+            HelpBulletText(S.budgetConfigHelp.manualBullet1)
+            HelpBulletText(S.budgetConfigHelp.manualBullet2)
+            HelpBulletText(S.budgetConfigHelp.manualBullet3)
             Spacer(modifier = Modifier.height(8.dp))
 
             Box(
@@ -288,16 +245,13 @@ fun BudgetConfigHelpScreen(onBack: () -> Unit) {
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        "Warning",
+                        S.budgetConfigHelp.warningTitle,
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.titleSmall,
                         color = Color(0xFFF44336)
                     )
                     Text(
-                        "Manual override disables the safety net provided by the budget calculator. " +
-                        "Amortization and Savings Goal deductions will not be subtracted " +
-                        "from your budget. Red warning banners will appear on the Amortization " +
-                        "and Savings Goals screens when manual override is active.",
+                        S.budgetConfigHelp.warningBody,
                         style = MaterialTheme.typography.bodySmall,
                         color = textColor,
                         lineHeight = 18.sp
@@ -309,86 +263,52 @@ fun BudgetConfigHelpScreen(onBack: () -> Unit) {
             HelpDividerLine()
 
             // ─── SECTION 7: INCOME SOURCES ───
-            HelpSectionTitle("Income Sources")
-            HelpBodyText(
-                "Income sources represent your reliable, recurring income \u2014 the money you " +
-                "can count on for budgeting purposes. Add all consistent income streams: " +
-                "salary, freelance retainers, pension, recurring side income, etc."
-            )
+            HelpSectionTitle(S.budgetConfigHelp.incomeSourcesTitle)
+            HelpBodyText(S.budgetConfigHelp.incomeSourcesBody)
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpSubSectionTitle("Adding an Income Source")
-            HelpBodyText(
-                "Tap \"Add Income Source\" and fill in:"
-            )
+            HelpSubSectionTitle(S.budgetConfigHelp.addingIncomeTitle)
+            HelpBodyText(S.budgetConfigHelp.addingIncomeBody)
             Spacer(modifier = Modifier.height(4.dp))
-            HelpBulletText("Source Name \u2014 a descriptive name (e.g., \"Main Job Paycheck\"). This is also used for budget income detection when you add transactions.")
-            HelpBulletText("Amount \u2014 the amount you receive per occurrence")
+            HelpBulletText(S.budgetConfigHelp.incomeNameBullet)
+            HelpBulletText(S.budgetConfigHelp.incomeAmountBullet)
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpSubSectionTitle("Variable Pay")
-            HelpBodyText(
-                "If your pay varies (for example, a large paycheck and a small paycheck " +
-                "each month), create separate entries for each amount. The budget calculator " +
-                "will handle the different amounts correctly."
-            )
+            HelpSubSectionTitle(S.budgetConfigHelp.variablePayTitle)
+            HelpBodyText(S.budgetConfigHelp.variablePayBody)
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpSubSectionTitle("Managing Income Sources")
-            HelpBulletText("Tap a source to edit its name and amount")
-            HelpIconRow(Icons.Filled.Sync, "Repeat Settings", "Configure the income schedule (when you get paid)")
-            HelpIconRow(Icons.Filled.Delete, "Delete", "Permanently remove the income source", Color(0xFFF44336))
+            HelpSubSectionTitle(S.budgetConfigHelp.managingTitle)
+            HelpBulletText(S.budgetConfigHelp.manageTapBullet)
+            HelpIconRow(Icons.Filled.Sync, S.common.repeatType, S.budgetConfigHelp.manageRepeatDesc)
+            HelpIconRow(Icons.Filled.Delete, S.common.delete, S.budgetConfigHelp.manageDeleteDesc, Color(0xFFF44336))
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
             // ─── SECTION 8: REPEAT SETTINGS ───
-            HelpSectionTitle("Repeat Schedules")
-            HelpBodyText(
-                "Every income source needs a repeat schedule so the budget calculator knows " +
-                "when to expect payments. The same repeat types are available for income sources " +
-                "and recurring expenses:"
-            )
+            HelpSectionTitle(S.budgetConfigHelp.repeatTitle)
+            HelpBodyText(S.budgetConfigHelp.repeatBody)
             Spacer(modifier = Modifier.height(8.dp))
 
-            HelpSubSectionTitle("Every X Days")
-            HelpBodyText(
-                "Income arrives every N days (1\u201360). Requires a Start Date \u2014 the date " +
-                "of any past or future occurrence. The engine calculates all future dates from " +
-                "this reference point."
-            )
+            HelpSubSectionTitle(S.budgetConfigHelp.everyXDaysTitle)
+            HelpBodyText(S.budgetConfigHelp.everyXDaysBody)
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpSubSectionTitle("Every X Weeks")
-            HelpBodyText(
-                "Income arrives every N weeks (1\u201318). Requires a Start Date. The day of " +
-                "the week is determined by your start date (e.g., if your start date falls on " +
-                "a Friday, income repeats every N Fridays)."
-            )
+            HelpSubSectionTitle(S.budgetConfigHelp.everyXWeeksTitle)
+            HelpBodyText(S.budgetConfigHelp.everyXWeeksBody)
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpSubSectionTitle("Every 2 Weeks (Bi-Weekly)")
-            HelpBodyText(
-                "A common pay schedule. Requires a Start Date. Income arrives every 14 days " +
-                "from the start date. This is different from \"Twice per Month\" \u2014 bi-weekly " +
-                "results in 26 pay periods per year, not 24."
-            )
+            HelpSubSectionTitle(S.budgetConfigHelp.biWeeklyTitle)
+            HelpBodyText(S.budgetConfigHelp.biWeeklyBody)
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpSubSectionTitle("Every X Months")
-            HelpBodyText(
-                "Income arrives on a specific day of the month, every N months (1\u20133). " +
-                "Enter the Day of Month (1\u201328). No start date is needed \u2014 the engine " +
-                "uses the day number directly."
-            )
+            HelpSubSectionTitle(S.budgetConfigHelp.everyXMonthsTitle)
+            HelpBodyText(S.budgetConfigHelp.everyXMonthsBody)
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpSubSectionTitle("Twice per Month (Bi-Monthly)")
-            HelpBodyText(
-                "Income arrives on two specific days each month. Enter both the First Day and " +
-                "Second Day (1\u201328 each). For example, if you're paid on the 1st and 15th, " +
-                "enter 1 and 15. This results in exactly 24 occurrences per year."
-            )
+            HelpSubSectionTitle(S.budgetConfigHelp.biMonthlyTitle)
+            HelpBodyText(S.budgetConfigHelp.biMonthlyBody)
             Spacer(modifier = Modifier.height(10.dp))
 
             Box(
@@ -401,15 +321,13 @@ fun BudgetConfigHelpScreen(onBack: () -> Unit) {
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        "Day Limit: 1\u201328",
+                        S.budgetConfigHelp.dayLimitTitle,
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.titleSmall,
                         color = textColor
                     )
                     Text(
-                        "Day-of-month values are limited to 28 to ensure the date exists in all months, " +
-                        "including February. If your actual pay date is the 29th, 30th, or 31st, " +
-                        "use 28 as the closest approximation.",
+                        S.budgetConfigHelp.dayLimitBody,
                         style = MaterialTheme.typography.bodySmall,
                         color = textColor,
                         lineHeight = 18.sp
@@ -421,19 +339,14 @@ fun BudgetConfigHelpScreen(onBack: () -> Unit) {
             HelpDividerLine()
 
             // ─── SECTION 9: BUDGET INCOME DETECTION ───
-            HelpSectionTitle("Budget Income Detection")
-            HelpBodyText(
-                "When you add an income transaction in the Transactions screen, the app " +
-                "checks whether it matches one of your configured income sources (by name " +
-                "and amount). If a match is found, you're asked whether this is:"
-            )
+            HelpSectionTitle(S.budgetConfigHelp.budgetIncomeTitle)
+            HelpBodyText(S.budgetConfigHelp.budgetIncomeBody)
             Spacer(modifier = Modifier.height(4.dp))
-            HelpBulletText("Budget income \u2014 already accounted for in your budget (does NOT increase available cash)")
-            HelpBulletText("Extra income \u2014 unexpected or additional income (DOES increase available cash)")
+            HelpBulletText(S.budgetConfigHelp.budgetIncomeBullet)
+            HelpBulletText(S.budgetConfigHelp.extraIncomeBullet)
             Spacer(modifier = Modifier.height(8.dp))
             HelpBodyText(
-                "This prevents your paycheck from being double-counted \u2014 once in the budget " +
-                "calculation and again as a manual income entry.",
+                S.budgetConfigHelp.budgetIncomeNote,
                 italic = true
             )
             Spacer(modifier = Modifier.height(16.dp))
@@ -441,13 +354,13 @@ fun BudgetConfigHelpScreen(onBack: () -> Unit) {
             HelpDividerLine()
 
             // ─── SECTION 10: TIPS ───
-            HelpSectionTitle("Tips")
-            HelpBulletText("Set up all income sources and recurring expenses BEFORE hitting Recalculate for the best result.")
-            HelpBulletText("Recalculate after any change to income or expenses to keep your budget accurate.")
-            HelpBulletText("Use Reset Budget sparingly \u2014 it wipes your accumulated surplus/deficit.")
-            HelpBulletText("For variable income, create separate entries for each pay amount to improve accuracy.")
-            HelpBulletText("Use descriptive source names like \"Acme Corp Paycheck\" \u2014 the name is used for automatic budget income matching.")
-            HelpBulletText("Only include reliable, recurring income. Don't add one-time windfalls \u2014 record those as extra income in Transactions.")
+            HelpSectionTitle(S.budgetConfigHelp.tipsTitle)
+            HelpBulletText(S.budgetConfigHelp.tip1)
+            HelpBulletText(S.budgetConfigHelp.tip2)
+            HelpBulletText(S.budgetConfigHelp.tip3)
+            HelpBulletText(S.budgetConfigHelp.tip4)
+            HelpBulletText(S.budgetConfigHelp.tip5)
+            HelpBulletText(S.budgetConfigHelp.tip6)
 
             Spacer(modifier = Modifier.height(32.dp))
         }

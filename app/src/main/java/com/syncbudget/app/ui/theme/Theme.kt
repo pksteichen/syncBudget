@@ -8,6 +8,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import com.syncbudget.app.ui.strings.AppStrings
+import com.syncbudget.app.ui.strings.EnglishStrings
+import com.syncbudget.app.ui.strings.LocalStrings
 
 data class SyncBudgetColors(
     val headerBackground: Color,
@@ -52,6 +55,7 @@ private val LightColorScheme = lightColorScheme(
 @Composable
 fun SyncBudgetTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    strings: AppStrings = EnglishStrings,
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
@@ -77,7 +81,10 @@ fun SyncBudgetTheme(
         )
     }
 
-    CompositionLocalProvider(LocalSyncBudgetColors provides customColors) {
+    CompositionLocalProvider(
+        LocalSyncBudgetColors provides customColors,
+        LocalStrings provides strings
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = SyncBudgetTypography,

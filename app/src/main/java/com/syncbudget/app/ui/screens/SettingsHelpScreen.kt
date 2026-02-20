@@ -39,19 +39,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.syncbudget.app.ui.strings.LocalStrings
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsHelpScreen(onBack: () -> Unit) {
     val customColors = LocalSyncBudgetColors.current
+    val S = LocalStrings.current
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = "Settings Help",
+                        text = S.settingsHelp.title,
                         style = MaterialTheme.typography.titleLarge,
                         color = customColors.headerText
                     )
@@ -60,7 +62,7 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = S.common.back,
                             tint = customColors.headerText
                         )
                     }
@@ -86,17 +88,13 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
             val headerBg = customColors.headerBackground
 
             // ─── SECTION 1: OVERVIEW ───
-            HelpSectionTitle("Overview")
-            HelpBodyText(
-                "The Settings screen lets you customize how the app displays information " +
-                "and manage your transaction categories. Access it by tapping the gear icon " +
-                "on the dashboard."
-            )
+            HelpSectionTitle(S.settingsHelp.overviewTitle)
+            HelpBodyText(S.settingsHelp.overviewBody)
             Spacer(modifier = Modifier.height(12.dp))
 
             // ─── HEADER ───
-            HelpSectionTitle("Header Bar")
-            HelpBodyText("The header provides navigation and help access:")
+            HelpSectionTitle(S.settingsHelp.headerTitle)
+            HelpBodyText(S.settingsHelp.headerBody)
             Spacer(modifier = Modifier.height(8.dp))
 
             Box(
@@ -112,50 +110,40 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
                 ) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = customColors.headerText, modifier = Modifier.size(22.dp))
                     Spacer(modifier = Modifier.weight(1f))
-                    Text("Settings", style = MaterialTheme.typography.titleMedium, color = customColors.headerText)
+                    Text(S.settings.title, style = MaterialTheme.typography.titleMedium, color = customColors.headerText)
                     Spacer(modifier = Modifier.weight(1f))
                     Icon(Icons.AutoMirrored.Filled.Help, contentDescription = null, tint = customColors.headerText, modifier = Modifier.size(22.dp))
                 }
             }
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpIconRow(Icons.AutoMirrored.Filled.ArrowBack, "Back", "Return to the dashboard.")
-            HelpIconRow(Icons.AutoMirrored.Filled.Help, "Help", "Opens this help page.")
+            HelpIconRow(Icons.AutoMirrored.Filled.ArrowBack, S.common.back, S.settingsHelp.backDesc)
+            HelpIconRow(Icons.AutoMirrored.Filled.Help, S.common.help, S.settingsHelp.helpDesc)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
             // ─── SECTION 2: BUDGET CONFIG BUTTON ───
-            HelpSectionTitle("Configure Your Budget")
-            HelpBodyText(
-                "The first item in Settings is a button that opens Budget Configuration. " +
-                "This is where you set up your income sources, choose your budget period, " +
-                "and calculate your safe daily budget. See the Budget Configuration help page " +
-                "for full details."
-            )
+            HelpSectionTitle(S.settingsHelp.configureTitle)
+            HelpBodyText(S.settingsHelp.configureBody)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
             // ─── SECTION 3: CURRENCY ───
-            HelpSectionTitle("Currency")
-            HelpBodyText(
-                "Choose the currency symbol displayed throughout the app. The dropdown includes " +
-                "common symbols:"
-            )
+            HelpSectionTitle(S.settingsHelp.currencyTitle)
+            HelpBodyText(S.settingsHelp.currencyBody)
             Spacer(modifier = Modifier.height(8.dp))
-            HelpBulletText("$ \u2014 US Dollar, Canadian Dollar, Australian Dollar, etc.")
-            HelpBulletText("\u20ac \u2014 Euro")
-            HelpBulletText("\u00a3 \u2014 British Pound")
-            HelpBulletText("\u00a5 \u2014 Japanese Yen / Chinese Yuan")
-            HelpBulletText("\u20b9 \u2014 Indian Rupee")
-            HelpBulletText("\u20a9 \u2014 Korean Won")
-            HelpBulletText("And more")
+            HelpBulletText(S.settingsHelp.currencyDollar)
+            HelpBulletText(S.settingsHelp.currencyEuro)
+            HelpBulletText(S.settingsHelp.currencyPound)
+            HelpBulletText(S.settingsHelp.currencyYen)
+            HelpBulletText(S.settingsHelp.currencyRupee)
+            HelpBulletText(S.settingsHelp.currencyWon)
+            HelpBulletText(S.settingsHelp.currencyMore)
             Spacer(modifier = Modifier.height(8.dp))
             HelpBodyText(
-                "The currency symbol affects the Solari display, transaction amounts, budget " +
-                "configuration, and all other monetary displays. Decimal places are automatically " +
-                "adjusted for currencies that traditionally don't use them (e.g., Yen).",
+                S.settingsHelp.currencyNote,
                 italic = true
             )
             Spacer(modifier = Modifier.height(16.dp))
@@ -163,34 +151,25 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
             HelpDividerLine()
 
             // ─── SECTION 4: DECIMALS ───
-            HelpSectionTitle("Show Decimal Places")
-            HelpBodyText(
-                "When checked, the Solari display shows cents/pence after a decimal point. " +
-                "The number of decimal places depends on your currency (2 for most currencies, " +
-                "0 for currencies like the Japanese Yen). Unchecking this rounds the display to " +
-                "whole numbers for a cleaner look."
-            )
+            HelpSectionTitle(S.settingsHelp.decimalsTitle)
+            HelpBodyText(S.settingsHelp.decimalsBody)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
             // ─── SECTION 5: DATE FORMAT ───
-            HelpSectionTitle("Date Format")
-            HelpBodyText(
-                "Choose how dates are displayed throughout the app, including the transaction " +
-                "list, date pickers, and export files. Options include:"
-            )
+            HelpSectionTitle(S.settingsHelp.dateFormatTitle)
+            HelpBodyText(S.settingsHelp.dateFormatBody)
             Spacer(modifier = Modifier.height(8.dp))
-            HelpBulletText("2026-02-17 \u2014 ISO format (default)")
-            HelpBulletText("02/17/2026 \u2014 US format")
-            HelpBulletText("17/02/2026 \u2014 European format")
-            HelpBulletText("Feb 17, 2026 \u2014 Abbreviated month")
-            HelpBulletText("February 17, 2026 \u2014 Full month name")
-            HelpBulletText("And several other international formats")
+            HelpBulletText(S.settingsHelp.dateIso)
+            HelpBulletText(S.settingsHelp.dateUs)
+            HelpBulletText(S.settingsHelp.dateEu)
+            HelpBulletText(S.settingsHelp.dateAbbrev)
+            HelpBulletText(S.settingsHelp.dateFull)
+            HelpBulletText(S.settingsHelp.dateMore)
             Spacer(modifier = Modifier.height(8.dp))
             HelpBodyText(
-                "The dropdown shows a sample date in each format so you can preview how " +
-                "it will look before selecting.",
+                S.settingsHelp.dateNote,
                 italic = true
             )
             Spacer(modifier = Modifier.height(16.dp))
@@ -198,30 +177,22 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
             HelpDividerLine()
 
             // ─── SECTION 6: WEEK STARTS ON ───
-            HelpSectionTitle("Week Starts On")
-            HelpBodyText(
-                "Choose whether the week begins on Sunday or Monday. This affects the spending " +
-                "chart's weekly grouping and any weekly budget period calculations."
-            )
+            HelpSectionTitle(S.settingsHelp.weekStartTitle)
+            HelpBodyText(S.settingsHelp.weekStartBody)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
             // ─── SECTION 7: CHART PALETTE ───
-            HelpSectionTitle("Chart Palette")
-            HelpBodyText(
-                "Choose the color palette used for pie charts and bar charts throughout the app. " +
-                "Three options are available:"
-            )
+            HelpSectionTitle(S.settingsHelp.chartPaletteTitle)
+            HelpBodyText(S.settingsHelp.chartPaletteBody)
             Spacer(modifier = Modifier.height(8.dp))
-            HelpBulletText("Bright \u2014 vivid, saturated colors for maximum contrast")
-            HelpBulletText("Pastel \u2014 softer, muted tones for a gentler look")
-            HelpBulletText("Sunset \u2014 warm earth tones inspired by a sunset palette (default)")
+            HelpBulletText(S.settingsHelp.paletteBright)
+            HelpBulletText(S.settingsHelp.palettePastel)
+            HelpBulletText(S.settingsHelp.paletteSunset)
             Spacer(modifier = Modifier.height(8.dp))
             HelpBodyText(
-                "Each palette automatically adjusts for light and dark mode. The palette " +
-                "applies to the dashboard spending chart, the transaction pie chart editor, " +
-                "and all other chart displays.",
+                S.settingsHelp.paletteNote,
                 italic = true
             )
             Spacer(modifier = Modifier.height(16.dp))
@@ -229,20 +200,16 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
             HelpDividerLine()
 
             // ─── SECTION 8: MATCHING CONFIGURATION ───
-            HelpSectionTitle("Matching Configuration")
-            HelpBodyText(
-                "These settings control how the app detects duplicate transactions and matches " +
-                "transactions to recurring expenses, amortization entries, and budget income sources:"
-            )
+            HelpSectionTitle(S.settingsHelp.matchingTitle)
+            HelpBodyText(S.settingsHelp.matchingBody)
             Spacer(modifier = Modifier.height(8.dp))
-            HelpBulletText("Match Days (\u00b1N) \u2014 how many days apart two transactions can be and still be considered a match")
-            HelpBulletText("Match Percent (\u00b1%) \u2014 percentage tolerance for amount matching")
-            HelpBulletText("Match Dollar (\u00b1\$) \u2014 absolute dollar tolerance for amount matching")
-            HelpBulletText("Match Characters \u2014 minimum shared substring length for merchant name matching")
+            HelpBulletText(S.settingsHelp.matchDaysBullet)
+            HelpBulletText(S.settingsHelp.matchPercentBullet)
+            HelpBulletText(S.settingsHelp.matchDollarBullet)
+            HelpBulletText(S.settingsHelp.matchCharsBullet)
             Spacer(modifier = Modifier.height(8.dp))
             HelpBodyText(
-                "The defaults work well for most users. Increase the tolerances if you find " +
-                "the app is missing matches, or decrease them if you're seeing too many false positives.",
+                S.settingsHelp.matchingNote,
                 italic = true
             )
             Spacer(modifier = Modifier.height(16.dp))
@@ -250,17 +217,14 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
             HelpDividerLine()
 
             // ─── SECTION 9: PAID USER ───
-            HelpSectionTitle("Paid User")
-            HelpBodyText(
-                "When checked, this unlocks premium features:"
-            )
+            HelpSectionTitle(S.settingsHelp.paidTitle)
+            HelpBodyText(S.settingsHelp.paidBody)
             Spacer(modifier = Modifier.height(4.dp))
-            HelpBulletText("Save transactions \u2014 export to CSV or encrypted file")
-            HelpBulletText("Load transactions \u2014 import from bank CSV, app CSV, or encrypted backup")
+            HelpBulletText(S.settingsHelp.paidSave)
+            HelpBulletText(S.settingsHelp.paidLoad)
             Spacer(modifier = Modifier.height(8.dp))
             HelpBodyText(
-                "When Paid User is not enabled, the Save and Load icons on the Transactions " +
-                "screen appear dimmed and are non-functional.",
+                S.settingsHelp.paidNote,
                 italic = true
             )
             Spacer(modifier = Modifier.height(16.dp))
@@ -268,46 +232,33 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
             HelpDividerLine()
 
             // ─── SECTION 10: CATEGORIES ───
-            HelpSectionTitle("Categories")
-            HelpBodyText(
-                "Categories let you classify your transactions for better spending insight. " +
-                "Each category has a name and an icon."
-            )
+            HelpSectionTitle(S.settingsHelp.categoriesTitle)
+            HelpBodyText(S.settingsHelp.categoriesBody)
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpSubSectionTitle("Default Categories")
-            HelpBodyText(
-                "Three categories are protected and cannot be deleted or renamed:"
-            )
+            HelpSubSectionTitle(S.settingsHelp.defaultCategoriesTitle)
+            HelpBodyText(S.settingsHelp.defaultCategoriesBody)
             Spacer(modifier = Modifier.height(4.dp))
-            HelpBulletText("Other \u2014 the default fallback category for uncategorized transactions")
-            HelpBulletText("Recurring \u2014 automatically assigned to transactions matched to recurring expenses")
-            HelpBulletText("Amortization \u2014 automatically assigned to transactions matched to amortization entries")
+            HelpBulletText(S.settingsHelp.catOther)
+            HelpBulletText(S.settingsHelp.catRecurring)
+            HelpBulletText(S.settingsHelp.catAmortization)
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpSubSectionTitle("Adding a Category")
-            HelpBodyText(
-                "Tap \"Add Category\" to create a new category. Enter a name and choose an icon " +
-                "from the icon grid. Icons are displayed as a visual grid you can scroll through."
-            )
+            HelpSubSectionTitle(S.settingsHelp.addCategoryTitle)
+            HelpBodyText(S.settingsHelp.addCategoryBody)
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpSubSectionTitle("Editing a Category")
-            HelpBodyText(
-                "Tap any non-protected category to open the edit dialog. You can change the " +
-                "name and icon. The delete button (red trash icon) appears in the dialog title bar."
-            )
+            HelpSubSectionTitle(S.settingsHelp.editCategoryTitle)
+            HelpBodyText(S.settingsHelp.editCategoryBody)
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpSubSectionTitle("Deleting a Category")
-            HelpBodyText(
-                "When deleting a category that has existing transactions:"
-            )
+            HelpSubSectionTitle(S.settingsHelp.deleteCategoryTitle)
+            HelpBodyText(S.settingsHelp.deleteCategoryBody)
             Spacer(modifier = Modifier.height(4.dp))
-            HelpBulletText("If no transactions use the category, it is deleted immediately")
-            HelpBulletText("If transactions exist, a reassignment dialog appears")
-            HelpBulletText("You must choose another category to move the affected transactions to")
-            HelpBulletText("Tap \"Move & Delete\" to reassign all affected transactions and remove the category")
+            HelpBulletText(S.settingsHelp.deleteBullet1)
+            HelpBulletText(S.settingsHelp.deleteBullet2)
+            HelpBulletText(S.settingsHelp.deleteBullet3)
+            HelpBulletText(S.settingsHelp.deleteBullet4)
             Spacer(modifier = Modifier.height(8.dp))
 
             // Reassignment info box
@@ -321,16 +272,13 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        "Category Reassignment",
+                        S.settingsHelp.reassignmentTitle,
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.titleSmall,
                         color = textColor
                     )
                     Text(
-                        "When you delete a category, all transactions assigned to it " +
-                        "are moved to your chosen replacement category. This includes " +
-                        "multi-category transactions where only the specific category " +
-                        "split is affected. The reassignment is permanent.",
+                        S.settingsHelp.reassignmentBody,
                         style = MaterialTheme.typography.bodySmall,
                         color = textColor,
                         lineHeight = 18.sp
@@ -342,11 +290,11 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
             HelpDividerLine()
 
             // ─── SECTION 11: TIPS ───
-            HelpSectionTitle("Tips")
-            HelpBulletText("Set up categories before importing transactions \u2014 the auto-categorization uses your existing transaction history to match merchants.")
-            HelpBulletText("Create categories that match your spending habits. Common examples: Food, Transport, Entertainment, Health, Housing, Utilities, Shopping.")
-            HelpBulletText("Use the \"Daily\" budget period if you want the most granular spending control.")
-            HelpBulletText("The Budget Configuration button is the first thing to set up after installing the app.")
+            HelpSectionTitle(S.settingsHelp.tipsTitle)
+            HelpBulletText(S.settingsHelp.tip1)
+            HelpBulletText(S.settingsHelp.tip2)
+            HelpBulletText(S.settingsHelp.tip3)
+            HelpBulletText(S.settingsHelp.tip4)
 
             Spacer(modifier = Modifier.height(32.dp))
         }

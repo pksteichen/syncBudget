@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -108,6 +109,36 @@ internal fun HelpIconRow(
     ) {
         Icon(
             imageVector = icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            buildAnnotatedString {
+                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(label) }
+                append(" \u2014 $description")
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+            lineHeight = 20.sp
+        )
+    }
+}
+
+@Composable
+internal fun HelpIconRow(
+    painter: Painter,
+    label: String,
+    description: String,
+    tint: Color = MaterialTheme.colorScheme.onBackground
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(vertical = 3.dp)
+    ) {
+        Icon(
+            painter = painter,
             contentDescription = null,
             tint = tint,
             modifier = Modifier.size(20.dp)

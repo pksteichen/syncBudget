@@ -58,11 +58,14 @@ import androidx.compose.ui.unit.dp
 import com.syncbudget.app.data.BudgetPeriod
 import com.syncbudget.app.data.SavingsGoal
 import com.syncbudget.app.data.generateSavingsGoalId
+import com.syncbudget.app.ui.strings.LocalStrings
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import kotlin.math.ceil
 
 private fun calculatePerPeriodDeduction(
     goal: SavingsGoal,
@@ -81,14 +84,8 @@ private fun calculatePerPeriodDeduction(
         if (periods <= 0) return remaining
         return remaining / periods.toDouble()
     } else {
-        return goal.contributionPerPeriod
+        return minOf(goal.contributionPerPeriod, remaining)
     }
-}
-
-private fun periodSingularLabel(budgetPeriod: BudgetPeriod): String = when (budgetPeriod) {
-    BudgetPeriod.DAILY -> "day"
-    BudgetPeriod.WEEKLY -> "week"
-    BudgetPeriod.MONTHLY -> "month"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -98,13 +95,16 @@ fun FutureExpendituresScreen(
     currencySymbol: String,
     budgetPeriod: BudgetPeriod,
     isManualBudgetEnabled: Boolean = false,
+    dateFormatPattern: String = "yyyy-MM-dd",
     onAddGoal: (SavingsGoal) -> Unit,
     onUpdateGoal: (SavingsGoal) -> Unit,
     onDeleteGoal: (SavingsGoal) -> Unit,
     onBack: () -> Unit,
     onHelpClick: () -> Unit = {}
 ) {
+    val S = LocalStrings.current
     val customColors = LocalSyncBudgetColors.current
+    val dateFormatter = remember(dateFormatPattern) { DateTimeFormatter.ofPattern(dateFormatPattern) }
 
     var showAddDialog by remember { mutableStateOf(false) }
     var editingGoal by remember { mutableStateOf<SavingsGoal?>(null) }
@@ -113,12 +113,18 @@ fun FutureExpendituresScreen(
     val allPaused = savingsGoals.isNotEmpty() && savingsGoals.all { it.isPaused }
     val anyActive = savingsGoals.any { !it.isPaused }
 
+    val periodLabel = when (budgetPeriod) {
+        BudgetPeriod.DAILY -> S.common.periodDay
+        BudgetPeriod.WEEKLY -> S.common.periodWeek
+        BudgetPeriod.MONTHLY -> S.common.periodMonth
+    }
+
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = "Savings Goals",
+                        text = S.futureExpenditures.title,
                         style = MaterialTheme.typography.titleLarge,
                         color = customColors.headerText
                     )
@@ -128,7 +134,7 @@ fun FutureExpendituresScreen(
                         IconButton(onClick = onBack) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
+                                contentDescription = S.common.back,
                                 tint = customColors.headerText
                             )
                         }
@@ -142,7 +148,7 @@ fun FutureExpendituresScreen(
                             }) {
                                 Icon(
                                     imageVector = if (allPaused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
-                                    contentDescription = if (allPaused) "Resume All" else "Pause All",
+                                    contentDescription = if (allPaused) S.futureExpenditures.resumeAll else S.futureExpenditures.pauseAll,
                                     tint = customColors.headerText
                                 )
                             }
@@ -153,7 +159,7 @@ fun FutureExpendituresScreen(
                     IconButton(onClick = onHelpClick) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Help,
-                            contentDescription = "Help",
+                            contentDescription = S.common.help,
                             tint = customColors.headerText
                         )
                     }
@@ -174,16 +180,14 @@ fun FutureExpendituresScreen(
         ) {
             item {
                 Text(
-                    text = "Save for future goals by setting a target amount and either a target date " +
-                            "(the app calculates per-period deductions) or a fixed contribution per period. " +
-                            "Your budget is reduced each period to build savings automatically.",
+                    text = S.futureExpenditures.description,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
                 if (isManualBudgetEnabled) {
                     Text(
-                        text = "Budget deductions are disabled. Manual budget override is active in Settings > Budget Configuration.",
+                        text = S.futureExpenditures.manualOverrideWarning,
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color(0xFFF44336),
                         modifier = Modifier.padding(bottom = 12.dp)
@@ -198,7 +202,7 @@ fun FutureExpendituresScreen(
                         contentDescription = null,
                         modifier = Modifier.padding(end = 8.dp)
                     )
-                    Text("Add Savings Goal")
+                    Text(S.futureExpenditures.addSavingsGoal)
                 }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             }
@@ -209,7 +213,6 @@ fun FutureExpendituresScreen(
                     (goal.totalSavedSoFar / goal.targetAmount).toFloat().coerceIn(0f, 1f)
                 } else 0f
                 val deduction = calculatePerPeriodDeduction(goal, budgetPeriod)
-                val label = periodSingularLabel(budgetPeriod)
                 val contentAlpha = if (goal.isPaused) 0.5f else 1f
 
                 Row(
@@ -225,7 +228,7 @@ fun FutureExpendituresScreen(
                     ) {
                         Icon(
                             imageVector = if (goal.isPaused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
-                            contentDescription = if (goal.isPaused) "Resume" else "Pause",
+                            contentDescription = if (goal.isPaused) S.futureExpenditures.resume else S.futureExpenditures.pause,
                             tint = MaterialTheme.colorScheme.onBackground.copy(alpha = contentAlpha)
                         )
                     }
@@ -237,31 +240,60 @@ fun FutureExpendituresScreen(
                         )
                         Text(
                             text = if (goal.targetDate != null) {
-                                "$currencySymbol${"%.2f".format(goal.targetAmount)} by ${goal.targetDate}"
+                                S.futureExpenditures.targetAmountBy(
+                                    "$currencySymbol${"%.2f".format(goal.targetAmount)}",
+                                    goal.targetDate.format(dateFormatter)
+                                )
                             } else {
-                                "Target: $currencySymbol${"%.2f".format(goal.targetAmount)}"
+                                S.futureExpenditures.targetLabel(
+                                    "$currencySymbol${"%.2f".format(goal.targetAmount)}"
+                                )
                             },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f * contentAlpha)
                         )
+                        // Show payoff date for fixed-contribution goals
+                        if (!goalReached && !goal.isPaused && goal.targetDate == null && goal.contributionPerPeriod > 0) {
+                            val remaining = goal.targetAmount - goal.totalSavedSoFar
+                            if (remaining > 0) {
+                                val periodsRemaining = ceil(remaining / goal.contributionPerPeriod).toLong()
+                                val today = LocalDate.now()
+                                val payoffDate = when (budgetPeriod) {
+                                    BudgetPeriod.DAILY -> today.plusDays(periodsRemaining)
+                                    BudgetPeriod.WEEKLY -> today.plusWeeks(periodsRemaining)
+                                    BudgetPeriod.MONTHLY -> today.plusMonths(periodsRemaining)
+                                }
+                                Text(
+                                    text = S.futureExpenditures.payoffDate(payoffDate.format(dateFormatter)),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f * contentAlpha)
+                                )
+                            }
+                        }
                         if (goalReached) {
                             Text(
-                                text = "Goal reached!",
+                                text = S.futureExpenditures.goalReached,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color(0xFF4CAF50)
                             )
                         } else if (goal.isPaused) {
                             Text(
-                                text = "Paused",
+                                text = S.futureExpenditures.paused,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
                             )
                         } else {
                             Text(
                                 text = if (goal.targetDate != null) {
-                                    "Budget reduction: $currencySymbol${"%.2f".format(deduction)}/$label"
+                                    S.futureExpenditures.budgetReduction(
+                                        "$currencySymbol${"%.2f".format(deduction)}",
+                                        periodLabel
+                                    )
                                 } else {
-                                    "Contribution: $currencySymbol${"%.2f".format(goal.contributionPerPeriod)}/$label"
+                                    S.futureExpenditures.contributionLabel(
+                                        "$currencySymbol${"%.2f".format(goal.contributionPerPeriod)}",
+                                        periodLabel
+                                    )
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
@@ -283,7 +315,10 @@ fun FutureExpendituresScreen(
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Saved: $currencySymbol${"%.2f".format(goal.totalSavedSoFar)} of $currencySymbol${"%.2f".format(goal.targetAmount)}",
+                            text = S.futureExpenditures.savedOf(
+                                "$currencySymbol${"%.2f".format(goal.totalSavedSoFar)}",
+                                "$currencySymbol${"%.2f".format(goal.targetAmount)}"
+                            ),
                             style = MaterialTheme.typography.bodySmall,
                             color = Color(0xFF4CAF50).copy(alpha = contentAlpha)
                         )
@@ -291,7 +326,7 @@ fun FutureExpendituresScreen(
                     IconButton(onClick = { deletingGoal = goal }) {
                         Icon(
                             imageVector = Icons.Filled.Delete,
-                            contentDescription = "Delete",
+                            contentDescription = S.common.delete,
                             tint = Color(0xFFF44336)
                         )
                     }
@@ -302,7 +337,7 @@ fun FutureExpendituresScreen(
 
     if (showAddDialog) {
         AddEditSavingsGoalDialog(
-            title = "Add Savings Goal",
+            title = S.futureExpenditures.addSavingsGoal,
             initialName = "",
             initialTargetAmount = "",
             initialStartingSaved = "",
@@ -310,6 +345,7 @@ fun FutureExpendituresScreen(
             initialContribution = "",
             initialIsTargetDate = true,
             isAddMode = true,
+            dateFormatter = dateFormatter,
             onDismiss = { showAddDialog = false },
             onSave = { name, targetAmount, startingSaved, targetDate, contribution ->
                 val id = generateSavingsGoalId(savingsGoals.map { it.id }.toSet())
@@ -330,7 +366,7 @@ fun FutureExpendituresScreen(
 
     editingGoal?.let { goal ->
         AddEditSavingsGoalDialog(
-            title = "Edit Savings Goal",
+            title = S.futureExpenditures.editSavingsGoal,
             initialName = goal.name,
             initialTargetAmount = "%.2f".format(goal.targetAmount),
             initialStartingSaved = "",
@@ -338,6 +374,7 @@ fun FutureExpendituresScreen(
             initialContribution = if (goal.targetDate == null) "%.2f".format(goal.contributionPerPeriod) else "",
             initialIsTargetDate = goal.targetDate != null,
             isAddMode = false,
+            dateFormatter = dateFormatter,
             onDismiss = { editingGoal = null },
             onSave = { name, targetAmount, _, targetDate, contribution ->
                 onUpdateGoal(
@@ -356,18 +393,18 @@ fun FutureExpendituresScreen(
     deletingGoal?.let { goal ->
         AlertDialog(
             onDismissRequest = { deletingGoal = null },
-            title = { Text("Delete Savings Goal?") },
-            text = { Text("Delete \"${goal.name}\"?") },
+            title = { Text(S.futureExpenditures.deleteSavingsGoal) },
+            text = { Text(S.futureExpenditures.deleteGoalConfirm(goal.name)) },
             confirmButton = {
                 TextButton(onClick = {
                     onDeleteGoal(goal)
                     deletingGoal = null
                 }) {
-                    Text("Delete", color = Color(0xFFF44336))
+                    Text(S.common.delete, color = Color(0xFFF44336))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { deletingGoal = null }) { Text("Cancel") }
+                TextButton(onClick = { deletingGoal = null }) { Text(S.common.cancel) }
             }
         )
     }
@@ -384,9 +421,12 @@ private fun AddEditSavingsGoalDialog(
     initialContribution: String,
     initialIsTargetDate: Boolean,
     isAddMode: Boolean,
+    dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd"),
     onDismiss: () -> Unit,
     onSave: (String, Double, Double, LocalDate?, Double) -> Unit
 ) {
+    val S = LocalStrings.current
+
     var name by remember { mutableStateOf(initialName) }
     var targetAmountText by remember { mutableStateOf(initialTargetAmount) }
     var startingSavedText by remember { mutableStateOf(initialStartingSaved) }
@@ -425,11 +465,11 @@ private fun AddEditSavingsGoalDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name") },
+                    label = { Text(S.futureExpenditures.name) },
                     singleLine = true,
                     isError = showValidation && !isNameValid,
                     supportingText = if (showValidation && !isNameValid) ({
-                        Text("Required, e.g. New Car", color = Color(0xFFF44336))
+                        Text(S.futureExpenditures.requiredNameExample, color = Color(0xFFF44336))
                     }) else null,
                     colors = textFieldColors,
                     modifier = Modifier.fillMaxWidth()
@@ -441,11 +481,11 @@ private fun AddEditSavingsGoalDialog(
                             targetAmountText = newVal
                         }
                     },
-                    label = { Text("Target Amount") },
+                    label = { Text(S.futureExpenditures.targetAmount) },
                     singleLine = true,
                     isError = showValidation && !isTargetAmountValid,
                     supportingText = if (showValidation && !isTargetAmountValid) ({
-                        Text("e.g. 5000.00", color = Color(0xFFF44336))
+                        Text(S.futureExpenditures.exampleTargetAmount, color = Color(0xFFF44336))
                     }) else null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     colors = textFieldColors,
@@ -459,11 +499,11 @@ private fun AddEditSavingsGoalDialog(
                                 startingSavedText = newVal
                             }
                         },
-                        label = { Text("Starting Saved Amount (optional)") },
+                        label = { Text(S.futureExpenditures.startingSavedAmount) },
                         singleLine = true,
                         isError = showValidation && !isStartingSavedValid,
                         supportingText = if (showValidation && !isStartingSavedValid) ({
-                            Text("Must be less than target", color = Color(0xFFF44336))
+                            Text(S.futureExpenditures.mustBeLessThanTarget, color = Color(0xFFF44336))
                         }) else null,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         colors = textFieldColors,
@@ -479,12 +519,12 @@ private fun AddEditSavingsGoalDialog(
                     FilterChip(
                         selected = isTargetDateType,
                         onClick = { isTargetDateType = true },
-                        label = { Text("Target Date") }
+                        label = { Text(S.futureExpenditures.targetDate) }
                     )
                     FilterChip(
                         selected = !isTargetDateType,
                         onClick = { isTargetDateType = false },
-                        label = { Text("Fixed Contribution") }
+                        label = { Text(S.futureExpenditures.fixedContribution) }
                     )
                 }
 
@@ -499,14 +539,14 @@ private fun AddEditSavingsGoalDialog(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
-                                if (targetDate != null) "Target Date: $targetDate"
-                                else "Select Target Date"
+                                if (targetDate != null) S.futureExpenditures.targetDateLabel(targetDate!!.format(dateFormatter))
+                                else S.futureExpenditures.selectTargetDate
                             )
                         }
                     }
                     if (showValidation && !isTargetDateValid) {
                         Text(
-                            text = "Select a future date",
+                            text = S.futureExpenditures.selectAFutureDate,
                             style = MaterialTheme.typography.bodySmall,
                             color = Color(0xFFF44336)
                         )
@@ -519,11 +559,11 @@ private fun AddEditSavingsGoalDialog(
                                 contributionText = newVal
                             }
                         },
-                        label = { Text("Contribution per Period") },
+                        label = { Text(S.futureExpenditures.contributionPerPeriod) },
                         singleLine = true,
                         isError = showValidation && !isContributionValid,
                         supportingText = if (showValidation && !isContributionValid) ({
-                            Text("e.g. 100.00", color = Color(0xFFF44336))
+                            Text(S.futureExpenditures.exampleContribution, color = Color(0xFFF44336))
                         }) else null,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         colors = textFieldColors,
@@ -550,11 +590,11 @@ private fun AddEditSavingsGoalDialog(
                     }
                 }
             ) {
-                Text("Save")
+                Text(S.common.save)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(S.common.cancel) }
         }
     )
 
@@ -570,10 +610,10 @@ private fun AddEditSavingsGoalDialog(
                         targetDate = Instant.ofEpochMilli(millis).atZone(ZoneId.of("UTC")).toLocalDate()
                     }
                     showDatePicker = false
-                }) { Text("OK") }
+                }) { Text(S.common.ok) }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+                TextButton(onClick = { showDatePicker = false }) { Text(S.common.cancel) }
             }
         ) {
             DatePicker(state = datePickerState)

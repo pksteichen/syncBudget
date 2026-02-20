@@ -55,6 +55,9 @@ import com.syncbudget.app.ui.screens.SettingsScreen
 import com.syncbudget.app.ui.screens.TransactionDialog
 import com.syncbudget.app.ui.screens.TransactionsHelpScreen
 import com.syncbudget.app.ui.screens.TransactionsScreen
+import com.syncbudget.app.ui.strings.AppStrings
+import com.syncbudget.app.ui.strings.EnglishStrings
+import com.syncbudget.app.ui.strings.SpanishStrings
 import com.syncbudget.app.ui.theme.SyncBudgetTheme
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -109,10 +112,12 @@ class MainActivity : ComponentActivity() {
             var matchChars by remember { mutableIntStateOf(prefs.getInt("matchChars", 5)) }
             var weekStartSunday by remember { mutableStateOf(prefs.getBoolean("weekStartSunday", true)) }
             var chartPalette by remember { mutableStateOf(prefs.getString("chartPalette", "Sunset") ?: "Sunset") }
+            var appLanguage by remember { mutableStateOf(prefs.getString("appLanguage", "en") ?: "en") }
+            val strings: AppStrings = if (appLanguage == "es") SpanishStrings else EnglishStrings
             var budgetPeriod by remember {
                 mutableStateOf(
-                    try { BudgetPeriod.valueOf(prefs.getString("budgetPeriod", "MONTHLY") ?: "MONTHLY") }
-                    catch (_: Exception) { BudgetPeriod.MONTHLY }
+                    try { BudgetPeriod.valueOf(prefs.getString("budgetPeriod", "DAILY") ?: "DAILY") }
+                    catch (_: Exception) { BudgetPeriod.DAILY }
                 )
             }
             var resetHour by remember { mutableIntStateOf(prefs.getInt("resetHour", 0)) }
@@ -144,7 +149,7 @@ class MainActivity : ComponentActivity() {
                     val usedIds = loaded.map { it.id }.toSet()
                     var id: Int
                     do { id = (0..65535).random() } while (id in usedIds)
-                    val otherCat = Category(id, "Other", "Balloon")
+                    val otherCat = Category(id, "Other", "CreditCard")
                     loaded.add(otherCat)
                     CategoryRepository.save(context, loaded)
                 }
@@ -366,7 +371,7 @@ class MainActivity : ComponentActivity() {
                 true // return value for remember
             }
 
-            SyncBudgetTheme {
+            SyncBudgetTheme(strings = strings) {
                 if (currentScreen != "main") {
                     BackHandler {
                         currentScreen = when (currentScreen) {
@@ -392,9 +397,9 @@ class MainActivity : ComponentActivity() {
                         budgetAmount = budgetAmount,
                         budgetStartDate = budgetStartDate?.toString(),
                         budgetPeriodLabel = when (budgetPeriod) {
-                            BudgetPeriod.DAILY -> "day"
-                            BudgetPeriod.WEEKLY -> "week"
-                            BudgetPeriod.MONTHLY -> "month"
+                            BudgetPeriod.DAILY -> strings.common.periodDay
+                            BudgetPeriod.WEEKLY -> strings.common.periodWeek
+                            BudgetPeriod.MONTHLY -> strings.common.periodMonth
                         },
                         savingsGoals = savingsGoals,
                         transactions = transactions,
@@ -409,6 +414,8 @@ class MainActivity : ComponentActivity() {
                         },
                         weekStartDay = if (weekStartSunday) java.time.DayOfWeek.SUNDAY else java.time.DayOfWeek.MONDAY,
                         chartPalette = chartPalette,
+                        dateFormatPattern = dateFormatPattern,
+                        budgetPeriod = budgetPeriod,
                         onSupercharge = { allocations ->
                             var totalDeducted = 0.0
                             for ((goalId, amount) in allocations) {
@@ -434,6 +441,11 @@ class MainActivity : ComponentActivity() {
                     )
                     "settings" -> SettingsScreen(
                         currencySymbol = currencySymbol,
+                        appLanguage = appLanguage,
+                        onLanguageChange = { lang ->
+                            appLanguage = lang
+                            prefs.edit().putString("appLanguage", lang).apply()
+                        },
                         onNavigateToBudgetConfig = { currentScreen = "budget_config" },
                         matchDays = matchDays,
                         onMatchDaysChange = { matchDays = it; prefs.edit().putInt("matchDays", it).apply() },
@@ -584,6 +596,7 @@ class MainActivity : ComponentActivity() {
                         currencySymbol = currencySymbol,
                         budgetPeriod = budgetPeriod,
                         isManualBudgetEnabled = isManualBudgetEnabled,
+                        dateFormatPattern = dateFormatPattern,
                         onAddGoal = { savingsGoals.add(it); saveSavingsGoals() },
                         onUpdateGoal = { updated ->
                             val idx = savingsGoals.indexOfFirst { it.id == updated.id }
@@ -598,6 +611,7 @@ class MainActivity : ComponentActivity() {
                         currencySymbol = currencySymbol,
                         budgetPeriod = budgetPeriod,
                         isManualBudgetEnabled = isManualBudgetEnabled,
+                        dateFormatPattern = dateFormatPattern,
                         onAddEntry = { amortizationEntries.add(it); saveAmortizationEntries() },
                         onUpdateEntry = { updated ->
                             val idx = amortizationEntries.indexOfFirst { it.id == updated.id }
@@ -610,6 +624,7 @@ class MainActivity : ComponentActivity() {
                     "recurring_expenses" -> RecurringExpensesScreen(
                         recurringExpenses = recurringExpenses,
                         currencySymbol = currencySymbol,
+                        dateFormatPattern = dateFormatPattern,
                         onAddRecurringExpense = { recurringExpenses.add(it); saveRecurringExpenses(); recalculateBudget() },
                         onUpdateRecurringExpense = { updated ->
                             val idx = recurringExpenses.indexOfFirst { it.id == updated.id }
@@ -622,6 +637,7 @@ class MainActivity : ComponentActivity() {
                     "budget_config" -> BudgetConfigScreen(
                         incomeSources = incomeSources,
                         currencySymbol = currencySymbol,
+                        dateFormatPattern = dateFormatPattern,
                         onAddIncomeSource = { incomeSources.add(it); saveIncomeSources(); recalculateBudget() },
                         onUpdateIncomeSource = { updated ->
                             val idx = incomeSources.indexOfFirst { it.id == updated.id }
@@ -651,7 +667,7 @@ class MainActivity : ComponentActivity() {
                             manualBudgetAmount = amount
                             prefs.edit().putFloat("manualBudgetAmount", amount.toFloat()).apply()
                         },
-                        budgetStartDate = budgetStartDate?.toString(),
+                        budgetStartDate = budgetStartDate?.format(DateTimeFormatter.ofPattern(dateFormatPattern)),
                         onResetBudget = {
                             safeBudgetAmount = BudgetCalculator.calculateSafeBudgetAmount(
                                 incomeSources, recurringExpenses, budgetPeriod
@@ -729,8 +745,8 @@ class MainActivity : ComponentActivity() {
                 // Dashboard quick-add dialogs (rendered over any screen)
                 if (dashboardShowAddIncome) {
                     TransactionDialog(
-                        title = "Add New Income Transaction",
-                        sourceLabel = "Source",
+                        title = strings.common.addNewIncomeTransaction,
+                        sourceLabel = strings.common.sourceLabel,
                         categories = categories,
                         existingIds = existingIds,
                         currencySymbol = currencySymbol,
@@ -746,8 +762,8 @@ class MainActivity : ComponentActivity() {
 
                 if (dashboardShowAddExpense) {
                     TransactionDialog(
-                        title = "Add New Expense Transaction",
-                        sourceLabel = "Merchant",
+                        title = strings.common.addNewExpenseTransaction,
+                        sourceLabel = strings.common.merchantLabel,
                         categories = categories,
                         existingIds = existingIds,
                         currencySymbol = currencySymbol,

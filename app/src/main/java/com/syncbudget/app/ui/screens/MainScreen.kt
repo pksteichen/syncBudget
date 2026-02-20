@@ -43,8 +43,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -75,6 +73,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
 import androidx.compose.ui.unit.sp
+import com.syncbudget.app.data.BudgetPeriod
 import com.syncbudget.app.data.Category
 import com.syncbudget.app.data.SavingsGoal
 import com.syncbudget.app.data.Transaction
@@ -83,14 +82,20 @@ import com.syncbudget.app.data.getCategoryIcon
 import com.syncbudget.app.sound.FlipSoundPlayer
 import com.syncbudget.app.ui.components.CURRENCY_DECIMALS
 import com.syncbudget.app.ui.components.FlipDisplay
+import com.syncbudget.app.ui.strings.LocalStrings
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
 import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
+
+private enum class SuperchargeMode { REDUCE_CONTRIBUTIONS, ACHIEVE_SOONER }
 
 private enum class SpendingRange(val label: String) {
     TODAY("Today"),
@@ -227,9 +232,12 @@ fun MainScreen(
     onAddExpense: () -> Unit = {},
     onSupercharge: (Map<Int, Double>) -> Unit = {},
     weekStartDay: DayOfWeek = DayOfWeek.SUNDAY,
-    chartPalette: String = "Bright"
+    chartPalette: String = "Bright",
+    dateFormatPattern: String = "yyyy-MM-dd",
+    budgetPeriod: BudgetPeriod = BudgetPeriod.DAILY
 ) {
     val customColors = LocalSyncBudgetColors.current
+    val S = LocalStrings.current
 
     val decimalPlaces = if (showDecimals) (CURRENCY_DECIMALS[currencySymbol] ?: 2) else 0
 
@@ -251,10 +259,10 @@ fun MainScreen(
     val autoDigitCount = maxOf(1, wholeValue.toString().length)
 
     val bottomLabel = if (budgetStartDate == null) {
-        "Not configured"
+        S.dashboard.notConfigured
     } else {
         val periodText = when {
-            budgetAmount == 0.0 && !isNegative -> "Recalculate budget"
+            budgetAmount == 0.0 && !isNegative -> S.budgetConfig.recalculate
             else -> "$currencySymbol${"%.2f".format(budgetAmount)}/$budgetPeriodLabel"
         }
         periodText
@@ -285,7 +293,7 @@ fun MainScreen(
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = "SecureSync Daily Budget",
+                        text = S.dashboard.appTitle,
                         style = MaterialTheme.typography.titleLarge,
                         color = customColors.headerText,
                         maxLines = 1,
@@ -296,7 +304,7 @@ fun MainScreen(
                     IconButton(onClick = onSettingsClick) {
                         Icon(
                             imageVector = Icons.Filled.Settings,
-                            contentDescription = "Settings",
+                            contentDescription = S.dashboard.settings,
                             tint = customColors.headerText
                         )
                     }
@@ -305,7 +313,7 @@ fun MainScreen(
                     IconButton(onClick = { onNavigate("dashboard_help") }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Help,
-                            contentDescription = "Help",
+                            contentDescription = S.common.help,
                             tint = customColors.headerText
                         )
                     }
@@ -344,7 +352,7 @@ fun MainScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Bolt,
-                        contentDescription = "Savings Supercharge",
+                        contentDescription = S.dashboard.supercharge,
                         tint = pulseColor,
                         modifier = Modifier.size(44.dp)
                     )
@@ -383,7 +391,7 @@ fun MainScreen(
 
                 // Centered title
                 Text(
-                    text = "Spending",
+                    text = S.dashboard.spending,
                     style = MaterialTheme.typography.titleSmall,
                     color = chartBarFg,
                     modifier = Modifier.weight(1f),
@@ -430,37 +438,27 @@ fun MainScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .background(customColors.displayBackground)
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Button(
-                    onClick = onAddIncome,
-                    modifier = Modifier.weight(1f).height(48.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = customColors.displayBackground
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Add,
-                        contentDescription = "Add Income",
-                        tint = Color(0xFF4CAF50),
-                        modifier = Modifier.size(48.dp)
-                    )
-                }
-                Button(
-                    onClick = onAddExpense,
-                    modifier = Modifier.weight(1f).height(48.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = customColors.displayBackground
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Remove,
-                        contentDescription = "Add Expense",
-                        tint = Color(0xFFF44336),
-                        modifier = Modifier.size(48.dp)
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Filled.Add,
+                    contentDescription = S.dashboard.addIncome,
+                    tint = Color(0xFF4CAF50),
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clickable(onClick = onAddIncome)
+                )
+                Icon(
+                    imageVector = Icons.Filled.Remove,
+                    contentDescription = S.dashboard.addExpense,
+                    tint = Color(0xFFF44336),
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clickable(onClick = onAddExpense)
+                )
             }
 
             // Nav icons
@@ -472,16 +470,16 @@ fun MainScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = { onNavigate("transactions") }, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.AutoMirrored.Filled.List, "Transactions", tint = customColors.headerBackground, modifier = Modifier.size(32.dp))
+                    Icon(Icons.AutoMirrored.Filled.List, S.dashboard.transactions, tint = customColors.headerBackground, modifier = Modifier.size(32.dp))
                 }
                 IconButton(onClick = { onNavigate("future_expenditures") }, modifier = Modifier.size(48.dp)) {
-                    Icon(painter = painterResource(id = R.drawable.ic_coins), contentDescription = "Savings Goals", tint = customColors.headerBackground, modifier = Modifier.size(32.dp))
+                    Icon(painter = painterResource(id = R.drawable.ic_coins), contentDescription = S.dashboard.savingsGoals, tint = customColors.headerBackground, modifier = Modifier.size(32.dp))
                 }
                 IconButton(onClick = { onNavigate("amortization") }, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Filled.Schedule, "Amortization", tint = customColors.headerBackground, modifier = Modifier.size(32.dp))
+                    Icon(Icons.Filled.Schedule, S.dashboard.amortization, tint = customColors.headerBackground, modifier = Modifier.size(32.dp))
                 }
                 IconButton(onClick = { onNavigate("recurring_expenses") }, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Filled.Sync, "Recurring Expenses", tint = customColors.headerBackground, modifier = Modifier.size(32.dp))
+                    Icon(Icons.Filled.Sync, S.dashboard.recurringExpenses, tint = customColors.headerBackground, modifier = Modifier.size(32.dp))
                 }
             }
         }
@@ -492,6 +490,9 @@ fun MainScreen(
             savingsGoals = savingsGoals,
             currencySymbol = currencySymbol,
             availableExtra = availableCash,
+            budgetPeriod = budgetPeriod,
+            dateFormatPattern = dateFormatPattern,
+            budgetPeriodLabel = budgetPeriodLabel,
             onDismiss = { showSuperchargeDialog = false },
             onApply = { allocations ->
                 onSupercharge(allocations)
@@ -514,6 +515,7 @@ private fun SpendingPieChart(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val S = LocalStrings.current
     val categoryMap = remember(categories) { categories.associateBy { it.id } }
     val otherCatId = remember(categories) { categories.find { it.name == "Other" }?.id ?: -1 }
 
@@ -583,7 +585,7 @@ private fun SpendingPieChart(
     Box(modifier = modifier) {
         if (wedges.isEmpty()) {
             Text(
-                text = "No spending data",
+                text = S.dashboard.noDataAvailable,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
                 modifier = Modifier.align(Alignment.Center)
@@ -710,11 +712,27 @@ private fun SavingsSuperchargeDialog(
     savingsGoals: List<SavingsGoal>,
     currencySymbol: String,
     availableExtra: Double,
+    budgetPeriod: BudgetPeriod = BudgetPeriod.DAILY,
+    dateFormatPattern: String = "yyyy-MM-dd",
+    budgetPeriodLabel: String = "period",
     onDismiss: () -> Unit,
     onApply: (Map<Int, Double>) -> Unit
 ) {
+    val S = LocalStrings.current
+    val dateFormatter = remember(dateFormatPattern) { DateTimeFormatter.ofPattern(dateFormatPattern) }
     val eligibleGoals = savingsGoals.filter { it.totalSavedSoFar < it.targetAmount }
     val amounts = remember { mutableStateMapOf<Int, String>() }
+    val modes = remember { mutableStateMapOf<Int, SuperchargeMode>() }
+
+    // Initialize default modes
+    eligibleGoals.forEach { goal ->
+        if (goal.id !in modes) {
+            modes[goal.id] = if (goal.targetDate != null)
+                SuperchargeMode.REDUCE_CONTRIBUTIONS
+            else
+                SuperchargeMode.ACHIEVE_SOONER
+        }
+    }
 
     val totalAllocated = amounts.values.sumOf { it.toDoubleOrNull() ?: 0.0 }
     val isOverBudget = totalAllocated > availableExtra
@@ -733,6 +751,18 @@ private fun SavingsSuperchargeDialog(
         unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
     )
 
+    // Green pulse animation for preview values
+    val previewTransition = rememberInfiniteTransition(label = "previewPulse")
+    val previewPulseColor by previewTransition.animateColor(
+        initialValue = Color(0xFF4CAF50),
+        targetValue = Color(0xFFA5D6A7),
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "previewPulseColor"
+    )
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -744,13 +774,13 @@ private fun SavingsSuperchargeDialog(
                     modifier = Modifier.size(28.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Savings Supercharge!")
+                Text(S.dashboard.superchargeTitle)
             }
         },
         text = {
             Column {
                 Text(
-                    text = "Move extra cash into your savings goals. Available: $currencySymbol${"%.2f".format(availableExtra)}",
+                    text = S.dashboard.superchargeRemaining("$currencySymbol${"%.2f".format(availableExtra)}"),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                 )
@@ -766,7 +796,7 @@ private fun SavingsSuperchargeDialog(
 
                 if (eligibleGoals.isEmpty()) {
                     Text(
-                        text = "No savings goals to supercharge.",
+                        text = S.dashboard.noDataAvailable,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                     )
@@ -781,6 +811,7 @@ private fun SavingsSuperchargeDialog(
                                 (goal.totalSavedSoFar / goal.targetAmount).toFloat().coerceIn(0f, 1f)
                             } else 0f
                             val contentAlpha = if (goal.isPaused) 0.5f else 1f
+                            val mode = modes[goal.id] ?: SuperchargeMode.ACHIEVE_SOONER
 
                             Column {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -792,7 +823,7 @@ private fun SavingsSuperchargeDialog(
                                     )
                                     if (goal.isPaused) {
                                         Text(
-                                            text = "Paused",
+                                            text = S.futureExpenditures.paused,
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
                                         )
@@ -800,9 +831,14 @@ private fun SavingsSuperchargeDialog(
                                 }
                                 Text(
                                     text = if (goal.targetDate != null) {
-                                        "$currencySymbol${"%.2f".format(goal.targetAmount)} by ${goal.targetDate}"
+                                        S.futureExpenditures.targetAmountBy(
+                                            "$currencySymbol${"%.2f".format(goal.targetAmount)}",
+                                            goal.targetDate.format(dateFormatter)
+                                        )
                                     } else {
-                                        "Target: $currencySymbol${"%.2f".format(goal.targetAmount)}"
+                                        S.futureExpenditures.targetLabel(
+                                            "$currencySymbol${"%.2f".format(goal.targetAmount)}"
+                                        )
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f * contentAlpha)
@@ -823,10 +859,55 @@ private fun SavingsSuperchargeDialog(
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "Saved: $currencySymbol${"%.2f".format(goal.totalSavedSoFar)} of $currencySymbol${"%.2f".format(goal.targetAmount)} (remaining: $currencySymbol${"%.2f".format(remaining)})",
+                                    text = S.futureExpenditures.savedOf(
+                                        "$currencySymbol${"%.2f".format(goal.totalSavedSoFar)}",
+                                        "$currencySymbol${"%.2f".format(goal.targetAmount)}"
+                                    ),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = Color(0xFF4CAF50).copy(alpha = contentAlpha)
                                 )
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                // Mode selection
+                                Text(
+                                    text = S.dashboard.superchargeExtraShouldLabel,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    val reduceSelected = mode == SuperchargeMode.REDUCE_CONTRIBUTIONS
+                                    val soonerSelected = mode == SuperchargeMode.ACHIEVE_SOONER
+                                    Text(
+                                        text = S.dashboard.superchargeReduceContributions,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (reduceSelected) MaterialTheme.colorScheme.primary
+                                            else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                                        modifier = Modifier
+                                            .background(
+                                                if (reduceSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                                else Color.Transparent,
+                                                RoundedCornerShape(16.dp)
+                                            )
+                                            .clickable { modes[goal.id] = SuperchargeMode.REDUCE_CONTRIBUTIONS }
+                                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                                    )
+                                    Text(
+                                        text = S.dashboard.superchargeAchieveSooner,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (soonerSelected) MaterialTheme.colorScheme.primary
+                                            else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                                        modifier = Modifier
+                                            .background(
+                                                if (soonerSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                                else Color.Transparent,
+                                                RoundedCornerShape(16.dp)
+                                            )
+                                            .clickable { modes[goal.id] = SuperchargeMode.ACHIEVE_SOONER }
+                                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                                    )
+                                }
+
                                 Spacer(modifier = Modifier.height(6.dp))
                                 val enteredAmount = (amounts[goal.id] ?: "").toDoubleOrNull() ?: 0.0
                                 val exceedsGoal = enteredAmount > remaining
@@ -837,16 +918,91 @@ private fun SavingsSuperchargeDialog(
                                             amounts[goal.id] = newVal
                                         }
                                     },
-                                    label = { Text("Amount to add") },
+                                    label = { Text(S.dashboard.superchargeAllocate) },
                                     singleLine = true,
                                     isError = exceedsGoal,
                                     supportingText = if (exceedsGoal) ({
-                                        Text("Max: $currencySymbol${"%.2f".format(remaining)}", color = Color(0xFFF44336))
+                                        Text(S.transactions.maxAmount2("$currencySymbol${"%.2f".format(remaining)}"), color = Color(0xFFF44336))
                                     }) else null,
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                     colors = textFieldColors,
                                     modifier = Modifier.fillMaxWidth()
                                 )
+
+                                // Live preview
+                                if (enteredAmount > 0 && !exceedsGoal) {
+                                    val newRemaining = remaining - enteredAmount
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    if (mode == SuperchargeMode.REDUCE_CONTRIBUTIONS) {
+                                        // Show new per-period contribution
+                                        val today = LocalDate.now()
+                                        val newDeduction = if (goal.targetDate != null) {
+                                            if (!today.isBefore(goal.targetDate)) 0.0
+                                            else {
+                                                val periods = when (budgetPeriod) {
+                                                    BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(today, goal.targetDate)
+                                                    BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(today, goal.targetDate)
+                                                    BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(today, goal.targetDate)
+                                                }
+                                                if (periods <= 0) 0.0 else newRemaining / periods.toDouble()
+                                            }
+                                        } else {
+                                            minOf(goal.contributionPerPeriod, newRemaining)
+                                        }
+                                        Text(
+                                            text = S.dashboard.superchargeNewContribution(
+                                                "$currencySymbol${"%.2f".format(newDeduction)}",
+                                                budgetPeriodLabel
+                                            ),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = previewPulseColor
+                                        )
+                                    } else {
+                                        // Show new payoff/completion date
+                                        val today = LocalDate.now()
+                                        if (goal.targetDate != null) {
+                                            // Target-date goal: keep same rate, compute new completion
+                                            val currentPeriods = when (budgetPeriod) {
+                                                BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(today, goal.targetDate)
+                                                BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(today, goal.targetDate)
+                                                BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(today, goal.targetDate)
+                                            }
+                                            val currentRate = if (currentPeriods > 0) remaining / currentPeriods.toDouble() else remaining
+                                            val newPeriods = if (currentRate > 0) ceil(newRemaining / currentRate).toLong() else 0L
+                                            val completionDate = when (budgetPeriod) {
+                                                BudgetPeriod.DAILY -> today.plusDays(newPeriods)
+                                                BudgetPeriod.WEEKLY -> today.plusWeeks(newPeriods)
+                                                BudgetPeriod.MONTHLY -> today.plusMonths(newPeriods)
+                                            }
+                                            Text(
+                                                text = S.dashboard.superchargeNewCompletion(completionDate.format(dateFormatter)),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = previewPulseColor
+                                            )
+                                        } else {
+                                            // Fixed-contribution goal: compute new payoff date
+                                            if (goal.contributionPerPeriod > 0 && newRemaining > 0) {
+                                                val periodsRemaining = ceil(newRemaining / goal.contributionPerPeriod).toLong()
+                                                val payoffDate = when (budgetPeriod) {
+                                                    BudgetPeriod.DAILY -> today.plusDays(periodsRemaining)
+                                                    BudgetPeriod.WEEKLY -> today.plusWeeks(periodsRemaining)
+                                                    BudgetPeriod.MONTHLY -> today.plusMonths(periodsRemaining)
+                                                }
+                                                Text(
+                                                    text = S.dashboard.superchargeNewPayoff(payoffDate.format(dateFormatter)),
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = previewPulseColor
+                                                )
+                                            } else if (newRemaining <= 0) {
+                                                Text(
+                                                    text = S.futureExpenditures.goalReached,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = previewPulseColor
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -869,11 +1025,11 @@ private fun SavingsSuperchargeDialog(
                 },
                 enabled = hasAnyAmount && !isOverBudget && !anyExceedsRemaining
             ) {
-                Text("Apply")
+                Text(S.common.ok)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(S.common.cancel) }
         }
     )
 }

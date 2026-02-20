@@ -61,6 +61,7 @@ import com.syncbudget.app.data.Transaction
 import com.syncbudget.app.data.getCategoryIcon
 import com.syncbudget.app.ui.components.CURRENCY_OPTIONS
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
+import com.syncbudget.app.ui.strings.LocalStrings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.filled.Delete
@@ -86,6 +87,8 @@ private val DATE_FORMAT_OPTIONS = listOf(
 @Composable
 fun SettingsScreen(
     currencySymbol: String,
+    appLanguage: String = "en",
+    onLanguageChange: (String) -> Unit = {},
     onCurrencyChange: (String) -> Unit,
     showDecimals: Boolean,
     onDecimalsChange: (Boolean) -> Unit,
@@ -116,6 +119,7 @@ fun SettingsScreen(
     onHelpClick: () -> Unit = {}
 ) {
     val customColors = LocalSyncBudgetColors.current
+    val S = LocalStrings.current
     var showAddCategory by remember { mutableStateOf(false) }
     var editingCategory by remember { mutableStateOf<Category?>(null) }
 
@@ -133,7 +137,7 @@ fun SettingsScreen(
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = "Settings",
+                        text = S.settings.title,
                         style = MaterialTheme.typography.titleLarge,
                         color = customColors.headerText
                     )
@@ -142,7 +146,7 @@ fun SettingsScreen(
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = S.common.back,
                             tint = customColors.headerText
                         )
                     }
@@ -151,7 +155,7 @@ fun SettingsScreen(
                     IconButton(onClick = onHelpClick) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Help,
-                            contentDescription = "Help",
+                            contentDescription = S.common.help,
                             tint = customColors.headerText
                         )
                     }
@@ -175,7 +179,7 @@ fun SettingsScreen(
                     onClick = onNavigateToBudgetConfig,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Configure Your Budget")
+                    Text(S.settings.configureYourBudget)
                 }
             }
 
@@ -190,7 +194,7 @@ fun SettingsScreen(
                         value = currencySymbol,
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Currency") },
+                        label = { Text(S.settings.currency) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = currencyExpanded) },
                         colors = textFieldColors,
                         modifier = Modifier
@@ -226,7 +230,7 @@ fun SettingsScreen(
                         )
                     )
                     Text(
-                        text = "Show decimal places",
+                        text = S.settings.showDecimalPlaces,
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onBackground
                     )
@@ -245,7 +249,7 @@ fun SettingsScreen(
                         value = sampleDate.format(DateTimeFormatter.ofPattern(dateFormatPattern)),
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Date Format") },
+                        label = { Text(S.settings.dateFormat) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dateFormatExpanded) },
                         colors = textFieldColors,
                         modifier = Modifier
@@ -278,10 +282,10 @@ fun SettingsScreen(
                     onExpandedChange = { weekStartExpanded = it }
                 ) {
                     OutlinedTextField(
-                        value = if (weekStartSunday) "Sunday" else "Monday",
+                        value = if (weekStartSunday) S.settings.sunday else S.settings.monday,
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Week Starts On") },
+                        label = { Text(S.settings.weekStartsOn) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = weekStartExpanded) },
                         colors = textFieldColors,
                         modifier = Modifier
@@ -293,14 +297,14 @@ fun SettingsScreen(
                         onDismissRequest = { weekStartExpanded = false }
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Sunday") },
+                            text = { Text(S.settings.sunday) },
                             onClick = {
                                 onWeekStartChange(true)
                                 weekStartExpanded = false
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Monday") },
+                            text = { Text(S.settings.monday) },
                             onClick = {
                                 onWeekStartChange(false)
                                 weekStartExpanded = false
@@ -318,10 +322,15 @@ fun SettingsScreen(
                     onExpandedChange = { paletteExpanded = it }
                 ) {
                     OutlinedTextField(
-                        value = chartPalette,
+                        value = when (chartPalette) {
+                            "Bright" -> S.settings.bright
+                            "Pastel" -> S.settings.pastel
+                            "Sunset" -> S.settings.sunset
+                            else -> chartPalette
+                        },
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Chart Palette") },
+                        label = { Text(S.settings.chartPalette) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = paletteExpanded) },
                         colors = textFieldColors,
                         modifier = Modifier
@@ -332,11 +341,11 @@ fun SettingsScreen(
                         expanded = paletteExpanded,
                         onDismissRequest = { paletteExpanded = false }
                     ) {
-                        listOf("Bright", "Pastel", "Sunset").forEach { option ->
+                        listOf("Bright" to S.settings.bright, "Pastel" to S.settings.pastel, "Sunset" to S.settings.sunset).forEach { (value, label) ->
                             DropdownMenuItem(
-                                text = { Text(option) },
+                                text = { Text(label) },
                                 onClick = {
-                                    onChartPaletteChange(option)
+                                    onChartPaletteChange(value)
                                     paletteExpanded = false
                                 }
                             )
@@ -345,11 +354,51 @@ fun SettingsScreen(
                 }
             }
 
+            // Language dropdown
+            item {
+                var languageExpanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = languageExpanded,
+                    onExpandedChange = { languageExpanded = it }
+                ) {
+                    OutlinedTextField(
+                        value = if (appLanguage == "es") "Español" else "English",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text(S.settings.languageLabel) },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = languageExpanded) },
+                        colors = textFieldColors,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = languageExpanded,
+                        onDismissRequest = { languageExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("English") },
+                            onClick = {
+                                onLanguageChange("en")
+                                languageExpanded = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Español") },
+                            onClick = {
+                                onLanguageChange("es")
+                                languageExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
             // Matching Configuration section
             item {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 Text(
-                    text = "Matching Configuration",
+                    text = S.settings.matchingConfiguration,
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onBackground
                 )
@@ -365,7 +414,7 @@ fun SettingsScreen(
                             text.toIntOrNull()?.let { onMatchDaysChange(it) }
                         }
                     },
-                    label = { Text("Match Days (±N)") },
+                    label = { Text(S.settings.matchDays) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     colors = textFieldColors,
@@ -383,7 +432,7 @@ fun SettingsScreen(
                             text.toFloatOrNull()?.let { onMatchPercentChange(it) }
                         }
                     },
-                    label = { Text("Match Percent (±%)") },
+                    label = { Text(S.settings.matchPercent) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     colors = textFieldColors,
@@ -401,7 +450,7 @@ fun SettingsScreen(
                             text.toIntOrNull()?.let { onMatchDollarChange(it) }
                         }
                     },
-                    label = { Text("Match Dollar (±\$)") },
+                    label = { Text(S.settings.matchDollar) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     colors = textFieldColors,
@@ -419,7 +468,7 @@ fun SettingsScreen(
                             text.toIntOrNull()?.let { if (it >= 1) onMatchCharsChange(it) }
                         }
                     },
-                    label = { Text("Match Characters") },
+                    label = { Text(S.settings.matchChars) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     colors = textFieldColors,
@@ -439,7 +488,7 @@ fun SettingsScreen(
                         )
                     )
                     Text(
-                        text = "Paid User",
+                        text = S.settings.paidUser,
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onBackground
                     )
@@ -450,7 +499,7 @@ fun SettingsScreen(
             item {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 Text(
-                    text = "Categories",
+                    text = S.settings.categories,
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onBackground
                 )
@@ -496,7 +545,7 @@ fun SettingsScreen(
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Add Category")
+                    Text(S.settings.addCategory)
                 }
             }
         }
@@ -542,6 +591,7 @@ private fun AddCategoryDialog(
     onSave: (Category) -> Unit,
     existingIds: Set<Int>
 ) {
+    val S = LocalStrings.current
     var name by remember { mutableStateOf("") }
     var selectedIcon by remember { mutableStateOf<String?>(null) }
     val iconEntries = remember { CATEGORY_ICON_MAP.entries.toList() }
@@ -549,7 +599,7 @@ private fun AddCategoryDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Category") },
+        title = { Text(S.settings.addCategory) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -558,11 +608,11 @@ private fun AddCategoryDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Category Name") },
+                    label = { Text(S.settings.categoryName) },
                     singleLine = true,
                     isError = showValidation && name.isBlank(),
                     supportingText = if (showValidation && name.isBlank()) ({
-                        Text("Required, e.g. Groceries", color = Color(0xFFF44336))
+                        Text(S.settings.categoryName, color = Color(0xFFF44336))
                     }) else null,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = MaterialTheme.colorScheme.onBackground,
@@ -576,7 +626,7 @@ private fun AddCategoryDialog(
                 )
 
                 Text(
-                    text = if (showValidation && selectedIcon == null) "Choose Icon: (required)" else "Choose Icon:",
+                    text = if (showValidation && selectedIcon == null) "${S.settings.chooseIcon}: (required)" else "${S.settings.chooseIcon}:",
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (showValidation && selectedIcon == null) Color(0xFFF44336)
                         else MaterialTheme.colorScheme.onBackground
@@ -632,11 +682,11 @@ private fun AddCategoryDialog(
                     }
                 }
             ) {
-                Text("Save")
+                Text(S.common.save)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(S.common.cancel) }
         }
     )
 }
@@ -651,6 +701,7 @@ private fun EditCategoryDialog(
     onDelete: () -> Unit,
     onReassignAndDelete: (toId: Int) -> Unit
 ) {
+    val S = LocalStrings.current
     var name by remember { mutableStateOf(category.name) }
     var selectedIcon by remember { mutableStateOf(category.iconName) }
     var showReassignDialog by remember { mutableStateOf(false) }
@@ -681,7 +732,7 @@ private fun EditCategoryDialog(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Edit Category", modifier = Modifier.weight(1f))
+                Text(S.settings.editCategory, modifier = Modifier.weight(1f))
                 if (category.name != "Other" && category.name != "Recurring" && category.name != "Amortization" && category.name != "Recurring Income") {
                     IconButton(onClick = {
                         if (txnCount > 0) {
@@ -692,7 +743,7 @@ private fun EditCategoryDialog(
                     }) {
                         Icon(
                             imageVector = Icons.Filled.Delete,
-                            contentDescription = "Delete category",
+                            contentDescription = S.common.delete,
                             tint = androidx.compose.ui.graphics.Color(0xFFF44336)
                         )
                     }
@@ -707,7 +758,7 @@ private fun EditCategoryDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Category Name") },
+                    label = { Text(S.settings.categoryName) },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = MaterialTheme.colorScheme.onBackground,
@@ -721,7 +772,7 @@ private fun EditCategoryDialog(
                 )
 
                 Text(
-                    text = "Choose Icon:",
+                    text = "${S.settings.chooseIcon}:",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onBackground
                 )
@@ -770,11 +821,11 @@ private fun EditCategoryDialog(
                     }
                 }
             ) {
-                Text("Save")
+                Text(S.common.save)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(S.common.cancel) }
         }
     )
 }
@@ -787,16 +838,17 @@ private fun ReassignCategoryDialog(
     onDismiss: () -> Unit,
     onReassign: (toId: Int) -> Unit
 ) {
+    val S = LocalStrings.current
     var selectedTargetId by remember { mutableStateOf<Int?>(null) }
     val otherCategories = categories.filter { it.id != deletingCategory.id }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Reassign Transactions") },
+        title = { Text(S.settings.reassignCategoryTitle(deletingCategory.name, txnCount)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = "$txnCount transaction${if (txnCount != 1) "s" else ""} use \"${deletingCategory.name}\". Choose a category to move them to:",
+                    text = S.settings.reassignCategoryBody(deletingCategory.name, txnCount),
                     style = MaterialTheme.typography.bodyMedium
                 )
                 LazyColumn(modifier = Modifier.height(200.dp)) {
@@ -836,11 +888,11 @@ private fun ReassignCategoryDialog(
                 onClick = { selectedTargetId?.let { onReassign(it) } },
                 enabled = selectedTargetId != null
             ) {
-                Text("Move & Delete")
+                Text(S.settings.moveAndDelete)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(S.common.cancel) }
         }
     )
 }

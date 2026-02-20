@@ -36,19 +36,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.syncbudget.app.ui.strings.LocalStrings
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AmortizationHelpScreen(onBack: () -> Unit) {
     val customColors = LocalSyncBudgetColors.current
+    val S = LocalStrings.current
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = "Amortization Help",
+                        text = S.amortizationHelp.title,
                         style = MaterialTheme.typography.titleLarge,
                         color = customColors.headerText
                     )
@@ -57,7 +59,7 @@ fun AmortizationHelpScreen(onBack: () -> Unit) {
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = S.common.back,
                             tint = customColors.headerText
                         )
                     }
@@ -83,13 +85,8 @@ fun AmortizationHelpScreen(onBack: () -> Unit) {
             val headerBg = customColors.headerBackground
 
             // ─── SECTION 1: WHAT IS AMORTIZATION ───
-            HelpSectionTitle("What Is Amortization?")
-            HelpBodyText(
-                "Amortization lets you spread the impact of a large expense across " +
-                "multiple budget periods. Instead of the full cost destroying your budget " +
-                "in a single day/week/month, the cost is divided evenly and deducted " +
-                "from your budget over time."
-            )
+            HelpSectionTitle(S.amortizationHelp.whatTitle)
+            HelpBodyText(S.amortizationHelp.whatBody)
             Spacer(modifier = Modifier.height(10.dp))
 
             // Example box
@@ -103,16 +100,13 @@ fun AmortizationHelpScreen(onBack: () -> Unit) {
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        "Example",
+                        S.amortizationHelp.exampleTitle,
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.titleSmall,
                         color = textColor
                     )
                     Text(
-                        "Your car unexpectedly needs a \$900 repair. On a daily budget of \$40/day, " +
-                        "that would wipe out more than 22 days of budget. Instead, you create an " +
-                        "amortization entry for \$900 over 90 days. Your budget is reduced by only " +
-                        "\$10/day for 90 days, keeping you above water while the cost is absorbed gradually.",
+                        S.amortizationHelp.exampleBody,
                         style = MaterialTheme.typography.bodySmall,
                         color = textColor,
                         lineHeight = 18.sp
@@ -121,19 +115,17 @@ fun AmortizationHelpScreen(onBack: () -> Unit) {
             }
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpSubSectionTitle("Amortization vs. Savings Goals")
-            HelpBodyText(
-                "These two features are complementary:"
-            )
+            HelpSubSectionTitle(S.amortizationHelp.vsGoalsTitle)
+            HelpBodyText(S.amortizationHelp.vsGoalsBody)
             Spacer(modifier = Modifier.height(4.dp))
-            HelpBulletText("Savings Goals \u2014 save BEFORE a planned expense (proactive)")
-            HelpBulletText("Amortization \u2014 spread AFTER an unplanned or past expense (reactive)")
+            HelpBulletText(S.amortizationHelp.goalsBullet)
+            HelpBulletText(S.amortizationHelp.amortBullet)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
             // ─── SECTION 2: HEADER BAR ───
-            HelpSectionTitle("Header Bar")
+            HelpSectionTitle(S.amortizationHelp.headerTitle)
 
             Box(
                 modifier = Modifier
@@ -148,41 +140,37 @@ fun AmortizationHelpScreen(onBack: () -> Unit) {
                 ) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = customColors.headerText, modifier = Modifier.size(22.dp))
                     Spacer(modifier = Modifier.weight(1f))
-                    Text("Amortization", style = MaterialTheme.typography.titleMedium, color = customColors.headerText)
+                    Text(S.dashboard.amortization, style = MaterialTheme.typography.titleMedium, color = customColors.headerText)
                     Spacer(modifier = Modifier.weight(1f))
                     Icon(Icons.AutoMirrored.Filled.Help, contentDescription = null, tint = customColors.headerText, modifier = Modifier.size(22.dp))
                 }
             }
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpIconRow(Icons.AutoMirrored.Filled.ArrowBack, "Back", "Return to the dashboard.")
-            HelpIconRow(Icons.AutoMirrored.Filled.Help, "Help", "Opens this help page.")
+            HelpIconRow(Icons.AutoMirrored.Filled.ArrowBack, S.common.back, S.amortizationHelp.backDesc)
+            HelpIconRow(Icons.AutoMirrored.Filled.Help, S.common.help, S.amortizationHelp.helpDesc)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
             // ─── SECTION 3: ADDING AN ENTRY ───
-            HelpSectionTitle("Adding an Amortization Entry")
-            HelpBodyText(
-                "Tap \"Add Amortization Entry\" and fill in:"
-            )
+            HelpSectionTitle(S.amortizationHelp.addingTitle)
+            HelpBodyText(S.amortizationHelp.addingBody)
             Spacer(modifier = Modifier.height(8.dp))
-            HelpNumberedItem(1, "Source Name", "A descriptive name for the expense (e.g., \"Car Repair\", \"Emergency Room Visit\", \"New Laptop\"). Important: this name is matched against bank transaction merchant names for automatic recognition.")
+            HelpNumberedItem(1, S.amortizationHelp.addStep1, S.amortizationHelp.addStep1Desc)
             Spacer(modifier = Modifier.height(4.dp))
-            HelpNumberedItem(2, "Total Amount", "The full cost of the expense.")
+            HelpNumberedItem(2, S.amortizationHelp.addStep2, S.amortizationHelp.addStep2Desc)
             Spacer(modifier = Modifier.height(4.dp))
-            HelpNumberedItem(3, "Budget Periods", "How many periods to spread the cost over. The label shows your current period type (days, weeks, or months).")
+            HelpNumberedItem(3, S.amortizationHelp.addStep3, S.amortizationHelp.addStep3Desc)
             Spacer(modifier = Modifier.height(4.dp))
-            HelpNumberedItem(4, "Start Date", "When the amortization begins (usually the date of the expense).")
+            HelpNumberedItem(4, S.amortizationHelp.addStep4, S.amortizationHelp.addStep4Desc)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
             // ─── SECTION 4: HOW DEDUCTIONS WORK ───
-            HelpSectionTitle("How Deductions Work")
-            HelpBodyText(
-                "The per-period deduction is straightforward:"
-            )
+            HelpSectionTitle(S.amortizationHelp.deductionsTitle)
+            HelpBodyText(S.amortizationHelp.deductionsBody)
             Spacer(modifier = Modifier.height(8.dp))
 
             Box(
@@ -194,7 +182,7 @@ fun AmortizationHelpScreen(onBack: () -> Unit) {
                     .padding(14.dp)
             ) {
                 Text(
-                    "Deduction = Total Amount \u00f7 Number of Budget Periods",
+                    S.amortizationHelp.deductionFormula,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = textColor,
@@ -203,42 +191,34 @@ fun AmortizationHelpScreen(onBack: () -> Unit) {
             }
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpBodyText(
-                "This deduction is subtracted from your Safe Budget Amount (along with any " +
-                "Savings Goal deductions) to produce your actual Budget Amount. The deduction remains " +
-                "constant for the full amortization period, then stops automatically."
-            )
+            HelpBodyText(S.amortizationHelp.deductionNote)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
             // ─── SECTION 5: ENTRY LIST ───
-            HelpSectionTitle("Entry List")
-            HelpBodyText("Each amortization entry displays:")
+            HelpSectionTitle(S.amortizationHelp.entryListTitle)
+            HelpBodyText(S.amortizationHelp.entryListBody)
             Spacer(modifier = Modifier.height(6.dp))
-            HelpBulletText("Source name")
-            HelpBulletText("Total amount and per-period deduction")
-            HelpBulletText("Progress \u2014 \"X of Y [periods] complete\" or \"Completed\" in green")
+            HelpBulletText(S.amortizationHelp.entrySource)
+            HelpBulletText(S.amortizationHelp.entryTotal)
+            HelpBulletText(S.amortizationHelp.entryProgress)
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpSubSectionTitle("Actions")
-            HelpBodyText("Tap an entry to edit its details (source name, amount, periods, start date).")
+            HelpSubSectionTitle(S.amortizationHelp.actionsTitle)
+            HelpBodyText(S.amortizationHelp.editNote)
             Spacer(modifier = Modifier.height(4.dp))
-            HelpIconRow(Icons.Filled.Delete, "Delete", "Permanently remove the amortization entry.", Color(0xFFF44336))
+            HelpIconRow(Icons.Filled.Delete, S.common.delete, S.amortizationHelp.deleteDesc, Color(0xFFF44336))
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
             // ─── SECTION 6: AUTOMATIC MATCHING ───
-            HelpSectionTitle("Automatic Transaction Matching")
-            HelpBodyText(
-                "When you add a transaction (manually or via bank import), the app checks " +
-                "whether the merchant name and amount match any of your amortization entries. " +
-                "If a match is found, you're shown a confirmation dialog:"
-            )
+            HelpSectionTitle(S.amortizationHelp.matchingTitle)
+            HelpBodyText(S.amortizationHelp.matchingBody)
             Spacer(modifier = Modifier.height(4.dp))
-            HelpBulletText("\"Yes, Amortization\" \u2014 the transaction is tagged as amortized and does NOT reduce your available cash (since the cost is already being deducted from your budget over time)")
-            HelpBulletText("\"No, Regular\" \u2014 the transaction is treated as a normal expense")
+            HelpBulletText(S.amortizationHelp.yesAmortBullet)
+            HelpBulletText(S.amortizationHelp.noRegularBullet)
             Spacer(modifier = Modifier.height(10.dp))
 
             Box(
@@ -251,16 +231,13 @@ fun AmortizationHelpScreen(onBack: () -> Unit) {
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        "Source Name Matching",
+                        S.amortizationHelp.sourceMatchingTitle,
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.titleSmall,
                         color = textColor
                     )
                     Text(
-                        "Use descriptive names for your amortization sources. The matching " +
-                        "algorithm looks for common substrings between the source name and " +
-                        "the transaction merchant name. For example, a source named \"Toyota Service\" " +
-                        "would match a bank transaction from \"TOYOTA SERVICE CENTER\".",
+                        S.amortizationHelp.sourceMatchingBody,
                         style = MaterialTheme.typography.bodySmall,
                         color = textColor,
                         lineHeight = 18.sp
@@ -271,25 +248,20 @@ fun AmortizationHelpScreen(onBack: () -> Unit) {
 
             HelpDividerLine()
 
-            // ─── SECTION 7: MANUAL OVERRIDE WARNING ───
-            HelpSectionTitle("Manual Budget Override")
-            HelpBodyText(
-                "If Manual Budget Override is enabled in Budget Configuration, a red warning " +
-                "banner appears at the top of this screen. When manual override is active, " +
-                "amortization deductions are NOT subtracted from your budget \u2014 you must " +
-                "account for these costs yourself."
-            )
+            // ─── SECTION 7: MANUAL BUDGET OVERRIDE ───
+            HelpSectionTitle(S.amortizationHelp.manualOverrideTitle)
+            HelpBodyText(S.amortizationHelp.manualOverrideBody)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
             // ─── SECTION 8: TIPS ───
-            HelpSectionTitle("Tips")
-            HelpBulletText("Choose a number of periods that results in a comfortable per-period deduction. If \$10/day feels too much, spread over more days.")
-            HelpBulletText("Use amortization for any expense that would otherwise devastate your budget: medical bills, car repairs, appliance replacements, emergency travel.")
-            HelpBulletText("Completed entries (all periods elapsed) can be deleted to keep the list clean.")
-            HelpBulletText("Remember to also record the actual transaction \u2014 amortization only adjusts your budget rate, it doesn't record the expense itself.")
-            HelpBulletText("If you knew about the expense in advance, Savings Goals would have been the better tool. Use Amortization for surprises.")
+            HelpSectionTitle(S.amortizationHelp.tipsTitle)
+            HelpBulletText(S.amortizationHelp.tip1)
+            HelpBulletText(S.amortizationHelp.tip2)
+            HelpBulletText(S.amortizationHelp.tip3)
+            HelpBulletText(S.amortizationHelp.tip4)
+            HelpBulletText(S.amortizationHelp.tip5)
 
             Spacer(modifier = Modifier.height(32.dp))
         }

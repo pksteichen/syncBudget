@@ -49,10 +49,12 @@ import androidx.compose.ui.unit.dp
 import com.syncbudget.app.data.AmortizationEntry
 import com.syncbudget.app.data.BudgetPeriod
 import com.syncbudget.app.data.generateAmortizationEntryId
+import com.syncbudget.app.ui.strings.LocalStrings
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
 private fun calculateElapsedPeriods(
@@ -70,12 +72,6 @@ private fun calculateElapsedPeriods(
     return minOf(elapsed, totalPeriods)
 }
 
-private fun periodLabel(budgetPeriod: BudgetPeriod): String = when (budgetPeriod) {
-    BudgetPeriod.DAILY -> "days"
-    BudgetPeriod.WEEKLY -> "weeks"
-    BudgetPeriod.MONTHLY -> "months"
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AmortizationScreen(
@@ -83,6 +79,7 @@ fun AmortizationScreen(
     currencySymbol: String,
     budgetPeriod: BudgetPeriod,
     isManualBudgetEnabled: Boolean = false,
+    dateFormatPattern: String = "yyyy-MM-dd",
     onAddEntry: (AmortizationEntry) -> Unit,
     onUpdateEntry: (AmortizationEntry) -> Unit,
     onDeleteEntry: (AmortizationEntry) -> Unit,
@@ -90,17 +87,30 @@ fun AmortizationScreen(
     onHelpClick: () -> Unit = {}
 ) {
     val customColors = LocalSyncBudgetColors.current
+    val S = LocalStrings.current
+    val dateFormatter = remember(dateFormatPattern) { DateTimeFormatter.ofPattern(dateFormatPattern) }
 
     var showAddDialog by remember { mutableStateOf(false) }
     var editingEntry by remember { mutableStateOf<AmortizationEntry?>(null) }
     var deletingEntry by remember { mutableStateOf<AmortizationEntry?>(null) }
+
+    val periodLabelPlural = when (budgetPeriod) {
+        BudgetPeriod.DAILY -> S.common.periodDays
+        BudgetPeriod.WEEKLY -> S.common.periodWeeks
+        BudgetPeriod.MONTHLY -> S.common.periodMonths
+    }
+    val periodLabelSingular = when (budgetPeriod) {
+        BudgetPeriod.DAILY -> S.common.periodDay
+        BudgetPeriod.WEEKLY -> S.common.periodWeek
+        BudgetPeriod.MONTHLY -> S.common.periodMonth
+    }
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = "Amortization",
+                        text = S.amortization.title,
                         style = MaterialTheme.typography.titleLarge,
                         color = customColors.headerText
                     )
@@ -109,7 +119,7 @@ fun AmortizationScreen(
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = S.common.back,
                             tint = customColors.headerText
                         )
                     }
@@ -118,7 +128,7 @@ fun AmortizationScreen(
                     IconButton(onClick = onHelpClick) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Help,
-                            contentDescription = "Help",
+                            contentDescription = S.common.help,
                             tint = customColors.headerText
                         )
                     }
@@ -139,18 +149,14 @@ fun AmortizationScreen(
         ) {
             item {
                 Text(
-                    text = "Amortization lets you spread a large one-time expense across multiple budget periods. " +
-                            "Instead of the full amount hitting your budget at once, the cost is divided evenly " +
-                            "across the number of periods you choose. Use descriptive source names \u2014 they will " +
-                            "be matched against bank transaction merchant names to automatically identify " +
-                            "amortized transactions.",
+                    text = S.amortization.description,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
                 if (isManualBudgetEnabled) {
                     Text(
-                        text = "Budget deductions are disabled. Manual budget override is active in Settings > Budget Configuration.",
+                        text = S.amortization.manualOverrideWarning,
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color(0xFFF44336),
                         modifier = Modifier.padding(bottom = 12.dp)
@@ -165,7 +171,7 @@ fun AmortizationScreen(
                         contentDescription = null,
                         modifier = Modifier.padding(end = 8.dp)
                     )
-                    Text("Add Amortization Entry")
+                    Text(S.amortization.addEntry)
                 }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             }
@@ -174,7 +180,6 @@ fun AmortizationScreen(
                 val elapsed = calculateElapsedPeriods(entry.startDate, budgetPeriod, entry.totalPeriods)
                 val isCompleted = elapsed >= entry.totalPeriods
                 val perPeriod = entry.amount / entry.totalPeriods
-                val label = periodLabel(budgetPeriod)
 
                 Row(
                     modifier = Modifier
@@ -190,13 +195,18 @@ fun AmortizationScreen(
                             color = MaterialTheme.colorScheme.onBackground
                         )
                         Text(
-                            text = "$currencySymbol${"%.2f".format(entry.amount)} total \u2022 $currencySymbol${"%.2f".format(perPeriod)}/${label.dropLast(1)}",
+                            text = S.amortization.totalPerPeriod(
+                                currencySymbol,
+                                "%.2f".format(entry.amount),
+                                "%.2f".format(perPeriod),
+                                periodLabelSingular
+                            ),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                         )
                         Text(
-                            text = if (isCompleted) "Completed"
-                                   else "$elapsed of ${entry.totalPeriods} $label complete",
+                            text = if (isCompleted) S.amortization.completed
+                                   else S.amortization.xOfYComplete(elapsed, entry.totalPeriods, periodLabelPlural),
                             style = MaterialTheme.typography.bodySmall,
                             color = if (isCompleted) Color(0xFF4CAF50)
                                     else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
@@ -205,7 +215,7 @@ fun AmortizationScreen(
                     IconButton(onClick = { deletingEntry = entry }) {
                         Icon(
                             imageVector = Icons.Filled.Delete,
-                            contentDescription = "Delete",
+                            contentDescription = S.common.delete,
                             tint = Color(0xFFF44336)
                         )
                     }
@@ -216,12 +226,13 @@ fun AmortizationScreen(
 
     if (showAddDialog) {
         AddEditAmortizationDialog(
-            title = "Add Amortization Entry",
+            title = S.amortization.addEntry,
             initialSource = "",
             initialAmount = "",
             initialTotalPeriods = "",
             initialStartDate = null,
             budgetPeriod = budgetPeriod,
+            dateFormatter = dateFormatter,
             onDismiss = { showAddDialog = false },
             onSave = { source, amount, totalPeriods, startDate ->
                 val id = generateAmortizationEntryId(amortizationEntries.map { it.id }.toSet())
@@ -233,12 +244,13 @@ fun AmortizationScreen(
 
     editingEntry?.let { entry ->
         AddEditAmortizationDialog(
-            title = "Edit Amortization Entry",
+            title = S.amortization.editEntry,
             initialSource = entry.source,
             initialAmount = "%.2f".format(entry.amount),
             initialTotalPeriods = entry.totalPeriods.toString(),
             initialStartDate = entry.startDate,
             budgetPeriod = budgetPeriod,
+            dateFormatter = dateFormatter,
             onDismiss = { editingEntry = null },
             onSave = { source, amount, totalPeriods, startDate ->
                 onUpdateEntry(entry.copy(source = source, amount = amount, totalPeriods = totalPeriods, startDate = startDate))
@@ -250,18 +262,18 @@ fun AmortizationScreen(
     deletingEntry?.let { entry ->
         AlertDialog(
             onDismissRequest = { deletingEntry = null },
-            title = { Text("Delete Entry?") },
-            text = { Text("Delete \"${entry.source}\"?") },
+            title = { Text(S.amortization.deleteEntryTitle) },
+            text = { Text(S.amortization.deleteEntryConfirm(entry.source)) },
             confirmButton = {
                 TextButton(onClick = {
                     onDeleteEntry(entry)
                     deletingEntry = null
                 }) {
-                    Text("Delete", color = Color(0xFFF44336))
+                    Text(S.common.delete, color = Color(0xFFF44336))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { deletingEntry = null }) { Text("Cancel") }
+                TextButton(onClick = { deletingEntry = null }) { Text(S.common.cancel) }
             }
         )
     }
@@ -276,9 +288,12 @@ private fun AddEditAmortizationDialog(
     initialTotalPeriods: String,
     initialStartDate: LocalDate?,
     budgetPeriod: BudgetPeriod,
+    dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd"),
     onDismiss: () -> Unit,
     onSave: (String, Double, Int, LocalDate) -> Unit
 ) {
+    val S = LocalStrings.current
+
     var source by remember { mutableStateOf(initialSource) }
     var amountText by remember { mutableStateOf(initialAmount) }
     var periodsText by remember { mutableStateOf(initialTotalPeriods) }
@@ -293,6 +308,12 @@ private fun AddEditAmortizationDialog(
     val isPeriodsValid = periods != null && periods > 0
     val isDateValid = startDate != null
     val isValid = isSourceValid && isAmountValid && isPeriodsValid && isDateValid
+
+    val periodLabelPlural = when (budgetPeriod) {
+        BudgetPeriod.DAILY -> S.common.periodDays
+        BudgetPeriod.WEEKLY -> S.common.periodWeeks
+        BudgetPeriod.MONTHLY -> S.common.periodMonths
+    }
 
     val textFieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = MaterialTheme.colorScheme.onBackground,
@@ -314,11 +335,11 @@ private fun AddEditAmortizationDialog(
                 OutlinedTextField(
                     value = source,
                     onValueChange = { source = it },
-                    label = { Text("Source Name") },
+                    label = { Text(S.amortization.sourceName) },
                     singleLine = true,
                     isError = showValidation && !isSourceValid,
                     supportingText = if (showValidation && !isSourceValid) ({
-                        Text("Required, e.g. New Laptop", color = Color(0xFFF44336))
+                        Text(S.amortization.requiredLaptopExample, color = Color(0xFFF44336))
                     }) else null,
                     colors = textFieldColors,
                     modifier = Modifier.fillMaxWidth()
@@ -330,11 +351,11 @@ private fun AddEditAmortizationDialog(
                             amountText = newVal
                         }
                     },
-                    label = { Text("Total Amount") },
+                    label = { Text(S.amortization.totalAmount) },
                     singleLine = true,
                     isError = showValidation && !isAmountValid,
                     supportingText = if (showValidation && !isAmountValid) ({
-                        Text("e.g. 1200.00", color = Color(0xFFF44336))
+                        Text(S.amortization.exampleTotalAmount, color = Color(0xFFF44336))
                     }) else null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     colors = textFieldColors,
@@ -347,11 +368,11 @@ private fun AddEditAmortizationDialog(
                             periodsText = newVal
                         }
                     },
-                    label = { Text("Budget Periods (${periodLabel(budgetPeriod)})") },
+                    label = { Text(S.amortization.budgetPeriods(periodLabelPlural)) },
                     singleLine = true,
                     isError = showValidation && !isPeriodsValid,
                     supportingText = if (showValidation && !isPeriodsValid) ({
-                        Text("e.g. 12", color = Color(0xFFF44336))
+                        Text(S.amortization.examplePeriods, color = Color(0xFFF44336))
                     }) else null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     colors = textFieldColors,
@@ -362,13 +383,13 @@ private fun AddEditAmortizationDialog(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        if (startDate != null) "Start Date: ${startDate}"
-                        else "Select Start Date"
+                        if (startDate != null) S.amortization.startDateLabel(startDate!!.format(dateFormatter))
+                        else S.amortization.selectStartDate
                     )
                 }
                 if (showValidation && !isDateValid) {
                     Text(
-                        text = "Select a start date",
+                        text = S.amortization.selectAStartDate,
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFFF44336)
                     )
@@ -385,11 +406,11 @@ private fun AddEditAmortizationDialog(
                     }
                 }
             ) {
-                Text("Save")
+                Text(S.common.save)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(S.common.cancel) }
         }
     )
 
@@ -405,10 +426,10 @@ private fun AddEditAmortizationDialog(
                         startDate = Instant.ofEpochMilli(millis).atZone(ZoneId.of("UTC")).toLocalDate()
                     }
                     showDatePicker = false
-                }) { Text("OK") }
+                }) { Text(S.common.ok) }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+                TextButton(onClick = { showDatePicker = false }) { Text(S.common.cancel) }
             }
         ) {
             DatePicker(state = datePickerState)

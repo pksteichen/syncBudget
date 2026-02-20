@@ -62,27 +62,15 @@ import com.syncbudget.app.data.BudgetPeriod
 import com.syncbudget.app.data.IncomeSource
 import com.syncbudget.app.data.RepeatType
 import com.syncbudget.app.data.generateIncomeSourceId
+import com.syncbudget.app.ui.strings.LocalStrings
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
-
-private val REPEAT_TYPE_LABELS = mapOf(
-    RepeatType.DAYS to "Every X Days",
-    RepeatType.WEEKS to "Every X Weeks",
-    RepeatType.BI_WEEKLY to "Every 2 Weeks",
-    RepeatType.MONTHS to "Every X Months",
-    RepeatType.BI_MONTHLY to "Twice per Month"
-)
-
-private val BUDGET_PERIOD_LABELS = mapOf(
-    BudgetPeriod.DAILY to "Daily",
-    BudgetPeriod.WEEKLY to "Weekly",
-    BudgetPeriod.MONTHLY to "Monthly"
-)
 
 private val HOUR_LABELS = (0..23).map { hour ->
     when {
@@ -122,10 +110,13 @@ fun BudgetConfigScreen(
     onRecalculate: () -> Unit = {},
     onResetBudget: () -> Unit = {},
     budgetStartDate: String? = null,
+    dateFormatPattern: String = "yyyy-MM-dd",
     onBack: () -> Unit,
     onHelpClick: () -> Unit = {}
 ) {
     val customColors = LocalSyncBudgetColors.current
+    val S = LocalStrings.current
+    val dateFormatter = remember(dateFormatPattern) { DateTimeFormatter.ofPattern(dateFormatPattern) }
     var showAddDialog by remember { mutableStateOf(false) }
     var editingSource by remember { mutableStateOf<IncomeSource?>(null) }
     var deletingSource by remember { mutableStateOf<IncomeSource?>(null) }
@@ -147,7 +138,7 @@ fun BudgetConfigScreen(
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = "Budget Configuration",
+                        text = S.budgetConfig.title,
                         style = MaterialTheme.typography.titleLarge,
                         color = customColors.headerText
                     )
@@ -156,7 +147,7 @@ fun BudgetConfigScreen(
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = S.common.back,
                             tint = customColors.headerText
                         )
                     }
@@ -165,7 +156,7 @@ fun BudgetConfigScreen(
                     IconButton(onClick = onHelpClick) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Help,
-                            contentDescription = "Help",
+                            contentDescription = S.common.help,
                             tint = customColors.headerText
                         )
                     }
@@ -195,10 +186,14 @@ fun BudgetConfigScreen(
                         modifier = Modifier.weight(1f)
                     ) {
                         OutlinedTextField(
-                            value = BUDGET_PERIOD_LABELS[budgetPeriod] ?: "",
+                            value = when (budgetPeriod) {
+                                BudgetPeriod.DAILY -> S.common.budgetPeriodDaily
+                                BudgetPeriod.WEEKLY -> S.common.budgetPeriodWeekly
+                                BudgetPeriod.MONTHLY -> S.common.budgetPeriodMonthly
+                            },
                             onValueChange = {},
                             readOnly = true,
-                            label = { Text("Budget Period") },
+                            label = { Text(S.budgetConfig.budgetPeriod) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = periodExpanded) },
                             colors = textFieldColors,
                             modifier = Modifier
@@ -211,7 +206,13 @@ fun BudgetConfigScreen(
                         ) {
                             BudgetPeriod.entries.forEach { period ->
                                 DropdownMenuItem(
-                                    text = { Text(BUDGET_PERIOD_LABELS[period] ?: period.name) },
+                                    text = {
+                                        Text(when (period) {
+                                            BudgetPeriod.DAILY -> S.common.budgetPeriodDaily
+                                            BudgetPeriod.WEEKLY -> S.common.budgetPeriodWeekly
+                                            BudgetPeriod.MONTHLY -> S.common.budgetPeriodMonthly
+                                        })
+                                    },
                                     onClick = {
                                         onBudgetPeriodChange(period)
                                         periodExpanded = false
@@ -222,7 +223,7 @@ fun BudgetConfigScreen(
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     OutlinedButton(onClick = { showResetDialog = true }) {
-                        Text("Reset")
+                        Text(S.common.reset)
                     }
                 }
                 Spacer(modifier = Modifier.height(12.dp))
@@ -230,19 +231,19 @@ fun BudgetConfigScreen(
 
             item {
                 val periodLabel = when (budgetPeriod) {
-                    BudgetPeriod.DAILY -> "day"
-                    BudgetPeriod.WEEKLY -> "week"
-                    BudgetPeriod.MONTHLY -> "month"
+                    BudgetPeriod.DAILY -> S.common.periodDay
+                    BudgetPeriod.WEEKLY -> S.common.periodWeek
+                    BudgetPeriod.MONTHLY -> S.common.periodMonth
                 }
 
                 Text(
-                    text = "Safe Budget Amount: $currencySymbol${"%.2f".format(safeBudgetAmount)}/$periodLabel",
+                    text = S.budgetConfig.safeBudgetAmountLabel(currencySymbol, "%.2f".format(safeBudgetAmount), periodLabel),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 if (budgetStartDate != null) {
                     Text(
-                        text = "Budget tracking since: $budgetStartDate",
+                        text = S.budgetConfig.budgetTrackingSince(budgetStartDate),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                     )
@@ -256,13 +257,13 @@ fun BudgetConfigScreen(
                         onClick = onRecalculate,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Recalculate")
+                        Text(S.budgetConfig.recalculate)
                     }
                     OutlinedButton(
                         onClick = { showResetBudgetConfirm = true },
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Reset Budget")
+                        Text(S.budgetConfig.resetBudget)
                     }
                 }
                 Spacer(modifier = Modifier.height(12.dp))
@@ -276,7 +277,7 @@ fun BudgetConfigScreen(
                         onCheckedChange = onManualBudgetToggle
                     )
                     Text(
-                        text = "Manual Budget Override",
+                        text = S.budgetConfig.manualBudgetOverride,
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onBackground
                     )
@@ -292,7 +293,7 @@ fun BudgetConfigScreen(
                             manualAmountText = text
                             text.toDoubleOrNull()?.let { onManualBudgetAmountChange(it) }
                         },
-                        label = { Text("Budget Amount per $periodLabel") },
+                        label = { Text(S.budgetConfig.budgetAmountPer(periodLabel)) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         colors = textFieldColors,
@@ -300,7 +301,7 @@ fun BudgetConfigScreen(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Manual override disables Amortization and Savings Goal deductions.",
+                        text = S.budgetConfig.manualOverrideWarning,
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFFFF9800)
                     )
@@ -310,7 +311,7 @@ fun BudgetConfigScreen(
 
             item {
                 Text(
-                    text = "Add sources of consistent income that you can rely on for budgeting. If your pay varies (large check, small check), you can make more than one entry for a source.",
+                    text = S.budgetConfig.incomeSourceDescription,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                 )
@@ -324,7 +325,7 @@ fun BudgetConfigScreen(
                         contentDescription = null,
                         modifier = Modifier.padding(end = 8.dp)
                     )
-                    Text("Add Income Source")
+                    Text(S.budgetConfig.addIncomeSource)
                 }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             }
@@ -352,7 +353,7 @@ fun BudgetConfigScreen(
                     IconButton(onClick = { deletingSource = source }) {
                         Icon(
                             imageVector = Icons.Filled.Delete,
-                            contentDescription = "Delete",
+                            contentDescription = S.common.delete,
                             tint = Color(0xFFF44336)
                         )
                     }
@@ -364,6 +365,7 @@ fun BudgetConfigScreen(
     if (showAddDialog) {
         AddEditIncomeDialog(
             existingSource = null,
+            dateFormatter = dateFormatter,
             onDismiss = { showAddDialog = false },
             onSave = { incomeSource ->
                 val id = generateIncomeSourceId(incomeSources.map { it.id }.toSet())
@@ -376,6 +378,7 @@ fun BudgetConfigScreen(
     editingSource?.let { source ->
         AddEditIncomeDialog(
             existingSource = source,
+            dateFormatter = dateFormatter,
             onDismiss = { editingSource = null },
             onSave = { updated ->
                 onUpdateIncomeSource(updated)
@@ -387,18 +390,18 @@ fun BudgetConfigScreen(
     deletingSource?.let { source ->
         AlertDialog(
             onDismissRequest = { deletingSource = null },
-            title = { Text("Delete ${source.source}?") },
-            text = { Text("This income source will be permanently removed.") },
+            title = { Text(S.budgetConfig.deleteSourceConfirmTitle(source.source)) },
+            text = { Text(S.budgetConfig.deleteSourceConfirmBody) },
             confirmButton = {
                 TextButton(onClick = {
                     onDeleteIncomeSource(source)
                     deletingSource = null
                 }) {
-                    Text("Delete", color = Color(0xFFF44336))
+                    Text(S.common.delete, color = Color(0xFFF44336))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { deletingSource = null }) { Text("Cancel") }
+                TextButton(onClick = { deletingSource = null }) { Text(S.common.cancel) }
             }
         )
     }
@@ -422,20 +425,20 @@ fun BudgetConfigScreen(
     if (showResetBudgetConfirm) {
         AlertDialog(
             onDismissRequest = { showResetBudgetConfirm = false },
-            title = { Text("Reset Budget?") },
+            title = { Text(S.budgetConfig.resetBudgetConfirmTitle) },
             text = {
-                Text("This will recalculate your safe budget amount, reset the budget start date to today, and set available cash to one period's budget amount. Your transactions will not be affected.")
+                Text(S.budgetConfig.resetBudgetConfirmBody)
             },
             confirmButton = {
                 TextButton(onClick = {
                     onResetBudget()
                     showResetBudgetConfirm = false
                 }) {
-                    Text("Reset", color = Color(0xFFF44336))
+                    Text(S.common.reset, color = Color(0xFFF44336))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showResetBudgetConfirm = false }) { Text("Cancel") }
+                TextButton(onClick = { showResetBudgetConfirm = false }) { Text(S.common.cancel) }
             }
         )
     }
@@ -445,11 +448,13 @@ fun BudgetConfigScreen(
 @Composable
 private fun AddEditIncomeDialog(
     existingSource: IncomeSource?,
+    dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd"),
     onDismiss: () -> Unit,
     onSave: (IncomeSource) -> Unit
 ) {
+    val S = LocalStrings.current
     val isEdit = existingSource != null
-    val title = if (isEdit) "Edit Income Source" else "Add Income Source"
+    val title = if (isEdit) S.budgetConfig.editIncomeSource else S.budgetConfig.addIncomeSource
 
     var sourceName by remember { mutableStateOf(existingSource?.source ?: "") }
     var amountText by remember {
@@ -522,11 +527,11 @@ private fun AddEditIncomeDialog(
                     OutlinedTextField(
                         value = sourceName,
                         onValueChange = { sourceName = it },
-                        label = { Text("Source Name") },
+                        label = { Text(S.common.sourceName) },
                         singleLine = true,
                         isError = showValidation && !isSourceValid,
                         supportingText = if (showValidation && !isSourceValid) ({
-                            Text("Required, e.g. Paycheck", color = Color(0xFFF44336))
+                            Text(S.budgetConfig.requiredPaycheckExample, color = Color(0xFFF44336))
                         }) else null,
                         colors = textFieldColors,
                         modifier = Modifier.fillMaxWidth()
@@ -534,11 +539,11 @@ private fun AddEditIncomeDialog(
                     OutlinedTextField(
                         value = amountText,
                         onValueChange = { amountText = it },
-                        label = { Text("Amount") },
+                        label = { Text(S.common.amount) },
                         singleLine = true,
                         isError = showValidation && !isAmountValid,
                         supportingText = if (showValidation && !isAmountValid) ({
-                            Text("e.g. 2500.00", color = Color(0xFFF44336))
+                            Text(S.budgetConfig.exampleIncomeAmount, color = Color(0xFFF44336))
                         }) else null,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         colors = textFieldColors,
@@ -552,10 +557,16 @@ private fun AddEditIncomeDialog(
                         onExpandedChange = { typeExpanded = it }
                     ) {
                         OutlinedTextField(
-                            value = REPEAT_TYPE_LABELS[repeatType] ?: "",
+                            value = when (repeatType) {
+                                RepeatType.DAYS -> S.common.repeatTypeDays
+                                RepeatType.WEEKS -> S.common.repeatTypeWeeks
+                                RepeatType.BI_WEEKLY -> S.common.repeatTypeBiWeekly
+                                RepeatType.MONTHS -> S.common.repeatTypeMonths
+                                RepeatType.BI_MONTHLY -> S.common.repeatTypeBiMonthly
+                            },
                             onValueChange = {},
                             readOnly = true,
-                            label = { Text("Repeat Type") },
+                            label = { Text(S.common.repeatType) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeExpanded) },
                             colors = textFieldColors,
                             modifier = Modifier
@@ -568,7 +579,15 @@ private fun AddEditIncomeDialog(
                         ) {
                             RepeatType.entries.forEach { type ->
                                 DropdownMenuItem(
-                                    text = { Text(REPEAT_TYPE_LABELS[type] ?: type.name) },
+                                    text = {
+                                        Text(when (type) {
+                                            RepeatType.DAYS -> S.common.repeatTypeDays
+                                            RepeatType.WEEKS -> S.common.repeatTypeWeeks
+                                            RepeatType.BI_WEEKLY -> S.common.repeatTypeBiWeekly
+                                            RepeatType.MONTHS -> S.common.repeatTypeMonths
+                                            RepeatType.BI_MONTHLY -> S.common.repeatTypeBiMonthly
+                                        })
+                                    },
                                     onClick = {
                                         repeatType = type
                                         typeExpanded = false
@@ -590,11 +609,11 @@ private fun AddEditIncomeDialog(
                             OutlinedTextField(
                                 value = intervalText,
                                 onValueChange = { intervalText = it },
-                                label = { Text("Every X Days (1-60)") },
+                                label = { Text(S.common.everyXDays) },
                                 singleLine = true,
                                 isError = showValidation && (interval == null || interval !in 1..60),
                                 supportingText = if (showValidation && (interval == null || interval !in 1..60)) ({
-                                    Text("e.g. 14", color = Color(0xFFF44336))
+                                    Text(S.common.exampleDays, color = Color(0xFFF44336))
                                 }) else null,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 colors = textFieldColors,
@@ -609,22 +628,22 @@ private fun AddEditIncomeDialog(
                                     onClick = { showDatePicker = true },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text(if (startDate != null) "Start Date: $startDate" else "Pick Start Date")
+                                    Text(if (startDate != null) S.common.startDateLabel(startDate!!.format(dateFormatter)) else S.common.pickStartDate)
                                 }
                             }
                             if (showValidation && startDate == null) {
-                                Text("Select a start date", style = MaterialTheme.typography.bodySmall, color = Color(0xFFF44336))
+                                Text(S.common.selectAStartDate, style = MaterialTheme.typography.bodySmall, color = Color(0xFFF44336))
                             }
                         }
                         RepeatType.WEEKS -> {
                             OutlinedTextField(
                                 value = intervalText,
                                 onValueChange = { intervalText = it },
-                                label = { Text("Interval (1-18)") },
+                                label = { Text(S.common.intervalWeeks) },
                                 singleLine = true,
                                 isError = showValidation && (interval == null || interval !in 1..18),
                                 supportingText = if (showValidation && (interval == null || interval !in 1..18)) ({
-                                    Text("e.g. 2", color = Color(0xFFF44336))
+                                    Text(S.common.exampleWeeks, color = Color(0xFFF44336))
                                 }) else null,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 colors = textFieldColors,
@@ -639,16 +658,16 @@ private fun AddEditIncomeDialog(
                                     onClick = { showDatePicker = true },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text(if (startDate != null) "Start Date: $startDate" else "Pick Start Date")
+                                    Text(if (startDate != null) S.common.startDateLabel(startDate!!.format(dateFormatter)) else S.common.pickStartDate)
                                 }
                             }
                             if (showValidation && startDate == null) {
-                                Text("Select a start date", style = MaterialTheme.typography.bodySmall, color = Color(0xFFF44336))
+                                Text(S.common.selectAStartDate, style = MaterialTheme.typography.bodySmall, color = Color(0xFFF44336))
                             }
                             if (startDate != null) {
                                 val dayName = startDate!!.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
                                 Text(
-                                    text = "Day of week: $dayName",
+                                    text = S.common.dayOfWeekLabel(dayName),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                                 )
@@ -664,16 +683,16 @@ private fun AddEditIncomeDialog(
                                     onClick = { showDatePicker = true },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text(if (startDate != null) "Start Date: $startDate" else "Pick Start Date")
+                                    Text(if (startDate != null) S.common.startDateLabel(startDate!!.format(dateFormatter)) else S.common.pickStartDate)
                                 }
                             }
                             if (showValidation && startDate == null) {
-                                Text("Select a start date", style = MaterialTheme.typography.bodySmall, color = Color(0xFFF44336))
+                                Text(S.common.selectAStartDate, style = MaterialTheme.typography.bodySmall, color = Color(0xFFF44336))
                             }
                             if (startDate != null) {
                                 val dayName = startDate!!.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
                                 Text(
-                                    text = "Day of week: $dayName",
+                                    text = S.common.dayOfWeekLabel(dayName),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                                 )
@@ -683,11 +702,11 @@ private fun AddEditIncomeDialog(
                             OutlinedTextField(
                                 value = intervalText,
                                 onValueChange = { intervalText = it },
-                                label = { Text("Every X Months (1-3)") },
+                                label = { Text(S.common.everyXMonths) },
                                 singleLine = true,
                                 isError = showValidation && (interval == null || interval !in 1..3),
                                 supportingText = if (showValidation && (interval == null || interval !in 1..3)) ({
-                                    Text("e.g. 1", color = Color(0xFFF44336))
+                                    Text(S.common.exampleMonths, color = Color(0xFFF44336))
                                 }) else null,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 colors = textFieldColors,
@@ -696,11 +715,11 @@ private fun AddEditIncomeDialog(
                             OutlinedTextField(
                                 value = monthDay1Text,
                                 onValueChange = { monthDay1Text = it },
-                                label = { Text("Day of Month (1-28)") },
+                                label = { Text(S.common.dayOfMonth) },
                                 singleLine = true,
                                 isError = showValidation && (monthDay1 == null || monthDay1 !in 1..28),
                                 supportingText = if (showValidation && (monthDay1 == null || monthDay1 !in 1..28)) ({
-                                    Text("e.g. 15", color = Color(0xFFF44336))
+                                    Text(S.common.exampleMonthDay, color = Color(0xFFF44336))
                                 }) else null,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 colors = textFieldColors,
@@ -711,11 +730,11 @@ private fun AddEditIncomeDialog(
                             OutlinedTextField(
                                 value = monthDay1Text,
                                 onValueChange = { monthDay1Text = it },
-                                label = { Text("First Day of Month (1-28)") },
+                                label = { Text(S.common.firstDayOfMonth) },
                                 singleLine = true,
                                 isError = showValidation && (monthDay1 == null || monthDay1 !in 1..28),
                                 supportingText = if (showValidation && (monthDay1 == null || monthDay1 !in 1..28)) ({
-                                    Text("e.g. 1", color = Color(0xFFF44336))
+                                    Text(S.common.exampleBiMonthlyDay1, color = Color(0xFFF44336))
                                 }) else null,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 colors = textFieldColors,
@@ -724,11 +743,11 @@ private fun AddEditIncomeDialog(
                             OutlinedTextField(
                                 value = monthDay2Text,
                                 onValueChange = { monthDay2Text = it },
-                                label = { Text("Second Day of Month (1-28)") },
+                                label = { Text(S.common.secondDayOfMonth) },
                                 singleLine = true,
                                 isError = showValidation && (monthDay2 == null || monthDay2 !in 1..28),
                                 supportingText = if (showValidation && (monthDay2 == null || monthDay2 !in 1..28)) ({
-                                    Text("e.g. 15", color = Color(0xFFF44336))
+                                    Text(S.common.exampleBiMonthlyDay2, color = Color(0xFFF44336))
                                 }) else null,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 colors = textFieldColors,
@@ -744,7 +763,7 @@ private fun AddEditIncomeDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    TextButton(onClick = onDismiss) { Text(S.common.cancel) }
                     TextButton(
                         onClick = {
                             if (isValid) {
@@ -806,7 +825,7 @@ private fun AddEditIncomeDialog(
                             }
                         }
                     ) {
-                        Text("Save")
+                        Text(S.common.save)
                     }
                 }
             }
@@ -828,12 +847,12 @@ private fun AddEditIncomeDialog(
                     }
                     showDatePicker = false
                 }) {
-                    Text("OK")
+                    Text(S.common.ok)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDatePicker = false }) {
-                    Text("Cancel")
+                    Text(S.common.cancel)
                 }
             }
         ) {
@@ -852,6 +871,7 @@ private fun BudgetResetDialog(
     onDismiss: () -> Unit,
     onSave: (hour: Int, dayOfWeek: Int, dayOfMonth: Int) -> Unit
 ) {
+    val S = LocalStrings.current
     var selectedHour by remember { mutableIntStateOf(resetHour) }
     var selectedDayOfWeek by remember { mutableIntStateOf(resetDayOfWeek) }
     var dayOfMonthText by remember { mutableStateOf(resetDayOfMonth.toString()) }
@@ -879,7 +899,7 @@ private fun BudgetResetDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Budget Reset Settings") },
+        title = { Text(S.budgetConfig.resetSettingsTitle) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -894,7 +914,7 @@ private fun BudgetResetDialog(
                             value = selectedDayOfWeekName,
                             onValueChange = {},
                             readOnly = true,
-                            label = { Text("Day of Week") },
+                            label = { Text(S.budgetConfig.dayOfWeekLabel) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dayOfWeekExpanded) },
                             colors = textFieldColors,
                             modifier = Modifier
@@ -922,7 +942,7 @@ private fun BudgetResetDialog(
                     OutlinedTextField(
                         value = dayOfMonthText,
                         onValueChange = { dayOfMonthText = it },
-                        label = { Text("Day of Month (1-28)") },
+                        label = { Text(S.budgetConfig.dayOfMonthReset) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         colors = textFieldColors,
@@ -938,7 +958,7 @@ private fun BudgetResetDialog(
                         value = HOUR_LABELS[selectedHour],
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Reset Hour") },
+                        label = { Text(S.budgetConfig.resetHour) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = hourExpanded) },
                         colors = textFieldColors,
                         modifier = Modifier
@@ -971,11 +991,11 @@ private fun BudgetResetDialog(
                 },
                 enabled = isValid
             ) {
-                Text("Save")
+                Text(S.common.save)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(S.common.cancel) }
         }
     )
 }

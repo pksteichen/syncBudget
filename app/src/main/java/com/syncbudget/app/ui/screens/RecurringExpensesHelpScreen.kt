@@ -37,19 +37,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.syncbudget.app.ui.strings.LocalStrings
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecurringExpensesHelpScreen(onBack: () -> Unit) {
     val customColors = LocalSyncBudgetColors.current
+    val S = LocalStrings.current
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = "Recurring Expenses Help",
+                        text = S.recurringExpensesHelp.title,
                         style = MaterialTheme.typography.titleLarge,
                         color = customColors.headerText
                     )
@@ -58,7 +60,7 @@ fun RecurringExpensesHelpScreen(onBack: () -> Unit) {
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = S.common.back,
                             tint = customColors.headerText
                         )
                     }
@@ -84,14 +86,8 @@ fun RecurringExpensesHelpScreen(onBack: () -> Unit) {
             val headerBg = customColors.headerBackground
 
             // ─── SECTION 1: OVERVIEW ───
-            HelpSectionTitle("What Are Recurring Expenses?")
-            HelpBodyText(
-                "Recurring expenses are bills and payments that repeat on a regular schedule: " +
-                "rent, mortgage, utilities, insurance, subscriptions, loan payments, and similar " +
-                "obligations. By registering them here, the budget calculator accounts for these " +
-                "costs automatically, so your daily/weekly/monthly budget reflects only what's " +
-                "truly available for discretionary spending."
-            )
+            HelpSectionTitle(S.recurringExpensesHelp.whatTitle)
+            HelpBodyText(S.recurringExpensesHelp.whatBody)
             Spacer(modifier = Modifier.height(10.dp))
 
             // Key concept box
@@ -105,16 +101,13 @@ fun RecurringExpensesHelpScreen(onBack: () -> Unit) {
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        "Why This Matters",
+                        S.recurringExpensesHelp.whyTitle,
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.titleSmall,
                         color = textColor
                     )
                     Text(
-                        "Without recurring expenses in the budget calculator, your budget amount " +
-                        "would be based on income alone. You'd see a high daily budget, spend freely, " +
-                        "and then scramble when rent is due. Registering expenses ensures the budget " +
-                        "reserves enough for bills, even in months where several bills cluster together.",
+                        S.recurringExpensesHelp.whyBody,
                         style = MaterialTheme.typography.bodySmall,
                         color = textColor,
                         lineHeight = 18.sp
@@ -126,7 +119,7 @@ fun RecurringExpensesHelpScreen(onBack: () -> Unit) {
             HelpDividerLine()
 
             // ─── SECTION 2: HEADER BAR ───
-            HelpSectionTitle("Header Bar")
+            HelpSectionTitle(S.recurringExpensesHelp.headerTitle)
 
             Box(
                 modifier = Modifier
@@ -141,79 +134,57 @@ fun RecurringExpensesHelpScreen(onBack: () -> Unit) {
                 ) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = customColors.headerText, modifier = Modifier.size(22.dp))
                     Spacer(modifier = Modifier.weight(1f))
-                    Text("Recurring Expenses", style = MaterialTheme.typography.titleMedium, color = customColors.headerText)
+                    Text(S.dashboard.recurringExpenses, style = MaterialTheme.typography.titleMedium, color = customColors.headerText)
                     Spacer(modifier = Modifier.weight(1f))
                     Icon(Icons.AutoMirrored.Filled.Help, contentDescription = null, tint = customColors.headerText, modifier = Modifier.size(22.dp))
                 }
             }
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpIconRow(Icons.AutoMirrored.Filled.ArrowBack, "Back", "Return to the dashboard.")
-            HelpIconRow(Icons.AutoMirrored.Filled.Help, "Help", "Opens this help page.")
+            HelpIconRow(Icons.AutoMirrored.Filled.ArrowBack, S.common.back, S.recurringExpensesHelp.backDesc)
+            HelpIconRow(Icons.AutoMirrored.Filled.Help, S.common.help, S.recurringExpensesHelp.helpDesc)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
             // ─── SECTION 3: ADDING AN EXPENSE ───
-            HelpSectionTitle("Adding a Recurring Expense")
-            HelpBodyText(
-                "Tap \"Add Recurring Expense\" and fill in:"
-            )
+            HelpSectionTitle(S.recurringExpensesHelp.addingTitle)
+            HelpBodyText(S.recurringExpensesHelp.addingBody)
             Spacer(modifier = Modifier.height(8.dp))
-            HelpNumberedItem(1, "Source Name", "A descriptive name for the expense (e.g., \"Rent\", \"Netflix\", \"Car Insurance\"). Important: this name is matched against bank transaction merchant names for automatic recognition.")
+            HelpNumberedItem(1, S.recurringExpensesHelp.addStep1, S.recurringExpensesHelp.addStep1Desc)
             Spacer(modifier = Modifier.height(4.dp))
-            HelpNumberedItem(2, "Amount", "The amount per occurrence.")
+            HelpNumberedItem(2, S.recurringExpensesHelp.addStep2, S.recurringExpensesHelp.addStep2Desc)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
             // ─── SECTION 4: REPEAT SETTINGS ───
-            HelpSectionTitle("Repeat Settings")
-            HelpBodyText(
-                "Every recurring expense needs a repeat schedule so the budget calculator " +
-                "knows when to expect the charge. Tap the sync icon on any expense to configure:"
-            )
+            HelpSectionTitle(S.recurringExpensesHelp.repeatTitle)
+            HelpBodyText(S.recurringExpensesHelp.repeatBody)
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpSubSectionTitle("Every X Days")
-            HelpBodyText(
-                "The expense occurs every N days (1\u201360). Requires a Start Date. " +
-                "Useful for irregular-interval expenses like medication refills."
-            )
+            HelpSubSectionTitle(S.recurringExpensesHelp.everyXDaysTitle)
+            HelpBodyText(S.recurringExpensesHelp.everyXDaysBody)
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpSubSectionTitle("Every X Weeks")
-            HelpBodyText(
-                "The expense occurs every N weeks (1\u201318). Requires a Start Date. " +
-                "The day of the week is determined by the start date."
-            )
+            HelpSubSectionTitle(S.recurringExpensesHelp.everyXWeeksTitle)
+            HelpBodyText(S.recurringExpensesHelp.everyXWeeksBody)
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpSubSectionTitle("Every 2 Weeks (Bi-Weekly)")
-            HelpBodyText(
-                "Occurs every 14 days from the start date. Useful for bi-weekly " +
-                "recurring charges. Results in 26 occurrences per year."
-            )
+            HelpSubSectionTitle(S.recurringExpensesHelp.biWeeklyTitle)
+            HelpBodyText(S.recurringExpensesHelp.biWeeklyBody)
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpSubSectionTitle("Every X Months")
-            HelpBodyText(
-                "Occurs on a specific day of the month, every N months (1\u20133). " +
-                "Enter the Day of Month (1\u201328). Most bills use this type: rent on the 1st, " +
-                "phone bill on the 15th, etc."
-            )
+            HelpSubSectionTitle(S.recurringExpensesHelp.everyXMonthsTitle)
+            HelpBodyText(S.recurringExpensesHelp.everyXMonthsBody)
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpSubSectionTitle("Twice per Month (Bi-Monthly)")
-            HelpBodyText(
-                "Occurs on two specific days each month. Enter both days (1\u201328 each). " +
-                "Useful for expenses that bill twice monthly."
-            )
+            HelpSubSectionTitle(S.recurringExpensesHelp.biMonthlyTitle)
+            HelpBodyText(S.recurringExpensesHelp.biMonthlyBody)
             Spacer(modifier = Modifier.height(8.dp))
 
             HelpBodyText(
-                "All day-of-month values are limited to 28 to ensure the date exists in every " +
-                "month, including February.",
+                S.recurringExpensesHelp.dayLimitNote,
                 italic = true
             )
             Spacer(modifier = Modifier.height(16.dp))
@@ -221,48 +192,36 @@ fun RecurringExpensesHelpScreen(onBack: () -> Unit) {
             HelpDividerLine()
 
             // ─── SECTION 5: EXPENSE LIST ───
-            HelpSectionTitle("Expense List")
-            HelpBodyText("Each recurring expense in the list shows:")
+            HelpSectionTitle(S.recurringExpensesHelp.expenseListTitle)
+            HelpBodyText(S.recurringExpensesHelp.expenseListBody)
             Spacer(modifier = Modifier.height(6.dp))
-            HelpBulletText("Source name")
-            HelpBulletText("Amount per occurrence")
+            HelpBulletText(S.recurringExpensesHelp.expenseSource)
+            HelpBulletText(S.recurringExpensesHelp.expenseAmount)
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpSubSectionTitle("Actions")
-            HelpBodyText("Tap an expense to edit its name and amount.")
+            HelpSubSectionTitle(S.recurringExpensesHelp.actionsTitle)
+            HelpBodyText(S.recurringExpensesHelp.editNote)
             Spacer(modifier = Modifier.height(4.dp))
-            HelpIconRow(Icons.Filled.Sync, "Repeat Settings", "Configure or change the repeat schedule.")
-            HelpIconRow(Icons.Filled.Delete, "Delete", "Permanently remove the recurring expense.", Color(0xFFF44336))
+            HelpIconRow(Icons.Filled.Sync, S.common.repeatType, S.recurringExpensesHelp.repeatSettingsDesc)
+            HelpIconRow(Icons.Filled.Delete, S.common.delete, S.recurringExpensesHelp.deleteDesc, Color(0xFFF44336))
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
             // ─── SECTION 6: HOW THEY AFFECT YOUR BUDGET ───
-            HelpSectionTitle("How Recurring Expenses Affect Your Budget")
-            HelpBodyText(
-                "Recurring expenses play two roles in the budget system:"
-            )
+            HelpSectionTitle(S.recurringExpensesHelp.budgetEffectTitle)
+            HelpBodyText(S.recurringExpensesHelp.budgetEffectBody)
             Spacer(modifier = Modifier.height(8.dp))
 
-            HelpSubSectionTitle("1. Budget Calculation (Timing Safety)")
-            HelpBodyText(
-                "The budget calculator projects all recurring expenses forward one year and " +
-                "simulates each budget period. It ensures your budget amount is high enough " +
-                "to cover bills even in months where multiple expenses cluster together. " +
-                "Without this, you might have enough money overall but not enough in a " +
-                "particular week or month."
-            )
+            HelpSubSectionTitle(S.recurringExpensesHelp.timingSafetyTitle)
+            HelpBodyText(S.recurringExpensesHelp.timingSafetyBody)
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpSubSectionTitle("2. Automatic Transaction Matching")
-            HelpBodyText(
-                "When you add a transaction (manually or via bank import), the app checks " +
-                "whether the merchant name and amount match any recurring expense. If a match " +
-                "is found, you're shown a confirmation dialog:"
-            )
+            HelpSubSectionTitle(S.recurringExpensesHelp.autoMatchTitle)
+            HelpBodyText(S.recurringExpensesHelp.autoMatchBody)
             Spacer(modifier = Modifier.height(4.dp))
-            HelpBulletText("\"Yes, Recurring\" \u2014 the transaction is tagged as a recurring expense and does NOT reduce your available cash (since it's already accounted for in the budget)")
-            HelpBulletText("\"No, Regular\" \u2014 the transaction is treated as a normal expense")
+            HelpBulletText(S.recurringExpensesHelp.yesRecurringBullet)
+            HelpBulletText(S.recurringExpensesHelp.noRegularBullet)
             Spacer(modifier = Modifier.height(10.dp))
 
             Box(
@@ -275,17 +234,13 @@ fun RecurringExpensesHelpScreen(onBack: () -> Unit) {
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        "Why Matching Matters",
+                        S.recurringExpensesHelp.whyMatchingTitle,
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.titleSmall,
                         color = textColor
                     )
                     Text(
-                        "Your budget amount already has recurring expenses \"baked in\" \u2014 the " +
-                        "calculator reserved money for them. If a recurring expense also subtracted " +
-                        "from available cash, it would be double-counted. The matching system prevents " +
-                        "this by recognizing recurring transactions and keeping them from affecting " +
-                        "your spending money.",
+                        S.recurringExpensesHelp.whyMatchingBody,
                         style = MaterialTheme.typography.bodySmall,
                         color = textColor,
                         lineHeight = 18.sp
@@ -297,28 +252,25 @@ fun RecurringExpensesHelpScreen(onBack: () -> Unit) {
             HelpDividerLine()
 
             // ─── SECTION 7: SOURCE NAME MATCHING ───
-            HelpSectionTitle("Source Name Matching")
-            HelpBodyText(
-                "The automatic recognition system matches transaction merchant names against " +
-                "your recurring expense source names. For best results:"
-            )
+            HelpSectionTitle(S.recurringExpensesHelp.sourceMatchTitle)
+            HelpBodyText(S.recurringExpensesHelp.sourceMatchBody)
             Spacer(modifier = Modifier.height(4.dp))
-            HelpBulletText("Use descriptive names that overlap with how the expense appears on bank statements")
-            HelpBulletText("For example, \"State Farm\" will match \"STATE FARM INSURANCE\" from your bank")
-            HelpBulletText("The match looks for common substrings, so partial matches work")
-            HelpBulletText("Amount must also be within 1% for the match to trigger")
+            HelpBulletText(S.recurringExpensesHelp.matchBullet1)
+            HelpBulletText(S.recurringExpensesHelp.matchBullet2)
+            HelpBulletText(S.recurringExpensesHelp.matchBullet3)
+            HelpBulletText(S.recurringExpensesHelp.matchBullet4)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
             // ─── SECTION 8: TIPS ───
-            HelpSectionTitle("Tips")
-            HelpBulletText("Add ALL recurring expenses, even small ones like streaming subscriptions. They add up and the budget calculator needs the full picture.")
-            HelpBulletText("If an expense amount varies slightly (like a utility bill), use the average amount.")
-            HelpBulletText("Remember to Recalculate your budget (in Budget Configuration) after adding or removing recurring expenses.")
-            HelpBulletText("Common expenses to add: rent/mortgage, utilities (electric, gas, water), insurance (car, health, home), subscriptions (streaming, gym, software), loan payments, phone bill.")
-            HelpBulletText("If an expense is truly one-time, don't add it here. Use Amortization instead to spread it over time.")
-            HelpBulletText("Check your bank statements to make sure you haven't missed any recurring charges.")
+            HelpSectionTitle(S.recurringExpensesHelp.tipsTitle)
+            HelpBulletText(S.recurringExpensesHelp.tip1)
+            HelpBulletText(S.recurringExpensesHelp.tip2)
+            HelpBulletText(S.recurringExpensesHelp.tip3)
+            HelpBulletText(S.recurringExpensesHelp.tip4)
+            HelpBulletText(S.recurringExpensesHelp.tip5)
+            HelpBulletText(S.recurringExpensesHelp.tip6)
 
             Spacer(modifier = Modifier.height(32.dp))
         }

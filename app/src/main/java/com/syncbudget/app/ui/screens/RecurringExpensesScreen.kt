@@ -58,33 +58,30 @@ import androidx.compose.ui.window.DialogProperties
 import com.syncbudget.app.data.RecurringExpense
 import com.syncbudget.app.data.RepeatType
 import com.syncbudget.app.data.generateRecurringExpenseId
+import com.syncbudget.app.ui.strings.LocalStrings
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
-
-private val REPEAT_TYPE_LABELS = mapOf(
-    RepeatType.DAYS to "Every X Days",
-    RepeatType.WEEKS to "Every X Weeks",
-    RepeatType.BI_WEEKLY to "Every 2 Weeks",
-    RepeatType.MONTHS to "Every X Months",
-    RepeatType.BI_MONTHLY to "Twice per Month"
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecurringExpensesScreen(
     recurringExpenses: List<RecurringExpense>,
     currencySymbol: String,
+    dateFormatPattern: String = "yyyy-MM-dd",
     onAddRecurringExpense: (RecurringExpense) -> Unit,
     onUpdateRecurringExpense: (RecurringExpense) -> Unit,
     onDeleteRecurringExpense: (RecurringExpense) -> Unit,
     onBack: () -> Unit,
     onHelpClick: () -> Unit = {}
 ) {
+    val S = LocalStrings.current
     val customColors = LocalSyncBudgetColors.current
+    val dateFormatter = remember(dateFormatPattern) { DateTimeFormatter.ofPattern(dateFormatPattern) }
     var showAddDialog by remember { mutableStateOf(false) }
     var editingExpense by remember { mutableStateOf<RecurringExpense?>(null) }
     var deletingExpense by remember { mutableStateOf<RecurringExpense?>(null) }
@@ -94,7 +91,7 @@ fun RecurringExpensesScreen(
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = "Recurring Expenses",
+                        text = S.recurringExpenses.title,
                         style = MaterialTheme.typography.titleLarge,
                         color = customColors.headerText
                     )
@@ -103,7 +100,7 @@ fun RecurringExpensesScreen(
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = S.common.back,
                             tint = customColors.headerText
                         )
                     }
@@ -112,7 +109,7 @@ fun RecurringExpensesScreen(
                     IconButton(onClick = onHelpClick) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Help,
-                            contentDescription = "Help",
+                            contentDescription = S.common.help,
                             tint = customColors.headerText
                         )
                     }
@@ -133,11 +130,7 @@ fun RecurringExpensesScreen(
         ) {
             item {
                 Text(
-                    text = "Enter recurring expenses like rent, insurance, subscriptions, and loan payments. " +
-                        "These will be used to calculate your cash flow and to identify bank transactions that " +
-                        "should not count against your budget because they are already factored in. " +
-                        "Use descriptive terms in Source Name \u2014 they will be matched against bank transaction " +
-                        "merchant names to automatically identify recurring transactions.",
+                    text = S.recurringExpenses.description,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                 )
@@ -151,7 +144,7 @@ fun RecurringExpensesScreen(
                         contentDescription = null,
                         modifier = Modifier.padding(end = 8.dp)
                     )
-                    Text("Add Recurring Expense")
+                    Text(S.recurringExpenses.addExpense)
                 }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             }
@@ -179,7 +172,7 @@ fun RecurringExpensesScreen(
                     IconButton(onClick = { deletingExpense = expense }) {
                         Icon(
                             imageVector = Icons.Filled.Delete,
-                            contentDescription = "Delete",
+                            contentDescription = S.common.delete,
                             tint = Color(0xFFF44336)
                         )
                     }
@@ -191,6 +184,7 @@ fun RecurringExpensesScreen(
     if (showAddDialog) {
         AddEditExpenseDialog(
             existingExpense = null,
+            dateFormatter = dateFormatter,
             onDismiss = { showAddDialog = false },
             onSave = { expense ->
                 val id = generateRecurringExpenseId(recurringExpenses.map { it.id }.toSet())
@@ -203,6 +197,7 @@ fun RecurringExpensesScreen(
     editingExpense?.let { expense ->
         AddEditExpenseDialog(
             existingExpense = expense,
+            dateFormatter = dateFormatter,
             onDismiss = { editingExpense = null },
             onSave = { updated ->
                 onUpdateRecurringExpense(updated)
@@ -214,18 +209,18 @@ fun RecurringExpensesScreen(
     deletingExpense?.let { expense ->
         AlertDialog(
             onDismissRequest = { deletingExpense = null },
-            title = { Text("Delete ${expense.source}?") },
-            text = { Text("This recurring expense will be permanently removed.") },
+            title = { Text(S.recurringExpenses.deleteExpenseTitle(expense.source)) },
+            text = { Text(S.recurringExpenses.deleteExpenseBody) },
             confirmButton = {
                 TextButton(onClick = {
                     onDeleteRecurringExpense(expense)
                     deletingExpense = null
                 }) {
-                    Text("Delete", color = Color(0xFFF44336))
+                    Text(S.common.delete, color = Color(0xFFF44336))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { deletingExpense = null }) { Text("Cancel") }
+                TextButton(onClick = { deletingExpense = null }) { Text(S.common.cancel) }
             }
         )
     }
@@ -235,11 +230,13 @@ fun RecurringExpensesScreen(
 @Composable
 private fun AddEditExpenseDialog(
     existingExpense: RecurringExpense?,
+    dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd"),
     onDismiss: () -> Unit,
     onSave: (RecurringExpense) -> Unit
 ) {
+    val S = LocalStrings.current
     val isEdit = existingExpense != null
-    val title = if (isEdit) "Edit Recurring Expense" else "Add Recurring Expense"
+    val title = if (isEdit) S.recurringExpenses.editExpense else S.recurringExpenses.addExpense
 
     var sourceName by remember { mutableStateOf(existingExpense?.source ?: "") }
     var amountText by remember {
@@ -285,6 +282,14 @@ private fun AddEditExpenseDialog(
 
     val isValid = isSourceValid && isAmountValid && isRepeatValid
 
+    fun getRepeatTypeLabel(type: RepeatType): String = when (type) {
+        RepeatType.DAYS -> S.common.repeatTypeDays
+        RepeatType.WEEKS -> S.common.repeatTypeWeeks
+        RepeatType.BI_WEEKLY -> S.common.repeatTypeBiWeekly
+        RepeatType.MONTHS -> S.common.repeatTypeMonths
+        RepeatType.BI_MONTHLY -> S.common.repeatTypeBiMonthly
+    }
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -312,11 +317,11 @@ private fun AddEditExpenseDialog(
                     OutlinedTextField(
                         value = sourceName,
                         onValueChange = { sourceName = it },
-                        label = { Text("Source Name") },
+                        label = { Text(S.common.sourceName) },
                         singleLine = true,
                         isError = showValidation && !isSourceValid,
                         supportingText = if (showValidation && !isSourceValid) ({
-                            Text("Required, e.g. Netflix", color = Color(0xFFF44336))
+                            Text(S.recurringExpenses.requiredNetflixExample, color = Color(0xFFF44336))
                         }) else null,
                         colors = textFieldColors,
                         modifier = Modifier.fillMaxWidth()
@@ -324,11 +329,11 @@ private fun AddEditExpenseDialog(
                     OutlinedTextField(
                         value = amountText,
                         onValueChange = { amountText = it },
-                        label = { Text("Amount") },
+                        label = { Text(S.common.amount) },
                         singleLine = true,
                         isError = showValidation && !isAmountValid,
                         supportingText = if (showValidation && !isAmountValid) ({
-                            Text("e.g. 150.00", color = Color(0xFFF44336))
+                            Text(S.recurringExpenses.exampleAmount, color = Color(0xFFF44336))
                         }) else null,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         colors = textFieldColors,
@@ -342,10 +347,10 @@ private fun AddEditExpenseDialog(
                         onExpandedChange = { typeExpanded = it }
                     ) {
                         OutlinedTextField(
-                            value = REPEAT_TYPE_LABELS[repeatType] ?: "",
+                            value = getRepeatTypeLabel(repeatType),
                             onValueChange = {},
                             readOnly = true,
-                            label = { Text("Repeat Type") },
+                            label = { Text(S.common.repeatType) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeExpanded) },
                             colors = textFieldColors,
                             modifier = Modifier
@@ -358,7 +363,7 @@ private fun AddEditExpenseDialog(
                         ) {
                             RepeatType.entries.forEach { type ->
                                 DropdownMenuItem(
-                                    text = { Text(REPEAT_TYPE_LABELS[type] ?: type.name) },
+                                    text = { Text(getRepeatTypeLabel(type)) },
                                     onClick = {
                                         repeatType = type
                                         typeExpanded = false
@@ -380,11 +385,11 @@ private fun AddEditExpenseDialog(
                             OutlinedTextField(
                                 value = intervalText,
                                 onValueChange = { intervalText = it },
-                                label = { Text("Every X Days (1-60)") },
+                                label = { Text(S.common.everyXDays) },
                                 singleLine = true,
                                 isError = showValidation && (interval == null || interval !in 1..60),
                                 supportingText = if (showValidation && (interval == null || interval !in 1..60)) ({
-                                    Text("e.g. 14", color = Color(0xFFF44336))
+                                    Text(S.common.exampleDays, color = Color(0xFFF44336))
                                 }) else null,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 colors = textFieldColors,
@@ -399,22 +404,22 @@ private fun AddEditExpenseDialog(
                                     onClick = { showDatePicker = true },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text(if (startDate != null) "Start Date: $startDate" else "Pick Start Date")
+                                    Text(if (startDate != null) S.common.startDateLabel(startDate!!.format(dateFormatter)) else S.common.pickStartDate)
                                 }
                             }
                             if (showValidation && startDate == null) {
-                                Text("Select a start date", style = MaterialTheme.typography.bodySmall, color = Color(0xFFF44336))
+                                Text(S.common.selectAStartDate, style = MaterialTheme.typography.bodySmall, color = Color(0xFFF44336))
                             }
                         }
                         RepeatType.WEEKS -> {
                             OutlinedTextField(
                                 value = intervalText,
                                 onValueChange = { intervalText = it },
-                                label = { Text("Interval (1-18)") },
+                                label = { Text(S.common.intervalWeeks) },
                                 singleLine = true,
                                 isError = showValidation && (interval == null || interval !in 1..18),
                                 supportingText = if (showValidation && (interval == null || interval !in 1..18)) ({
-                                    Text("e.g. 2", color = Color(0xFFF44336))
+                                    Text(S.common.exampleWeeks, color = Color(0xFFF44336))
                                 }) else null,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 colors = textFieldColors,
@@ -429,16 +434,16 @@ private fun AddEditExpenseDialog(
                                     onClick = { showDatePicker = true },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text(if (startDate != null) "Start Date: $startDate" else "Pick Start Date")
+                                    Text(if (startDate != null) S.common.startDateLabel(startDate!!.format(dateFormatter)) else S.common.pickStartDate)
                                 }
                             }
                             if (showValidation && startDate == null) {
-                                Text("Select a start date", style = MaterialTheme.typography.bodySmall, color = Color(0xFFF44336))
+                                Text(S.common.selectAStartDate, style = MaterialTheme.typography.bodySmall, color = Color(0xFFF44336))
                             }
                             if (startDate != null) {
                                 val dayName = startDate!!.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
                                 Text(
-                                    text = "Day of week: $dayName",
+                                    text = S.common.dayOfWeekLabel(dayName),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                                 )
@@ -454,16 +459,16 @@ private fun AddEditExpenseDialog(
                                     onClick = { showDatePicker = true },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text(if (startDate != null) "Start Date: $startDate" else "Pick Start Date")
+                                    Text(if (startDate != null) S.common.startDateLabel(startDate!!.format(dateFormatter)) else S.common.pickStartDate)
                                 }
                             }
                             if (showValidation && startDate == null) {
-                                Text("Select a start date", style = MaterialTheme.typography.bodySmall, color = Color(0xFFF44336))
+                                Text(S.common.selectAStartDate, style = MaterialTheme.typography.bodySmall, color = Color(0xFFF44336))
                             }
                             if (startDate != null) {
                                 val dayName = startDate!!.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
                                 Text(
-                                    text = "Day of week: $dayName",
+                                    text = S.common.dayOfWeekLabel(dayName),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                                 )
@@ -473,11 +478,11 @@ private fun AddEditExpenseDialog(
                             OutlinedTextField(
                                 value = intervalText,
                                 onValueChange = { intervalText = it },
-                                label = { Text("Every X Months (1-3)") },
+                                label = { Text(S.common.everyXMonths) },
                                 singleLine = true,
                                 isError = showValidation && (interval == null || interval !in 1..3),
                                 supportingText = if (showValidation && (interval == null || interval !in 1..3)) ({
-                                    Text("e.g. 1", color = Color(0xFFF44336))
+                                    Text(S.common.exampleMonths, color = Color(0xFFF44336))
                                 }) else null,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 colors = textFieldColors,
@@ -486,11 +491,11 @@ private fun AddEditExpenseDialog(
                             OutlinedTextField(
                                 value = monthDay1Text,
                                 onValueChange = { monthDay1Text = it },
-                                label = { Text("Day of Month (1-28)") },
+                                label = { Text(S.common.dayOfMonth) },
                                 singleLine = true,
                                 isError = showValidation && (monthDay1 == null || monthDay1 !in 1..28),
                                 supportingText = if (showValidation && (monthDay1 == null || monthDay1 !in 1..28)) ({
-                                    Text("e.g. 15", color = Color(0xFFF44336))
+                                    Text(S.common.exampleMonthDay, color = Color(0xFFF44336))
                                 }) else null,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 colors = textFieldColors,
@@ -501,11 +506,11 @@ private fun AddEditExpenseDialog(
                             OutlinedTextField(
                                 value = monthDay1Text,
                                 onValueChange = { monthDay1Text = it },
-                                label = { Text("First Day of Month (1-28)") },
+                                label = { Text(S.common.firstDayOfMonth) },
                                 singleLine = true,
                                 isError = showValidation && (monthDay1 == null || monthDay1 !in 1..28),
                                 supportingText = if (showValidation && (monthDay1 == null || monthDay1 !in 1..28)) ({
-                                    Text("e.g. 1", color = Color(0xFFF44336))
+                                    Text(S.common.exampleBiMonthlyDay1, color = Color(0xFFF44336))
                                 }) else null,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 colors = textFieldColors,
@@ -514,11 +519,11 @@ private fun AddEditExpenseDialog(
                             OutlinedTextField(
                                 value = monthDay2Text,
                                 onValueChange = { monthDay2Text = it },
-                                label = { Text("Second Day of Month (1-28)") },
+                                label = { Text(S.common.secondDayOfMonth) },
                                 singleLine = true,
                                 isError = showValidation && (monthDay2 == null || monthDay2 !in 1..28),
                                 supportingText = if (showValidation && (monthDay2 == null || monthDay2 !in 1..28)) ({
-                                    Text("e.g. 15", color = Color(0xFFF44336))
+                                    Text(S.common.exampleBiMonthlyDay2, color = Color(0xFFF44336))
                                 }) else null,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 colors = textFieldColors,
@@ -534,7 +539,7 @@ private fun AddEditExpenseDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    TextButton(onClick = onDismiss) { Text(S.common.cancel) }
                     TextButton(
                         onClick = {
                             if (isValid) {
@@ -596,7 +601,7 @@ private fun AddEditExpenseDialog(
                             }
                         }
                     ) {
-                        Text("Save")
+                        Text(S.common.save)
                     }
                 }
             }
@@ -618,12 +623,12 @@ private fun AddEditExpenseDialog(
                     }
                     showDatePicker = false
                 }) {
-                    Text("OK")
+                    Text(S.common.ok)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDatePicker = false }) {
-                    Text("Cancel")
+                    Text(S.common.cancel)
                 }
             }
         ) {
