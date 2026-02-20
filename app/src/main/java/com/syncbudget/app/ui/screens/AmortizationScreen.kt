@@ -57,6 +57,8 @@ import androidx.compose.ui.window.DialogProperties
 import com.syncbudget.app.data.AmortizationEntry
 import com.syncbudget.app.data.BudgetPeriod
 import com.syncbudget.app.data.generateAmortizationEntryId
+import com.syncbudget.app.ui.components.formatCurrency
+import com.syncbudget.app.ui.components.CURRENCY_DECIMALS
 import com.syncbudget.app.ui.strings.LocalStrings
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 import java.time.Instant
@@ -210,8 +212,8 @@ fun AmortizationScreen(
                         Text(
                             text = S.amortization.totalPerPeriod(
                                 currencySymbol,
-                                "%.2f".format(entry.amount),
-                                "%.2f".format(perPeriod),
+                                "%.${CURRENCY_DECIMALS[currencySymbol] ?: 2}f".format(entry.amount),
+                                "%.${CURRENCY_DECIMALS[currencySymbol] ?: 2}f".format(perPeriod),
                                 periodLabelSingular
                             ),
                             style = MaterialTheme.typography.bodyMedium,
@@ -240,7 +242,7 @@ fun AmortizationScreen(
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "$currencySymbol${"%.2f".format(amountPaid)} / $currencySymbol${"%.2f".format(entry.amount)}",
+                            text = "${formatCurrency(amountPaid, currencySymbol)} / ${formatCurrency(entry.amount, currencySymbol)}",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color(0xFF4CAF50).copy(alpha = contentAlpha)
                         )
@@ -264,6 +266,7 @@ fun AmortizationScreen(
             initialAmount = "",
             initialTotalPeriods = "",
             initialStartDate = null,
+            currencySymbol = currencySymbol,
             budgetPeriod = budgetPeriod,
             dateFormatter = dateFormatter,
             onDismiss = { showAddDialog = false },
@@ -279,9 +282,10 @@ fun AmortizationScreen(
         AddEditAmortizationDialog(
             title = S.amortization.editEntry,
             initialSource = entry.source,
-            initialAmount = "%.2f".format(entry.amount),
+            initialAmount = "%.${CURRENCY_DECIMALS[currencySymbol] ?: 2}f".format(entry.amount),
             initialTotalPeriods = entry.totalPeriods.toString(),
             initialStartDate = entry.startDate,
+            currencySymbol = currencySymbol,
             budgetPeriod = budgetPeriod,
             dateFormatter = dateFormatter,
             onDismiss = { editingEntry = null },
@@ -320,6 +324,7 @@ private fun AddEditAmortizationDialog(
     initialAmount: String,
     initialTotalPeriods: String,
     initialStartDate: LocalDate?,
+    currencySymbol: String,
     budgetPeriod: BudgetPeriod,
     dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd"),
     onDismiss: () -> Unit,
@@ -333,6 +338,7 @@ private fun AddEditAmortizationDialog(
     var startDate by remember { mutableStateOf(initialStartDate) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showValidation by remember { mutableStateOf(false) }
+    val maxDecimalPlaces = CURRENCY_DECIMALS[currencySymbol] ?: 2
 
     val amount = amountText.toDoubleOrNull()
     val periods = periodsText.toIntOrNull()
@@ -392,8 +398,11 @@ private fun AddEditAmortizationDialog(
                     OutlinedTextField(
                         value = amountText,
                         onValueChange = { newVal ->
-                            if (newVal.isEmpty() || newVal.toDoubleOrNull() != null || newVal == ".") {
-                                amountText = newVal
+                            if (newVal.isEmpty() || newVal == "." || newVal.toDoubleOrNull() != null) {
+                                val dotIdx = newVal.indexOf('.')
+                                val decs = if (dotIdx >= 0) newVal.length - dotIdx - 1 else 0
+                                if (maxDecimalPlaces == 0 && dotIdx >= 0) { /* block */ }
+                                else if (decs <= maxDecimalPlaces) { amountText = newVal }
                             }
                         },
                         label = { Text(S.amortization.totalAmount) },
@@ -402,7 +411,7 @@ private fun AddEditAmortizationDialog(
                         supportingText = if (showValidation && !isAmountValid) ({
                             Text(S.amortization.exampleTotalAmount, color = Color(0xFFF44336))
                         }) else null,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        keyboardOptions = KeyboardOptions(keyboardType = if (maxDecimalPlaces > 0) KeyboardType.Decimal else KeyboardType.Number),
                         colors = textFieldColors,
                         modifier = Modifier.fillMaxWidth()
                     )

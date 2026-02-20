@@ -87,6 +87,7 @@ import com.syncbudget.app.data.getCategoryIcon
 import com.syncbudget.app.sound.FlipSoundPlayer
 import com.syncbudget.app.ui.components.CURRENCY_DECIMALS
 import com.syncbudget.app.ui.components.FlipDisplay
+import com.syncbudget.app.ui.components.formatCurrency
 import com.syncbudget.app.ui.strings.LocalStrings
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 import java.time.DayOfWeek
@@ -268,7 +269,7 @@ fun MainScreen(
     } else {
         val periodText = when {
             budgetAmount == 0.0 && !isNegative -> S.budgetConfig.recalculate
-            else -> "$currencySymbol${"%.2f".format(budgetAmount)}/$budgetPeriodLabel"
+            else -> "${formatCurrency(budgetAmount, currencySymbol)}/$budgetPeriodLabel"
         }
         periodText
     }
@@ -639,7 +640,7 @@ private fun SpendingPieChart(
                                     Toast
                                         .makeText(
                                             context,
-                                            "${w.categoryName}: $currencySymbol${"%.2f".format(w.amount)}",
+                                            "${w.categoryName}: ${formatCurrency(w.amount, currencySymbol)}",
                                             Toast.LENGTH_SHORT
                                         )
                                         .show()
@@ -700,7 +701,7 @@ private fun SpendingPieChart(
                                 Toast
                                     .makeText(
                                         context,
-                                        "${w.categoryName}: $currencySymbol${"%.2f".format(w.amount)}",
+                                        "${w.categoryName}: ${formatCurrency(w.amount, currencySymbol)}",
                                         Toast.LENGTH_SHORT
                                     )
                                     .show()
@@ -802,14 +803,14 @@ private fun SavingsSuperchargeDialog(
                 ) {
                     item {
                         Text(
-                            text = S.dashboard.superchargeRemaining("$currencySymbol${"%.2f".format(availableExtra)}"),
+                            text = S.dashboard.superchargeRemaining(formatCurrency(availableExtra, currencySymbol)),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         if (isOverBudget) {
                             Text(
-                                text = "Total ($currencySymbol${"%.2f".format(totalAllocated)}) exceeds available cash",
+                                text = "Total (${formatCurrency(totalAllocated, currencySymbol)}) exceeds available cash",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color(0xFFF44336)
                             )
@@ -853,12 +854,12 @@ private fun SavingsSuperchargeDialog(
                                 Text(
                                     text = if (goal.targetDate != null) {
                                         S.futureExpenditures.targetAmountBy(
-                                            "$currencySymbol${"%.2f".format(goal.targetAmount)}",
+                                            formatCurrency(goal.targetAmount, currencySymbol),
                                             goal.targetDate.format(dateFormatter)
                                         )
                                     } else {
                                         S.futureExpenditures.targetLabel(
-                                            "$currencySymbol${"%.2f".format(goal.targetAmount)}"
+                                            formatCurrency(goal.targetAmount, currencySymbol)
                                         )
                                     },
                                     style = MaterialTheme.typography.bodySmall,
@@ -883,7 +884,7 @@ private fun SavingsSuperchargeDialog(
                                 val currentContribution = calculatePerPeriodDeduction(goal, budgetPeriod)
                                 Text(
                                     text = S.futureExpenditures.contributionLabel(
-                                        "$currencySymbol${"%.2f".format(currentContribution)}",
+                                        formatCurrency(currentContribution, currencySymbol),
                                         budgetPeriodLabel
                                     ),
                                     style = MaterialTheme.typography.bodySmall,
@@ -906,8 +907,8 @@ private fun SavingsSuperchargeDialog(
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
                                     text = S.futureExpenditures.savedOf(
-                                        "$currencySymbol${"%.2f".format(goal.totalSavedSoFar)}",
-                                        "$currencySymbol${"%.2f".format(goal.targetAmount)}"
+                                        formatCurrency(goal.totalSavedSoFar, currencySymbol),
+                                        formatCurrency(goal.targetAmount, currencySymbol)
                                     ),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = Color(0xFF4CAF50).copy(alpha = contentAlpha)
@@ -955,7 +956,7 @@ private fun SavingsSuperchargeDialog(
                                 // Exceeds-goal warning (above text field so keyboard doesn't hide it)
                                 if (exceedsGoal) {
                                     Text(
-                                        text = S.transactions.maxAmount2("$currencySymbol${"%.2f".format(remaining)}"),
+                                        text = S.transactions.maxAmount2(formatCurrency(remaining, currencySymbol)),
                                         color = Color(0xFFF44336),
                                         style = MaterialTheme.typography.bodySmall
                                     )
@@ -979,7 +980,7 @@ private fun SavingsSuperchargeDialog(
                                         }
                                         Text(
                                             text = S.dashboard.superchargeNewContribution(
-                                                "$currencySymbol${"%.2f".format(newDeduction)}",
+                                                formatCurrency(newDeduction, currencySymbol),
                                                 budgetPeriodLabel
                                             ),
                                             style = MaterialTheme.typography.bodySmall,
@@ -1015,7 +1016,7 @@ private fun SavingsSuperchargeDialog(
                                             val newDeduction = if (currentPeriodsRemaining > 0) newRemaining / currentPeriodsRemaining.toDouble() else 0.0
                                             Text(
                                                 text = S.dashboard.superchargeNewContribution(
-                                                    "$currencySymbol${"%.2f".format(newDeduction)}",
+                                                    formatCurrency(newDeduction, currencySymbol),
                                                     budgetPeriodLabel
                                                 ),
                                                 style = MaterialTheme.typography.bodySmall,

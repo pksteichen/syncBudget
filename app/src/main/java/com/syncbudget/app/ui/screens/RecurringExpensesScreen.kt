@@ -59,6 +59,8 @@ import androidx.compose.ui.window.DialogProperties
 import com.syncbudget.app.data.RecurringExpense
 import com.syncbudget.app.data.RepeatType
 import com.syncbudget.app.data.generateRecurringExpenseId
+import com.syncbudget.app.ui.components.formatCurrency
+import com.syncbudget.app.ui.components.CURRENCY_DECIMALS
 import com.syncbudget.app.ui.strings.LocalStrings
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 import java.time.Instant
@@ -165,7 +167,7 @@ fun RecurringExpensesScreen(
                             color = MaterialTheme.colorScheme.onBackground
                         )
                         Text(
-                            text = "$currencySymbol${"%.2f".format(expense.amount)}",
+                            text = formatCurrency(expense.amount, currencySymbol),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                         )
@@ -185,6 +187,7 @@ fun RecurringExpensesScreen(
     if (showAddDialog) {
         AddEditExpenseDialog(
             existingExpense = null,
+            currencySymbol = currencySymbol,
             dateFormatter = dateFormatter,
             onDismiss = { showAddDialog = false },
             onSave = { expense ->
@@ -198,6 +201,7 @@ fun RecurringExpensesScreen(
     editingExpense?.let { expense ->
         AddEditExpenseDialog(
             existingExpense = expense,
+            currencySymbol = currencySymbol,
             dateFormatter = dateFormatter,
             onDismiss = { editingExpense = null },
             onSave = { updated ->
@@ -231,6 +235,7 @@ fun RecurringExpensesScreen(
 @Composable
 private fun AddEditExpenseDialog(
     existingExpense: RecurringExpense?,
+    currencySymbol: String,
     dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd"),
     onDismiss: () -> Unit,
     onSave: (RecurringExpense) -> Unit
@@ -238,12 +243,13 @@ private fun AddEditExpenseDialog(
     val S = LocalStrings.current
     val isEdit = existingExpense != null
     val title = if (isEdit) S.recurringExpenses.editExpense else S.recurringExpenses.addExpense
+    val maxDecimalPlaces = CURRENCY_DECIMALS[currencySymbol] ?: 2
 
     var sourceName by remember { mutableStateOf(existingExpense?.source ?: "") }
     var amountText by remember {
         mutableStateOf(
             if (existingExpense != null && existingExpense.amount > 0.0)
-                "%.2f".format(existingExpense.amount)
+                "%.${CURRENCY_DECIMALS[currencySymbol] ?: 2}f".format(existingExpense.amount)
             else ""
         )
     }
@@ -330,14 +336,21 @@ private fun AddEditExpenseDialog(
                     )
                     OutlinedTextField(
                         value = amountText,
-                        onValueChange = { amountText = it },
+                        onValueChange = { newVal ->
+                            if (newVal.isEmpty() || newVal == "." || newVal.toDoubleOrNull() != null) {
+                                val dotIdx = newVal.indexOf('.')
+                                val decs = if (dotIdx >= 0) newVal.length - dotIdx - 1 else 0
+                                if (maxDecimalPlaces == 0 && dotIdx >= 0) { /* block */ }
+                                else if (decs <= maxDecimalPlaces) { amountText = newVal }
+                            }
+                        },
                         label = { Text(S.common.amount) },
                         singleLine = true,
                         isError = showValidation && !isAmountValid,
                         supportingText = if (showValidation && !isAmountValid) ({
                             Text(S.recurringExpenses.exampleAmount, color = Color(0xFFF44336))
                         }) else null,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        keyboardOptions = KeyboardOptions(keyboardType = if (maxDecimalPlaces > 0) KeyboardType.Decimal else KeyboardType.Number),
                         colors = textFieldColors,
                         modifier = Modifier.fillMaxWidth()
                     )

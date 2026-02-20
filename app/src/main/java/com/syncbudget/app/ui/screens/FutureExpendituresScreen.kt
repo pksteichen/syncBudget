@@ -63,6 +63,8 @@ import com.syncbudget.app.data.BudgetPeriod
 import com.syncbudget.app.data.SavingsGoal
 import com.syncbudget.app.data.calculatePerPeriodDeduction
 import com.syncbudget.app.data.generateSavingsGoalId
+import com.syncbudget.app.ui.components.CURRENCY_DECIMALS
+import com.syncbudget.app.ui.components.formatCurrency
 import com.syncbudget.app.ui.strings.LocalStrings
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 import java.time.Instant
@@ -225,12 +227,12 @@ fun FutureExpendituresScreen(
                         Text(
                             text = if (goal.targetDate != null) {
                                 S.futureExpenditures.targetAmountBy(
-                                    "$currencySymbol${"%.2f".format(goal.targetAmount)}",
+                                    formatCurrency(goal.targetAmount, currencySymbol),
                                     goal.targetDate.format(dateFormatter)
                                 )
                             } else {
                                 S.futureExpenditures.targetLabel(
-                                    "$currencySymbol${"%.2f".format(goal.targetAmount)}"
+                                    formatCurrency(goal.targetAmount, currencySymbol)
                                 )
                             },
                             style = MaterialTheme.typography.bodyMedium,
@@ -270,12 +272,12 @@ fun FutureExpendituresScreen(
                             Text(
                                 text = if (goal.targetDate != null) {
                                     S.futureExpenditures.contributionLabel(
-                                        "$currencySymbol${"%.2f".format(deduction)}",
+                                        formatCurrency(deduction, currencySymbol),
                                         periodLabel
                                     )
                                 } else {
                                     S.futureExpenditures.contributionLabel(
-                                        "$currencySymbol${"%.2f".format(goal.contributionPerPeriod)}",
+                                        formatCurrency(goal.contributionPerPeriod, currencySymbol),
                                         periodLabel
                                     )
                                 },
@@ -300,8 +302,8 @@ fun FutureExpendituresScreen(
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = S.futureExpenditures.savedOf(
-                                "$currencySymbol${"%.2f".format(goal.totalSavedSoFar)}",
-                                "$currencySymbol${"%.2f".format(goal.targetAmount)}"
+                                formatCurrency(goal.totalSavedSoFar, currencySymbol),
+                                formatCurrency(goal.targetAmount, currencySymbol)
                             ),
                             style = MaterialTheme.typography.bodySmall,
                             color = Color(0xFF4CAF50).copy(alpha = contentAlpha)
@@ -329,6 +331,7 @@ fun FutureExpendituresScreen(
             initialContribution = "",
             initialIsTargetDate = true,
             isAddMode = true,
+            currencySymbol = currencySymbol,
             dateFormatter = dateFormatter,
             onDismiss = { showAddDialog = false },
             onSave = { name, targetAmount, startingSaved, targetDate, contribution ->
@@ -352,12 +355,13 @@ fun FutureExpendituresScreen(
         AddEditSavingsGoalDialog(
             title = S.futureExpenditures.editSavingsGoal,
             initialName = goal.name,
-            initialTargetAmount = "%.2f".format(goal.targetAmount),
+            initialTargetAmount = "%.${CURRENCY_DECIMALS[currencySymbol] ?: 2}f".format(goal.targetAmount),
             initialStartingSaved = "",
             initialTargetDate = goal.targetDate,
-            initialContribution = if (goal.targetDate == null) "%.2f".format(goal.contributionPerPeriod) else "",
+            initialContribution = if (goal.targetDate == null) "%.${CURRENCY_DECIMALS[currencySymbol] ?: 2}f".format(goal.contributionPerPeriod) else "",
             initialIsTargetDate = goal.targetDate != null,
             isAddMode = false,
+            currencySymbol = currencySymbol,
             dateFormatter = dateFormatter,
             onDismiss = { editingGoal = null },
             onSave = { name, targetAmount, _, targetDate, contribution ->
@@ -405,11 +409,13 @@ private fun AddEditSavingsGoalDialog(
     initialContribution: String,
     initialIsTargetDate: Boolean,
     isAddMode: Boolean,
+    currencySymbol: String,
     dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd"),
     onDismiss: () -> Unit,
     onSave: (String, Double, Double, LocalDate?, Double) -> Unit
 ) {
     val S = LocalStrings.current
+    val maxDecimalPlaces = CURRENCY_DECIMALS[currencySymbol] ?: 2
 
     var name by remember { mutableStateOf(initialName) }
     var targetAmountText by remember { mutableStateOf(initialTargetAmount) }
@@ -473,8 +479,11 @@ private fun AddEditSavingsGoalDialog(
                     OutlinedTextField(
                         value = targetAmountText,
                         onValueChange = { newVal ->
-                            if (newVal.isEmpty() || newVal.toDoubleOrNull() != null || newVal == ".") {
-                                targetAmountText = newVal
+                            if (newVal.isEmpty() || newVal == "." || newVal.toDoubleOrNull() != null) {
+                                val dotIdx = newVal.indexOf('.')
+                                val decs = if (dotIdx >= 0) newVal.length - dotIdx - 1 else 0
+                                if (maxDecimalPlaces == 0 && dotIdx >= 0) { /* block */ }
+                                else if (decs <= maxDecimalPlaces) { targetAmountText = newVal }
                             }
                         },
                         label = { Text(S.futureExpenditures.targetAmount) },
@@ -483,7 +492,7 @@ private fun AddEditSavingsGoalDialog(
                         supportingText = if (showValidation && !isTargetAmountValid) ({
                             Text(S.futureExpenditures.exampleTargetAmount, color = Color(0xFFF44336))
                         }) else null,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        keyboardOptions = KeyboardOptions(keyboardType = if (maxDecimalPlaces > 0) KeyboardType.Decimal else KeyboardType.Number),
                         colors = textFieldColors,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -491,8 +500,11 @@ private fun AddEditSavingsGoalDialog(
                         OutlinedTextField(
                             value = startingSavedText,
                             onValueChange = { newVal ->
-                                if (newVal.isEmpty() || newVal.toDoubleOrNull() != null || newVal == ".") {
-                                    startingSavedText = newVal
+                                if (newVal.isEmpty() || newVal == "." || newVal.toDoubleOrNull() != null) {
+                                    val dotIdx = newVal.indexOf('.')
+                                    val decs = if (dotIdx >= 0) newVal.length - dotIdx - 1 else 0
+                                    if (maxDecimalPlaces == 0 && dotIdx >= 0) { /* block */ }
+                                    else if (decs <= maxDecimalPlaces) { startingSavedText = newVal }
                                 }
                             },
                             label = { Text(S.futureExpenditures.startingSavedAmount) },
@@ -501,7 +513,7 @@ private fun AddEditSavingsGoalDialog(
                             supportingText = if (showValidation && !isStartingSavedValid) ({
                                 Text(S.futureExpenditures.mustBeLessThanTarget, color = Color(0xFFF44336))
                             }) else null,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            keyboardOptions = KeyboardOptions(keyboardType = if (maxDecimalPlaces > 0) KeyboardType.Decimal else KeyboardType.Number),
                             colors = textFieldColors,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -551,8 +563,11 @@ private fun AddEditSavingsGoalDialog(
                         OutlinedTextField(
                             value = contributionText,
                             onValueChange = { newVal ->
-                                if (newVal.isEmpty() || newVal.toDoubleOrNull() != null || newVal == ".") {
-                                    contributionText = newVal
+                                if (newVal.isEmpty() || newVal == "." || newVal.toDoubleOrNull() != null) {
+                                    val dotIdx = newVal.indexOf('.')
+                                    val decs = if (dotIdx >= 0) newVal.length - dotIdx - 1 else 0
+                                    if (maxDecimalPlaces == 0 && dotIdx >= 0) { /* block */ }
+                                    else if (decs <= maxDecimalPlaces) { contributionText = newVal }
                                 }
                             },
                             label = { Text(S.futureExpenditures.contributionPerPeriod) },
@@ -561,7 +576,7 @@ private fun AddEditSavingsGoalDialog(
                             supportingText = if (showValidation && !isContributionValid) ({
                                 Text(S.futureExpenditures.exampleContribution, color = Color(0xFFF44336))
                             }) else null,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            keyboardOptions = KeyboardOptions(keyboardType = if (maxDecimalPlaces > 0) KeyboardType.Decimal else KeyboardType.Number),
                             colors = textFieldColors,
                             modifier = Modifier.fillMaxWidth()
                         )

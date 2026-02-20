@@ -45,6 +45,11 @@ val CURRENCY_DECIMALS = mapOf(
     "Fr" to 2
 )
 
+fun formatCurrency(amount: Double, currencySymbol: String): String {
+    val decimals = CURRENCY_DECIMALS[currencySymbol] ?: 2
+    return "$currencySymbol${"%.${decimals}f".format(amount)}"
+}
+
 private const val CARD_ASPECT = 1.5f
 private val GAP = 5.dp
 private val DOT_WIDTH = 10.dp

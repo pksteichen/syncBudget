@@ -117,6 +117,7 @@ import com.syncbudget.app.data.parseUsBank
 import com.syncbudget.app.data.serializeTransactionsCsv
 import com.syncbudget.app.ui.components.CURRENCY_DECIMALS
 import com.syncbudget.app.ui.components.PieChartEditor
+import com.syncbudget.app.ui.components.formatCurrency
 import com.syncbudget.app.ui.strings.LocalStrings
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 import java.io.BufferedReader
@@ -1892,7 +1893,7 @@ fun DuplicateResolutionDialog(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(S.transactions.duplicateExisting, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "${existingTransaction.date.format(dateFormatter)}  ${existingTransaction.source}  $currencySymbol${"%.2f".format(existingTransaction.amount)}",
+                    "${existingTransaction.date.format(dateFormatter)}  ${existingTransaction.source}  ${formatCurrency(existingTransaction.amount, currencySymbol)}",
                     style = MaterialTheme.typography.bodySmall
                 )
                 if (existingTransaction.categoryAmounts.isNotEmpty()) {
@@ -1905,7 +1906,7 @@ fun DuplicateResolutionDialog(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(S.transactions.duplicateNew, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "${newTransaction.date.format(dateFormatter)}  ${newTransaction.source}  $currencySymbol${"%.2f".format(newTransaction.amount)}",
+                    "${newTransaction.date.format(dateFormatter)}  ${newTransaction.source}  ${formatCurrency(newTransaction.amount, currencySymbol)}",
                     style = MaterialTheme.typography.bodySmall
                 )
                 if (newTransaction.categoryAmounts.isNotEmpty()) {
@@ -1959,7 +1960,7 @@ private fun TransactionRow(
     val isExpense = transaction.type == TransactionType.EXPENSE
     val amountColor = if (isExpense) Color(0xFFF44336) else Color(0xFF4CAF50)
     val amountPrefix = if (isExpense) "-" else ""
-    val formattedAmount = "$amountPrefix$currencySymbol${"%.2f".format(transaction.amount)}"
+    val formattedAmount = "$amountPrefix${formatCurrency(transaction.amount, currencySymbol)}"
 
     val hasMultipleCategories = transaction.categoryAmounts.size > 1
     val singleCategory = if (transaction.categoryAmounts.size == 1)
@@ -2119,7 +2120,7 @@ private fun TransactionRow(
                         )
                     }
                     Text(
-                        text = "$currencySymbol${"%.2f".format(ca.amount)}",
+                        text = formatCurrency(ca.amount, currencySymbol),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                     )

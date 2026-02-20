@@ -63,6 +63,8 @@ import com.syncbudget.app.data.BudgetPeriod
 import com.syncbudget.app.data.IncomeSource
 import com.syncbudget.app.data.RepeatType
 import com.syncbudget.app.data.generateIncomeSourceId
+import com.syncbudget.app.ui.components.formatCurrency
+import com.syncbudget.app.ui.components.CURRENCY_DECIMALS
 import com.syncbudget.app.ui.strings.LocalStrings
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 import java.time.DayOfWeek
@@ -238,7 +240,7 @@ fun BudgetConfigScreen(
                 }
 
                 Text(
-                    text = S.budgetConfig.safeBudgetAmountLabel(currencySymbol, "%.2f".format(safeBudgetAmount), periodLabel),
+                    text = S.budgetConfig.safeBudgetAmountLabel(currencySymbol, "%.${CURRENCY_DECIMALS[currencySymbol] ?: 2}f".format(safeBudgetAmount), periodLabel),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onBackground
                 )
@@ -285,18 +287,26 @@ fun BudgetConfigScreen(
                 }
 
                 if (isManualBudgetEnabled) {
+                    val maxDecimalPlaces = CURRENCY_DECIMALS[currencySymbol] ?: 2
                     var manualAmountText by remember(manualBudgetAmount) {
-                        mutableStateOf(if (manualBudgetAmount == 0.0) "" else "%.2f".format(manualBudgetAmount))
+                        mutableStateOf(if (manualBudgetAmount == 0.0) "" else "%.${CURRENCY_DECIMALS[currencySymbol] ?: 2}f".format(manualBudgetAmount))
                     }
                     OutlinedTextField(
                         value = manualAmountText,
-                        onValueChange = { text ->
-                            manualAmountText = text
-                            text.toDoubleOrNull()?.let { onManualBudgetAmountChange(it) }
+                        onValueChange = { newVal ->
+                            if (newVal.isEmpty() || newVal == "." || newVal.toDoubleOrNull() != null) {
+                                val dotIdx = newVal.indexOf('.')
+                                val decs = if (dotIdx >= 0) newVal.length - dotIdx - 1 else 0
+                                if (maxDecimalPlaces == 0 && dotIdx >= 0) { /* block */ }
+                                else if (decs <= maxDecimalPlaces) {
+                                    manualAmountText = newVal
+                                    newVal.toDoubleOrNull()?.let { onManualBudgetAmountChange(it) }
+                                }
+                            }
                         },
                         label = { Text(S.budgetConfig.budgetAmountPer(periodLabel)) },
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        keyboardOptions = KeyboardOptions(keyboardType = if (maxDecimalPlaces > 0) KeyboardType.Decimal else KeyboardType.Number),
                         colors = textFieldColors,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -346,7 +356,7 @@ fun BudgetConfigScreen(
                             color = MaterialTheme.colorScheme.onBackground
                         )
                         Text(
-                            text = "$currencySymbol${"%.2f".format(source.amount)}",
+                            text = formatCurrency(source.amount, currencySymbol),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                         )
@@ -366,6 +376,7 @@ fun BudgetConfigScreen(
     if (showAddDialog) {
         AddEditIncomeDialog(
             existingSource = null,
+            currencySymbol = currencySymbol,
             dateFormatter = dateFormatter,
             onDismiss = { showAddDialog = false },
             onSave = { incomeSource ->
@@ -379,6 +390,7 @@ fun BudgetConfigScreen(
     editingSource?.let { source ->
         AddEditIncomeDialog(
             existingSource = source,
+            currencySymbol = currencySymbol,
             dateFormatter = dateFormatter,
             onDismiss = { editingSource = null },
             onSave = { updated ->
@@ -449,6 +461,7 @@ fun BudgetConfigScreen(
 @Composable
 private fun AddEditIncomeDialog(
     existingSource: IncomeSource?,
+    currencySymbol: String,
     dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd"),
     onDismiss: () -> Unit,
     onSave: (IncomeSource) -> Unit
@@ -457,11 +470,13 @@ private fun AddEditIncomeDialog(
     val isEdit = existingSource != null
     val title = if (isEdit) S.budgetConfig.editIncomeSource else S.budgetConfig.addIncomeSource
 
+    val maxDecimalPlaces = CURRENCY_DECIMALS[currencySymbol] ?: 2
+
     var sourceName by remember { mutableStateOf(existingSource?.source ?: "") }
     var amountText by remember {
         mutableStateOf(
             if (existingSource != null && existingSource.amount > 0.0)
-                "%.2f".format(existingSource.amount)
+                "%.${CURRENCY_DECIMALS[currencySymbol] ?: 2}f".format(existingSource.amount)
             else ""
         )
     }
@@ -540,14 +555,21 @@ private fun AddEditIncomeDialog(
                     )
                     OutlinedTextField(
                         value = amountText,
-                        onValueChange = { amountText = it },
+                        onValueChange = { newVal ->
+                            if (newVal.isEmpty() || newVal == "." || newVal.toDoubleOrNull() != null) {
+                                val dotIdx = newVal.indexOf('.')
+                                val decs = if (dotIdx >= 0) newVal.length - dotIdx - 1 else 0
+                                if (maxDecimalPlaces == 0 && dotIdx >= 0) { /* block */ }
+                                else if (decs <= maxDecimalPlaces) { amountText = newVal }
+                            }
+                        },
                         label = { Text(S.common.amount) },
                         singleLine = true,
                         isError = showValidation && !isAmountValid,
                         supportingText = if (showValidation && !isAmountValid) ({
                             Text(S.budgetConfig.exampleIncomeAmount, color = Color(0xFFF44336))
                         }) else null,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        keyboardOptions = KeyboardOptions(keyboardType = if (maxDecimalPlaces > 0) KeyboardType.Decimal else KeyboardType.Number),
                         colors = textFieldColors,
                         modifier = Modifier.fillMaxWidth()
                     )
