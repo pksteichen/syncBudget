@@ -860,6 +860,21 @@ private fun SavingsSuperchargeDialog(
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f * contentAlpha)
                                 )
+                                // Show current payoff date for fixed-contribution goals
+                                if (goal.targetDate == null && goal.contributionPerPeriod > 0 && remaining > 0) {
+                                    val periodsToPayoff = ceil(remaining / goal.contributionPerPeriod).toLong()
+                                    val today = LocalDate.now()
+                                    val payoffDate = when (budgetPeriod) {
+                                        BudgetPeriod.DAILY -> today.plusDays(periodsToPayoff)
+                                        BudgetPeriod.WEEKLY -> today.plusWeeks(periodsToPayoff)
+                                        BudgetPeriod.MONTHLY -> today.plusMonths(periodsToPayoff)
+                                    }
+                                    Text(
+                                        text = S.dashboard.superchargeNewPayoff(payoffDate.format(dateFormatter)),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f * contentAlpha)
+                                    )
+                                }
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Box(
                                     modifier = Modifier
@@ -915,11 +930,21 @@ private fun SavingsSuperchargeDialog(
                                 val enteredAmount = (amounts[goal.id] ?: "").toDoubleOrNull() ?: 0.0
                                 val exceedsGoal = enteredAmount > remaining
 
+                                // Exceeds-goal warning (above text field so keyboard doesn't hide it)
+                                if (exceedsGoal) {
+                                    Text(
+                                        text = S.transactions.maxAmount2("$currencySymbol${"%.2f".format(remaining)}"),
+                                        color = Color(0xFFF44336),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                }
+
                                 // Live preview (above text field so it stays visible when keyboard is open)
                                 if (enteredAmount > 0 && !exceedsGoal) {
                                     val newRemaining = remaining - enteredAmount
                                     if (mode == SuperchargeMode.REDUCE_CONTRIBUTIONS) {
-                                        // Show new per-period contribution
+                                        // Show new per-period contribution (same payoff timeline, lower amount)
                                         val today = LocalDate.now()
                                         val newDeduction = if (goal.targetDate != null) {
                                             if (!today.isBefore(goal.targetDate)) 0.0
@@ -932,7 +957,11 @@ private fun SavingsSuperchargeDialog(
                                                 if (periods <= 0) 0.0 else newRemaining / periods.toDouble()
                                             }
                                         } else {
-                                            minOf(goal.contributionPerPeriod, newRemaining)
+                                            // Fixed-contribution: keep same number of periods, reduce per-period amount
+                                            if (goal.contributionPerPeriod > 0 && remaining > 0) {
+                                                val currentPeriodsRemaining = ceil(remaining / goal.contributionPerPeriod).toLong()
+                                                if (currentPeriodsRemaining > 0) newRemaining / currentPeriodsRemaining.toDouble() else 0.0
+                                            } else 0.0
                                         }
                                         Text(
                                             text = S.dashboard.superchargeNewContribution(
@@ -1000,9 +1029,6 @@ private fun SavingsSuperchargeDialog(
                                     label = { Text(S.dashboard.superchargeAllocate) },
                                     singleLine = true,
                                     isError = exceedsGoal,
-                                    supportingText = if (exceedsGoal) ({
-                                        Text(S.transactions.maxAmount2("$currencySymbol${"%.2f".format(remaining)}"), color = Color(0xFFF44336))
-                                    }) else null,
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                     colors = textFieldColors,
                                     modifier = Modifier.fillMaxWidth()
