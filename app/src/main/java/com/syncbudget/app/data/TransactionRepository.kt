@@ -30,6 +30,17 @@ object TransactionRepository {
                 }
                 obj.put("categoryAmounts", catArray)
             }
+            // Sync fields
+            obj.put("deviceId", t.deviceId)
+            obj.put("deleted", t.deleted)
+            obj.put("source_clock", t.source_clock)
+            obj.put("amount_clock", t.amount_clock)
+            obj.put("date_clock", t.date_clock)
+            obj.put("type_clock", t.type_clock)
+            obj.put("categoryAmounts_clock", t.categoryAmounts_clock)
+            obj.put("isUserCategorized_clock", t.isUserCategorized_clock)
+            obj.put("isBudgetIncome_clock", t.isBudgetIncome_clock)
+            obj.put("deleted_clock", t.deleted_clock)
             jsonArray.put(obj)
         }
         context.openFileOutput(FILE_NAME, Context.MODE_PRIVATE).use { fos ->
@@ -70,7 +81,17 @@ object TransactionRepository {
                     categoryAmounts = categoryAmounts,
                     amount = amount,
                     isUserCategorized = isUserCategorized,
-                    isBudgetIncome = isBudgetIncome
+                    isBudgetIncome = isBudgetIncome,
+                    deviceId = obj.optString("deviceId", ""),
+                    deleted = obj.optBoolean("deleted", false),
+                    source_clock = obj.optLong("source_clock", 0L),
+                    amount_clock = obj.optLong("amount_clock", 0L),
+                    date_clock = obj.optLong("date_clock", 0L),
+                    type_clock = obj.optLong("type_clock", 0L),
+                    categoryAmounts_clock = obj.optLong("categoryAmounts_clock", 0L),
+                    isUserCategorized_clock = obj.optLong("isUserCategorized_clock", 0L),
+                    isBudgetIncome_clock = obj.optLong("isBudgetIncome_clock", 0L),
+                    deleted_clock = obj.optLong("deleted_clock", 0L)
                 )
             )
         }

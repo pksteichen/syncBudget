@@ -15,6 +15,12 @@ object CategoryRepository {
             obj.put("id", c.id)
             obj.put("name", c.name)
             obj.put("iconName", c.iconName)
+            // Sync fields
+            obj.put("deviceId", c.deviceId)
+            obj.put("deleted", c.deleted)
+            obj.put("name_clock", c.name_clock)
+            obj.put("iconName_clock", c.iconName_clock)
+            obj.put("deleted_clock", c.deleted_clock)
             jsonArray.put(obj)
         }
         context.openFileOutput(FILE_NAME, Context.MODE_PRIVATE).use { fos ->
@@ -35,7 +41,12 @@ object CategoryRepository {
                 Category(
                     id = obj.getInt("id"),
                     name = obj.getString("name"),
-                    iconName = obj.getString("iconName")
+                    iconName = obj.getString("iconName"),
+                    deviceId = obj.optString("deviceId", ""),
+                    deleted = obj.optBoolean("deleted", false),
+                    name_clock = obj.optLong("name_clock", 0L),
+                    iconName_clock = obj.optLong("iconName_clock", 0L),
+                    deleted_clock = obj.optLong("deleted_clock", 0L)
                 )
             )
         }

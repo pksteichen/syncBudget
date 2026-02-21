@@ -7,7 +7,15 @@ data class AmortizationEntry(
     val source: String,
     val amount: Double,
     val totalPeriods: Int,
-    val startDate: LocalDate
+    val startDate: LocalDate,
+    // Sync fields
+    val deviceId: String = "",
+    val deleted: Boolean = false,
+    val source_clock: Long = 0L,
+    val amount_clock: Long = 0L,
+    val totalPeriods_clock: Long = 0L,
+    val startDate_clock: Long = 0L,
+    val deleted_clock: Long = 0L
 )
 
 fun generateAmortizationEntryId(existingIds: Set<Int>): Int {

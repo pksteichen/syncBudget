@@ -57,4 +57,37 @@ object CryptoHelper {
         val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
         return factory.generateSecret(spec).encoded
     }
+
+    fun encryptWithKey(plaintext: ByteArray, key: ByteArray): ByteArray {
+        require(key.size == 32) { "Key must be 256 bits (32 bytes)" }
+        val random = SecureRandom()
+        val nonce = ByteArray(NONCE_LENGTH)
+        random.nextBytes(nonce)
+
+        val keySpec = SecretKeySpec(key, "ChaCha20")
+        val ivSpec = IvParameterSpec(nonce)
+
+        val cipher = Cipher.getInstance("ChaCha20-Poly1305")
+        cipher.init(Cipher.ENCRYPT_MODE, keySpec, ivSpec)
+        val ciphertext = cipher.doFinal(plaintext)
+
+        return nonce + ciphertext
+    }
+
+    fun decryptWithKey(data: ByteArray, key: ByteArray): ByteArray {
+        require(key.size == 32) { "Key must be 256 bits (32 bytes)" }
+        if (data.size < NONCE_LENGTH + 1) {
+            throw IllegalArgumentException("Data too small to be valid encrypted data")
+        }
+
+        val nonce = data.copyOfRange(0, NONCE_LENGTH)
+        val ciphertext = data.copyOfRange(NONCE_LENGTH, data.size)
+
+        val keySpec = SecretKeySpec(key, "ChaCha20")
+        val ivSpec = IvParameterSpec(nonce)
+
+        val cipher = Cipher.getInstance("ChaCha20-Poly1305")
+        cipher.init(Cipher.DECRYPT_MODE, keySpec, ivSpec)
+        return cipher.doFinal(ciphertext)
+    }
 }

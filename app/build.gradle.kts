@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -55,4 +56,11 @@ dependencies {
     implementation("androidx.compose.animation:animation")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
+
+    // Firebase
+    implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
+    implementation("com.google.firebase:firebase-firestore")
+
+    // WorkManager
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
 }

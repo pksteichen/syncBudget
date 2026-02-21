@@ -17,7 +17,18 @@ data class Transaction(
     val categoryAmounts: List<CategoryAmount> = emptyList(),
     val amount: Double,
     val isUserCategorized: Boolean = true,
-    val isBudgetIncome: Boolean = false
+    val isBudgetIncome: Boolean = false,
+    // Sync fields
+    val deviceId: String = "",
+    val deleted: Boolean = false,
+    val source_clock: Long = 0L,
+    val amount_clock: Long = 0L,
+    val date_clock: Long = 0L,
+    val type_clock: Long = 0L,
+    val categoryAmounts_clock: Long = 0L,
+    val isUserCategorized_clock: Long = 0L,
+    val isBudgetIncome_clock: Long = 0L,
+    val deleted_clock: Long = 0L
 )
 
 fun generateTransactionId(existingIds: Set<Int>): Int {

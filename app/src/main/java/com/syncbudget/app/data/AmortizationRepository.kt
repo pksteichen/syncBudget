@@ -18,6 +18,14 @@ object AmortizationRepository {
             obj.put("amount", e.amount)
             obj.put("totalPeriods", e.totalPeriods)
             obj.put("startDate", e.startDate.toString())
+            // Sync fields
+            obj.put("deviceId", e.deviceId)
+            obj.put("deleted", e.deleted)
+            obj.put("source_clock", e.source_clock)
+            obj.put("amount_clock", e.amount_clock)
+            obj.put("totalPeriods_clock", e.totalPeriods_clock)
+            obj.put("startDate_clock", e.startDate_clock)
+            obj.put("deleted_clock", e.deleted_clock)
             jsonArray.put(obj)
         }
         context.openFileOutput(FILE_NAME, Context.MODE_PRIVATE).use { fos ->
@@ -40,7 +48,14 @@ object AmortizationRepository {
                     source = obj.getString("source"),
                     amount = obj.getDouble("amount"),
                     totalPeriods = obj.getInt("totalPeriods"),
-                    startDate = LocalDate.parse(obj.getString("startDate"))
+                    startDate = LocalDate.parse(obj.getString("startDate")),
+                    deviceId = obj.optString("deviceId", ""),
+                    deleted = obj.optBoolean("deleted", false),
+                    source_clock = obj.optLong("source_clock", 0L),
+                    amount_clock = obj.optLong("amount_clock", 0L),
+                    totalPeriods_clock = obj.optLong("totalPeriods_clock", 0L),
+                    startDate_clock = obj.optLong("startDate_clock", 0L),
+                    deleted_clock = obj.optLong("deleted_clock", 0L)
                 )
             )
         }
