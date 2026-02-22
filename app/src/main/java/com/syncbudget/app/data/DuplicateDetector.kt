@@ -61,16 +61,76 @@ fun filterAlreadyLoadedDays(
     return result
 }
 
+/**
+ * Check if a transaction date is near any expected occurrence of a schedule.
+ * Uses BudgetCalculator.generateOccurrences to produce exact dates, then
+ * checks if the transaction falls within [dayWindow] days of any of them.
+ */
+private fun dateNearOccurrence(
+    transactionDate: LocalDate,
+    repeatType: RepeatType,
+    repeatInterval: Int,
+    startDate: LocalDate?,
+    monthDay1: Int?,
+    monthDay2: Int?,
+    dayWindow: Int
+): Boolean {
+    // Generate occurrences in a window around the transaction date
+    val rangeStart = transactionDate.minusDays(dayWindow.toLong())
+    val rangeEnd = transactionDate.plusDays(dayWindow.toLong())
+    val occurrences = BudgetCalculator.generateOccurrences(
+        repeatType, repeatInterval, startDate, monthDay1, monthDay2, rangeStart, rangeEnd
+    )
+    return occurrences.any { occ ->
+        abs(ChronoUnit.DAYS.between(transactionDate, occ)) <= dayWindow
+    }
+}
+
+/**
+ * Find the closest expected occurrence to a transaction date and return
+ * how many days apart they are, or null if no occurrence can be computed.
+ * Used for the date advisory (warns if > 2 days off).
+ */
+fun nearestOccurrenceDistance(
+    transactionDate: LocalDate,
+    repeatType: RepeatType,
+    repeatInterval: Int,
+    startDate: LocalDate?,
+    monthDay1: Int?,
+    monthDay2: Int?
+): Long? {
+    val rangeStart = transactionDate.minusDays(15)
+    val rangeEnd = transactionDate.plusDays(15)
+    val occurrences = BudgetCalculator.generateOccurrences(
+        repeatType, repeatInterval, startDate, monthDay1, monthDay2, rangeStart, rangeEnd
+    )
+    if (occurrences.isEmpty()) return null
+    return occurrences.minOf { abs(ChronoUnit.DAYS.between(transactionDate, it)) }
+}
+
+fun isRecurringDateCloseEnough(transactionDate: LocalDate, re: RecurringExpense): Boolean {
+    val distance = nearestOccurrenceDistance(
+        transactionDate, re.repeatType, re.repeatInterval,
+        re.startDate, re.monthDay1, re.monthDay2
+    )
+    return distance == null || distance <= 2
+}
+
 fun findRecurringExpenseMatch(
     incoming: Transaction,
     recurringExpenses: List<RecurringExpense>,
     percentTolerance: Float = 0.01f,
     dollarTolerance: Int = 1,
-    minChars: Int = 5
+    minChars: Int = 5,
+    dayWindow: Int = 7
 ): RecurringExpense? {
     return recurringExpenses.find { re ->
         amountMatches(incoming.amount, re.amount, percentTolerance, dollarTolerance) &&
-        merchantMatches(incoming.source, re.source, minChars)
+        merchantMatches(incoming.source, re.source, minChars) &&
+        dateNearOccurrence(
+            incoming.date, re.repeatType, re.repeatInterval,
+            re.startDate, re.monthDay1, re.monthDay2, dayWindow
+        )
     }
 }
 
@@ -87,30 +147,19 @@ fun findAmortizationMatch(
     }
 }
 
-fun isRecurringDateCloseEnough(transactionDate: LocalDate, re: RecurringExpense): Boolean {
-    val txDay = transactionDate.dayOfMonth
-    return when (re.repeatType) {
-        RepeatType.MONTHS -> {
-            val expected = re.monthDay1 ?: return true
-            abs(txDay - expected) <= 2
-        }
-        RepeatType.BI_MONTHLY -> {
-            val d1 = re.monthDay1 ?: return true
-            val d2 = re.monthDay2 ?: return true
-            abs(txDay - d1) <= 2 || abs(txDay - d2) <= 2
-        }
-        else -> true
-    }
-}
-
 fun findBudgetIncomeMatch(
     incoming: Transaction,
     incomeSources: List<IncomeSource>,
-    minChars: Int = 5
+    minChars: Int = 5,
+    dayWindow: Int = 7
 ): IncomeSource? {
     if (incoming.type != TransactionType.INCOME) return null
     return incomeSources.find { source ->
-        merchantMatches(incoming.source, source.source, minChars)
+        merchantMatches(incoming.source, source.source, minChars) &&
+        dateNearOccurrence(
+            incoming.date, source.repeatType, source.repeatInterval,
+            source.startDate, source.monthDay1, source.monthDay2, dayWindow
+        )
     }
 }
 

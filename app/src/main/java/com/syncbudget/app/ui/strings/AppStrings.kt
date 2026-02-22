@@ -83,7 +83,8 @@ data class CommonStrings(
     val exampleMonthDay: String,
     val exampleBiMonthlyDay1: String,
     val exampleBiMonthlyDay2: String,
-    val language: String
+    val language: String,
+    val dateDayTooHigh: String
 )
 
 data class DashboardStrings(
@@ -264,7 +265,19 @@ data class TransactionsStrings(
     val requiredMerchantExample: String,
     val moveCategoryValue: String,
     val sumMismatch: String,
-    val maxAmount2: (String) -> String
+    val maxAmount2: (String) -> String,
+    val includeAllData: String,
+    val fullBackupNote: String,
+    val fullBackupDetected: String,
+    val fullBackupBody: String,
+    val loadTransactionsOnly: String,
+    val loadAllDataOverwrite: String,
+    val fullBackupRestored: String,
+    val fullBackupSaved: String,
+    val fullBackupSyncWarning: String,
+    val fullBackupNonAdminBlock: String,
+    val fullBackupGroupRecreated: String,
+    val fullBackupGroupDissolved: String
 )
 
 data class FutureExpendituresStrings(

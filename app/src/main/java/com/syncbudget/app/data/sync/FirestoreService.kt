@@ -2,6 +2,7 @@ package com.syncbudget.app.data.sync
 
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 
 data class FirestoreDelta(
@@ -155,9 +156,18 @@ object FirestoreService {
         return db.runTransaction { transaction ->
             val snapshot = transaction.get(groupRef)
             val current = snapshot.getLong("nextDeltaVersion") ?: 1L
-            transaction.update(groupRef, "nextDeltaVersion", current + 1)
+            transaction.set(groupRef, mapOf(
+                "nextDeltaVersion" to current + 1,
+                "lastActivity" to System.currentTimeMillis()
+            ), SetOptions.merge())
             current
         }.await()
+    }
+
+    suspend fun updateGroupActivity(groupId: String) {
+        db.collection("groups").document(groupId)
+            .set(mapOf("lastActivity" to System.currentTimeMillis()), SetOptions.merge())
+            .await()
     }
 
     suspend fun createPairingCode(groupId: String, code: String, encryptedKey: String, expiresAt: Long) {
@@ -225,6 +235,8 @@ object FirestoreService {
             .document(deviceId)
             .set(data)
             .await()
+        // Ensure group document exists with lastActivity for TTL
+        updateGroupActivity(groupId)
     }
 
     suspend fun deleteGroup(groupId: String) {

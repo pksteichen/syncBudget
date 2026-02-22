@@ -64,7 +64,8 @@ object EnglishStrings : AppStrings {
         exampleMonthDay = "e.g. 15",
         exampleBiMonthlyDay1 = "e.g. 1",
         exampleBiMonthlyDay2 = "e.g. 15",
-        language = "Language"
+        language = "Language",
+        dateDayTooHigh = "Please select a date between the 1st and 28th of the month"
     )
 
     override val dashboard = DashboardStrings(
@@ -245,7 +246,19 @@ object EnglishStrings : AppStrings {
         requiredMerchantExample = "Required, e.g. Grocery Store",
         moveCategoryValue = "Move Category Value",
         sumMismatch = "Sum Mismatch",
-        maxAmount2 = { max: String -> "Max: $max" }
+        maxAmount2 = { max: String -> "Max: $max" },
+        includeAllData = "Include all app data (full backup)",
+        fullBackupNote = "All app data will be saved including settings, categories, recurring expenses, savings goals, and amortization entries.",
+        fullBackupDetected = "Full Backup Detected",
+        fullBackupBody = "This file contains settings, categories, recurring expenses, savings goals, amortization entries, and all other app data. How would you like to load it?",
+        loadTransactionsOnly = "Load Transactions Only",
+        loadAllDataOverwrite = "Load All Data & Overwrite",
+        fullBackupRestored = "Full backup restored successfully",
+        fullBackupSaved = "Full backup saved successfully",
+        fullBackupSyncWarning = "Restoring a full backup will dissolve the current family sync group. You will need to create a new group and share a new pairing code with family members.",
+        fullBackupNonAdminBlock = "Only the group admin can restore a full backup. A full restore would corrupt sync state for all devices.",
+        fullBackupGroupRecreated = "Backup restored. New family group created \u2014 share the pairing code with family members.",
+        fullBackupGroupDissolved = "Backup restored. Family group dissolved."
     )
 
     override val futureExpenditures = FutureExpendituresStrings(

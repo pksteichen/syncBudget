@@ -66,7 +66,19 @@ object BudgetCalculator {
             }
             RepeatType.MONTHS -> {
                 val day = monthDay1 ?: return dates
-                var month = rangeStart.withDayOfMonth(1)
+                // Use startDate to anchor the phase for multi-month intervals
+                var month = if (startDate != null && repeatInterval > 1) {
+                    var m = startDate.withDayOfMonth(1)
+                    if (m.isBefore(rangeStart.withDayOfMonth(1))) {
+                        val gap = java.time.Period.between(m, rangeStart.withDayOfMonth(1)).toTotalMonths()
+                        val steps = gap / repeatInterval
+                        m = m.plusMonths(steps * repeatInterval)
+                        if (m.isBefore(rangeStart.withDayOfMonth(1))) m = m.plusMonths(repeatInterval.toLong())
+                    }
+                    m
+                } else {
+                    rangeStart.withDayOfMonth(1)
+                }
                 while (!month.isAfter(rangeEnd)) {
                     val d = month.withDayOfMonth(day.coerceAtMost(month.lengthOfMonth()))
                     if (!d.isBefore(rangeStart) && !d.isAfter(rangeEnd)) {

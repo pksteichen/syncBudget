@@ -1,0 +1,394 @@
+================================================================================
+  SecureSync Budget — Firebase / Firestore Setup Guide
+================================================================================
+
+This guide covers everything needed to set up Firebase for the Family Sync
+feature from scratch. Follow it when creating a new Firebase project or
+migrating to a new account.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  1. CREATE THE FIREBASE PROJECT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Go to https://console.firebase.google.com/
+2. Click "Add project" (or "Create a project")
+3. Name it (e.g. "syncbudget-prod")
+4. Disable Google Analytics (not needed — the app is privacy-first)
+5. Click "Create project"
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  2. ADD THE ANDROID APP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. In the Firebase console, click "Add app" → Android
+2. Package name: com.syncbudget.app
+3. App nickname: SecureSync Budget (optional)
+4. Debug signing certificate SHA-1: (optional, not needed for Firestore)
+5. Click "Register app"
+6. Download google-services.json
+7. Place it at: app/google-services.json  (replacing the placeholder)
+8. Click "Next" through the remaining steps
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  3. ENABLE CLOUD FIRESTORE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. In the Firebase console sidebar: Build → Firestore Database
+2. Click "Create database"
+3. Choose a location close to your users (e.g. us-central1, europe-west1)
+   IMPORTANT: This cannot be changed later.
+4. Start in "production mode" (we'll set proper rules next)
+5. Click "Create"
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  4. FIRESTORE SECURITY RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Go to: Firestore Database → Rules tab
+
+Replace the default rules with the following, then click "Publish":
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Group documents ──
+    // The group doc holds nextDeltaVersion, createdAt, lastActivity.
+    match /groups/{groupId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasAll(['nextDeltaVersion', 'lastActivity'])
+                    && request.resource.data.nextDeltaVersion is int;
+      allow update: if request.resource.data.diff(resource.data).affectedKeys()
+                      .hasOnly(['nextDeltaVersion', 'lastActivity'])
+                    && request.resource.data.nextDeltaVersion is int;
+      allow delete: if true;
+
+      // ── Deltas (encrypted sync payloads) ──
+      match /deltas/{deltaId} {
+        allow read: if true;
+        allow create: if request.resource.data.keys().hasAll(['version', 'sourceDeviceId', 'encryptedPayload', 'timestamp'])
+                      && request.resource.data.encryptedPayload is string
+                      && request.resource.data.encryptedPayload.size() < 1048576;  // 1 MB max
+        allow delete: if true;
+      }
+
+      // ── Devices ──
+      match /devices/{deviceId} {
+        allow read: if true;
+        allow write: if request.resource.data.keys().hasAll(['deviceId', 'lastSeen'])
+                     && request.resource.data.deviceId is string;
+        allow delete: if true;
+      }
+
+      // ── Snapshots ──
+      match /snapshots/{snapshotId} {
+        allow read: if true;
+        allow write: if request.resource.data.keys().hasAll(['snapshotVersion', 'encryptedData', 'timestamp'])
+                     && request.resource.data.encryptedData is string
+                     && request.resource.data.encryptedData.size() < 5242880;  // 5 MB max
+        allow delete: if true;
+      }
+
+      // ── Admin claims ──
+      match /adminClaim/{claimId} {
+        allow read: if true;
+        allow write: if true;
+        allow delete: if true;
+      }
+    }
+
+    // ── Pairing codes (short-lived, one-time use) ──
+    match /pairing_codes/{code} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasAll(['groupId', 'encryptedKey', 'expiresAt'])
+                    && request.resource.data.expiresAt is int;
+      allow delete: if true;
+    }
+
+    // Deny everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+SECURITY NOTES:
+- All sync data is end-to-end encrypted with a 256-bit key. Even with full
+  Firestore read access, an attacker cannot read financial data.
+- These rules do NOT require Firebase Authentication. The app uses device-
+  generated IDs and client-side encryption instead. If you later add Firebase
+  Auth, you can tighten rules to require request.auth != null.
+- Payload size limits (1 MB for deltas, 5 MB for snapshots) prevent abuse.
+- Pairing codes are one-time-use and expire after 10 minutes (enforced in app
+  code; the rules allow creation and deletion but not updates).
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  5. TTL POLICY (AUTO-DELETE ORPHANED GROUPS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+If a family group is abandoned (app uninstalled, devices forgotten), the data
+will sit in Firestore forever. A TTL policy automatically deletes these
+orphaned group documents.
+
+The app writes a `lastActivity` timestamp (epoch millis) to each group
+document on every sync. We configure Firestore to delete documents where
+`lastActivity` is older than 90 days.
+
+HOW TO SET UP:
+
+  Option A — Firebase Console (if available)
+  ─────────────────────────────────────────────
+  1. Go to: Firestore Database → Indexes tab → TTL tab
+     (or: Firestore Database → TTL policies)
+  2. Click "Create TTL policy"
+  3. Collection group: groups
+  4. Timestamp field: lastActivity
+  5. Click "Create"
+
+  Option B — gcloud CLI
+  ─────────────────────────
+  Install the gcloud CLI (https://cloud.google.com/sdk/docs/install), then:
+
+    gcloud firestore fields ttls update lastActivity \
+      --collection-group=groups \
+      --enable-ttl \
+      --project=YOUR_PROJECT_ID
+
+  Replace YOUR_PROJECT_ID with your Firebase project ID (visible in the
+  Firebase console under Project Settings → General).
+
+  Option C — Firebase Admin SDK (Node.js)
+  ────────────────────────────────────────────
+  If you use the Firebase Admin SDK:
+
+    const admin = require('firebase-admin');
+    admin.initializeApp();
+    const db = admin.firestore();
+    db.settings({ ignoreUndefinedProperties: true });
+    // TTL policies are configured via gcloud CLI or console, not the Admin SDK.
+
+IMPORTANT NOTES:
+- The TTL field must be a timestamp. The app stores `lastActivity` as epoch
+  milliseconds (a number). Firestore TTL works with both Firestore Timestamp
+  types and numeric epoch timestamps in seconds. Since the app writes epoch
+  MILLISECONDS, you have two options:
+
+  a) (Recommended) Change nothing. Firestore will interpret the millis value
+     as a timestamp far in the future (year ~50,000+), so TTL will never
+     trigger on active groups. For truly orphaned groups where the field is
+     never updated, the document ages out naturally. However, this approach
+     relies on Firestore's document age, not the field value itself.
+
+  b) (More correct) Modify the app to write a Firestore server timestamp
+     instead of epoch millis. See the ALTERNATIVE section below.
+
+ALTERNATIVE — Use Firestore server timestamps:
+  If you want TTL to work precisely based on the lastActivity value, change
+  the app code to write a Firestore Timestamp instead of epoch millis:
+
+  In FirestoreService.kt, replace:
+    mapOf("lastActivity" to System.currentTimeMillis())
+  With:
+    mapOf("lastActivity" to com.google.firebase.firestore.FieldValue.serverTimestamp())
+
+  Then set the TTL duration to 90 days (7776000 seconds) in the TTL policy.
+  This is the most precise approach. The app currently uses epoch millis for
+  consistency with other timestamp fields, but Firestore server timestamps
+  are better for TTL.
+
+WHAT HAPPENS WHEN A GROUP IS TTL-DELETED:
+- Only the group document itself is deleted by TTL.
+- Subcollections (deltas, devices, snapshots, adminClaim) are NOT auto-deleted
+  by TTL — Firestore TTL only deletes the matched document.
+- To also clean up subcollections, you have two options:
+  a) Accept orphaned subcollections (they're encrypted and harmless, just cost
+     storage). Over time this is negligible per group.
+  b) Deploy a Cloud Function triggered by document deletion that cleans up
+     subcollections. See section 7 below.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  6. FIRESTORE INDEXES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The app uses one compound query that requires a composite index:
+
+  Collection: deltas (under groups/{groupId})
+  Fields:     version (Ascending)
+  Filter:     version > lastSyncVersion, orderBy version ASC
+
+Firestore should auto-create this index on first query. If you see an error
+like "FAILED_PRECONDITION: The query requires an index", click the link in
+the error message to create it, or manually add:
+
+  1. Go to: Firestore Database → Indexes tab → Composite tab
+  2. Click "Create index"
+  3. Collection ID: deltas
+  4. Fields: version — Ascending
+  5. Query scope: Collection
+  6. Click "Create"
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  7. (OPTIONAL) CLOUD FUNCTION FOR SUBCOLLECTION CLEANUP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Deploy this Cloud Function to automatically clean up subcollections when a
+group document is deleted (by TTL or by dissolveGroup):
+
+  // functions/index.js
+  const functions = require('firebase-functions');
+  const admin = require('firebase-admin');
+  admin.initializeApp();
+
+  exports.cleanupGroupSubcollections = functions.firestore
+    .document('groups/{groupId}')
+    .onDelete(async (snap, context) => {
+      const groupId = context.params.groupId;
+      const db = admin.firestore();
+      const groupRef = db.collection('groups').doc(groupId);
+
+      const subcollections = ['deltas', 'devices', 'snapshots', 'adminClaim'];
+      for (const sub of subcollections) {
+        const docs = await groupRef.collection(sub).listDocuments();
+        const batch = db.batch();
+        for (const doc of docs) {
+          batch.delete(doc);
+        }
+        if (docs.length > 0) await batch.commit();
+      }
+    });
+
+To deploy:
+  1. Install Firebase CLI: npm install -g firebase-tools
+  2. firebase login
+  3. firebase init functions  (select your project, choose JavaScript)
+  4. Paste the function above into functions/index.js
+  5. firebase deploy --only functions
+
+NOTE: Cloud Functions require the Blaze (pay-as-you-go) plan. If you're on
+the free Spark plan, skip this — orphaned subcollections are encrypted and
+cost very little storage.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  8. EXPIRED PAIRING CODE CLEANUP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Pairing codes expire after 10 minutes and are deleted on use. But if a code
+is generated and never redeemed, it stays in Firestore.
+
+Option A — TTL policy on pairing_codes:
+  Same as section 5, but for the pairing_codes collection with the
+  `expiresAt` field. Since expiresAt is already epoch millis:
+
+    gcloud firestore fields ttls update expiresAt \
+      --collection-group=pairing_codes \
+      --enable-ttl \
+      --project=YOUR_PROJECT_ID
+
+Option B — Scheduled Cloud Function:
+  Run daily to delete expired codes:
+
+    exports.cleanupExpiredCodes = functions.pubsub
+      .schedule('every 24 hours')
+      .onRun(async () => {
+        const db = admin.firestore();
+        const now = Date.now();
+        const expired = await db.collection('pairing_codes')
+          .where('expiresAt', '<', now)
+          .get();
+        const batch = db.batch();
+        expired.docs.forEach(doc => batch.delete(doc.ref));
+        if (!expired.empty) await batch.commit();
+      });
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  9. FIRESTORE DATA STRUCTURE REFERENCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  groups/
+    {groupId}/                         # Group document
+      nextDeltaVersion: number         # Monotonic counter for delta ordering
+      createdAt: number                # Epoch millis when group was created
+      lastActivity: number             # Epoch millis of last sync (for TTL)
+      deltas/
+        v{version}/                    # One doc per sync delta
+          version: number
+          sourceDeviceId: string
+          encryptedPayload: string     # E2E encrypted, base64-encoded
+          timestamp: number
+      devices/
+        {deviceId}/                    # One doc per device in group
+          deviceId: string
+          deviceName: string
+          isAdmin: boolean
+          lastSyncVersion: number
+          lastSeen: number
+      snapshots/
+        latest/                        # Single doc, overwritten every 50 deltas
+          snapshotVersion: number
+          createdBy: string
+          encryptedData: string        # E2E encrypted full state, base64
+          timestamp: number
+      adminClaim/
+        current/                       # Single doc for pending admin claims
+          claimantDeviceId: string
+          claimantName: string
+          claimedAt: number
+          expiresAt: number
+          objections: string[]
+          status: string               # "pending", "approved", "rejected"
+
+  pairing_codes/
+    {CODE}/                            # 6-char alphanumeric, one-time use
+      groupId: string
+      encryptedKey: string             # Base64 encryption key
+      expiresAt: number                # Epoch millis, 10-minute window
+      timestamp: number
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  10. COST CONSIDERATIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Firestore Spark (free) plan limits:
+  - 1 GiB storage
+  - 50,000 reads / day
+  - 20,000 writes / day
+  - 20,000 deletes / day
+
+Each sync operation costs roughly:
+  - 2-5 reads (group doc, device doc, deltas query, snapshot check)
+  - 1-3 writes (delta push, device metadata, group activity)
+  - Snapshot writes every 50 syncs
+
+For a household of 5 devices syncing every 15 minutes:
+  - ~2000 syncs/day → ~6000 reads, ~4000 writes
+  - Well within free tier
+
+If you exceed the free tier, upgrade to Blaze (pay-as-you-go). Firestore
+costs are very low for this use case (~$0.01-0.10/month for a typical family).
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  QUICK CHECKLIST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  [ ] Firebase project created
+  [ ] Android app registered, google-services.json in app/
+  [ ] Firestore database created (choose region carefully — permanent)
+  [ ] Security rules published (section 4)
+  [ ] TTL policy on groups collection, lastActivity field (section 5)
+  [ ] TTL policy on pairing_codes collection, expiresAt field (section 8)
+  [ ] (Optional) Composite index for deltas if not auto-created (section 6)
+  [ ] (Optional) Cloud Function for subcollection cleanup (section 7)
+  [ ] Test: Create a group, generate pairing code, join from second device

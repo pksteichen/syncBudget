@@ -114,6 +114,7 @@ import com.syncbudget.app.data.getCategoryIcon
 import com.syncbudget.app.data.isRecurringDateCloseEnough
 import com.syncbudget.app.data.parseSyncBudgetCsv
 import com.syncbudget.app.data.parseUsBank
+import com.syncbudget.app.data.FullBackupSerializer
 import com.syncbudget.app.data.serializeTransactionsCsv
 import com.syncbudget.app.ui.components.CURRENCY_DECIMALS
 import com.syncbudget.app.ui.components.PieChartEditor
@@ -191,7 +192,11 @@ fun TransactionsScreen(
     onHelpClick: () -> Unit = {},
     showAttribution: Boolean = false,
     deviceNameMap: Map<String, String> = emptyMap(),
-    localDeviceId: String = ""
+    localDeviceId: String = "",
+    onSerializeFullBackup: () -> String = { "" },
+    onLoadFullBackup: (String) -> Unit = {},
+    isSyncConfigured: Boolean = false,
+    isSyncAdmin: Boolean = false
 ) {
     val S = LocalStrings.current
     val customColors = LocalSyncBudgetColors.current
@@ -281,6 +286,11 @@ fun TransactionsScreen(
     var savePasswordConfirm by remember { mutableStateOf("") }
     var saveError by remember { mutableStateOf<String?>(null) }
 
+    // Full backup state
+    var includeAllData by remember { mutableStateOf(false) }
+    var pendingFullBackupContent by remember { mutableStateOf<String?>(null) }
+    var showFullBackupDialog by remember { mutableStateOf(false) }
+
     // Encrypted load password
     var encryptedLoadPassword by remember { mutableStateOf("") }
 
@@ -313,12 +323,16 @@ fun TransactionsScreen(
     ) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
-            val toSave = if (selectionMode && selectedIds.any { it.value }) {
-                transactions.filter { selectedIds[it.id] == true }
-            } else { transactions }
-            val csvContent = serializeTransactionsCsv(toSave)
+            val contentToEncrypt = if (includeAllData) {
+                onSerializeFullBackup()
+            } else {
+                val toSave = if (selectionMode && selectedIds.any { it.value }) {
+                    transactions.filter { selectedIds[it.id] == true }
+                } else { transactions }
+                serializeTransactionsCsv(toSave)
+            }
             val encrypted = CryptoHelper.encrypt(
-                csvContent.toByteArray(),
+                contentToEncrypt.toByteArray(),
                 savePassword.toCharArray()
             )
             context.contentResolver.openOutputStream(uri)?.use { os ->
@@ -326,9 +340,28 @@ fun TransactionsScreen(
             }
             savePassword = ""
             savePasswordConfirm = ""
-            Toast.makeText(context, S.transactions.savedSuccessfully(toSave.size), Toast.LENGTH_SHORT).show()
+            val msg = if (includeAllData) S.transactions.fullBackupSaved
+                      else S.transactions.savedSuccessfully(transactions.size)
+            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            includeAllData = false
         } catch (e: Exception) {
             Toast.makeText(context, "Encrypted save failed: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val jsonSaveLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        try {
+            val content = onSerializeFullBackup()
+            context.contentResolver.openOutputStream(uri)?.use { os ->
+                os.write(content.toByteArray())
+            }
+            Toast.makeText(context, S.transactions.fullBackupSaved, Toast.LENGTH_SHORT).show()
+            includeAllData = false
+        } catch (e: Exception) {
+            Toast.makeText(context, "Save failed: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -361,7 +394,14 @@ fun TransactionsScreen(
                         importStage = ImportStage.PARSE_ERROR
                         return@LaunchedEffect
                     }
-                    val reader = BufferedReader(InputStreamReader(inputStream))
+                    val textContent = inputStream.bufferedReader().use { it.readText() }
+                    if (FullBackupSerializer.isFullBackup(textContent)) {
+                        pendingFullBackupContent = textContent
+                        showFullBackupDialog = true
+                        importStage = null
+                        return@LaunchedEffect
+                    }
+                    val reader = BufferedReader(textContent.reader())
                     val r = parseSyncBudgetCsv(reader, existingIdSet)
                     reader.close()
                     r
@@ -381,9 +421,14 @@ fun TransactionsScreen(
                             encryptedLoadPassword.toCharArray()
                         )
                         encryptedLoadPassword = ""
-                        val reader = BufferedReader(
-                            InputStreamReader(decryptedBytes.inputStream())
-                        )
+                        val textContent = String(decryptedBytes)
+                        if (FullBackupSerializer.isFullBackup(textContent)) {
+                            pendingFullBackupContent = textContent
+                            showFullBackupDialog = true
+                            importStage = null
+                            return@LaunchedEffect
+                        }
+                        val reader = BufferedReader(textContent.reader())
                         val r = parseSyncBudgetCsv(reader, existingIdSet)
                         reader.close()
                         r
@@ -461,7 +506,7 @@ fun TransactionsScreen(
         val txn = parsedTransactions[importIndex]
         if (ignoreAllDuplicates) {
             // Still check recurring/amortization even when ignoring duplicates
-            val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars)
+            val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
             if (recurringMatch != null) {
                 currentImportRecurring = recurringMatch
             } else {
@@ -478,7 +523,7 @@ fun TransactionsScreen(
 
         val dup = findDuplicate(txn, transactions, percentTolerance, matchDollar, matchDays, matchChars)
         if (dup == null) {
-            val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars)
+            val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
             if (recurringMatch != null) {
                 currentImportRecurring = recurringMatch
             } else {
@@ -873,7 +918,7 @@ fun TransactionsScreen(
                     pendingManualIsEdit = false
                     showManualDuplicateDialog = true
                 } else {
-                    val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars)
+                    val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
                     if (recurringMatch != null) {
                         pendingRecurringTxn = txn
                         pendingRecurringMatch = recurringMatch
@@ -887,7 +932,7 @@ fun TransactionsScreen(
                             pendingAmortizationIsEdit = false
                             showAmortizationDialog = true
                         } else {
-                            val budgetMatch = findBudgetIncomeMatch(txn, incomeSources, matchChars)
+                            val budgetMatch = findBudgetIncomeMatch(txn, incomeSources, matchChars, matchDays)
                             if (budgetMatch != null) {
                                 pendingBudgetIncomeTxn = txn
                                 pendingBudgetIncomeMatch = budgetMatch
@@ -924,7 +969,7 @@ fun TransactionsScreen(
                     pendingManualIsEdit = false
                     showManualDuplicateDialog = true
                 } else {
-                    val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars)
+                    val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
                     if (recurringMatch != null) {
                         pendingRecurringTxn = txn
                         pendingRecurringMatch = recurringMatch
@@ -968,7 +1013,7 @@ fun TransactionsScreen(
                     pendingManualIsEdit = true
                     showManualDuplicateDialog = true
                 } else {
-                    val recurringMatch = findRecurringExpenseMatch(updated, recurringExpenses, percentTolerance, matchDollar, matchChars)
+                    val recurringMatch = findRecurringExpenseMatch(updated, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
                     if (recurringMatch != null) {
                         pendingRecurringTxn = updated
                         pendingRecurringMatch = recurringMatch
@@ -982,7 +1027,7 @@ fun TransactionsScreen(
                             pendingAmortizationIsEdit = true
                             showAmortizationDialog = true
                         } else {
-                            val budgetMatch = findBudgetIncomeMatch(updated, incomeSources, matchChars)
+                            val budgetMatch = findBudgetIncomeMatch(updated, incomeSources, matchChars, matchDays)
                             if (budgetMatch != null) {
                                 pendingBudgetIncomeTxn = updated
                                 pendingBudgetIncomeMatch = budgetMatch
@@ -1300,11 +1345,27 @@ fun TransactionsScreen(
                             }
                         }
 
-                        val transactionsToSave = if (selectionMode && selectedIds.any { it.value })
-                            transactions.filter { selectedIds[it.id] == true } else transactions
-                        Text(S.transactions.selectedCount(transactionsToSave.size),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { includeAllData = !includeAllData }
+                        ) {
+                            Checkbox(checked = includeAllData, onCheckedChange = { includeAllData = it })
+                            Spacer(Modifier.width(8.dp))
+                            Text(S.transactions.includeAllData, style = MaterialTheme.typography.bodyMedium)
+                        }
+                        if (includeAllData) {
+                            Text(S.transactions.fullBackupNote,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
+                        } else {
+                            val transactionsToSave = if (selectionMode && selectedIds.any { it.value })
+                                transactions.filter { selectedIds[it.id] == true } else transactions
+                            Text(S.transactions.selectedCount(transactionsToSave.size),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
+                        }
 
                         if (selectedSaveFormat == SaveFormat.ENCRYPTED) {
                             val pwFieldColors = OutlinedTextFieldDefaults.colors(
@@ -1358,12 +1419,30 @@ fun TransactionsScreen(
                             saveError = null
                         }) { Text(S.common.cancel) }
                         TextButton(onClick = {
-                            when (selectedSaveFormat) {
-                                SaveFormat.CSV -> {
+                            when {
+                                includeAllData && selectedSaveFormat == SaveFormat.CSV -> {
+                                    showSaveDialog = false
+                                    jsonSaveLauncher.launch("syncbudget_backup.json")
+                                }
+                                includeAllData && selectedSaveFormat == SaveFormat.ENCRYPTED -> {
+                                    when {
+                                        savePassword.length < 8 -> {
+                                            saveError = S.transactions.passwordMinLength
+                                        }
+                                        savePassword != savePasswordConfirm -> {
+                                            saveError = S.transactions.passwordsMustMatch
+                                        }
+                                        else -> {
+                                            showSaveDialog = false
+                                            encryptedSaveLauncher.launch("syncbudget_backup.enc")
+                                        }
+                                    }
+                                }
+                                selectedSaveFormat == SaveFormat.CSV -> {
                                     showSaveDialog = false
                                     csvSaveLauncher.launch("syncbudget_transactions.csv")
                                 }
-                                SaveFormat.ENCRYPTED -> {
+                                selectedSaveFormat == SaveFormat.ENCRYPTED -> {
                                     when {
                                         savePassword.length < 8 -> {
                                             saveError = S.transactions.passwordMinLength
@@ -1383,6 +1462,78 @@ fun TransactionsScreen(
                 }
             }
         }
+    }
+
+    // Full backup load confirmation dialog
+    if (showFullBackupDialog && pendingFullBackupContent != null) {
+        AlertDialog(
+            onDismissRequest = {
+                showFullBackupDialog = false
+                pendingFullBackupContent = null
+            },
+            title = { Text(S.transactions.fullBackupDetected) },
+            text = {
+                Column {
+                    Text(S.transactions.fullBackupBody)
+                    if (isSyncConfigured) {
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            if (isSyncAdmin) S.transactions.fullBackupSyncWarning
+                            else S.transactions.fullBackupNonAdminBlock,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                if (isSyncConfigured && !isSyncAdmin) {
+                    Column {
+                        TextButton(onClick = {}, enabled = false) {
+                            Text(S.transactions.loadAllDataOverwrite)
+                        }
+                        Text(
+                            S.transactions.fullBackupNonAdminBlock,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+                    }
+                } else {
+                    TextButton(onClick = {
+                        onLoadFullBackup(pendingFullBackupContent!!)
+                        showFullBackupDialog = false
+                        pendingFullBackupContent = null
+                        Toast.makeText(context, S.transactions.fullBackupRestored, Toast.LENGTH_SHORT).show()
+                    }) { Text(S.transactions.loadAllDataOverwrite) }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    val existingIdSet = transactions.map { it.id }.toSet()
+                    val result = FullBackupSerializer.extractTransactions(
+                        pendingFullBackupContent!!, existingIdSet
+                    )
+                    parsedTransactions.clear()
+                    parsedTransactions.addAll(result.transactions)
+                    showFullBackupDialog = false
+                    pendingFullBackupContent = null
+                    if (result.error != null && result.transactions.isEmpty()) {
+                        importError = result.error
+                        importStage = ImportStage.PARSE_ERROR
+                    } else {
+                        totalFileTransactions = parsedTransactions.size
+                        val filtered = filterAlreadyLoadedDays(parsedTransactions.toList(), transactions)
+                        parsedTransactions.clear()
+                        parsedTransactions.addAll(filtered)
+                        importApproved.clear()
+                        importIndex = 0
+                        ignoreAllDuplicates = false
+                        importStage = ImportStage.DUPLICATE_CHECK
+                    }
+                }) { Text(S.transactions.loadTransactionsOnly) }
+            }
+        )
     }
 
     // Import / Load format selection dialog

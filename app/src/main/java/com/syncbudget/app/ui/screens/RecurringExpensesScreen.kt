@@ -261,6 +261,7 @@ private fun AddEditExpenseDialog(
     var typeExpanded by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showValidation by remember { mutableStateOf(false) }
+    var datePickerError by remember { mutableStateOf<String?>(null) }
 
     val textFieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = MaterialTheme.colorScheme.onBackground,
@@ -283,7 +284,7 @@ private fun AddEditExpenseDialog(
         RepeatType.DAYS -> interval != null && interval in 1..365 && startDate != null
         RepeatType.WEEKS -> interval != null && interval in 1..52 && startDate != null
         RepeatType.BI_WEEKLY -> startDate != null
-        RepeatType.MONTHS -> interval != null && interval in 1..12 && monthDay1 != null && monthDay1 in 1..28
+        RepeatType.MONTHS -> interval != null && interval in 1..12 && startDate != null
         RepeatType.BI_MONTHLY -> monthDay1 != null && monthDay1 in 1..28 && monthDay2 != null && monthDay2 in 1..28
     }
 
@@ -386,7 +387,7 @@ private fun AddEditExpenseDialog(
                                             RepeatType.DAYS -> { intervalText = "1"; monthDay1Text = ""; monthDay2Text = "" }
                                             RepeatType.WEEKS -> { intervalText = "1"; monthDay1Text = ""; monthDay2Text = "" }
                                             RepeatType.BI_WEEKLY -> { monthDay1Text = ""; monthDay2Text = "" }
-                                            RepeatType.MONTHS -> { intervalText = "1"; startDate = null; monthDay2Text = "" }
+                                            RepeatType.MONTHS -> { intervalText = "1"; monthDay1Text = ""; monthDay2Text = "" }
                                             RepeatType.BI_MONTHLY -> { intervalText = "1"; startDate = null }
                                         }
                                     }
@@ -503,19 +504,28 @@ private fun AddEditExpenseDialog(
                                 colors = textFieldColors,
                                 modifier = Modifier.fillMaxWidth()
                             )
-                            OutlinedTextField(
-                                value = monthDay1Text,
-                                onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) monthDay1Text = it },
-                                label = { Text(S.common.dayOfMonth) },
-                                singleLine = true,
-                                isError = showValidation && (monthDay1 == null || monthDay1 !in 1..28),
-                                supportingText = if (showValidation && (monthDay1 == null || monthDay1 !in 1..28)) ({
-                                    Text(S.common.exampleMonthDay, color = Color(0xFFF44336))
-                                }) else null,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                colors = textFieldColors,
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                            Box(
+                                modifier = if (showValidation && startDate == null)
+                                    Modifier.border(1.dp, Color.Red, RoundedCornerShape(4.dp))
+                                else Modifier
+                            ) {
+                                OutlinedButton(
+                                    onClick = { showDatePicker = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(if (startDate != null) S.common.startDateLabel(startDate!!.format(dateFormatter)) else S.common.pickStartDate)
+                                }
+                            }
+                            if (showValidation && startDate == null) {
+                                Text(S.common.selectAStartDate, style = MaterialTheme.typography.bodySmall, color = Color(0xFFF44336))
+                            }
+                            if (startDate != null) {
+                                Text(
+                                    text = S.common.dayOfMonth + ": " + startDate!!.dayOfMonth,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                                )
+                            }
                         }
                         RepeatType.BI_MONTHLY -> {
                             OutlinedTextField(
@@ -595,8 +605,8 @@ private fun AddEditExpenseDialog(
                                         amount = amount!!,
                                         repeatType = repeatType,
                                         repeatInterval = interval!!,
-                                        startDate = null,
-                                        monthDay1 = monthDay1,
+                                        startDate = startDate,
+                                        monthDay1 = startDate!!.dayOfMonth,
                                         monthDay2 = null
                                     )
                                     RepeatType.BI_MONTHLY -> RecurringExpense(
@@ -630,19 +640,35 @@ private fun AddEditExpenseDialog(
             }
         )
         DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
+            onDismissRequest = { showDatePicker = false; datePickerError = null },
             confirmButton = {
-                TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let { millis ->
-                        startDate = Instant.ofEpochMilli(millis).atZone(ZoneId.of("UTC")).toLocalDate()
+                Column {
+                    if (datePickerError != null) {
+                        Text(
+                            datePickerError!!,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                        )
                     }
-                    showDatePicker = false
-                }) {
-                    Text(S.common.ok)
+                    TextButton(onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            val selected = Instant.ofEpochMilli(millis).atZone(ZoneId.of("UTC")).toLocalDate()
+                            if (repeatType == RepeatType.MONTHS && selected.dayOfMonth > 28) {
+                                datePickerError = S.common.dateDayTooHigh
+                            } else {
+                                startDate = selected
+                                datePickerError = null
+                                showDatePicker = false
+                            }
+                        }
+                    }) {
+                        Text(S.common.ok)
+                    }
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) {
+                TextButton(onClick = { showDatePicker = false; datePickerError = null }) {
                     Text(S.common.cancel)
                 }
             }

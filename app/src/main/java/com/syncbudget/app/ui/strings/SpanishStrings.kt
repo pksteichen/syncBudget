@@ -64,7 +64,8 @@ object SpanishStrings : AppStrings {
         exampleMonthDay = "ej. 15",
         exampleBiMonthlyDay1 = "ej. 1",
         exampleBiMonthlyDay2 = "ej. 15",
-        language = "Idioma"
+        language = "Idioma",
+        dateDayTooHigh = "Selecciona una fecha entre el 1 y el 28 del mes"
     )
 
     override val dashboard = DashboardStrings(
@@ -245,7 +246,19 @@ object SpanishStrings : AppStrings {
         requiredMerchantExample = "Obligatorio, ej. Supermercado",
         moveCategoryValue = "Mover valor de categor\u00eda",
         sumMismatch = "La suma no coincide",
-        maxAmount2 = { max: String -> "M\u00e1x: $max" }
+        maxAmount2 = { max: String -> "M\u00e1x: $max" },
+        includeAllData = "Incluir todos los datos (respaldo completo)",
+        fullBackupNote = "Se guardar\u00e1n todos los datos de la app incluyendo ajustes, categor\u00edas, gastos recurrentes, metas de ahorro y entradas de amortizaci\u00f3n.",
+        fullBackupDetected = "Respaldo completo detectado",
+        fullBackupBody = "Este archivo contiene ajustes, categor\u00edas, gastos recurrentes, metas de ahorro, entradas de amortizaci\u00f3n y todos los dem\u00e1s datos. \u00bfC\u00f3mo desea cargarlo?",
+        loadTransactionsOnly = "Cargar solo transacciones",
+        loadAllDataOverwrite = "Cargar todo y sobrescribir",
+        fullBackupRestored = "Respaldo completo restaurado exitosamente",
+        fullBackupSaved = "Respaldo completo guardado exitosamente",
+        fullBackupSyncWarning = "Restaurar un respaldo completo disolverá el grupo de sincronización familiar actual. Deberás crear un nuevo grupo y compartir un nuevo código de emparejamiento con los miembros de la familia.",
+        fullBackupNonAdminBlock = "Solo el administrador del grupo puede restaurar un respaldo completo. Una restauración completa corrompería el estado de sincronización de todos los dispositivos.",
+        fullBackupGroupRecreated = "Respaldo restaurado. Nuevo grupo familiar creado \u2014 comparte el código de emparejamiento con los miembros de la familia.",
+        fullBackupGroupDissolved = "Respaldo restaurado. Grupo familiar disuelto."
     )
 
     override val futureExpenditures = FutureExpendituresStrings(

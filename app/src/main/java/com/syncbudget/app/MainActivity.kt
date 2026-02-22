@@ -54,6 +54,7 @@ import com.syncbudget.app.data.sync.SyncWorker
 import com.syncbudget.app.data.sync.active
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.syncbudget.app.data.FullBackupSerializer
 import com.syncbudget.app.data.findAmortizationMatch
 import com.syncbudget.app.data.findBudgetIncomeMatch
 import com.syncbudget.app.data.findDuplicate
@@ -472,7 +473,7 @@ class MainActivity : ComponentActivity() {
                     dashManualDuplicateMatch = dup
                     dashShowManualDuplicateDialog = true
                 } else {
-                    val recurringMatch = findRecurringExpenseMatch(txn, activeRecurring, percentTolerance, matchDollar, matchChars)
+                    val recurringMatch = findRecurringExpenseMatch(txn, activeRecurring, percentTolerance, matchDollar, matchChars, matchDays)
                     if (recurringMatch != null) {
                         dashPendingRecurringTxn = txn
                         dashPendingRecurringMatch = recurringMatch
@@ -484,7 +485,7 @@ class MainActivity : ComponentActivity() {
                             dashPendingAmortizationMatch = amortizationMatch
                             dashShowAmortizationDialog = true
                         } else {
-                            val budgetMatch = findBudgetIncomeMatch(txn, activeIncome, matchChars)
+                            val budgetMatch = findBudgetIncomeMatch(txn, activeIncome, matchChars, matchDays)
                             if (budgetMatch != null) {
                                 dashPendingBudgetIncomeTxn = txn
                                 dashPendingBudgetIncomeMatch = budgetMatch
@@ -911,6 +912,89 @@ class MainActivity : ComponentActivity() {
                                 persistAvailableCash()
                             }
                         },
+                        onSerializeFullBackup = {
+                            FullBackupSerializer.serialize(context)
+                        },
+                        onLoadFullBackup = { jsonContent ->
+                            FullBackupSerializer.restoreFullState(context, jsonContent)
+
+                            // Reload all lists from repositories
+                            val newTxns = TransactionRepository.load(context)
+                            transactions.clear(); transactions.addAll(newTxns)
+
+                            val newCats = CategoryRepository.load(context)
+                            categories.clear(); categories.addAll(newCats)
+
+                            val newRE = RecurringExpenseRepository.load(context)
+                            recurringExpenses.clear(); recurringExpenses.addAll(newRE)
+
+                            val newIS = IncomeSourceRepository.load(context)
+                            incomeSources.clear(); incomeSources.addAll(newIS)
+
+                            val newAE = AmortizationRepository.load(context)
+                            amortizationEntries.clear(); amortizationEntries.addAll(newAE)
+
+                            val newSG = SavingsGoalRepository.load(context)
+                            savingsGoals.clear(); savingsGoals.addAll(newSG)
+
+                            val newPL = PeriodLedgerRepository.load(context)
+                            periodLedger.clear(); periodLedger.addAll(newPL)
+
+                            sharedSettings = SharedSettingsRepository.load(context)
+
+                            // Reload local prefs
+                            currencySymbol = prefs.getString("currencySymbol", "$") ?: "$"
+                            digitCount = prefs.getInt("digitCount", 3)
+                            showDecimals = prefs.getBoolean("showDecimals", false)
+                            dateFormatPattern = prefs.getString("dateFormatPattern", "yyyy-MM-dd") ?: "yyyy-MM-dd"
+                            chartPalette = prefs.getString("chartPalette", "Sunset") ?: "Sunset"
+                            appLanguage = prefs.getString("appLanguage", "en") ?: "en"
+                            budgetPeriod = try { BudgetPeriod.valueOf(prefs.getString("budgetPeriod", "DAILY") ?: "DAILY") }
+                                           catch (_: Exception) { BudgetPeriod.DAILY }
+                            resetHour = prefs.getInt("resetHour", 0)
+                            resetDayOfWeek = prefs.getInt("resetDayOfWeek", 7)
+                            resetDayOfMonth = prefs.getInt("resetDayOfMonth", 1)
+                            isManualBudgetEnabled = prefs.getBoolean("isManualBudgetEnabled", false)
+                            manualBudgetAmount = prefs.getFloat("manualBudgetAmount", 0f).toDouble()
+                            availableCash = prefs.getFloat("availableCash", 0f).toDouble()
+                            budgetStartDate = prefs.getString("budgetStartDate", null)?.let { LocalDate.parse(it) }
+                            lastRefreshDate = prefs.getString("lastRefreshDate", null)?.let { LocalDate.parse(it) }
+                            weekStartSunday = prefs.getBoolean("weekStartSunday", true)
+                            matchDays = prefs.getInt("matchDays", 7)
+                            matchPercent = prefs.getFloat("matchPercent", 1.0f)
+                            matchDollar = prefs.getInt("matchDollar", 1)
+                            matchChars = prefs.getInt("matchChars", 5)
+
+                            // Handle family sync: dissolve old group, create new one
+                            if (isSyncConfigured) {
+                                val oldGroupId = syncGroupId
+                                if (oldGroupId != null) {
+                                    coroutineScope.launch {
+                                        try {
+                                            GroupManager.dissolveGroup(context, oldGroupId)
+                                        } catch (_: Exception) {}
+                                        val newGroup = GroupManager.createGroup(context)
+                                        // Register admin device and initialize group doc
+                                        FirestoreService.registerDevice(
+                                            newGroup.groupId, localDeviceId,
+                                            GroupManager.getDeviceName(context), isAdmin = true
+                                        )
+                                        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                        db.collection("groups").document(newGroup.groupId)
+                                            .set(mapOf("nextDeltaVersion" to 1L, "createdAt" to System.currentTimeMillis(), "lastActivity" to System.currentTimeMillis()))
+                                        isSyncConfigured = true
+                                        syncGroupId = newGroup.groupId
+                                        isSyncAdmin = true
+                                        syncStatus = "synced"
+                                        lastSyncTime = null
+                                        syncDevices = emptyList()
+                                        generatedPairingCode = null
+                                    }
+                                }
+                            }
+                        },
+                        isSyncConfigured = isSyncConfigured,
+                        isSyncAdmin = isSyncAdmin,
                         onBack = { currentScreen = "main" },
                         onHelpClick = { currentScreen = "transactions_help" }
                     )
@@ -1165,10 +1249,10 @@ class MainActivity : ComponentActivity() {
                                         GroupManager.getDeviceName(context),
                                         isAdmin = true
                                     )
-                                    // Initialize group doc with nextDeltaVersion
+                                    // Initialize group doc with nextDeltaVersion and lastActivity for TTL
                                     val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
                                     db.collection("groups").document(info.groupId)
-                                        .set(mapOf("nextDeltaVersion" to 1L, "createdAt" to System.currentTimeMillis()))
+                                        .set(mapOf("nextDeltaVersion" to 1L, "createdAt" to System.currentTimeMillis(), "lastActivity" to System.currentTimeMillis()))
                                     // Initialize SharedSettings from current app_prefs
                                     val clock = lamportClock.tick()
                                     sharedSettings = SharedSettings(

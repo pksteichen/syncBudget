@@ -224,8 +224,9 @@ class SyncEngine(
                 FirestoreService.writeSnapshot(groupId, newSyncVersion, deviceId, encodedSnapshot)
             }
 
-            // Step 9: Record successful sync time
+            // Step 9: Record successful sync time & update group activity for TTL
             prefs.edit().putLong("lastSuccessfulSync", System.currentTimeMillis()).apply()
+            FirestoreService.updateGroupActivity(groupId)
 
             // Step 10: Check admin claim status
             var adminClaim: AdminClaim? = null
