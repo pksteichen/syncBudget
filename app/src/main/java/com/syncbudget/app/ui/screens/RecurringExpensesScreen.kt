@@ -63,6 +63,8 @@ import com.syncbudget.app.ui.components.formatCurrency
 import com.syncbudget.app.ui.components.CURRENCY_DECIMALS
 import com.syncbudget.app.ui.strings.LocalStrings
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -241,6 +243,7 @@ private fun AddEditExpenseDialog(
     onSave: (RecurringExpense) -> Unit
 ) {
     val S = LocalStrings.current
+    val context = LocalContext.current
     val isEdit = existingExpense != null
     val title = if (isEdit) S.recurringExpenses.editExpense else S.recurringExpenses.addExpense
     val maxDecimalPlaces = CURRENCY_DECIMALS[currencySymbol] ?: 2
@@ -261,7 +264,7 @@ private fun AddEditExpenseDialog(
     var typeExpanded by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showValidation by remember { mutableStateOf(false) }
-    var datePickerError by remember { mutableStateOf<String?>(null) }
+
 
     val textFieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = MaterialTheme.colorScheme.onBackground,
@@ -640,35 +643,24 @@ private fun AddEditExpenseDialog(
             }
         )
         DatePickerDialog(
-            onDismissRequest = { showDatePicker = false; datePickerError = null },
+            onDismissRequest = { showDatePicker = false },
             confirmButton = {
-                Column {
-                    if (datePickerError != null) {
-                        Text(
-                            datePickerError!!,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                        )
-                    }
-                    TextButton(onClick = {
-                        datePickerState.selectedDateMillis?.let { millis ->
-                            val selected = Instant.ofEpochMilli(millis).atZone(ZoneId.of("UTC")).toLocalDate()
-                            if (repeatType == RepeatType.MONTHS && selected.dayOfMonth > 28) {
-                                datePickerError = S.common.dateDayTooHigh
-                            } else {
-                                startDate = selected
-                                datePickerError = null
-                                showDatePicker = false
-                            }
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        val selected = Instant.ofEpochMilli(millis).atZone(ZoneId.of("UTC")).toLocalDate()
+                        if (repeatType == RepeatType.MONTHS && selected.dayOfMonth > 28) {
+                            Toast.makeText(context, S.common.dateDayTooHigh, Toast.LENGTH_SHORT).show()
+                        } else {
+                            startDate = selected
+                            showDatePicker = false
                         }
-                    }) {
-                        Text(S.common.ok)
                     }
+                }) {
+                    Text(S.common.ok)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false; datePickerError = null }) {
+                TextButton(onClick = { showDatePicker = false }) {
                     Text(S.common.cancel)
                 }
             }
