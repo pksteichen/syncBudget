@@ -94,8 +94,9 @@ object DeltaBuilder {
         if (cat.name_clock > lastPushedClock) fields["name"] = FieldDelta(cat.name, cat.name_clock)
         if (cat.iconName_clock > lastPushedClock) fields["iconName"] = FieldDelta(cat.iconName, cat.iconName_clock)
         if (cat.deleted_clock > lastPushedClock) fields["deleted"] = FieldDelta(cat.deleted, cat.deleted_clock)
-        if (cat.tag.isNotEmpty()) fields["tag"] = FieldDelta(cat.tag, 0L)
         if (fields.isEmpty()) return null
+        // Include tag as metadata only when there are real field changes to send
+        if (cat.tag.isNotEmpty()) fields["tag"] = FieldDelta(cat.tag, 0L)
         return RecordDelta("category", "upsert", cat.id, cat.deviceId, fields)
     }
 
@@ -116,6 +117,7 @@ object DeltaBuilder {
         if (settings.matchDollar_clock > lastPushedClock) fields["matchDollar"] = FieldDelta(settings.matchDollar, settings.matchDollar_clock)
         if (settings.matchChars_clock > lastPushedClock) fields["matchChars"] = FieldDelta(settings.matchChars, settings.matchChars_clock)
         if (settings.showAttribution_clock > lastPushedClock) fields["showAttribution"] = FieldDelta(settings.showAttribution, settings.showAttribution_clock)
+        if (settings.availableCash_clock > lastPushedClock) fields["availableCash"] = FieldDelta(settings.availableCash, settings.availableCash_clock)
         if (fields.isEmpty()) return null
         return RecordDelta("shared_settings", "upsert", 0, settings.lastChangedBy, fields)
     }

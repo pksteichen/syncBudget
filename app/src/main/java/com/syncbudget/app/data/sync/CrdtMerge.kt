@@ -227,6 +227,7 @@ object CrdtMerge {
             matchDollar = if (shouldAcceptRemote(local.matchDollar_clock, remote.matchDollar_clock, localDeviceId, remoteDeviceId)) remote.matchDollar else local.matchDollar,
             matchChars = if (shouldAcceptRemote(local.matchChars_clock, remote.matchChars_clock, localDeviceId, remoteDeviceId)) remote.matchChars else local.matchChars,
             showAttribution = if (shouldAcceptRemote(local.showAttribution_clock, remote.showAttribution_clock, localDeviceId, remoteDeviceId)) remote.showAttribution else local.showAttribution,
+            availableCash = if (shouldAcceptRemote(local.availableCash_clock, remote.availableCash_clock, localDeviceId, remoteDeviceId)) remote.availableCash else local.availableCash,
             lastChangedBy = remote.lastChangedBy,
             currency_clock = maxOf(local.currency_clock, remote.currency_clock),
             budgetPeriod_clock = maxOf(local.budgetPeriod_clock, remote.budgetPeriod_clock),
@@ -242,7 +243,8 @@ object CrdtMerge {
             matchPercent_clock = maxOf(local.matchPercent_clock, remote.matchPercent_clock),
             matchDollar_clock = maxOf(local.matchDollar_clock, remote.matchDollar_clock),
             matchChars_clock = maxOf(local.matchChars_clock, remote.matchChars_clock),
-            showAttribution_clock = maxOf(local.showAttribution_clock, remote.showAttribution_clock)
+            showAttribution_clock = maxOf(local.showAttribution_clock, remote.showAttribution_clock),
+            availableCash_clock = maxOf(local.availableCash_clock, remote.availableCash_clock)
         )
     }
 }

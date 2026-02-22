@@ -33,6 +33,7 @@ data class SyncResult(
     val mergedCategories: List<Category>? = null,
     val mergedSharedSettings: SharedSettings? = null,
     val pendingAdminClaim: AdminClaim? = null,
+    val catIdRemap: Map<Int, Int>? = null,
     val error: String? = null
 )
 
@@ -61,7 +62,8 @@ class SyncEngine(
         savingsGoals: List<SavingsGoal>,
         amortizationEntries: List<AmortizationEntry>,
         categories: List<Category>,
-        sharedSettings: SharedSettings = SharedSettingsRepository.load(context)
+        sharedSettings: SharedSettings = SharedSettingsRepository.load(context),
+        existingCatIdRemap: Map<Int, Int> = emptyMap()
     ): SyncResult {
         try {
             // Step 0: Stale check — block sync if too many days without success
@@ -112,6 +114,7 @@ class SyncEngine(
             var mergedSettings = sharedSettings
             var settingsChanged = false
             var budgetRecalcNeeded = false
+            val catIdRemap = existingCatIdRemap.toMutableMap() // remote ID -> local ID (seeded from persistent map)
 
             for (packet in packets) {
                 lamportClock.merge(packet.timestamp.epochSecond)
@@ -141,9 +144,24 @@ class SyncEngine(
                             ) { local, remote -> CrdtMerge.mergeAmortizationEntry(local, remote, deviceId) }
                             budgetRecalcNeeded = true
                         }
-                        "category" -> mergedCat = mergeRecordIntoList(
-                            mergedCat, change, deviceId
-                        ) { local, remote -> CrdtMerge.mergeCategory(local, remote, deviceId) }
+                        "category" -> {
+                            val remoteCat = deserializeCategory(change)
+                            val byId = mergedCat.indexOfFirst { it.id == change.id }
+                            if (byId >= 0) {
+                                mergedCat[byId] = CrdtMerge.mergeCategory(mergedCat[byId], remoteCat, deviceId)
+                            } else {
+                                // Deduplicate by tag: if a local category has the same tag, merge into it
+                                val byTag = if (remoteCat.tag.isNotEmpty())
+                                    mergedCat.indexOfFirst { it.tag == remoteCat.tag } else -1
+                                if (byTag >= 0) {
+                                    // Record ID mapping: remote ID -> local ID
+                                    catIdRemap[change.id] = mergedCat[byTag].id
+                                    mergedCat[byTag] = CrdtMerge.mergeCategory(mergedCat[byTag], remoteCat, deviceId)
+                                } else {
+                                    mergedCat.add(remoteCat)
+                                }
+                            }
+                        }
                         "shared_settings" -> {
                             val remoteSettings = deserializeSharedSettings(change, mergedSettings)
                             val before = mergedSettings
@@ -160,6 +178,20 @@ class SyncEngine(
                                 }
                             }
                         }
+                    }
+                }
+            }
+
+            // Step 5: Remap category IDs in transactions (handles different random IDs per device)
+            if (catIdRemap.isNotEmpty()) {
+                for (i in mergedTxns.indices) {
+                    val txn = mergedTxns[i]
+                    val remapped = txn.categoryAmounts.map { ca ->
+                        val newId = catIdRemap[ca.categoryId]
+                        if (newId != null) ca.copy(categoryId = newId) else ca
+                    }
+                    if (remapped != txn.categoryAmounts) {
+                        mergedTxns[i] = txn.copy(categoryAmounts = remapped)
                     }
                 }
             }
@@ -269,7 +301,8 @@ class SyncEngine(
                 mergedAmortizationEntries = if (hasRemoteChanges) mergedAe else null,
                 mergedCategories = if (hasRemoteChanges) mergedCat else null,
                 mergedSharedSettings = if (settingsChanged) mergedSettings else null,
-                pendingAdminClaim = adminClaim
+                pendingAdminClaim = adminClaim,
+                catIdRemap = catIdRemap
             )
         } catch (e: Exception) {
             val errorCode = when {
@@ -326,6 +359,7 @@ class SyncEngine(
                 "matchDollar" -> s = s.copy(matchDollar = (fd.value as? Number)?.toInt() ?: s.matchDollar, matchDollar_clock = fd.clock)
                 "matchChars" -> s = s.copy(matchChars = (fd.value as? Number)?.toInt() ?: s.matchChars, matchChars_clock = fd.clock)
                 "showAttribution" -> s = s.copy(showAttribution = fd.value as? Boolean ?: s.showAttribution, showAttribution_clock = fd.clock)
+                "availableCash" -> s = s.copy(availableCash = (fd.value as? Number)?.toDouble() ?: s.availableCash, availableCash_clock = fd.clock)
             }
         }
         return s

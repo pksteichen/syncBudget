@@ -14,6 +14,7 @@ import com.syncbudget.app.data.SavingsGoalRepository
 import com.syncbudget.app.data.SharedSettingsRepository
 import com.syncbudget.app.data.TransactionRepository
 import android.util.Base64
+import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 class SyncWorker(
@@ -45,10 +46,20 @@ class SyncWorker(
         val categories = CategoryRepository.load(applicationContext)
         val sharedSettings = SharedSettingsRepository.load(applicationContext)
 
+        // Load persisted category ID remap
+        val remapJson = syncPrefs.getString("catIdRemap", null)
+        val existingRemap = if (remapJson != null) {
+            try {
+                val json = JSONObject(remapJson)
+                json.keys().asSequence().associate { it.toInt() to json.getInt(it) }
+            } catch (_: Exception) { emptyMap() }
+        } else emptyMap<Int, Int>()
+
         val result = engine.sync(
             transactions, recurringExpenses, incomeSources,
             savingsGoals, amortizationEntries, categories,
-            sharedSettings
+            sharedSettings,
+            existingCatIdRemap = existingRemap
         )
 
         if (result.success) {
@@ -60,6 +71,11 @@ class SyncWorker(
             result.mergedAmortizationEntries?.let { AmortizationRepository.save(applicationContext, it) }
             result.mergedCategories?.let { CategoryRepository.save(applicationContext, it) }
             result.mergedSharedSettings?.let { SharedSettingsRepository.save(applicationContext, it) }
+            // Persist updated category ID remap
+            result.catIdRemap?.let { remap ->
+                val json = JSONObject(remap.mapKeys { it.key.toString() })
+                syncPrefs.edit().putString("catIdRemap", json.toString()).apply()
+            }
             return Result.success()
         }
 

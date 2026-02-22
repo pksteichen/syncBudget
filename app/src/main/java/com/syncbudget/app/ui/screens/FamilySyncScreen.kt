@@ -106,8 +106,8 @@ fun FamilySyncScreen(
     onClaimAdmin: () -> Unit = {},
     onObjectClaim: () -> Unit = {},
     syncErrorMessage: String? = null,
-    onCreateGroup: () -> Unit,
-    onJoinGroup: (pairingCode: String) -> Unit,
+    onCreateGroup: (nickname: String) -> Unit,
+    onJoinGroup: (pairingCode: String, nickname: String) -> Unit,
     onLeaveGroup: () -> Unit,
     onDissolveGroup: () -> Unit,
     onSyncNow: () -> Unit,
@@ -122,8 +122,11 @@ fun FamilySyncScreen(
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
 
+    var showCreateDialog by remember { mutableStateOf(false) }
+    var createNicknameInput by remember { mutableStateOf("") }
     var showJoinDialog by remember { mutableStateOf(false) }
     var joinCodeInput by remember { mutableStateOf("") }
+    var joinNicknameInput by remember { mutableStateOf("") }
     var showJoinWarning by remember { mutableStateOf(false) }
     var showLeaveConfirm by remember { mutableStateOf(false) }
     var showDissolveConfirm by remember { mutableStateOf(false) }
@@ -194,7 +197,7 @@ fun FamilySyncScreen(
 
                 item {
                     OutlinedButton(
-                        onClick = onCreateGroup,
+                        onClick = { showCreateDialog = true },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(S.sync.createGroup)
@@ -546,28 +549,80 @@ fun FamilySyncScreen(
             }
         }
 
+        // Create group dialog (nickname input)
+        if (showCreateDialog) {
+            AlertDialog(
+                onDismissRequest = {
+                    showCreateDialog = false
+                    createNicknameInput = ""
+                },
+                title = { Text(S.sync.createGroupTitle) },
+                text = {
+                    OutlinedTextField(
+                        value = createNicknameInput,
+                        onValueChange = { createNicknameInput = it.take(20) },
+                        label = { Text(S.sync.enterNickname) },
+                        singleLine = true,
+                        colors = textFieldColors,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            onCreateGroup(createNicknameInput.trim())
+                            showCreateDialog = false
+                            createNicknameInput = ""
+                        },
+                        enabled = createNicknameInput.isNotBlank()
+                    ) {
+                        Text(S.common.ok)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        showCreateDialog = false
+                        createNicknameInput = ""
+                    }) {
+                        Text(S.common.cancel)
+                    }
+                }
+            )
+        }
+
         // Join dialog
         if (showJoinDialog) {
             AlertDialog(
                 onDismissRequest = {
                     showJoinDialog = false
                     joinCodeInput = ""
+                    joinNicknameInput = ""
                 },
                 title = { Text(S.sync.joinGroup) },
                 text = {
-                    OutlinedTextField(
-                        value = joinCodeInput,
-                        onValueChange = { joinCodeInput = it.uppercase().take(6) },
-                        label = { Text(S.sync.enterPairingCode) },
-                        singleLine = true,
-                        colors = textFieldColors,
-                        modifier = Modifier.fillMaxWidth(),
-                        textStyle = MaterialTheme.typography.headlineSmall.copy(
-                            fontFamily = FontFamily.Monospace,
-                            textAlign = TextAlign.Center,
-                            letterSpacing = 4.sp
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedTextField(
+                            value = joinNicknameInput,
+                            onValueChange = { joinNicknameInput = it.take(20) },
+                            label = { Text(S.sync.enterNickname) },
+                            singleLine = true,
+                            colors = textFieldColors,
+                            modifier = Modifier.fillMaxWidth()
                         )
-                    )
+                        OutlinedTextField(
+                            value = joinCodeInput,
+                            onValueChange = { joinCodeInput = it.uppercase().take(6) },
+                            label = { Text(S.sync.enterPairingCode) },
+                            singleLine = true,
+                            colors = textFieldColors,
+                            modifier = Modifier.fillMaxWidth(),
+                            textStyle = MaterialTheme.typography.headlineSmall.copy(
+                                fontFamily = FontFamily.Monospace,
+                                textAlign = TextAlign.Center,
+                                letterSpacing = 4.sp
+                            )
+                        )
+                    }
                 },
                 confirmButton = {
                     TextButton(
@@ -575,7 +630,7 @@ fun FamilySyncScreen(
                             showJoinDialog = false
                             showJoinWarning = true
                         },
-                        enabled = joinCodeInput.length == 6
+                        enabled = joinCodeInput.length == 6 && joinNicknameInput.isNotBlank()
                     ) {
                         Text(S.common.ok)
                     }
@@ -584,6 +639,7 @@ fun FamilySyncScreen(
                     TextButton(onClick = {
                         showJoinDialog = false
                         joinCodeInput = ""
+                        joinNicknameInput = ""
                     }) {
                         Text(S.common.cancel)
                     }
@@ -684,14 +740,16 @@ fun FamilySyncScreen(
                 onDismissRequest = {
                     showJoinWarning = false
                     joinCodeInput = ""
+                    joinNicknameInput = ""
                 },
                 title = { Text(S.sync.joinWarningTitle) },
                 text = { Text(S.sync.joinWarningBody) },
                 confirmButton = {
                     TextButton(onClick = {
-                        onJoinGroup(joinCodeInput)
+                        onJoinGroup(joinCodeInput, joinNicknameInput.trim())
                         showJoinWarning = false
                         joinCodeInput = ""
+                        joinNicknameInput = ""
                     }) {
                         Text(S.common.ok, color = Color(0xFFF44336))
                     }
@@ -700,6 +758,7 @@ fun FamilySyncScreen(
                     TextButton(onClick = {
                         showJoinWarning = false
                         joinCodeInput = ""
+                        joinNicknameInput = ""
                     }) {
                         Text(S.common.cancel)
                     }

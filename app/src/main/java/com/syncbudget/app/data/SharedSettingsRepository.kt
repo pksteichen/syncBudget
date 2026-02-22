@@ -24,6 +24,7 @@ object SharedSettingsRepository {
         json.put("matchDollar", settings.matchDollar)
         json.put("matchChars", settings.matchChars)
         json.put("showAttribution", settings.showAttribution)
+        json.put("availableCash", settings.availableCash)
         json.put("lastChangedBy", settings.lastChangedBy)
         // Clocks
         json.put("currency_clock", settings.currency_clock)
@@ -41,6 +42,7 @@ object SharedSettingsRepository {
         json.put("matchDollar_clock", settings.matchDollar_clock)
         json.put("matchChars_clock", settings.matchChars_clock)
         json.put("showAttribution_clock", settings.showAttribution_clock)
+        json.put("availableCash_clock", settings.availableCash_clock)
 
         context.openFileOutput(FILE_NAME, Context.MODE_PRIVATE).use {
             it.write(json.toString().toByteArray())
@@ -69,6 +71,7 @@ object SharedSettingsRepository {
                 matchDollar = json.optInt("matchDollar", 1),
                 matchChars = json.optInt("matchChars", 5),
                 showAttribution = json.optBoolean("showAttribution", false),
+                availableCash = json.optDouble("availableCash", 0.0),
                 lastChangedBy = json.optString("lastChangedBy", ""),
                 currency_clock = json.optLong("currency_clock", 0L),
                 budgetPeriod_clock = json.optLong("budgetPeriod_clock", 0L),
@@ -84,7 +87,8 @@ object SharedSettingsRepository {
                 matchPercent_clock = json.optLong("matchPercent_clock", 0L),
                 matchDollar_clock = json.optLong("matchDollar_clock", 0L),
                 matchChars_clock = json.optLong("matchChars_clock", 0L),
-                showAttribution_clock = json.optLong("showAttribution_clock", 0L)
+                showAttribution_clock = json.optLong("showAttribution_clock", 0L),
+                availableCash_clock = json.optLong("availableCash_clock", 0L)
             )
         } catch (_: Exception) {
             SharedSettings()
@@ -108,6 +112,7 @@ object SharedSettingsRepository {
         json.put("matchDollar", settings.matchDollar)
         json.put("matchChars", settings.matchChars)
         json.put("showAttribution", settings.showAttribution)
+        json.put("availableCash", settings.availableCash)
         json.put("lastChangedBy", settings.lastChangedBy)
         json.put("currency_clock", settings.currency_clock)
         json.put("budgetPeriod_clock", settings.budgetPeriod_clock)
@@ -124,6 +129,7 @@ object SharedSettingsRepository {
         json.put("matchDollar_clock", settings.matchDollar_clock)
         json.put("matchChars_clock", settings.matchChars_clock)
         json.put("showAttribution_clock", settings.showAttribution_clock)
+        json.put("availableCash_clock", settings.availableCash_clock)
         return json
     }
 
@@ -144,6 +150,7 @@ object SharedSettingsRepository {
             matchDollar = json.optInt("matchDollar", 1),
             matchChars = json.optInt("matchChars", 5),
             showAttribution = json.optBoolean("showAttribution", false),
+            availableCash = json.optDouble("availableCash", 0.0),
             lastChangedBy = json.optString("lastChangedBy", ""),
             currency_clock = json.optLong("currency_clock", 0L),
             budgetPeriod_clock = json.optLong("budgetPeriod_clock", 0L),
@@ -159,7 +166,8 @@ object SharedSettingsRepository {
             matchPercent_clock = json.optLong("matchPercent_clock", 0L),
             matchDollar_clock = json.optLong("matchDollar_clock", 0L),
             matchChars_clock = json.optLong("matchChars_clock", 0L),
-            showAttribution_clock = json.optLong("showAttribution_clock", 0L)
+            showAttribution_clock = json.optLong("showAttribution_clock", 0L),
+            availableCash_clock = json.optLong("availableCash_clock", 0L)
         )
     }
 }

@@ -402,7 +402,10 @@ object SpanishStrings : AppStrings {
         errorGroupDeleted = "Este grupo ha sido disuelto",
         errorEncryption = "Error de cifrado \u2014 verifica tu emparejamiento",
         joinWarningTitle = "\u00bfReemplazar Datos Locales?",
-        joinWarningBody = "Unirte a un grupo familiar reemplazar\u00e1 tus datos locales con los datos compartidos del grupo. Tus transacciones, metas y configuraciones actuales ser\u00e1n sobrescritas. Esto no se puede deshacer."
+        joinWarningBody = "Unirte a un grupo familiar reemplazar\u00e1 tus datos locales con los datos compartidos del grupo. Tus transacciones, metas y configuraciones actuales ser\u00e1n sobrescritas. Esto no se puede deshacer.",
+        dissolveError = "No se pudo conectar al servidor \u2014 int\u00e9ntalo m\u00e1s tarde",
+        enterNickname = "Tu nombre",
+        createGroupTitle = "Crear Grupo"
     )
 
     // ── Help Screen Strings ──

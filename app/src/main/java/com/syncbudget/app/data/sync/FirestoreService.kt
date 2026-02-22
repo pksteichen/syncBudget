@@ -249,29 +249,31 @@ object FirestoreService {
     }
 
     suspend fun deleteGroup(groupId: String) {
-        // Delete all subcollections
         val groupRef = db.collection("groups").document(groupId)
 
-        // Delete deltas
-        val deltas = groupRef.collection("deltas").get().await()
-        for (doc in deltas.documents) {
-            doc.reference.delete().await()
-        }
+        // Fetch all subcollections in parallel
+        val deltasTask = groupRef.collection("deltas").get()
+        val devicesTask = groupRef.collection("devices").get()
+        val snapshotsTask = groupRef.collection("snapshots").get()
+        val deltas = deltasTask.await()
+        val devices = devicesTask.await()
+        val snapshots = snapshotsTask.await()
 
-        // Delete devices
-        val devices = groupRef.collection("devices").get().await()
-        for (doc in devices.documents) {
-            doc.reference.delete().await()
+        // Batch-delete all documents (max 500 per batch, well within limits)
+        val allDocs = deltas.documents + devices.documents + snapshots.documents
+        val chunks = allDocs.chunked(499)
+        for ((i, chunk) in chunks.withIndex()) {
+            val batch = db.batch()
+            for (doc in chunk) {
+                batch.delete(doc.reference)
+            }
+            if (i == chunks.lastIndex) batch.delete(groupRef)
+            batch.commit().await()
         }
-
-        // Delete snapshots
-        val snapshots = groupRef.collection("snapshots").get().await()
-        for (doc in snapshots.documents) {
-            doc.reference.delete().await()
+        // If there were no subcollection docs, still delete the group doc
+        if (allDocs.isEmpty()) {
+            groupRef.delete().await()
         }
-
-        // Delete group document
-        groupRef.delete().await()
     }
 
     suspend fun createAdminClaim(groupId: String, claim: AdminClaim) {

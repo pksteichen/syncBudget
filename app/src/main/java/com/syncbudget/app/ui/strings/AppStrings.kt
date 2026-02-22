@@ -426,7 +426,10 @@ data class SyncStrings(
     val errorEncryption: String,
     // Join warning (5.6)
     val joinWarningTitle: String,
-    val joinWarningBody: String
+    val joinWarningBody: String,
+    val dissolveError: String,
+    val enterNickname: String,
+    val createGroupTitle: String
 )
 
 // ── Help Screen Strings ──

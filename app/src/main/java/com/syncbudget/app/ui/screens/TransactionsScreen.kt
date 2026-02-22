@@ -2926,7 +2926,10 @@ fun TransactionDialog(
             onDismissRequest = { showCategoryPicker = false },
             title = { Text(S.transactions.category) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     categories.forEach { cat ->
                         val isSelected = selectedCategoryIds[cat.id] == true
                         Row(
