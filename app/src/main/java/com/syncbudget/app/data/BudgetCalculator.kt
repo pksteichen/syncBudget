@@ -99,6 +99,19 @@ object BudgetCalculator {
                     month = month.plusMonths(1)
                 }
             }
+            RepeatType.ANNUAL -> {
+                val sd = startDate ?: return dates
+                var d = sd
+                if (d.isBefore(rangeStart)) {
+                    val gap = java.time.Period.between(d, rangeStart).years
+                    d = d.plusYears(gap.toLong())
+                    if (d.isBefore(rangeStart)) d = d.plusYears(1)
+                }
+                while (!d.isAfter(rangeEnd)) {
+                    dates.add(d)
+                    d = d.plusYears(1)
+                }
+            }
         }
         return dates
     }

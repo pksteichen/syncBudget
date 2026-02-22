@@ -174,24 +174,13 @@ fun BudgetConfigHelpScreen(onBack: () -> Unit) {
 
             HelpDividerLine()
 
-            // ─── SECTION 5: RECALCULATE & RESET ───
-            HelpSectionTitle(S.budgetConfigHelp.recalcResetTitle)
-
-            HelpSubSectionTitle(S.budgetConfigHelp.recalcTitle)
-            HelpBodyText(S.budgetConfigHelp.recalcBody)
-            Spacer(modifier = Modifier.height(4.dp))
-            HelpBulletText(S.budgetConfigHelp.recalcBullet1)
-            HelpBulletText(S.budgetConfigHelp.recalcBullet2)
-            HelpBulletText(S.budgetConfigHelp.recalcBullet3)
-            Spacer(modifier = Modifier.height(8.dp))
-            HelpBodyText(
-                S.budgetConfigHelp.recalcNote,
-                italic = true
-            )
+            // ─── SECTION 5: AUTO-RECALCULATION & START/RESET ───
+            HelpSectionTitle(S.budgetConfigHelp.autoRecalcTitle)
+            HelpBodyText(S.budgetConfigHelp.autoRecalcBody)
             Spacer(modifier = Modifier.height(12.dp))
 
-            HelpSubSectionTitle(S.budgetConfigHelp.resetBudgetTitle)
-            HelpBodyText(S.budgetConfigHelp.resetBudgetBody)
+            HelpSubSectionTitle(S.budgetConfigHelp.startResetTitle)
+            HelpBodyText(S.budgetConfigHelp.startResetBody)
             Spacer(modifier = Modifier.height(4.dp))
             HelpBulletText(S.budgetConfigHelp.resetBullet1)
             HelpBulletText(S.budgetConfigHelp.resetBullet2)
@@ -305,6 +294,10 @@ fun BudgetConfigHelpScreen(onBack: () -> Unit) {
 
             HelpSubSectionTitle(S.budgetConfigHelp.biMonthlyTitle)
             HelpBodyText(S.budgetConfigHelp.biMonthlyBody)
+            Spacer(modifier = Modifier.height(10.dp))
+
+            HelpSubSectionTitle(S.budgetConfigHelp.annualTitle)
+            HelpBodyText(S.budgetConfigHelp.annualBody)
             Spacer(modifier = Modifier.height(10.dp))
 
             Box(

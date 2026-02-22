@@ -289,6 +289,7 @@ private fun AddEditExpenseDialog(
         RepeatType.BI_WEEKLY -> startDate != null
         RepeatType.MONTHS -> interval != null && interval in 1..12 && startDate != null
         RepeatType.BI_MONTHLY -> monthDay1 != null && monthDay1 in 1..28 && monthDay2 != null && monthDay2 in 1..28
+        RepeatType.ANNUAL -> startDate != null
     }
 
     val isValid = isSourceValid && isAmountValid && isRepeatValid
@@ -299,6 +300,7 @@ private fun AddEditExpenseDialog(
         RepeatType.BI_WEEKLY -> S.common.repeatTypeBiWeekly
         RepeatType.MONTHS -> S.common.repeatTypeMonths
         RepeatType.BI_MONTHLY -> S.common.repeatTypeBiMonthly
+        RepeatType.ANNUAL -> S.common.repeatTypeAnnual
     }
 
     Dialog(
@@ -392,6 +394,7 @@ private fun AddEditExpenseDialog(
                                             RepeatType.BI_WEEKLY -> { monthDay1Text = ""; monthDay2Text = "" }
                                             RepeatType.MONTHS -> { intervalText = "1"; monthDay1Text = ""; monthDay2Text = "" }
                                             RepeatType.BI_MONTHLY -> { intervalText = "1"; startDate = null }
+                                            RepeatType.ANNUAL -> { monthDay1Text = ""; monthDay2Text = "" }
                                         }
                                     }
                                 )
@@ -558,6 +561,23 @@ private fun AddEditExpenseDialog(
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
+                        RepeatType.ANNUAL -> {
+                            Box(
+                                modifier = if (showValidation && startDate == null)
+                                    Modifier.border(1.dp, Color.Red, RoundedCornerShape(4.dp))
+                                else Modifier
+                            ) {
+                                OutlinedButton(
+                                    onClick = { showDatePicker = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(if (startDate != null) S.common.startDateLabel(startDate!!.format(dateFormatter)) else S.common.pickStartDate)
+                                }
+                            }
+                            if (showValidation && startDate == null) {
+                                Text(S.common.selectAStartDate, style = MaterialTheme.typography.bodySmall, color = Color(0xFFF44336))
+                            }
+                        }
                     }
                 }
 
@@ -622,6 +642,16 @@ private fun AddEditExpenseDialog(
                                         monthDay1 = monthDay1,
                                         monthDay2 = monthDay2
                                     )
+                                    RepeatType.ANNUAL -> RecurringExpense(
+                                        id = existingExpense?.id ?: 0,
+                                        source = sourceName.trim(),
+                                        amount = amount!!,
+                                        repeatType = repeatType,
+                                        repeatInterval = 1,
+                                        startDate = startDate,
+                                        monthDay1 = null,
+                                        monthDay2 = null
+                                    )
                                 }
                                 onSave(result)
                             } else {
@@ -648,7 +678,8 @@ private fun AddEditExpenseDialog(
                 TextButton(onClick = {
                     datePickerState.selectedDateMillis?.let { millis ->
                         val selected = Instant.ofEpochMilli(millis).atZone(ZoneId.of("UTC")).toLocalDate()
-                        if (repeatType == RepeatType.MONTHS && selected.dayOfMonth > 28) {
+                        val monthInterval = intervalText.toIntOrNull() ?: 1
+                        if (repeatType == RepeatType.MONTHS && monthInterval != 12 && selected.dayOfMonth > 28) {
                             Toast.makeText(context, S.common.dateDayTooHigh, Toast.LENGTH_SHORT).show()
                         } else {
                             startDate = selected

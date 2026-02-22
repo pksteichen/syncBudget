@@ -2,7 +2,7 @@ package com.syncbudget.app.data
 
 import java.time.LocalDate
 
-enum class RepeatType { DAYS, WEEKS, BI_WEEKLY, MONTHS, BI_MONTHLY }
+enum class RepeatType { DAYS, WEEKS, BI_WEEKLY, MONTHS, BI_MONTHLY, ANNUAL }
 
 data class IncomeSource(
     val id: Int,

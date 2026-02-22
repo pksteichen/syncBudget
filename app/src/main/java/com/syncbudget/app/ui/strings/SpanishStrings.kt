@@ -40,6 +40,7 @@ object SpanishStrings : AppStrings {
         repeatTypeBiWeekly = "Cada 2 semanas",
         repeatTypeMonths = "Mes",
         repeatTypeBiMonthly = "Dos veces al mes",
+        repeatTypeAnnual = "Anual",
         budgetPeriodDaily = "Diario",
         budgetPeriodWeekly = "Semanal",
         budgetPeriodMonthly = "Mensual",
@@ -149,9 +150,9 @@ object SpanishStrings : AppStrings {
         editIncomeSource = "Editar fuente de ingreso",
         deleteSourceConfirmTitle = { name -> "\u00bfEliminar $name?" },
         deleteSourceConfirmBody = "Esta fuente de ingreso se eliminar\u00e1 permanentemente.",
-        resetBudgetConfirmTitle = "\u00bfRestablecer presupuesto?",
-        resetBudgetConfirmBody = "Esto recalcular\u00e1 tu presupuesto seguro, restablecer\u00e1 la fecha de inicio a hoy y fijar\u00e1 el efectivo disponible en el monto de un per\u00edodo. Tus transacciones no se ver\u00e1n afectadas.",
-        resetSettingsTitle = "Ajustes de reinicio",
+        resetBudgetConfirmTitle = "\u00bfIniciar/Restablecer presupuesto?",
+        resetBudgetConfirmBody = "Esto restablecer\u00e1 la fecha de inicio a hoy y fijar\u00e1 el efectivo disponible en el monto de un per\u00edodo. Tus transacciones no se ver\u00e1n afectadas.",
+        resetSettingsTitle = "Ajustes de hora de refresco",
         resetHour = "Hora de reinicio",
         dayOfWeekLabel = "D\u00eda de la semana",
         dayOfMonthReset = "D\u00eda del mes (1-28)",
@@ -496,8 +497,8 @@ object SpanishStrings : AppStrings {
         step3Desc = "En Configuraci\u00f3n del presupuesto, agrega todas tus fuentes de ingreso confiables \u2014 tu salario, ingresos extra regulares, etc. Configura el calendario de repetici\u00f3n de cada una (ej. \"Mes\" el 1 y el 15 para pagos quincenales).",
         step4Title = "Agrega gastos recurrentes",
         step4Desc = "Ve a Gastos Recurrentes (el icono de sincronizaci\u00f3n en el panel principal) y agrega todas tus facturas regulares: alquiler, servicios, seguros, suscripciones, pagos de pr\u00e9stamos.",
-        step5Title = "Toca Recalcular",
-        step5Desc = "De vuelta en Configuraci\u00f3n del presupuesto, toca \"Recalcular\" para calcular tu presupuesto seguro. Toca \"Restablecer presupuesto\" para inicializar tu efectivo disponible.",
+        step5Title = "Inicia tu presupuesto",
+        step5Desc = "De vuelta en Configuraci\u00f3n del presupuesto, tu presupuesto seguro se calcula autom\u00e1ticamente. Toca \"Iniciar/Restablecer\" para inicializar tu efectivo disponible.",
         step6Title = "Empieza a registrar",
         step6Desc = "Vuelve al panel principal. Tu pantalla Solari ahora muestra tu efectivo disponible. Registra gastos a medida que gastas y observa c\u00f3mo se actualiza el n\u00famero en tiempo real.",
         habitsTitle = "Construyendo mejores h\u00e1bitos financieros",
@@ -839,8 +840,8 @@ object SpanishStrings : AppStrings {
         periodMonthlyDesc = "Tu presupuesto se calcula por mes. Adecuado para personas con pago mensual que prefieren planificar por mes.",
         periodNote = "El per\u00edodo tambi\u00e9n afecta c\u00f3mo se calculan las deducciones de Metas de Ahorro y Amortizaci\u00f3n, " +
             "ya que deducen un monto fijo por per\u00edodo.",
-        resetSettingsTitle = "Ajustes de reinicio",
-        resetSettingsBody = "Toca el bot\u00f3n \"Restablecer\" junto al selector de Per\u00edodo del presupuesto para configurar " +
+        resetSettingsTitle = "Ajustes de hora de refresco",
+        resetSettingsBody = "Toca el bot\u00f3n \"Hora de refresco\" junto al selector de Per\u00edodo del presupuesto para configurar " +
             "cu\u00e1ndo cambia tu per\u00edodo:",
         resetHourTitle = "Hora de reinicio",
         resetHourBody = "La hora del d\u00eda en que comienza un nuevo per\u00edodo y tu monto de presupuesto se " +
@@ -870,23 +871,17 @@ object SpanishStrings : AppStrings {
             "que tengan configuraci\u00f3n completa de calendario de repetici\u00f3n. Si una fuente no tiene " +
             "ajustes de repetici\u00f3n, se excluir\u00e1 del c\u00e1lculo. Aseg\u00farate de configurar " +
             "los calendarios de repetici\u00f3n de todas tus fuentes de ingreso.",
-        recalcResetTitle = "Recalcular y restablecer presupuesto",
-        recalcTitle = "Recalcular",
-        recalcBody = "Toca \"Recalcular\" para volver a calcular el Presupuesto Seguro seg\u00fan tus fuentes " +
-            "de ingreso y gastos recurrentes actuales. Hazlo cada vez que:",
-        recalcBullet1 = "Agregues, elimines o modifiques una fuente de ingreso",
-        recalcBullet2 = "Agregues, elimines o modifiques un gasto recurrente",
-        recalcBullet3 = "Cambies el per\u00edodo del presupuesto",
-        recalcNote = "En el primer uso, Recalcular tambi\u00e9n inicializa el seguimiento del presupuesto \u2014 establece " +
-            "la fecha de inicio y te da el monto de un per\u00edodo como efectivo disponible inicial.",
-        resetBudgetTitle = "Restablecer presupuesto",
-        resetBudgetBody = "Toca \"Restablecer presupuesto\" cuando necesites empezar de cero. Esto:",
+        autoRecalcTitle = "Rec\u00e1lculo autom\u00e1tico",
+        autoRecalcBody = "El Presupuesto Seguro se actualiza autom\u00e1ticamente cuando cambias fuentes de ingreso, " +
+            "gastos recurrentes o el per\u00edodo del presupuesto. No se necesita rec\u00e1lculo manual.",
+        startResetTitle = "Iniciar/Restablecer presupuesto",
+        startResetBody = "Toca \"Iniciar/Restablecer\" cuando configures por primera vez o necesites empezar de cero. Esto:",
         resetBullet1 = "Recalcula el presupuesto seguro",
         resetBullet2 = "Restablece la fecha de inicio del presupuesto a hoy",
         resetBullet3 = "Fija el efectivo disponible en el monto de un per\u00edodo",
         resetBullet4 = "NO elimina tus transacciones",
         whenToResetTitle = "Cu\u00e1ndo restablecer",
-        whenToResetBody = "Usa Restablecer presupuesto cuando tu efectivo disponible se haya desviado de la realidad " +
+        whenToResetBody = "Usa Iniciar/Restablecer cuando tu efectivo disponible se haya desviado de la realidad " +
             "(ej. despu\u00e9s de un cambio importante como un nuevo empleo o mudanza), o cuando " +
             "hayas hecho cambios significativos en tus fuentes de ingreso o gastos " +
             "y quieras empezar de cero. Restablecer perder\u00e1 tu excedente o d\u00e9ficit acumulado, " +
@@ -934,16 +929,20 @@ object SpanishStrings : AppStrings {
         biWeeklyBody = "",
         everyXMonthsTitle = "Mes",
         everyXMonthsBody = "El ingreso llega en un d\u00eda espec\u00edfico del mes, cada N meses (1\u201312). " +
-            "Ingresa el D\u00eda del Mes (1\u201328). No se necesita fecha de inicio \u2014 el motor " +
-            "usa el n\u00famero de d\u00eda directamente.",
+            "Elige una fecha de inicio para establecer el d\u00eda y la fase. Los d\u00edas 29\u201331 se permiten " +
+            "cuando el intervalo es 12 (anual); de lo contrario se limita a 1\u201328.",
         biMonthlyTitle = "Dos veces al mes (Bimensual)",
         biMonthlyBody = "El ingreso llega en dos d\u00edas espec\u00edficos cada mes. Ingresa tanto el Primer D\u00eda como el " +
             "Segundo D\u00eda (1\u201328 cada uno). Por ejemplo, si te pagan el 1 y el 15, " +
             "ingresa 1 y 15. Esto da exactamente 24 ocurrencias al a\u00f1o.",
+        annualTitle = "Anual",
+        annualBody = "El ingreso llega una vez al a\u00f1o en una fecha espec\u00edfica. Elige una fecha de inicio \u2014 " +
+            "cualquier d\u00eda de cualquier mes es v\u00e1lido, incluyendo del 29 al 31. El motor maneja a\u00f1os " +
+            "bisiestos y meses cortos autom\u00e1ticamente.",
         dayLimitTitle = "L\u00edmite de d\u00eda: 1\u201328",
-        dayLimitBody = "Los valores de d\u00eda del mes est\u00e1n limitados a 28 para asegurar que la fecha exista en todos los meses, " +
-            "incluyendo febrero. Si tu fecha real de pago es el 29, 30 o 31, " +
-            "usa 28 como la aproximaci\u00f3n m\u00e1s cercana.",
+        dayLimitBody = "Los valores de d\u00eda del mes est\u00e1n limitados a 28 para la mayor\u00eda de tipos de repetici\u00f3n " +
+            "para asegurar que la fecha exista en todos los meses, incluyendo febrero. Los tipos Anual " +
+            "e intervalos de 12 meses permiten d\u00edas 29\u201331 ya que apuntan a un mes espec\u00edfico.",
         budgetIncomeTitle = "Detecci\u00f3n de ingresos presupuestados",
         budgetIncomeBody = "Cuando agregas una transacci\u00f3n de ingreso en la pantalla de Transacciones, la app " +
             "verifica si coincide con alguna de tus fuentes de ingreso configuradas (por nombre " +
@@ -953,9 +952,9 @@ object SpanishStrings : AppStrings {
         budgetIncomeNote = "Esto evita que tu n\u00f3mina se cuente dos veces \u2014 una en el c\u00e1lculo del presupuesto " +
             "y otra como entrada manual de ingreso.",
         tipsTitle = "Consejos",
-        tip1 = "Configura todas las fuentes de ingreso y gastos recurrentes ANTES de tocar Recalcular para obtener el mejor resultado.",
-        tip2 = "Recalcula despu\u00e9s de cualquier cambio en ingresos o gastos para mantener tu presupuesto preciso.",
-        tip3 = "Usa Restablecer presupuesto con moderaci\u00f3n \u2014 elimina tu excedente/d\u00e9ficit acumulado.",
+        tip1 = "Configura todas las fuentes de ingreso y gastos recurrentes antes de tocar Iniciar/Restablecer para obtener el mejor resultado.",
+        tip2 = "El presupuesto seguro se recalcula autom\u00e1ticamente cuando cambias ingresos o gastos.",
+        tip3 = "Usa Iniciar/Restablecer con moderaci\u00f3n \u2014 elimina tu excedente/d\u00e9ficit acumulado.",
         tip4 = "Para ingresos variables, crea entradas separadas para cada monto de pago para mejorar la precisi\u00f3n.",
         tip5 = "Usa nombres descriptivos como \"N\u00f3mina Empresa ABC\" \u2014 el nombre se usa para la detecci\u00f3n autom\u00e1tica de ingresos presupuestados.",
         tip6 = "Solo incluye ingresos confiables y recurrentes. No agregues ingresos puntuales \u2014 reg\u00edstralos como ingreso extra en Transacciones."
@@ -1152,13 +1151,16 @@ object SpanishStrings : AppStrings {
         biWeeklyBody = "",
         everyXMonthsTitle = "Mes",
         everyXMonthsBody = "Ocurre en un d\u00eda espec\u00edfico del mes, cada N meses (1\u201312). " +
-            "Ingresa el D\u00eda del Mes (1\u201328). La mayor\u00eda de facturas usan este tipo: alquiler el 1, " +
-            "tel\u00e9fono el 15, etc.",
+            "Elige una fecha de inicio para establecer el d\u00eda y la fase. La mayor\u00eda de facturas usan este tipo: " +
+            "alquiler el 1, tel\u00e9fono el 15, etc. Los d\u00edas 29\u201331 se permiten cuando el intervalo es 12.",
         biMonthlyTitle = "Dos veces al mes (Bimensual)",
         biMonthlyBody = "Ocurre en dos d\u00edas espec\u00edficos cada mes. Ingresa ambos d\u00edas (1\u201328 cada uno). " +
             "\u00datil para gastos que se cobran dos veces al mes.",
-        dayLimitNote = "Todos los valores de d\u00eda del mes est\u00e1n limitados a 28 para asegurar que la fecha exista en " +
-            "todos los meses, incluyendo febrero.",
+        annualTitle = "Anual",
+        annualBody = "Ocurre una vez al a\u00f1o en una fecha espec\u00edfica. Elige una fecha de inicio \u2014 cualquier " +
+            "d\u00eda es v\u00e1lido, incluyendo del 29 al 31. \u00datil para primas de seguros anuales, membres\u00edas o suscripciones.",
+        dayLimitNote = "Los valores de d\u00eda del mes est\u00e1n limitados a 28 para la mayor\u00eda de tipos de repetici\u00f3n " +
+            "para asegurar que la fecha exista en todos los meses. Los tipos Anual e intervalos de 12 meses permiten d\u00edas 29\u201331.",
         expenseListTitle = "Lista de gastos",
         expenseListBody = "Cada gasto recurrente en la lista muestra:",
         expenseSource = "Descripci\u00f3n",
@@ -1197,7 +1199,7 @@ object SpanishStrings : AppStrings {
         tipsTitle = "Consejos",
         tip1 = "Agrega TODOS los gastos recurrentes, incluso los peque\u00f1os como suscripciones de streaming. Se acumulan y la calculadora necesita el panorama completo.",
         tip2 = "Si el monto de un gasto var\u00eda ligeramente (como una factura de servicios), usa el monto promedio.",
-        tip3 = "Recuerda Recalcular tu presupuesto (en Configuraci\u00f3n del presupuesto) despu\u00e9s de agregar o eliminar gastos recurrentes.",
+        tip3 = "Tu presupuesto se recalcula autom\u00e1ticamente cuando agregas o eliminas gastos recurrentes.",
         tip4 = "Gastos comunes para agregar: alquiler/hipoteca, servicios (electricidad, gas, agua), seguros (auto, salud, hogar), suscripciones (streaming, gimnasio, software), pagos de pr\u00e9stamos, tel\u00e9fono.",
         tip5 = "Si un gasto es realmente puntual, no lo agregues aqu\u00ed. Usa la Amortizaci\u00f3n para distribuirlo en el tiempo.",
         tip6 = "Revisa tus extractos bancarios para asegurarte de no haber olvidado ning\u00fan cargo recurrente."

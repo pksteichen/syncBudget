@@ -40,6 +40,7 @@ object EnglishStrings : AppStrings {
         repeatTypeBiWeekly = "Every 2 Weeks",
         repeatTypeMonths = "Month",
         repeatTypeBiMonthly = "Twice per Month",
+        repeatTypeAnnual = "Annual",
         budgetPeriodDaily = "Daily",
         budgetPeriodWeekly = "Weekly",
         budgetPeriodMonthly = "Monthly",
@@ -149,9 +150,9 @@ object EnglishStrings : AppStrings {
         editIncomeSource = "Edit Income Source",
         deleteSourceConfirmTitle = { name -> "Delete $name?" },
         deleteSourceConfirmBody = "This income source will be permanently removed.",
-        resetBudgetConfirmTitle = "Reset Budget?",
-        resetBudgetConfirmBody = "This will recalculate your safe budget amount, reset the budget start date to today, and set available cash to one period's budget amount. Your transactions will not be affected.",
-        resetSettingsTitle = "Reset Settings",
+        resetBudgetConfirmTitle = "Start/Reset Budget?",
+        resetBudgetConfirmBody = "This will reset the budget start date to today and set available cash to one period's budget amount. Your transactions will not be affected.",
+        resetSettingsTitle = "Refresh Time Settings",
         resetHour = "Reset Hour",
         dayOfWeekLabel = "Day of Week",
         dayOfMonthReset = "Day of Month (1-28)",
@@ -497,8 +498,8 @@ object EnglishStrings : AppStrings {
         step3Desc = "In Budget Configuration, add all reliable income sources \u2014 your salary, regular side income, etc. Set the repeat schedule for each (e.g., \"Month\" on the 1st and 15th for bi-monthly pay).",
         step4Title = "Add Recurring Expenses",
         step4Desc = "Navigate to Recurring Expenses (the sync icon on the dashboard) and add all your regular bills: rent, utilities, insurance, subscriptions, loan payments.",
-        step5Title = "Hit Recalculate",
-        step5Desc = "Back in Budget Configuration, tap \"Recalculate\" to compute your safe budget. Tap \"Reset Budget\" to initialize your available cash.",
+        step5Title = "Start Your Budget",
+        step5Desc = "Back in Budget Configuration, your safe budget is calculated automatically. Tap \"Start/Reset Budget\" to initialize your available cash.",
         step6Title = "Start Tracking",
         step6Desc = "Return to the dashboard. Your Solari display now shows your available cash. Record expenses as you spend and watch your number update in real time.",
         habitsTitle = "Building Better Financial Habits",
@@ -840,8 +841,8 @@ object EnglishStrings : AppStrings {
         periodMonthlyDesc = "Your budget is calculated per month. Suits people with monthly pay who prefer monthly planning.",
         periodNote = "The period also affects how Savings Goal and Amortization deductions are calculated, " +
             "since they deduct a fixed amount per period.",
-        resetSettingsTitle = "Reset Settings",
-        resetSettingsBody = "Tap the \"Reset\" button next to the Budget Period selector to configure " +
+        resetSettingsTitle = "Refresh Time Settings",
+        resetSettingsBody = "Tap the \"Refresh Time\" button next to the Budget Period selector to configure " +
             "when your budget period rolls over:",
         resetHourTitle = "Reset Hour",
         resetHourBody = "The hour of the day when a new period begins and your budget amount is " +
@@ -871,23 +872,17 @@ object EnglishStrings : AppStrings {
             "that have complete repeat schedule configurations. If a source has no repeat " +
             "settings, it will be excluded from the calculation. Make sure to configure " +
             "repeat schedules for all your income sources.",
-        recalcResetTitle = "Recalculate & Reset Budget",
-        recalcTitle = "Recalculate",
-        recalcBody = "Tap \"Recalculate\" to recompute the Safe Budget Amount based on your current " +
-            "income sources and recurring expenses. Do this whenever you:",
-        recalcBullet1 = "Add, remove, or change an income source",
-        recalcBullet2 = "Add, remove, or change a recurring expense",
-        recalcBullet3 = "Change the budget period",
-        recalcNote = "On first use, Recalculate also initializes your budget tracking \u2014 it sets " +
-            "the budget start date and gives you one period's budget as starting available cash.",
-        resetBudgetTitle = "Reset Budget",
-        resetBudgetBody = "Tap \"Reset Budget\" when you need a fresh start. This:",
+        autoRecalcTitle = "Automatic Recalculation",
+        autoRecalcBody = "The Safe Budget Amount updates automatically whenever you change income sources, " +
+            "recurring expenses, or the budget period. No manual recalculation is needed.",
+        startResetTitle = "Start/Reset Budget",
+        startResetBody = "Tap \"Start/Reset Budget\" when you first set up or need a fresh start. This:",
         resetBullet1 = "Recalculates the safe budget amount",
         resetBullet2 = "Resets the budget start date to today",
         resetBullet3 = "Sets available cash to one period's budget amount",
         resetBullet4 = "Does NOT delete your transactions",
         whenToResetTitle = "When to Reset",
-        whenToResetBody = "Use Reset Budget when your available cash has drifted from reality " +
+        whenToResetBody = "Use Start/Reset Budget when your available cash has drifted from reality " +
             "(e.g., after a major life change like a new job or move), or when " +
             "you've made significant changes to your income sources or expenses " +
             "and want to start fresh. Resetting will lose your accumulated surplus " +
@@ -935,16 +930,20 @@ object EnglishStrings : AppStrings {
         biWeeklyBody = "",
         everyXMonthsTitle = "Month",
         everyXMonthsBody = "Income arrives on a specific day of the month, every N months (1\u201312). " +
-            "Enter the Day of Month (1\u201328). No start date is needed \u2014 the engine " +
-            "uses the day number directly.",
+            "Pick a start date to set the day and phase. Days 29\u201331 are allowed when " +
+            "the interval is 12 (yearly); otherwise days are limited to 1\u201328.",
         biMonthlyTitle = "Twice per Month (Bi-Monthly)",
         biMonthlyBody = "Income arrives on two specific days each month. Enter both the First Day and " +
             "Second Day (1\u201328 each). For example, if you're paid on the 1st and 15th, " +
             "enter 1 and 15. This results in exactly 24 occurrences per year.",
+        annualTitle = "Annual",
+        annualBody = "Income arrives once per year on a specific date. Pick a start date \u2014 any day " +
+            "of any month is allowed, including the 29th\u201331st. The engine handles leap years " +
+            "and short months automatically.",
         dayLimitTitle = "Day Limit: 1\u201328",
-        dayLimitBody = "Day-of-month values are limited to 28 to ensure the date exists in all months, " +
-            "including February. If your actual pay date is the 29th, 30th, or 31st, " +
-            "use 28 as the closest approximation.",
+        dayLimitBody = "Day-of-month values are limited to 28 for most repeat types to ensure the date " +
+            "exists in all months, including February. Annual and 12-month intervals allow " +
+            "days 29\u201331 since they target a specific month.",
         budgetIncomeTitle = "Budget Income Detection",
         budgetIncomeBody = "When you add an income transaction in the Transactions screen, the app " +
             "checks whether it matches one of your configured income sources (by name " +
@@ -954,9 +953,9 @@ object EnglishStrings : AppStrings {
         budgetIncomeNote = "This prevents your paycheck from being double-counted \u2014 once in the budget " +
             "calculation and again as a manual income entry.",
         tipsTitle = "Tips",
-        tip1 = "Set up all income sources and recurring expenses BEFORE hitting Recalculate for the best result.",
-        tip2 = "Recalculate after any change to income or expenses to keep your budget accurate.",
-        tip3 = "Use Reset Budget sparingly \u2014 it wipes your accumulated surplus/deficit.",
+        tip1 = "Set up all income sources and recurring expenses before tapping Start/Reset Budget for the best result.",
+        tip2 = "The safe budget recalculates automatically whenever you change income or expenses.",
+        tip3 = "Use Start/Reset Budget sparingly \u2014 it wipes your accumulated surplus/deficit.",
         tip4 = "For variable income, create separate entries for each pay amount to improve accuracy.",
         tip5 = "Use descriptive source names like \"Acme Corp Paycheck\" \u2014 the name is used for automatic budget income matching.",
         tip6 = "Only include reliable, recurring income. Don't add one-time windfalls \u2014 record those as extra income in Transactions."
@@ -1153,13 +1152,16 @@ object EnglishStrings : AppStrings {
         biWeeklyBody = "",
         everyXMonthsTitle = "Month",
         everyXMonthsBody = "Occurs on a specific day of the month, every N months (1\u201312). " +
-            "Enter the Day of Month (1\u201328). Most bills use this type: rent on the 1st, " +
-            "phone bill on the 15th, etc.",
+            "Pick a start date to set the day and phase. Most bills use this type: rent on the 1st, " +
+            "phone bill on the 15th, etc. Days 29\u201331 are allowed when the interval is 12.",
         biMonthlyTitle = "Twice per Month (Bi-Monthly)",
         biMonthlyBody = "Occurs on two specific days each month. Enter both days (1\u201328 each). " +
             "Useful for expenses that bill twice monthly.",
-        dayLimitNote = "All day-of-month values are limited to 28 to ensure the date exists in every " +
-            "month, including February.",
+        annualTitle = "Annual",
+        annualBody = "Occurs once per year on a specific date. Pick a start date \u2014 any day is allowed, " +
+            "including the 29th\u201331st. Useful for annual insurance premiums, memberships, or subscriptions.",
+        dayLimitNote = "Day-of-month values are limited to 28 for most repeat types to ensure the date " +
+            "exists in every month. Annual and 12-month intervals allow days 29\u201331.",
         expenseListTitle = "Expense List",
         expenseListBody = "Each recurring expense in the list shows:",
         expenseSource = "Description",
@@ -1198,7 +1200,7 @@ object EnglishStrings : AppStrings {
         tipsTitle = "Tips",
         tip1 = "Add ALL recurring expenses, even small ones like streaming subscriptions. They add up and the budget calculator needs the full picture.",
         tip2 = "If an expense amount varies slightly (like a utility bill), use the average amount.",
-        tip3 = "Remember to Recalculate your budget (in Budget Configuration) after adding or removing recurring expenses.",
+        tip3 = "Your budget recalculates automatically when you add or remove recurring expenses.",
         tip4 = "Common expenses to add: rent/mortgage, utilities (electric, gas, water), insurance (car, health, home), subscriptions (streaming, gym, software), loan payments, phone bill.",
         tip5 = "If an expense is truly one-time, don't add it here. Use Amortization instead to spread it over time.",
         tip6 = "Check your bank statements to make sure you haven't missed any recurring charges."
