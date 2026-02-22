@@ -101,8 +101,16 @@ object GroupManager {
         return true
     }
 
-    fun leaveGroup(context: Context) {
+    suspend fun leaveGroup(context: Context) {
+        // Remove device document from Firestore so admin roster updates
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val groupId = prefs.getString("groupId", null)
+        if (groupId != null) {
+            val deviceId = SyncIdGenerator.getOrCreateDeviceId(context)
+            try {
+                FirestoreService.removeDevice(groupId, deviceId)
+            } catch (_: Exception) {}
+        }
         prefs.edit()
             .remove("groupId")
             .remove("encryptionKey")

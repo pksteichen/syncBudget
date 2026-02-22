@@ -26,6 +26,8 @@ object AmortizationRepository {
             obj.put("totalPeriods_clock", e.totalPeriods_clock)
             obj.put("startDate_clock", e.startDate_clock)
             obj.put("deleted_clock", e.deleted_clock)
+            obj.put("isPaused", e.isPaused)
+            obj.put("isPaused_clock", e.isPaused_clock)
             jsonArray.put(obj)
         }
         context.openFileOutput(FILE_NAME, Context.MODE_PRIVATE).use { fos ->
@@ -55,7 +57,9 @@ object AmortizationRepository {
                     amount_clock = obj.optLong("amount_clock", 0L),
                     totalPeriods_clock = obj.optLong("totalPeriods_clock", 0L),
                     startDate_clock = obj.optLong("startDate_clock", 0L),
-                    deleted_clock = obj.optLong("deleted_clock", 0L)
+                    deleted_clock = obj.optLong("deleted_clock", 0L),
+                    isPaused = obj.optBoolean("isPaused", false),
+                    isPaused_clock = obj.optLong("isPaused_clock", 0L)
                 )
             )
         }

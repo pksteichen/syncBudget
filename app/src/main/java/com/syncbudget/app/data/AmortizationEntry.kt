@@ -15,7 +15,9 @@ data class AmortizationEntry(
     val amount_clock: Long = 0L,
     val totalPeriods_clock: Long = 0L,
     val startDate_clock: Long = 0L,
-    val deleted_clock: Long = 0L
+    val deleted_clock: Long = 0L,
+    val isPaused: Boolean = false,
+    val isPaused_clock: Long = 0L
 )
 
 fun generateAmortizationEntryId(existingIds: Set<Int>): Int {

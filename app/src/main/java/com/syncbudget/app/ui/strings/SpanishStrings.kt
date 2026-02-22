@@ -107,6 +107,7 @@ object SpanishStrings : AppStrings {
         showDecimalPlaces = "Mostrar decimales",
         dateFormat = "Formato de fecha",
         weekStartsOn = "La semana empieza el",
+        weekStartWeeklyNote = "Para presupuestos semanales, esto se configura en D\u00eda de reinicio en Configuraci\u00f3n del presupuesto.",
         sunday = "Domingo",
         monday = "Lunes",
         chartPalette = "Paleta de gr\u00e1ficos",
@@ -141,10 +142,12 @@ object SpanishStrings : AppStrings {
         safeBudgetAmountLabel = { symbol, amount, period -> "Presupuesto seguro: $symbol$amount/$period" },
         budgetTrackingSince = { date -> "Seguimiento del presupuesto desde: $date" },
         refreshTime = "Hora de refresco",
+        resetDay = "D\u00eda de reinicio",
+        resetDate = "Fecha de reinicio",
         startResetBudget = "Iniciar/Restablecer",
         manualBudgetOverride = "Presupuesto manual",
         budgetAmountPer = { period -> "Monto por $period" },
-        manualOverrideWarning = "El modo manual desactiva las deducciones de Amortizaci\u00f3n y Metas de Ahorro.",
+        manualOverrideNote = { period -> "Las Metas de Ahorro y Amortizaciones reducir\u00e1n este monto. Si deseas exactamente esta cantidad cada $period, pausa tus deducciones en esas p\u00e1ginas." },
         incomeSourceDescription = "Agrega fuentes de ingreso estables con las que puedas contar para tu presupuesto. Si tu pago var\u00eda (cheque grande, cheque peque\u00f1o), puedes crear m\u00e1s de una entrada por fuente.",
         addIncomeSource = "Agregar fuente de ingreso",
         editIncomeSource = "Editar fuente de ingreso",
@@ -153,6 +156,8 @@ object SpanishStrings : AppStrings {
         resetBudgetConfirmTitle = "\u00bfIniciar/Restablecer presupuesto?",
         resetBudgetConfirmBody = "Esto restablecer\u00e1 la fecha de inicio a hoy y fijar\u00e1 el efectivo disponible en el monto de un per\u00edodo. Tus transacciones no se ver\u00e1n afectadas.",
         resetSettingsTitle = "Ajustes de hora de refresco",
+        resetDayTitle = "D\u00eda de reinicio",
+        resetDateTitle = "Fecha de reinicio",
         resetHour = "Hora de reinicio",
         dayOfWeekLabel = "D\u00eda de la semana",
         dayOfMonthReset = "D\u00eda del mes (1-28)",
@@ -265,7 +270,6 @@ object SpanishStrings : AppStrings {
     override val futureExpenditures = FutureExpendituresStrings(
         title = "Metas de Ahorro",
         description = "Planifica y ahorra para gastos futuros u objetivos financieros. La app deduce autom\u00e1ticamente una peque\u00f1a cantidad en cada per\u00edodo.",
-        manualOverrideWarning = "El presupuesto manual est\u00e1 activado. Las deducciones de Metas de Ahorro NO se est\u00e1n restando de tu presupuesto.",
         addSavingsGoal = "Agregar meta de ahorro",
         editSavingsGoal = "Editar meta de ahorro",
         name = "Descripci\u00f3n",
@@ -300,7 +304,6 @@ object SpanishStrings : AppStrings {
     override val amortization = AmortizationStrings(
         title = "Amortizaci\u00f3n",
         description = "Distribuye un gasto grande a lo largo de varios per\u00edodos para que no golpee tu presupuesto de una sola vez.",
-        manualOverrideWarning = "El presupuesto manual est\u00e1 activado. Las deducciones de amortizaci\u00f3n NO se est\u00e1n restando de tu presupuesto.",
         addEntry = "Agregar entrada de amortizaci\u00f3n",
         editEntry = "Editar entrada de amortizaci\u00f3n",
         sourceName = "Descripci\u00f3n",
@@ -316,7 +319,12 @@ object SpanishStrings : AppStrings {
         requiredLaptopExample = "Obligatorio, ej. Laptop",
         exampleTotalAmount = "ej. 900.00",
         examplePeriods = "ej. 90",
-        selectAStartDate = "Selecciona una fecha de inicio"
+        selectAStartDate = "Selecciona una fecha de inicio",
+        paused = "Pausada",
+        pauseAll = "Pausar todas",
+        resumeAll = "Reanudar todas",
+        pause = "Pausar",
+        resume = "Reanudar"
     )
 
     override val recurringExpenses = RecurringExpensesStrings(
@@ -891,12 +899,11 @@ object SpanishStrings : AppStrings {
             "en lugar de usar el valor calculado. Al activarlo:",
         manualBullet1 = "Aparece un campo de texto donde ingresas el monto deseado por per\u00edodo",
         manualBullet2 = "El c\u00e1lculo del presupuesto seguro se ignora",
-        manualBullet3 = "Las deducciones de Amortizaci\u00f3n y Metas de Ahorro se desactivan",
-        warningTitle = "Advertencia",
-        warningBody = "El modo manual desactiva la red de seguridad del calculador de presupuesto. " +
-            "Las deducciones de Amortizaci\u00f3n y Metas de Ahorro no se restar\u00e1n " +
-            "de tu presupuesto. Aparecer\u00e1n banners de advertencia rojos en las pantallas de Amortizaci\u00f3n " +
-            "y Metas de Ahorro cuando el modo manual est\u00e9 activo.",
+        manualBullet3 = "Las deducciones de Metas de Ahorro y Amortizaci\u00f3n a\u00fan se aplican a tu monto manual",
+        warningTitle = "Nota",
+        warningBody = "Las deducciones de Metas de Ahorro y Amortizaci\u00f3n a\u00fan se restan de tu monto " +
+            "manual. Si deseas exactamente el monto ingresado cada per\u00edodo, " +
+            "pausa tus Metas de Ahorro y entradas de Amortizaci\u00f3n en esas p\u00e1ginas.",
         incomeSourcesTitle = "Fuentes de ingreso",
         incomeSourcesBody = "Las fuentes de ingreso representan tus ingresos confiables y recurrentes \u2014 el dinero con " +
             "el que puedes contar para presupuestar. Agrega todos los flujos de ingreso constantes: " +
@@ -1036,10 +1043,9 @@ object SpanishStrings : AppStrings {
         goalReachedBody = "Muestra \"\u00a1Meta alcanzada!\" en verde cuando el Ahorrado Hasta Ahora alcanza o supera el objetivo. " +
             "No se hacen m\u00e1s deducciones. Puedes eliminar la meta o conservarla como registro.",
         manualOverrideTitle = "Presupuesto manual",
-        manualOverrideBody = "Si el Presupuesto manual est\u00e1 activado en Configuraci\u00f3n del presupuesto, aparece un banner " +
-            "de advertencia rojo en la parte superior de esta pantalla. Con el modo manual activo, " +
-            "las deducciones de Metas de Ahorro NO se restan de tu presupuesto \u2014 debes contabilizar " +
-            "estos gastos por tu cuenta.",
+        manualOverrideBody = "Si el Presupuesto manual est\u00e1 activado en Configuraci\u00f3n del presupuesto, las deducciones " +
+            "de Metas de Ahorro a\u00fan se restan de tu monto manual. Puedes pausar metas individuales " +
+            "o todas las metas a la vez si deseas el monto manual completo.",
         tipsTitle = "Consejos",
         tip1 = "Crea metas con fecha objetivo lo antes posible \u2014 cuanto m\u00e1s tiempo tengas, menor ser\u00e1 la deducci\u00f3n de cada per\u00edodo.",
         tip2 = "Usa metas de contribuci\u00f3n fija para ahorros sin fecha l\u00edmite, como fondos de emergencia o ahorro general.",
@@ -1104,10 +1110,9 @@ object SpanishStrings : AppStrings {
             "el nombre del comercio de la transacci\u00f3n. Por ejemplo, una fuente llamada \"Servicio Toyota\" " +
             "coincidir\u00eda con una transacci\u00f3n bancaria de \"SERVICIO TOYOTA CENTER\".",
         manualOverrideTitle = "Presupuesto manual",
-        manualOverrideBody = "Si el Presupuesto manual est\u00e1 activado en Configuraci\u00f3n del presupuesto, aparece un banner " +
-            "de advertencia rojo en la parte superior de esta pantalla. Con el modo manual activo, " +
-            "las deducciones de amortizaci\u00f3n NO se restan de tu presupuesto \u2014 debes " +
-            "contabilizar estos costos por tu cuenta.",
+        manualOverrideBody = "Si el Presupuesto manual est\u00e1 activado en Configuraci\u00f3n del presupuesto, las deducciones " +
+            "de amortizaci\u00f3n a\u00fan se restan de tu monto manual. Puedes pausar entradas individuales " +
+            "o todas las entradas a la vez si deseas el monto manual completo.",
         tipsTitle = "Consejos",
         tip1 = "Elige un n\u00famero de per\u00edodos que resulte en una deducci\u00f3n c\u00f3moda. Si \$10/d\u00eda es demasiado, distr\u00edbuyelo en m\u00e1s d\u00edas.",
         tip2 = "Usa la amortizaci\u00f3n para cualquier gasto que de otro modo devastar\u00eda tu presupuesto: facturas m\u00e9dicas, reparaciones del auto, reemplazo de electrodom\u00e9sticos, viajes de emergencia.",

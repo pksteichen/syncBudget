@@ -126,6 +126,7 @@ data class SettingsStrings(
     val showDecimalPlaces: String,
     val dateFormat: String,
     val weekStartsOn: String,
+    val weekStartWeeklyNote: String,
     val sunday: String,
     val monday: String,
     val chartPalette: String,
@@ -160,10 +161,12 @@ data class BudgetConfigStrings(
     val safeBudgetAmountLabel: (String, String, String) -> String,
     val budgetTrackingSince: (String) -> String,
     val refreshTime: String,
+    val resetDay: String,
+    val resetDate: String,
     val startResetBudget: String,
     val manualBudgetOverride: String,
     val budgetAmountPer: (String) -> String,
-    val manualOverrideWarning: String,
+    val manualOverrideNote: (String) -> String,
     val incomeSourceDescription: String,
     val addIncomeSource: String,
     val editIncomeSource: String,
@@ -172,6 +175,8 @@ data class BudgetConfigStrings(
     val resetBudgetConfirmTitle: String,
     val resetBudgetConfirmBody: String,
     val resetSettingsTitle: String,
+    val resetDayTitle: String,
+    val resetDateTitle: String,
     val resetHour: String,
     val dayOfWeekLabel: String,
     val dayOfMonthReset: String,
@@ -284,7 +289,6 @@ data class TransactionsStrings(
 data class FutureExpendituresStrings(
     val title: String,
     val description: String,
-    val manualOverrideWarning: String,
     val addSavingsGoal: String,
     val editSavingsGoal: String,
     val name: String,
@@ -319,7 +323,6 @@ data class FutureExpendituresStrings(
 data class AmortizationStrings(
     val title: String,
     val description: String,
-    val manualOverrideWarning: String,
     val addEntry: String,
     val editEntry: String,
     val sourceName: String,
@@ -335,7 +338,12 @@ data class AmortizationStrings(
     val requiredLaptopExample: String,
     val exampleTotalAmount: String,
     val examplePeriods: String,
-    val selectAStartDate: String
+    val selectAStartDate: String,
+    val paused: String,
+    val pauseAll: String,
+    val resumeAll: String,
+    val pause: String,
+    val resume: String
 )
 
 data class RecurringExpensesStrings(

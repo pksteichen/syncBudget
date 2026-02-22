@@ -80,7 +80,6 @@ fun FutureExpendituresScreen(
     savingsGoals: List<SavingsGoal>,
     currencySymbol: String,
     budgetPeriod: BudgetPeriod,
-    isManualBudgetEnabled: Boolean = false,
     dateFormatPattern: String = "yyyy-MM-dd",
     onAddGoal: (SavingsGoal) -> Unit,
     onUpdateGoal: (SavingsGoal) -> Unit,
@@ -171,14 +170,6 @@ fun FutureExpendituresScreen(
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
-                if (isManualBudgetEnabled) {
-                    Text(
-                        text = S.futureExpenditures.manualOverrideWarning,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFFF44336),
-                        modifier = Modifier.padding(bottom = 12.dp)
-                    )
-                }
                 OutlinedButton(
                     onClick = { showAddDialog = true },
                     modifier = Modifier.fillMaxWidth()

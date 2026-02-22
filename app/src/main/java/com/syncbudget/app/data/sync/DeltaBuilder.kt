@@ -84,6 +84,7 @@ object DeltaBuilder {
         if (entry.totalPeriods_clock > lastPushedClock) fields["totalPeriods"] = FieldDelta(entry.totalPeriods, entry.totalPeriods_clock)
         if (entry.startDate_clock > lastPushedClock) fields["startDate"] = FieldDelta(entry.startDate.toString(), entry.startDate_clock)
         if (entry.deleted_clock > lastPushedClock) fields["deleted"] = FieldDelta(entry.deleted, entry.deleted_clock)
+        if (entry.isPaused_clock > lastPushedClock) fields["isPaused"] = FieldDelta(entry.isPaused, entry.isPaused_clock)
         if (fields.isEmpty()) return null
         return RecordDelta("amortization_entry", "upsert", entry.id, entry.deviceId, fields)
     }

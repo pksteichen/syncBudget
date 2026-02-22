@@ -24,6 +24,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DatePicker
@@ -51,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -88,7 +91,6 @@ fun AmortizationScreen(
     amortizationEntries: List<AmortizationEntry>,
     currencySymbol: String,
     budgetPeriod: BudgetPeriod,
-    isManualBudgetEnabled: Boolean = false,
     dateFormatPattern: String = "yyyy-MM-dd",
     onAddEntry: (AmortizationEntry) -> Unit,
     onUpdateEntry: (AmortizationEntry) -> Unit,
@@ -103,6 +105,9 @@ fun AmortizationScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var editingEntry by remember { mutableStateOf<AmortizationEntry?>(null) }
     var deletingEntry by remember { mutableStateOf<AmortizationEntry?>(null) }
+
+    val allPaused = amortizationEntries.isNotEmpty() && amortizationEntries.all { it.isPaused }
+    val anyActive = amortizationEntries.any { !it.isPaused }
 
     val periodLabelPlural = when (budgetPeriod) {
         BudgetPeriod.DAILY -> S.common.periodDays
@@ -126,12 +131,29 @@ fun AmortizationScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = S.common.back,
-                            tint = customColors.headerText
-                        )
+                    Row {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = S.common.back,
+                                tint = customColors.headerText
+                            )
+                        }
+                        if (amortizationEntries.isNotEmpty()) {
+                            IconButton(onClick = {
+                                if (anyActive) {
+                                    amortizationEntries.forEach { onUpdateEntry(it.copy(isPaused = true)) }
+                                } else {
+                                    amortizationEntries.forEach { onUpdateEntry(it.copy(isPaused = false)) }
+                                }
+                            }) {
+                                Icon(
+                                    imageVector = if (allPaused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+                                    contentDescription = if (allPaused) S.amortization.resumeAll else S.amortization.pauseAll,
+                                    tint = customColors.headerText
+                                )
+                            }
+                        }
                     }
                 },
                 actions = {
@@ -164,14 +186,6 @@ fun AmortizationScreen(
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
-                if (isManualBudgetEnabled) {
-                    Text(
-                        text = S.amortization.manualOverrideWarning,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFFF44336),
-                        modifier = Modifier.padding(bottom = 12.dp)
-                    )
-                }
                 OutlinedButton(
                     onClick = { showAddDialog = true },
                     modifier = Modifier.fillMaxWidth()
@@ -194,7 +208,7 @@ fun AmortizationScreen(
                     (elapsed.toFloat() / entry.totalPeriods).coerceIn(0f, 1f)
                 } else 0f
                 val amountPaid = perPeriod * elapsed
-                val contentAlpha = if (isCompleted) 0.6f else 1f
+                val contentAlpha = if (entry.isPaused) 0.5f else if (isCompleted) 0.6f else 1f
 
                 Row(
                     modifier = Modifier
@@ -203,7 +217,17 @@ fun AmortizationScreen(
                         .padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    IconButton(
+                        onClick = { onUpdateEntry(entry.copy(isPaused = !entry.isPaused)) },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (entry.isPaused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+                            contentDescription = if (entry.isPaused) S.amortization.resume else S.amortization.pause,
+                            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = contentAlpha)
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
                         Text(
                             text = entry.source,
                             style = MaterialTheme.typography.bodyLarge,
@@ -219,13 +243,25 @@ fun AmortizationScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f * contentAlpha)
                         )
-                        Text(
-                            text = if (isCompleted) S.amortization.completed
-                                   else S.amortization.xOfYComplete(elapsed, entry.totalPeriods, periodLabelPlural),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (isCompleted) Color(0xFF4CAF50)
-                                    else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-                        )
+                        if (isCompleted) {
+                            Text(
+                                text = S.amortization.completed,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF4CAF50)
+                            )
+                        } else if (entry.isPaused) {
+                            Text(
+                                text = S.amortization.paused,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
+                            )
+                        } else {
+                            Text(
+                                text = S.amortization.xOfYComplete(elapsed, entry.totalPeriods, periodLabelPlural),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                            )
+                        }
                         Spacer(modifier = Modifier.height(6.dp))
                         Box(
                             modifier = Modifier

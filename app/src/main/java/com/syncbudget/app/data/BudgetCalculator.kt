@@ -195,6 +195,7 @@ object BudgetCalculator {
         val today = LocalDate.now()
         var total = 0.0
         for (entry in entries) {
+            if (entry.isPaused) continue
             val elapsed = when (budgetPeriod) {
                 BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(entry.startDate, today).toInt()
                 BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(entry.startDate, today).toInt()

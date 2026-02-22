@@ -255,17 +255,14 @@ class MainActivity : ComponentActivity() {
             // Derived budgetAmount
             val budgetAmount by remember {
                 derivedStateOf {
-                    if (isManualBudgetEnabled) {
-                        manualBudgetAmount
-                    } else {
-                        val amortDeductions = BudgetCalculator.activeAmortizationDeductions(
-                            amortizationEntries.toList().active, budgetPeriod
-                        )
-                        val savingsDeductions = BudgetCalculator.activeSavingsGoalDeductions(
-                            savingsGoals.toList().active, budgetPeriod
-                        )
-                        maxOf(0.0, safeBudgetAmount - amortDeductions - savingsDeductions)
-                    }
+                    val base = if (isManualBudgetEnabled) manualBudgetAmount else safeBudgetAmount
+                    val amortDeductions = BudgetCalculator.activeAmortizationDeductions(
+                        amortizationEntries.toList().active, budgetPeriod
+                    )
+                    val savingsDeductions = BudgetCalculator.activeSavingsGoalDeductions(
+                        savingsGoals.toList().active, budgetPeriod
+                    )
+                    maxOf(0.0, base - amortDeductions - savingsDeductions)
                 }
             }
 
@@ -539,43 +536,41 @@ class MainActivity : ComponentActivity() {
                         savePeriodLedger()
 
                         // Update savings goals totalSavedSoFar for non-paused, non-complete items
-                        if (!isManualBudgetEnabled) {
-                            for (period in 0 until missedPeriods) {
-                                savingsGoals.forEachIndexed { idx, goal ->
-                                    if (!goal.isPaused && !goal.deleted) {
-                                        val remaining = goal.targetAmount - goal.totalSavedSoFar
-                                        if (remaining > 0) {
-                                            if (goal.targetDate != null) {
-                                                if (LocalDate.now().isBefore(goal.targetDate)) {
-                                                    val periods = when (budgetPeriod) {
-                                                        BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(LocalDate.now(), goal.targetDate)
-                                                        BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(LocalDate.now(), goal.targetDate)
-                                                        BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(LocalDate.now(), goal.targetDate)
-                                                    }
-                                                    if (periods > 0) {
-                                                        val deduction = minOf(remaining / periods.toDouble(), remaining)
-                                                        savingsGoals[idx] = goal.copy(
-                                                            totalSavedSoFar = goal.totalSavedSoFar + deduction
-                                                        )
-                                                    }
+                        for (period in 0 until missedPeriods) {
+                            savingsGoals.forEachIndexed { idx, goal ->
+                                if (!goal.isPaused && !goal.deleted) {
+                                    val remaining = goal.targetAmount - goal.totalSavedSoFar
+                                    if (remaining > 0) {
+                                        if (goal.targetDate != null) {
+                                            if (LocalDate.now().isBefore(goal.targetDate)) {
+                                                val periods = when (budgetPeriod) {
+                                                    BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(LocalDate.now(), goal.targetDate)
+                                                    BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(LocalDate.now(), goal.targetDate)
+                                                    BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(LocalDate.now(), goal.targetDate)
                                                 }
-                                            } else {
-                                                val contribution = minOf(
-                                                    goal.contributionPerPeriod,
-                                                    remaining
-                                                )
-                                                if (contribution > 0) {
+                                                if (periods > 0) {
+                                                    val deduction = minOf(remaining / periods.toDouble(), remaining)
                                                     savingsGoals[idx] = goal.copy(
-                                                        totalSavedSoFar = goal.totalSavedSoFar + contribution
+                                                        totalSavedSoFar = goal.totalSavedSoFar + deduction
                                                     )
                                                 }
+                                            }
+                                        } else {
+                                            val contribution = minOf(
+                                                goal.contributionPerPeriod,
+                                                remaining
+                                            )
+                                            if (contribution > 0) {
+                                                savingsGoals[idx] = goal.copy(
+                                                    totalSavedSoFar = goal.totalSavedSoFar + contribution
+                                                )
                                             }
                                         }
                                     }
                                 }
                             }
-                            saveSavingsGoals()
                         }
+                        saveSavingsGoals()
 
                         prefs.edit()
                             .putFloat("availableCash", availableCash.toFloat())
@@ -762,6 +757,7 @@ class MainActivity : ComponentActivity() {
                         },
                         chartPalette = chartPalette,
                         onChartPaletteChange = { chartPalette = it; prefs.edit().putString("chartPalette", it).apply() },
+                        budgetPeriod = budgetPeriod.name,
                         weekStartSunday = weekStartSunday,
                         onWeekStartChange = {
                             weekStartSunday = it; prefs.edit().putBoolean("weekStartSunday", it).apply()
@@ -1017,7 +1013,6 @@ class MainActivity : ComponentActivity() {
                         savingsGoals = savingsGoals.toList().active,
                         currencySymbol = currencySymbol,
                         budgetPeriod = budgetPeriod,
-                        isManualBudgetEnabled = isManualBudgetEnabled,
                         dateFormatPattern = dateFormatPattern,
                         onAddGoal = { savingsGoals.add(it); saveSavingsGoals() },
                         onUpdateGoal = { updated ->
@@ -1038,7 +1033,6 @@ class MainActivity : ComponentActivity() {
                         amortizationEntries = amortizationEntries.toList().active,
                         currencySymbol = currencySymbol,
                         budgetPeriod = budgetPeriod,
-                        isManualBudgetEnabled = isManualBudgetEnabled,
                         dateFormatPattern = dateFormatPattern,
                         onAddEntry = { amortizationEntries.add(it); saveAmortizationEntries() },
                         onUpdateEntry = { updated ->
@@ -1313,13 +1307,15 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         onLeaveGroup = {
-                            GroupManager.leaveGroup(context)
-                            isSyncConfigured = false
-                            syncGroupId = null
-                            isSyncAdmin = false
-                            syncStatus = "off"
-                            lastSyncTime = null
-                            syncDevices = emptyList()
+                            coroutineScope.launch {
+                                GroupManager.leaveGroup(context)
+                                isSyncConfigured = false
+                                syncGroupId = null
+                                isSyncAdmin = false
+                                syncStatus = "off"
+                                lastSyncTime = null
+                                syncDevices = emptyList()
+                            }
                         },
                         onDissolveGroup = {
                             val gId = syncGroupId

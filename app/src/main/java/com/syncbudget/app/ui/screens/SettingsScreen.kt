@@ -118,6 +118,7 @@ fun SettingsScreen(
     onChartPaletteChange: (String) -> Unit = {},
     weekStartSunday: Boolean = true,
     onWeekStartChange: (Boolean) -> Unit = {},
+    budgetPeriod: String = "DAILY",
     onNavigateToBudgetConfig: () -> Unit = {},
     onNavigateToFamilySync: () -> Unit = {},
     isSyncConfigured: Boolean = false,
@@ -293,39 +294,52 @@ fun SettingsScreen(
 
             // Week start day dropdown
             item {
+                val isWeeklyBudget = budgetPeriod == "WEEKLY"
+                val isDisabled = isLocked || isWeeklyBudget
                 var weekStartExpanded by remember { mutableStateOf(false) }
-                ExposedDropdownMenuBox(
-                    expanded = if (isLocked) false else weekStartExpanded,
-                    onExpandedChange = { if (!isLocked) weekStartExpanded = it }
-                ) {
-                    OutlinedTextField(
-                        value = if (weekStartSunday) S.settings.sunday else S.settings.monday,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text(S.settings.weekStartsOn) },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = weekStartExpanded) },
-                        colors = textFieldColors,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor()
-                    )
-                    ExposedDropdownMenu(
-                        expanded = weekStartExpanded,
-                        onDismissRequest = { weekStartExpanded = false }
+                Column {
+                    ExposedDropdownMenuBox(
+                        expanded = if (isDisabled) false else weekStartExpanded,
+                        onExpandedChange = { if (!isDisabled) weekStartExpanded = it }
                     ) {
-                        DropdownMenuItem(
-                            text = { Text(S.settings.sunday) },
-                            onClick = {
-                                onWeekStartChange(true)
-                                weekStartExpanded = false
-                            }
+                        OutlinedTextField(
+                            value = if (weekStartSunday) S.settings.sunday else S.settings.monday,
+                            onValueChange = {},
+                            readOnly = true,
+                            enabled = !isWeeklyBudget,
+                            label = { Text(S.settings.weekStartsOn) },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = weekStartExpanded) },
+                            colors = textFieldColors,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor()
                         )
-                        DropdownMenuItem(
-                            text = { Text(S.settings.monday) },
-                            onClick = {
-                                onWeekStartChange(false)
-                                weekStartExpanded = false
-                            }
+                        ExposedDropdownMenu(
+                            expanded = weekStartExpanded,
+                            onDismissRequest = { weekStartExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(S.settings.sunday) },
+                                onClick = {
+                                    onWeekStartChange(true)
+                                    weekStartExpanded = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(S.settings.monday) },
+                                onClick = {
+                                    onWeekStartChange(false)
+                                    weekStartExpanded = false
+                                }
+                            )
+                        }
+                    }
+                    if (isWeeklyBudget) {
+                        Text(
+                            S.settings.weekStartWeeklyNote,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 8.dp, top = 4.dp)
                         )
                     }
                 }

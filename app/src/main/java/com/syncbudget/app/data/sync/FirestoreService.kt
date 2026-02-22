@@ -221,6 +221,15 @@ object FirestoreService {
         }
     }
 
+    suspend fun removeDevice(groupId: String, deviceId: String) {
+        db.collection("groups")
+            .document(groupId)
+            .collection("devices")
+            .document(deviceId)
+            .delete()
+            .await()
+    }
+
     suspend fun registerDevice(groupId: String, deviceId: String, deviceName: String, isAdmin: Boolean = false) {
         val data = mapOf(
             "deviceId" to deviceId,

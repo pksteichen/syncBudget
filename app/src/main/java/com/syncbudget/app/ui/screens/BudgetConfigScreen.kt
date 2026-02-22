@@ -233,7 +233,11 @@ fun BudgetConfigScreen(
                         onClick = { showResetDialog = true },
                         enabled = !isLocked
                     ) {
-                        Text(S.budgetConfig.refreshTime)
+                        Text(when (budgetPeriod) {
+                            BudgetPeriod.WEEKLY -> S.budgetConfig.resetDay
+                            BudgetPeriod.MONTHLY -> S.budgetConfig.resetDate
+                            else -> S.budgetConfig.refreshTime
+                        })
                     }
                 }
                 Spacer(modifier = Modifier.height(12.dp))
@@ -309,7 +313,7 @@ fun BudgetConfigScreen(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = S.budgetConfig.manualOverrideWarning,
+                        text = S.budgetConfig.manualOverrideNote(periodLabel),
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFFFF9800)
                     )
@@ -988,7 +992,14 @@ private fun BudgetResetDialog(
             tonalElevation = 6.dp
         ) {
             Column(modifier = Modifier.padding(24.dp)) {
-                Text(S.budgetConfig.resetSettingsTitle, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    when (budgetPeriod) {
+                        BudgetPeriod.WEEKLY -> S.budgetConfig.resetDayTitle
+                        BudgetPeriod.MONTHLY -> S.budgetConfig.resetDateTitle
+                        else -> S.budgetConfig.resetSettingsTitle
+                    },
+                    style = MaterialTheme.typography.titleMedium
+                )
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Column(
@@ -998,6 +1009,7 @@ private fun BudgetResetDialog(
                         .verticalScroll(rememberScrollState())
                 ) {
                     if (budgetPeriod == BudgetPeriod.WEEKLY) {
+                        val weeklyDays = listOf(DayOfWeek.SUNDAY, DayOfWeek.MONDAY)
                         ExposedDropdownMenuBox(
                             expanded = dayOfWeekExpanded,
                             onExpandedChange = { dayOfWeekExpanded = it }
@@ -1017,7 +1029,7 @@ private fun BudgetResetDialog(
                                 expanded = dayOfWeekExpanded,
                                 onDismissRequest = { dayOfWeekExpanded = false }
                             ) {
-                                DAY_OF_WEEK_ORDER.forEach { day ->
+                                weeklyDays.forEach { day ->
                                     DropdownMenuItem(
                                         text = { Text(day.getDisplayName(TextStyle.FULL, Locale.getDefault())) },
                                         onClick = {
@@ -1042,33 +1054,35 @@ private fun BudgetResetDialog(
                         )
                     }
 
-                    ExposedDropdownMenuBox(
-                        expanded = hourExpanded,
-                        onExpandedChange = { hourExpanded = it }
-                    ) {
-                        OutlinedTextField(
-                            value = HOUR_LABELS[selectedHour],
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text(S.budgetConfig.resetHour) },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = hourExpanded) },
-                            colors = textFieldColors,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .menuAnchor()
-                        )
-                        ExposedDropdownMenu(
+                    if (budgetPeriod == BudgetPeriod.DAILY) {
+                        ExposedDropdownMenuBox(
                             expanded = hourExpanded,
-                            onDismissRequest = { hourExpanded = false }
+                            onExpandedChange = { hourExpanded = it }
                         ) {
-                            HOUR_LABELS.forEachIndexed { index, label ->
-                                DropdownMenuItem(
-                                    text = { Text(label) },
-                                    onClick = {
-                                        selectedHour = index
-                                        hourExpanded = false
-                                    }
-                                )
+                            OutlinedTextField(
+                                value = HOUR_LABELS[selectedHour],
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text(S.budgetConfig.resetHour) },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = hourExpanded) },
+                                colors = textFieldColors,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .menuAnchor()
+                            )
+                            ExposedDropdownMenu(
+                                expanded = hourExpanded,
+                                onDismissRequest = { hourExpanded = false }
+                            ) {
+                                HOUR_LABELS.forEachIndexed { index, label ->
+                                    DropdownMenuItem(
+                                        text = { Text(label) },
+                                        onClick = {
+                                            selectedHour = index
+                                            hourExpanded = false
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -1084,7 +1098,8 @@ private fun BudgetResetDialog(
                     TextButton(
                         onClick = {
                             if (isValid) {
-                                onSave(selectedHour, selectedDayOfWeek, dayOfMonth ?: resetDayOfMonth)
+                                val saveHour = if (budgetPeriod == BudgetPeriod.DAILY) selectedHour else 0
+                                onSave(saveHour, selectedDayOfWeek, dayOfMonth ?: resetDayOfMonth)
                             }
                         },
                         enabled = isValid

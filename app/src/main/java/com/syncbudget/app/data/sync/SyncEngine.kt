@@ -482,11 +482,13 @@ class SyncEngine(
             startDate = try { LocalDate.parse(f["startDate"]?.value as? String) } catch (_: Exception) { LocalDate.now() },
             deviceId = change.deviceId,
             deleted = f["deleted"]?.value as? Boolean ?: false,
+            isPaused = f["isPaused"]?.value as? Boolean ?: false,
             source_clock = f["source"]?.clock ?: 0L,
             amount_clock = f["amount"]?.clock ?: 0L,
             totalPeriods_clock = f["totalPeriods"]?.clock ?: 0L,
             startDate_clock = f["startDate"]?.clock ?: 0L,
-            deleted_clock = f["deleted"]?.clock ?: 0L
+            deleted_clock = f["deleted"]?.clock ?: 0L,
+            isPaused_clock = f["isPaused"]?.clock ?: 0L
         )
     }
 

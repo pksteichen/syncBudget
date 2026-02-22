@@ -107,6 +107,7 @@ object EnglishStrings : AppStrings {
         showDecimalPlaces = "Show decimal places",
         dateFormat = "Date Format",
         weekStartsOn = "Week Starts On",
+        weekStartWeeklyNote = "For weekly budgets, this is set by Reset Day in Budget Configuration.",
         sunday = "Sunday",
         monday = "Monday",
         chartPalette = "Chart Palette",
@@ -141,10 +142,12 @@ object EnglishStrings : AppStrings {
         safeBudgetAmountLabel = { symbol, amount, period -> "Safe Budget Amount: $symbol$amount/$period" },
         budgetTrackingSince = { date -> "Budget tracking since: $date" },
         refreshTime = "Refresh Time",
+        resetDay = "Reset Day",
+        resetDate = "Reset Date",
         startResetBudget = "Start/Reset Budget",
         manualBudgetOverride = "Manual Budget Override",
         budgetAmountPer = { period -> "Budget Amount per $period" },
-        manualOverrideWarning = "Manual override disables Amortization and Savings Goal deductions.",
+        manualOverrideNote = { period -> "Savings Goals and Amortization page entries will reduce this amount. If you want exactly this amount added each $period, pause your Savings Goals and Amortization deductions on those pages." },
         incomeSourceDescription = "Add sources of consistent income that you can rely on for budgeting. If your pay varies (large check, small check), you can make more than one entry for a source.",
         addIncomeSource = "Add Income Source",
         editIncomeSource = "Edit Income Source",
@@ -153,6 +156,8 @@ object EnglishStrings : AppStrings {
         resetBudgetConfirmTitle = "Start/Reset Budget?",
         resetBudgetConfirmBody = "This will reset the budget start date to today and set available cash to one period's budget amount. Your transactions will not be affected.",
         resetSettingsTitle = "Refresh Time Settings",
+        resetDayTitle = "Reset Day",
+        resetDateTitle = "Reset Date",
         resetHour = "Reset Hour",
         dayOfWeekLabel = "Day of Week",
         dayOfMonthReset = "Day of Month (1-28)",
@@ -265,7 +270,6 @@ object EnglishStrings : AppStrings {
     override val futureExpenditures = FutureExpendituresStrings(
         title = "Savings Goals",
         description = "Plan and save for future expenses or financial targets. The app automatically deducts a small amount each budget period.",
-        manualOverrideWarning = "Manual Budget Override is enabled. Savings Goal deductions are NOT being subtracted from your budget.",
         addSavingsGoal = "Add Savings Goal",
         editSavingsGoal = "Edit Savings Goal",
         name = "Description",
@@ -300,7 +304,6 @@ object EnglishStrings : AppStrings {
     override val amortization = AmortizationStrings(
         title = "Amortization",
         description = "Spread a large past expense across multiple budget periods so it doesn't hit your budget all at once.",
-        manualOverrideWarning = "Manual Budget Override is enabled. Amortization deductions are NOT being subtracted from your budget.",
         addEntry = "Add Amortization Entry",
         editEntry = "Edit Amortization Entry",
         sourceName = "Description",
@@ -316,7 +319,12 @@ object EnglishStrings : AppStrings {
         requiredLaptopExample = "Required, e.g. Laptop",
         exampleTotalAmount = "e.g. 900.00",
         examplePeriods = "e.g. 90",
-        selectAStartDate = "Select a start date"
+        selectAStartDate = "Select a start date",
+        paused = "Paused",
+        pauseAll = "Pause All",
+        resumeAll = "Resume All",
+        pause = "Pause",
+        resume = "Resume"
     )
 
     override val recurringExpenses = RecurringExpensesStrings(
@@ -892,12 +900,11 @@ object EnglishStrings : AppStrings {
             "instead of using the calculated value. When enabled:",
         manualBullet1 = "A text field appears where you enter your desired amount per period",
         manualBullet2 = "The safe budget calculation is ignored",
-        manualBullet3 = "Amortization and Savings Goal deductions are disabled",
-        warningTitle = "Warning",
-        warningBody = "Manual override disables the safety net provided by the budget calculator. " +
-            "Amortization and Savings Goal deductions will not be subtracted " +
-            "from your budget. Red warning banners will appear on the Amortization " +
-            "and Savings Goals screens when manual override is active.",
+        manualBullet3 = "Savings Goal and Amortization deductions still apply to your manual amount",
+        warningTitle = "Note",
+        warningBody = "Savings Goals and Amortization deductions are still subtracted from " +
+            "your manual budget amount. If you want exactly your entered amount each period, " +
+            "pause your Savings Goals and Amortization entries on those pages.",
         incomeSourcesTitle = "Income Sources",
         incomeSourcesBody = "Income sources represent your reliable, recurring income \u2014 the money you " +
             "can count on for budgeting purposes. Add all consistent income streams: " +
@@ -1037,10 +1044,9 @@ object EnglishStrings : AppStrings {
         goalReachedBody = "Shows \"Goal reached!\" in green when Saved So Far meets or exceeds the target. " +
             "No further deductions are taken. You can delete the goal or keep it as a record.",
         manualOverrideTitle = "Manual Budget Override",
-        manualOverrideBody = "If Manual Budget Override is enabled in Budget Configuration, a red warning " +
-            "banner appears at the top of this screen. When manual override is active, " +
-            "Savings Goal deductions are NOT subtracted from your budget \u2014 you must account " +
-            "for these expenses yourself.",
+        manualOverrideBody = "If Manual Budget Override is enabled in Budget Configuration, Savings Goal " +
+            "deductions are still subtracted from your manual budget amount. You can pause " +
+            "individual goals or all goals at once if you want the full manual amount.",
         tipsTitle = "Tips",
         tip1 = "Create target-date goals as early as possible \u2014 the more time you have, the smaller each period's deduction.",
         tip2 = "Use fixed contribution goals for open-ended savings like emergency funds or general savings.",
@@ -1105,10 +1111,9 @@ object EnglishStrings : AppStrings {
             "the transaction merchant name. For example, a source named \"Toyota Service\" " +
             "would match a bank transaction from \"TOYOTA SERVICE CENTER\".",
         manualOverrideTitle = "Manual Budget Override",
-        manualOverrideBody = "If Manual Budget Override is enabled in Budget Configuration, a red warning " +
-            "banner appears at the top of this screen. When manual override is active, " +
-            "amortization deductions are NOT subtracted from your budget \u2014 you must " +
-            "account for these costs yourself.",
+        manualOverrideBody = "If Manual Budget Override is enabled in Budget Configuration, amortization " +
+            "deductions are still subtracted from your manual budget amount. You can pause " +
+            "individual entries or all entries at once if you want the full manual amount.",
         tipsTitle = "Tips",
         tip1 = "Choose a number of periods that results in a comfortable per-period deduction. If \$10/day feels too much, spread over more days.",
         tip2 = "Use amortization for any expense that would otherwise devastate your budget: medical bills, car repairs, appliance replacements, emergency travel.",

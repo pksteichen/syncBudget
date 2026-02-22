@@ -169,13 +169,15 @@ object CrdtMerge {
             amount = if (shouldAcceptRemote(local.amount_clock, remote.amount_clock, localDeviceId, remoteDeviceId)) remote.amount else local.amount,
             totalPeriods = if (shouldAcceptRemote(local.totalPeriods_clock, remote.totalPeriods_clock, localDeviceId, remoteDeviceId)) remote.totalPeriods else local.totalPeriods,
             startDate = if (shouldAcceptRemote(local.startDate_clock, remote.startDate_clock, localDeviceId, remoteDeviceId)) remote.startDate else local.startDate,
+            isPaused = if (shouldAcceptRemote(local.isPaused_clock, remote.isPaused_clock, localDeviceId, remoteDeviceId)) remote.isPaused else local.isPaused,
             deviceId = local.deviceId,
             deleted = mergedDeleted,
             source_clock = maxOf(local.source_clock, remote.source_clock),
             amount_clock = maxOf(local.amount_clock, remote.amount_clock),
             totalPeriods_clock = maxOf(local.totalPeriods_clock, remote.totalPeriods_clock),
             startDate_clock = maxOf(local.startDate_clock, remote.startDate_clock),
-            deleted_clock = mergedDeletedClock
+            deleted_clock = mergedDeletedClock,
+            isPaused_clock = maxOf(local.isPaused_clock, remote.isPaused_clock)
         )
     }
 
