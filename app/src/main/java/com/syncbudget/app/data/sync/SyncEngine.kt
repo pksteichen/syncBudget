@@ -12,8 +12,13 @@ import com.syncbudget.app.data.SavingsGoal
 import com.syncbudget.app.data.SharedSettings
 import com.syncbudget.app.data.SharedSettingsRepository
 import com.syncbudget.app.data.Transaction
+import com.syncbudget.app.data.TransactionType
+import com.syncbudget.app.data.CategoryAmount
+import com.syncbudget.app.data.RepeatType
+import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
+import java.time.LocalDate
 
 data class SyncResult(
     val success: Boolean,
@@ -333,9 +338,170 @@ class SyncEngine(
         localDeviceId: String,
         mergeFn: (T, T) -> T
     ): MutableList<T> {
-        // This is a simplified merge — the actual field application happens in CrdtMerge
-        // For now, we find or create the record and merge
-        // The RecordDelta contains field-level changes that need to be applied
-        return list // Actual per-field merge is handled by the CRDT merge functions
+        val remote = when (change.type) {
+            "transaction" -> deserializeTransaction(change)
+            "recurring_expense" -> deserializeRecurringExpense(change)
+            "income_source" -> deserializeIncomeSource(change)
+            "savings_goal" -> deserializeSavingsGoal(change)
+            "amortization_entry" -> deserializeAmortizationEntry(change)
+            "category" -> deserializeCategory(change)
+            else -> return list
+        } as? T ?: return list
+
+        val existingIndex = list.indexOfFirst { getId(it) == change.id }
+        if (existingIndex >= 0) {
+            list[existingIndex] = mergeFn(list[existingIndex], remote)
+        } else {
+            list.add(remote)
+        }
+        return list
+    }
+
+    private fun getId(record: Any): Int = when (record) {
+        is Transaction -> record.id
+        is RecurringExpense -> record.id
+        is IncomeSource -> record.id
+        is SavingsGoal -> record.id
+        is AmortizationEntry -> record.id
+        is Category -> record.id
+        else -> -1
+    }
+
+    private fun deserializeTransaction(change: RecordDelta): Transaction {
+        val f = change.fields
+        val catAmountsStr = f["categoryAmounts"]?.value as? String
+        val categoryAmounts = if (catAmountsStr != null) {
+            try {
+                val arr = JSONArray(catAmountsStr)
+                (0 until arr.length()).map { i ->
+                    val obj = arr.getJSONObject(i)
+                    CategoryAmount(obj.getInt("categoryId"), obj.getDouble("amount"))
+                }
+            } catch (_: Exception) { emptyList() }
+        } else emptyList<CategoryAmount>()
+
+        return Transaction(
+            id = change.id,
+            type = try { TransactionType.valueOf(f["type"]?.value as? String ?: "EXPENSE") } catch (_: Exception) { TransactionType.EXPENSE },
+            date = try { LocalDate.parse(f["date"]?.value as? String) } catch (_: Exception) { LocalDate.now() },
+            source = f["source"]?.value as? String ?: "",
+            categoryAmounts = categoryAmounts,
+            amount = (f["amount"]?.value as? Number)?.toDouble() ?: 0.0,
+            isUserCategorized = f["isUserCategorized"]?.value as? Boolean ?: true,
+            isBudgetIncome = f["isBudgetIncome"]?.value as? Boolean ?: false,
+            deviceId = change.deviceId,
+            deleted = f["deleted"]?.value as? Boolean ?: false,
+            source_clock = f["source"]?.clock ?: 0L,
+            amount_clock = f["amount"]?.clock ?: 0L,
+            date_clock = f["date"]?.clock ?: 0L,
+            type_clock = f["type"]?.clock ?: 0L,
+            categoryAmounts_clock = f["categoryAmounts"]?.clock ?: 0L,
+            isUserCategorized_clock = f["isUserCategorized"]?.clock ?: 0L,
+            isBudgetIncome_clock = f["isBudgetIncome"]?.clock ?: 0L,
+            deleted_clock = f["deleted"]?.clock ?: 0L
+        )
+    }
+
+    private fun deserializeRecurringExpense(change: RecordDelta): RecurringExpense {
+        val f = change.fields
+        return RecurringExpense(
+            id = change.id,
+            source = f["source"]?.value as? String ?: "",
+            amount = (f["amount"]?.value as? Number)?.toDouble() ?: 0.0,
+            repeatType = try { RepeatType.valueOf(f["repeatType"]?.value as? String ?: "MONTHS") } catch (_: Exception) { RepeatType.MONTHS },
+            repeatInterval = (f["repeatInterval"]?.value as? Number)?.toInt() ?: 1,
+            startDate = try { LocalDate.parse(f["startDate"]?.value as? String) } catch (_: Exception) { null },
+            monthDay1 = (f["monthDay1"]?.value as? Number)?.toInt(),
+            monthDay2 = (f["monthDay2"]?.value as? Number)?.toInt(),
+            deviceId = change.deviceId,
+            deleted = f["deleted"]?.value as? Boolean ?: false,
+            source_clock = f["source"]?.clock ?: 0L,
+            amount_clock = f["amount"]?.clock ?: 0L,
+            repeatType_clock = f["repeatType"]?.clock ?: 0L,
+            repeatInterval_clock = f["repeatInterval"]?.clock ?: 0L,
+            startDate_clock = f["startDate"]?.clock ?: 0L,
+            monthDay1_clock = f["monthDay1"]?.clock ?: 0L,
+            monthDay2_clock = f["monthDay2"]?.clock ?: 0L,
+            deleted_clock = f["deleted"]?.clock ?: 0L
+        )
+    }
+
+    private fun deserializeIncomeSource(change: RecordDelta): IncomeSource {
+        val f = change.fields
+        return IncomeSource(
+            id = change.id,
+            source = f["source"]?.value as? String ?: "",
+            amount = (f["amount"]?.value as? Number)?.toDouble() ?: 0.0,
+            repeatType = try { RepeatType.valueOf(f["repeatType"]?.value as? String ?: "MONTHS") } catch (_: Exception) { RepeatType.MONTHS },
+            repeatInterval = (f["repeatInterval"]?.value as? Number)?.toInt() ?: 1,
+            startDate = try { LocalDate.parse(f["startDate"]?.value as? String) } catch (_: Exception) { null },
+            monthDay1 = (f["monthDay1"]?.value as? Number)?.toInt(),
+            monthDay2 = (f["monthDay2"]?.value as? Number)?.toInt(),
+            deviceId = change.deviceId,
+            deleted = f["deleted"]?.value as? Boolean ?: false,
+            source_clock = f["source"]?.clock ?: 0L,
+            amount_clock = f["amount"]?.clock ?: 0L,
+            repeatType_clock = f["repeatType"]?.clock ?: 0L,
+            repeatInterval_clock = f["repeatInterval"]?.clock ?: 0L,
+            startDate_clock = f["startDate"]?.clock ?: 0L,
+            monthDay1_clock = f["monthDay1"]?.clock ?: 0L,
+            monthDay2_clock = f["monthDay2"]?.clock ?: 0L,
+            deleted_clock = f["deleted"]?.clock ?: 0L
+        )
+    }
+
+    private fun deserializeSavingsGoal(change: RecordDelta): SavingsGoal {
+        val f = change.fields
+        return SavingsGoal(
+            id = change.id,
+            name = f["name"]?.value as? String ?: "",
+            targetAmount = (f["targetAmount"]?.value as? Number)?.toDouble() ?: 0.0,
+            targetDate = try { LocalDate.parse(f["targetDate"]?.value as? String) } catch (_: Exception) { null },
+            totalSavedSoFar = (f["totalSavedSoFar"]?.value as? Number)?.toDouble() ?: 0.0,
+            contributionPerPeriod = (f["contributionPerPeriod"]?.value as? Number)?.toDouble() ?: 0.0,
+            isPaused = f["isPaused"]?.value as? Boolean ?: false,
+            deviceId = change.deviceId,
+            deleted = f["deleted"]?.value as? Boolean ?: false,
+            name_clock = f["name"]?.clock ?: 0L,
+            targetAmount_clock = f["targetAmount"]?.clock ?: 0L,
+            targetDate_clock = f["targetDate"]?.clock ?: 0L,
+            totalSavedSoFar_clock = f["totalSavedSoFar"]?.clock ?: 0L,
+            contributionPerPeriod_clock = f["contributionPerPeriod"]?.clock ?: 0L,
+            isPaused_clock = f["isPaused"]?.clock ?: 0L,
+            deleted_clock = f["deleted"]?.clock ?: 0L
+        )
+    }
+
+    private fun deserializeAmortizationEntry(change: RecordDelta): AmortizationEntry {
+        val f = change.fields
+        return AmortizationEntry(
+            id = change.id,
+            source = f["source"]?.value as? String ?: "",
+            amount = (f["amount"]?.value as? Number)?.toDouble() ?: 0.0,
+            totalPeriods = (f["totalPeriods"]?.value as? Number)?.toInt() ?: 1,
+            startDate = try { LocalDate.parse(f["startDate"]?.value as? String) } catch (_: Exception) { LocalDate.now() },
+            deviceId = change.deviceId,
+            deleted = f["deleted"]?.value as? Boolean ?: false,
+            source_clock = f["source"]?.clock ?: 0L,
+            amount_clock = f["amount"]?.clock ?: 0L,
+            totalPeriods_clock = f["totalPeriods"]?.clock ?: 0L,
+            startDate_clock = f["startDate"]?.clock ?: 0L,
+            deleted_clock = f["deleted"]?.clock ?: 0L
+        )
+    }
+
+    private fun deserializeCategory(change: RecordDelta): Category {
+        val f = change.fields
+        return Category(
+            id = change.id,
+            name = f["name"]?.value as? String ?: "",
+            iconName = f["iconName"]?.value as? String ?: "label",
+            tag = f["tag"]?.value as? String ?: "",
+            deviceId = change.deviceId,
+            deleted = f["deleted"]?.value as? Boolean ?: false,
+            name_clock = f["name"]?.clock ?: 0L,
+            iconName_clock = f["iconName"]?.clock ?: 0L,
+            deleted_clock = f["deleted"]?.clock ?: 0L
+        )
     }
 }

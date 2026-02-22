@@ -374,8 +374,16 @@ class MainActivity : ComponentActivity() {
                                 matchPercent = merged.matchPercent
                                 matchDollar = merged.matchDollar
                                 matchChars = merged.matchChars
+                                // Apply synced budgetStartDate
+                                val syncedStartDate = merged.budgetStartDate?.let {
+                                    try { LocalDate.parse(it) } catch (_: Exception) { null }
+                                }
+                                val hadNoBudget = budgetStartDate == null
+                                if (syncedStartDate != null) {
+                                    budgetStartDate = syncedStartDate
+                                }
                                 // Also write to app_prefs for backward compat
-                                prefs.edit()
+                                val prefsEditor = prefs.edit()
                                     .putString("currencySymbol", merged.currency)
                                     .putString("budgetPeriod", merged.budgetPeriod)
                                     .putInt("resetHour", merged.resetHour)
@@ -388,7 +396,18 @@ class MainActivity : ComponentActivity() {
                                     .putFloat("matchPercent", merged.matchPercent)
                                     .putInt("matchDollar", merged.matchDollar)
                                     .putInt("matchChars", merged.matchChars)
-                                    .apply()
+                                if (syncedStartDate != null) {
+                                    prefsEditor.putString("budgetStartDate", syncedStartDate.toString())
+                                }
+                                // Auto-initialize budget on slave device joining for the first time
+                                if (hadNoBudget && syncedStartDate != null) {
+                                    lastRefreshDate = LocalDate.now()
+                                    availableCash = budgetAmount
+                                    prefsEditor
+                                        .putString("lastRefreshDate", lastRefreshDate.toString())
+                                        .putFloat("availableCash", availableCash.toFloat())
+                                }
+                                prefsEditor.apply()
                             }
                             syncStatus = "synced"
                             syncErrorMessage = null
