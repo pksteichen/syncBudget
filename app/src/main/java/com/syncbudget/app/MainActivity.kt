@@ -1162,20 +1162,6 @@ class MainActivity : ComponentActivity() {
                                 .putFloat("availableCash", availableCash.toFloat())
                                 .apply()
                         },
-                        onRecalculate = {
-                            if (budgetStartDate == null || availableCash == 0.0) {
-                                val tz = if (isSyncConfigured && sharedSettings.familyTimezone.isNotEmpty())
-                                    ZoneId.of(sharedSettings.familyTimezone) else null
-                                budgetStartDate = BudgetCalculator.currentPeriodStart(budgetPeriod, resetDayOfWeek, resetDayOfMonth, tz)
-                                lastRefreshDate = LocalDate.now()
-                                availableCash = budgetAmount
-                                prefs.edit()
-                                    .putString("budgetStartDate", budgetStartDate.toString())
-                                    .putString("lastRefreshDate", lastRefreshDate.toString())
-                                    .putFloat("availableCash", availableCash.toFloat())
-                                    .apply()
-                            }
-                        },
                         isSyncConfigured = isSyncConfigured,
                         isAdmin = isSyncAdmin,
                         onBack = { currentScreen = "settings" },

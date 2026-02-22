@@ -270,7 +270,7 @@ fun MainScreen(
         S.dashboard.notConfigured
     } else {
         val periodText = when {
-            budgetAmount == 0.0 && !isNegative -> S.budgetConfig.recalculate
+            budgetAmount == 0.0 && !isNegative -> S.budgetConfig.startResetBudget
             else -> "${formatCurrency(budgetAmount, currencySymbol)}/$budgetPeriodLabel"
         }
         periodText

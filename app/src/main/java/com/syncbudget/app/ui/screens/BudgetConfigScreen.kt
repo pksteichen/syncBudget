@@ -112,7 +112,6 @@ fun BudgetConfigScreen(
     manualBudgetAmount: Double = 0.0,
     onManualBudgetToggle: (Boolean) -> Unit = {},
     onManualBudgetAmountChange: (Double) -> Unit = {},
-    onRecalculate: () -> Unit = {},
     onResetBudget: () -> Unit = {},
     budgetStartDate: String? = null,
     dateFormatPattern: String = "yyyy-MM-dd",
@@ -234,7 +233,7 @@ fun BudgetConfigScreen(
                         onClick = { showResetDialog = true },
                         enabled = !isLocked
                     ) {
-                        Text(S.common.reset)
+                        Text(S.budgetConfig.refreshTime)
                     }
                 }
                 Spacer(modifier = Modifier.height(12.dp))
@@ -260,22 +259,11 @@ fun BudgetConfigScreen(
                     )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                OutlinedButton(
+                    onClick = { showResetBudgetConfirm = true },
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    OutlinedButton(
-                        onClick = onRecalculate,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(S.budgetConfig.recalculate)
-                    }
-                    OutlinedButton(
-                        onClick = { showResetBudgetConfirm = true },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(S.budgetConfig.resetBudget)
-                    }
+                    Text(S.budgetConfig.startResetBudget)
                 }
                 Spacer(modifier = Modifier.height(12.dp))
 
