@@ -1,0 +1,36 @@
+package com.syncbudget.app.data
+
+data class SharedSettings(
+    val currency: String = "$",
+    val budgetPeriod: String = "DAILY",
+    val budgetStartDate: String? = null,
+    val isManualBudgetEnabled: Boolean = false,
+    val manualBudgetAmount: Double = 0.0,
+    val weekStartSunday: Boolean = true,
+    val resetDayOfWeek: Int = 7,
+    val resetDayOfMonth: Int = 1,
+    val resetHour: Int = 0,
+    val familyTimezone: String = "",
+    val matchDays: Int = 7,
+    val matchPercent: Float = 1.0f,
+    val matchDollar: Int = 1,
+    val matchChars: Int = 5,
+    val showAttribution: Boolean = false,
+    val lastChangedBy: String = "",
+    // Per-field clocks
+    val currency_clock: Long = 0L,
+    val budgetPeriod_clock: Long = 0L,
+    val budgetStartDate_clock: Long = 0L,
+    val isManualBudgetEnabled_clock: Long = 0L,
+    val manualBudgetAmount_clock: Long = 0L,
+    val weekStartSunday_clock: Long = 0L,
+    val resetDayOfWeek_clock: Long = 0L,
+    val resetDayOfMonth_clock: Long = 0L,
+    val resetHour_clock: Long = 0L,
+    val familyTimezone_clock: Long = 0L,
+    val matchDays_clock: Long = 0L,
+    val matchPercent_clock: Long = 0L,
+    val matchDollar_clock: Long = 0L,
+    val matchChars_clock: Long = 0L,
+    val showAttribution_clock: Long = 0L
+)

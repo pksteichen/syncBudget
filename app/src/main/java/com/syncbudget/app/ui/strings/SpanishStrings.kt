@@ -2,6 +2,20 @@ package com.syncbudget.app.ui.strings
 
 object SpanishStrings : AppStrings {
 
+    override val defaultCategoryNames = DefaultCategoryNames(
+        other = "Otros",
+        recurring = "Recurrente",
+        amortization = "Amortizaci\u00f3n",
+        recurringIncome = "Ingreso Recurrente",
+        transportation = "Transporte/Gasolina",
+        groceries = "Supermercado",
+        entertainment = "Entretenimiento",
+        homeSupplies = "Hogar",
+        restaurants = "Restaurantes",
+        charity = "Caridad",
+        clothes = "Ropa"
+    )
+
     override val common = CommonStrings(
         ok = "OK",
         cancel = "Cancelar",
@@ -19,22 +33,22 @@ object SpanishStrings : AppStrings {
         periodMonths = "meses",
         addNewIncomeTransaction = "Nueva transacci\u00f3n de ingreso",
         addNewExpenseTransaction = "Nueva transacci\u00f3n de gasto",
-        sourceLabel = "Fuente",
-        merchantLabel = "Comercio",
-        repeatTypeDays = "Cada X d\u00edas",
-        repeatTypeWeeks = "Cada X semanas",
+        sourceLabel = "Descripci\u00f3n",
+        merchantLabel = "Descripci\u00f3n",
+        repeatTypeDays = "D\u00eda",
+        repeatTypeWeeks = "Semana",
         repeatTypeBiWeekly = "Cada 2 semanas",
-        repeatTypeMonths = "Cada X meses",
+        repeatTypeMonths = "Mes",
         repeatTypeBiMonthly = "Dos veces al mes",
         budgetPeriodDaily = "Diario",
         budgetPeriodWeekly = "Semanal",
         budgetPeriodMonthly = "Mensual",
-        sourceName = "Nombre de la fuente",
+        sourceName = "Descripci\u00f3n",
         amount = "Monto",
         repeatType = "Tipo de repetici\u00f3n",
-        everyXDays = "Cada X d\u00edas (1-60)",
-        intervalWeeks = "Cada X semanas (1-18)",
-        everyXMonths = "Cada X meses (1-3)",
+        everyXDays = "D\u00edas entre repeticiones (1-365)",
+        intervalWeeks = "Semanas entre repeticiones (1-52)",
+        everyXMonths = "Meses entre repeticiones (1-12)",
         dayOfMonth = "D\u00eda del mes (1-28)",
         firstDayOfMonth = "Primer d\u00eda (1-28)",
         secondDayOfMonth = "Segundo d\u00eda (1-28)",
@@ -210,9 +224,10 @@ object SpanishStrings : AppStrings {
         dateAdvisory = "Nota: La fecha de esta transacci\u00f3n difiere del calendario esperado por m\u00e1s de 2 d\u00edas. Considera actualizar la configuraci\u00f3n de tu gasto recurrente.",
         savedSuccessfully = { count -> "$count transacciones guardadas correctamente." },
         loadedSuccessfully = { loaded, total -> "$loaded de $total transacciones cargadas." },
+        allSkipped = { total -> "0 de $total transacciones cargadas. Datos previamente cargados omitidos." },
         passwordMinLength = "La contrase\u00f1a debe tener al menos 8 caracteres",
         passwordsMustMatch = "Las contrase\u00f1as no coinciden",
-        newMerchantName = "Comercio/Fuente",
+        newMerchantName = "Descripci\u00f3n",
         filterByCategory = { name -> "Filtrado por: $name" },
         tapToClearFilter = "Toca para borrar el filtro",
         startDate = "Seleccionar fecha de inicio",
@@ -239,7 +254,7 @@ object SpanishStrings : AppStrings {
         manualOverrideWarning = "El presupuesto manual est\u00e1 activado. Las deducciones de Metas de Ahorro NO se est\u00e1n restando de tu presupuesto.",
         addSavingsGoal = "Agregar meta de ahorro",
         editSavingsGoal = "Editar meta de ahorro",
-        name = "Nombre",
+        name = "Descripci\u00f3n",
         targetAmount = "Monto objetivo",
         startingSavedAmount = "Monto ya ahorrado",
         targetDate = "Fecha objetivo",
@@ -274,7 +289,7 @@ object SpanishStrings : AppStrings {
         manualOverrideWarning = "El presupuesto manual est\u00e1 activado. Las deducciones de amortizaci\u00f3n NO se est\u00e1n restando de tu presupuesto.",
         addEntry = "Agregar entrada de amortizaci\u00f3n",
         editEntry = "Editar entrada de amortizaci\u00f3n",
-        sourceName = "Nombre de la fuente",
+        sourceName = "Descripci\u00f3n",
         totalAmount = "Monto total",
         budgetPeriods = { period -> "Per\u00edodos ($period)" },
         selectStartDate = "Elegir fecha de inicio",
@@ -297,8 +312,75 @@ object SpanishStrings : AppStrings {
         editExpense = "Editar gasto recurrente",
         deleteExpenseTitle = { name -> "\u00bfEliminar $name?" },
         deleteExpenseBody = "Este gasto recurrente se eliminar\u00e1 permanentemente.",
+        descriptionLabel = "Descripci\u00f3n",
         requiredNetflixExample = "Obligatorio, ej. Netflix",
         exampleAmount = "ej. 15.99"
+    )
+
+    override val sync = SyncStrings(
+        title = "Sincronizaci\u00f3n Familiar",
+        familySync = "Sincronizaci\u00f3n Familiar",
+        familySyncDescription = "Sincroniza tu presupuesto en hasta 5 dispositivos de tu hogar.",
+        createGroup = "Crear Grupo Familiar",
+        createGroupDescription = "Inicia un nuevo grupo de sincronizaci\u00f3n e invita a familiares con un c\u00f3digo de emparejamiento.",
+        joinGroup = "Unirse a Grupo Familiar",
+        joinGroupDescription = "Ingresa un c\u00f3digo de emparejamiento de un familiar para unirte a su grupo.",
+        leaveGroup = "Salir del Grupo",
+        dissolveGroup = "Disolver Grupo",
+        syncNow = "Sincronizar Ahora",
+        lastSynced = { time -> "\u00daltima sincronizaci\u00f3n: $time" },
+        syncing = "Sincronizando...",
+        syncError = "Error de sincronizaci\u00f3n",
+        notConfigured = "Sin configurar",
+        groupId = "ID del Grupo",
+        pairingCode = "C\u00f3digo de Emparejamiento",
+        enterPairingCode = "Ingresa el c\u00f3digo de emparejamiento",
+        pairingCodeExpiry = "El c\u00f3digo expira en 10 minutos",
+        generateCode = "Generar C\u00f3digo",
+        deviceRoster = "Lista de Dispositivos",
+        devices = "Dispositivos",
+        thisDevice = "Este dispositivo",
+        admin = "Administrador",
+        transferAdmin = "Transferir Admin",
+        removeDevice = "Eliminar Dispositivo",
+        confirmLeave = "\u00bfEst\u00e1s seguro de que quieres salir de este grupo? Tus datos locales se conservar\u00e1n pero dejar\u00e1n de sincronizarse.",
+        confirmDissolve = "\u00bfEst\u00e1s seguro de que quieres disolver este grupo? Todos los miembros ser\u00e1n desconectados y los datos de sincronizaci\u00f3n se eliminar\u00e1n.",
+        connected = "Conectado",
+        disconnected = "Desconectado",
+        syncStatusSynced = "Sincronizado",
+        syncStatusSyncing = "Sincronizando",
+        syncStatusStale = "Desactualizado",
+        syncStatusError = "Error",
+        syncStatusOff = "Desactivado",
+        groupCreated = "Grupo familiar creado",
+        joinedGroup = "Te uniste al grupo familiar",
+        leftGroup = "Saliste del grupo familiar",
+        groupDissolved = "Grupo disuelto",
+        pairingCodeCopied = "C\u00f3digo copiado",
+        invalidPairingCode = "C\u00f3digo inv\u00e1lido o expirado",
+        encryptionKey = "Clave de Cifrado",
+        deviceName = "Nombre del Dispositivo",
+        adminOnly = "Solo administrador",
+        familyTimezone = "Zona Horaria Familiar",
+        selectTimezone = "Seleccionar Zona Horaria",
+        showAttributionLabel = "Mostrar Atribuci\u00f3n",
+        you = "T\u00fa",
+        staleWarning60 = "Sincroniza pronto para mantener tus datos actualizados",
+        staleWarning75 = "15 d\u00edas para que los datos de sincronizaci\u00f3n expiren",
+        staleWarning85 = "5 d\u00edas para sincronizar o los cambios locales deber\u00e1n descartarse",
+        staleBlocked = "Sincronizaci\u00f3n bloqueada \u2014 se requiere actualizaci\u00f3n completa",
+        claimAdmin = "Reclamar Rol de Admin",
+        objectClaim = "Objetar",
+        claimPending = "Reclamo de admin pendiente",
+        claimApproved = "Rol de admin transferido",
+        claimRejected = "Reclamo de admin rechazado",
+        claimExpiry = { time -> "El reclamo expira: $time" },
+        claimBy = { name -> "$name est\u00e1 reclamando el rol de admin" },
+        errorRemovedFromGroup = "Has sido eliminado de este grupo",
+        errorGroupDeleted = "Este grupo ha sido disuelto",
+        errorEncryption = "Error de cifrado \u2014 verifica tu emparejamiento",
+        joinWarningTitle = "\u00bfReemplazar Datos Locales?",
+        joinWarningBody = "Unirte a un grupo familiar reemplazar\u00e1 tus datos locales con los datos compartidos del grupo. Tus transacciones, metas y configuraciones actuales ser\u00e1n sobrescritas. Esto no se puede deshacer."
     )
 
     // ── Help Screen Strings ──
@@ -398,7 +480,7 @@ object SpanishStrings : AppStrings {
         step2Title = "Configura tu presupuesto",
         step2Desc = "En Ajustes, toca \"Configurar tu presupuesto\" para abrir la Configuraci\u00f3n del presupuesto. Elige un per\u00edodo (Diario es lo recomendado para la mayor\u00eda).",
         step3Title = "Agrega fuentes de ingreso",
-        step3Desc = "En Configuraci\u00f3n del presupuesto, agrega todas tus fuentes de ingreso confiables \u2014 tu salario, ingresos extra regulares, etc. Configura el calendario de repetici\u00f3n de cada una (ej. \"Cada X meses\" el 1 y el 15 para pagos quincenales).",
+        step3Desc = "En Configuraci\u00f3n del presupuesto, agrega todas tus fuentes de ingreso confiables \u2014 tu salario, ingresos extra regulares, etc. Configura el calendario de repetici\u00f3n de cada una (ej. \"Mes\" el 1 y el 15 para pagos quincenales).",
         step4Title = "Agrega gastos recurrentes",
         step4Desc = "Ve a Gastos Recurrentes (el icono de sincronizaci\u00f3n en el panel principal) y agrega todas tus facturas regulares: alquiler, servicios, seguros, suscripciones, pagos de pr\u00e9stamos.",
         step5Title = "Toca Recalcular",
@@ -827,20 +909,18 @@ object SpanishStrings : AppStrings {
         repeatBody = "Cada fuente de ingreso necesita un calendario de repetici\u00f3n para que la calculadora de presupuesto " +
             "sepa cu\u00e1ndo esperar los pagos. Los mismos tipos de repetici\u00f3n est\u00e1n disponibles para fuentes " +
             "de ingreso y gastos recurrentes:",
-        everyXDaysTitle = "Cada X d\u00edas",
-        everyXDaysBody = "El ingreso llega cada N d\u00edas (1\u201360). Requiere una Fecha de Inicio \u2014 la fecha " +
+        everyXDaysTitle = "D\u00eda",
+        everyXDaysBody = "El ingreso llega cada N d\u00edas (1\u2013365). Requiere una Fecha de Inicio \u2014 la fecha " +
             "de cualquier ocurrencia pasada o futura. El motor calcula todas las fechas futuras a partir " +
             "de este punto de referencia.",
-        everyXWeeksTitle = "Cada X semanas",
-        everyXWeeksBody = "El ingreso llega cada N semanas (1\u201318). Requiere una Fecha de Inicio. El d\u00eda de " +
+        everyXWeeksTitle = "Semana",
+        everyXWeeksBody = "El ingreso llega cada N semanas (1\u201352). Requiere una Fecha de Inicio. El d\u00eda de " +
             "la semana lo determina tu fecha de inicio (ej. si tu fecha de inicio cae en viernes, " +
             "el ingreso se repite cada N viernes).",
-        biWeeklyTitle = "Cada 2 semanas (Quincenal)",
-        biWeeklyBody = "Un calendario de pago com\u00fan. Requiere una Fecha de Inicio. El ingreso llega cada 14 d\u00edas " +
-            "desde la fecha de inicio. Esto es diferente de \"Dos veces al mes\" \u2014 quincenal " +
-            "da 26 per\u00edodos de pago al a\u00f1o, no 24.",
-        everyXMonthsTitle = "Cada X meses",
-        everyXMonthsBody = "El ingreso llega en un d\u00eda espec\u00edfico del mes, cada N meses (1\u20133). " +
+        biWeeklyTitle = "",
+        biWeeklyBody = "",
+        everyXMonthsTitle = "Mes",
+        everyXMonthsBody = "El ingreso llega en un d\u00eda espec\u00edfico del mes, cada N meses (1\u201312). " +
             "Ingresa el D\u00eda del Mes (1\u201328). No se necesita fecha de inicio \u2014 el motor " +
             "usa el n\u00famero de d\u00eda directamente.",
         biMonthlyTitle = "Dos veces al mes (Bimensual)",
@@ -1042,24 +1122,23 @@ object SpanishStrings : AppStrings {
         helpDesc = "Abre esta p\u00e1gina de ayuda.",
         addingTitle = "Agregar un gasto recurrente",
         addingBody = "Toca \"Agregar gasto recurrente\" y completa:",
-        addStep1 = "Nombre de la fuente",
+        addStep1 = "Descripci\u00f3n",
         addStep1Desc = "Un nombre descriptivo para el gasto (ej. \"Alquiler\", \"Netflix\", \"Seguro del auto\"). Importante: este nombre se compara con los nombres de comercio en transacciones bancarias para el reconocimiento autom\u00e1tico.",
         addStep2 = "Monto",
         addStep2Desc = "El monto por ocurrencia.",
         repeatTitle = "Ajustes de repetici\u00f3n",
         repeatBody = "Cada gasto recurrente necesita un calendario de repetici\u00f3n para que la calculadora de presupuesto " +
             "sepa cu\u00e1ndo esperar el cargo. Toca el icono de sincronizaci\u00f3n en cualquier gasto para configurar:",
-        everyXDaysTitle = "Cada X d\u00edas",
-        everyXDaysBody = "El gasto ocurre cada N d\u00edas (1\u201360). Requiere una Fecha de Inicio. " +
+        everyXDaysTitle = "D\u00eda",
+        everyXDaysBody = "El gasto ocurre cada N d\u00edas (1\u2013365). Requiere una Fecha de Inicio. " +
             "\u00datil para gastos con intervalos irregulares como recarga de medicamentos.",
-        everyXWeeksTitle = "Cada X semanas",
-        everyXWeeksBody = "El gasto ocurre cada N semanas (1\u201318). Requiere una Fecha de Inicio. " +
+        everyXWeeksTitle = "Semana",
+        everyXWeeksBody = "El gasto ocurre cada N semanas (1\u201352). Requiere una Fecha de Inicio. " +
             "El d\u00eda de la semana lo determina la fecha de inicio.",
-        biWeeklyTitle = "Cada 2 semanas (Quincenal)",
-        biWeeklyBody = "Ocurre cada 14 d\u00edas desde la fecha de inicio. \u00datil para cargos " +
-            "quincenales recurrentes. Resulta en 26 ocurrencias al a\u00f1o.",
-        everyXMonthsTitle = "Cada X meses",
-        everyXMonthsBody = "Ocurre en un d\u00eda espec\u00edfico del mes, cada N meses (1\u20133). " +
+        biWeeklyTitle = "",
+        biWeeklyBody = "",
+        everyXMonthsTitle = "Mes",
+        everyXMonthsBody = "Ocurre en un d\u00eda espec\u00edfico del mes, cada N meses (1\u201312). " +
             "Ingresa el D\u00eda del Mes (1\u201328). La mayor\u00eda de facturas usan este tipo: alquiler el 1, " +
             "tel\u00e9fono el 15, etc.",
         biMonthlyTitle = "Dos veces al mes (Bimensual)",
@@ -1069,7 +1148,7 @@ object SpanishStrings : AppStrings {
             "todos los meses, incluyendo febrero.",
         expenseListTitle = "Lista de gastos",
         expenseListBody = "Cada gasto recurrente en la lista muestra:",
-        expenseSource = "Nombre de la fuente",
+        expenseSource = "Descripci\u00f3n",
         expenseAmount = "Monto por ocurrencia",
         actionsTitle = "Acciones",
         editNote = "Toca un gasto para editar su nombre y monto.",
@@ -1109,5 +1188,62 @@ object SpanishStrings : AppStrings {
         tip4 = "Gastos comunes para agregar: alquiler/hipoteca, servicios (electricidad, gas, agua), seguros (auto, salud, hogar), suscripciones (streaming, gimnasio, software), pagos de pr\u00e9stamos, tel\u00e9fono.",
         tip5 = "Si un gasto es realmente puntual, no lo agregues aqu\u00ed. Usa la Amortizaci\u00f3n para distribuirlo en el tiempo.",
         tip6 = "Revisa tus extractos bancarios para asegurarte de no haber olvidado ning\u00fan cargo recurrente."
+    )
+
+    override val familySyncHelp = FamilySyncHelpStrings(
+        title = "Ayuda de Sincronizaci\u00f3n Familiar",
+        whatTitle = "\u00bfQu\u00e9 es la Sincronizaci\u00f3n Familiar?",
+        whatBody = "La Sincronizaci\u00f3n Familiar te permite compartir un presupuesto familiar en hasta 5 dispositivos. " +
+            "Todas las transacciones, fuentes de ingreso, gastos recurrentes, metas de ahorro y configuraciones " +
+            "se mantienen sincronizados autom\u00e1ticamente usando cifrado de extremo a extremo. " +
+            "Nadie \u2014 ni siquiera el servidor \u2014 puede leer tus datos financieros.",
+        adminRoleTitle = "El Rol de Administrador",
+        adminRoleBody = "La persona que crea el grupo familiar se convierte en administrador. El admin puede " +
+            "cambiar la configuraci\u00f3n compartida del presupuesto (moneda, per\u00edodo, horario de reinicio), " +
+            "generar c\u00f3digos de emparejamiento, configurar la zona horaria familiar, " +
+            "habilitar la atribuci\u00f3n de transacciones y disolver el grupo. Los miembros no admin " +
+            "pueden ver la configuraci\u00f3n pero no pueden cambiarla.",
+        gettingStartedTitle = "Primeros Pasos",
+        gettingStartedBody = "Para configurar la sincronizaci\u00f3n: Abre Configuraci\u00f3n, toca Sincronizaci\u00f3n Familiar y " +
+            "toca \"Crear Grupo Familiar\". Se crear\u00e1 un grupo contigo como admin. " +
+            "Luego toca \"Generar C\u00f3digo\" y comparte el c\u00f3digo de 6 caracteres con " +
+            "tus familiares. Ellos ingresan el c\u00f3digo en su dispositivo para unirse. " +
+            "Los c\u00f3digos expiran despu\u00e9s de 10 minutos por seguridad.",
+        joiningTitle = "Unirse a un Grupo",
+        joiningBody = "Para unirte a un grupo existente, toca \"Unirse a Grupo Familiar\" e ingresa el " +
+            "c\u00f3digo de 6 caracteres. Importante: unirte reemplazar\u00e1 tus datos locales " +
+            "con los datos compartidos del grupo. Tus transacciones, metas y configuraciones " +
+            "actuales ser\u00e1n sobrescritas. Aseg\u00farate de hacer una copia de seguridad primero.",
+        syncStatusTitle = "Estado de Sincronizaci\u00f3n",
+        syncStatusBody = "El punto de color en el panel principal y la tarjeta de estado en esta pantalla " +
+            "muestran el estado actual: Verde (Sincronizado) significa que todo est\u00e1 actualizado. " +
+            "Amarillo (Sincronizando) significa que hay una sincronizaci\u00f3n en progreso. Naranja (Desactualizado) " +
+            "significa que ha pasado tiempo desde la \u00faltima sincronizaci\u00f3n. Rojo (Error) " +
+            "significa que el \u00faltimo intento fall\u00f3.",
+        staleWarningsTitle = "Advertencias de Desactualizaci\u00f3n",
+        staleWarningsBody = "Si tu dispositivo no se ha sincronizado por un per\u00edodo extendido, " +
+            "aparecer\u00e1n advertencias escalonadas en el panel: a los 60 d\u00edas un recordatorio suave, " +
+            "a los 75 d\u00edas una cuenta regresiva, a los 85 d\u00edas una advertencia urgente, y a los 90 d\u00edas " +
+            "la sincronizaci\u00f3n se bloquea y se requiere una actualizaci\u00f3n completa. " +
+            "Sincroniza regularmente para evitar esto.",
+        attributionTitle = "Atribuci\u00f3n de Transacciones",
+        attributionBody = "Cuando el admin lo habilita, cada transacci\u00f3n muestra qu\u00e9 dispositivo la cre\u00f3. " +
+            "Tus propias transacciones muestran \"T\u00fa\" y las de otros dispositivos muestran " +
+            "el nombre del dispositivo. Esto ayuda a las familias a ver qui\u00e9n registr\u00f3 cada gasto.",
+        adminClaimsTitle = "Reclamos de Admin",
+        adminClaimsBody = "Si el dispositivo admin se pierde o no est\u00e1 disponible, cualquier miembro puede " +
+            "reclamar el rol de admin. Toca \"Reclamar Rol de Admin\" en la pantalla de Sincronizaci\u00f3n Familiar. " +
+            "Los dem\u00e1s miembros tienen 24 horas para objetar. Si nadie objeta, el reclamo se aprueba. " +
+            "Si alguien objeta, el reclamo se rechaza.",
+        leavingTitle = "Salir o Disolver",
+        leavingBody = "Los miembros no admin pueden salir del grupo en cualquier momento. Tus datos locales se conservan " +
+            "pero dejan de sincronizarse. El admin puede disolver el grupo completamente, " +
+            "desconectando a todos los miembros y eliminando los datos de sincronizaci\u00f3n del servidor. " +
+            "Los datos locales en cada dispositivo se conservan.",
+        privacyTitle = "Privacidad y Seguridad",
+        privacyBody = "Todos los datos de sincronizaci\u00f3n est\u00e1n cifrados de extremo a extremo con una clave de 256 bits " +
+            "generada al crear el grupo. La clave se comparte solo a trav\u00e9s del mecanismo de c\u00f3digo de emparejamiento. " +
+            "El servidor almacena solo datos cifrados \u2014 no puede leer tus transacciones, montos, " +
+            "nombres de comercios ni ning\u00fan dato financiero. Tu dinero, tus datos, tu control."
     )
 }

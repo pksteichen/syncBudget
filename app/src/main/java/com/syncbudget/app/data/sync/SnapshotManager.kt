@@ -10,6 +10,8 @@ import com.syncbudget.app.data.RecurringExpense
 import com.syncbudget.app.data.RecurringExpenseRepository
 import com.syncbudget.app.data.SavingsGoal
 import com.syncbudget.app.data.SavingsGoalRepository
+import com.syncbudget.app.data.SharedSettings
+import com.syncbudget.app.data.SharedSettingsRepository
 import com.syncbudget.app.data.Transaction
 import com.syncbudget.app.data.TransactionRepository
 import android.content.Context
@@ -21,7 +23,8 @@ data class FullState(
     val incomeSources: List<IncomeSource>,
     val savingsGoals: List<SavingsGoal>,
     val amortizationEntries: List<AmortizationEntry>,
-    val categories: List<Category>
+    val categories: List<Category>,
+    val sharedSettings: SharedSettings = SharedSettings()
 )
 
 object SnapshotManager {
@@ -33,7 +36,8 @@ object SnapshotManager {
         incomeSources: List<IncomeSource>,
         savingsGoals: List<SavingsGoal>,
         amortizationEntries: List<AmortizationEntry>,
-        categories: List<Category>
+        categories: List<Category>,
+        sharedSettings: SharedSettings = SharedSettings()
     ): JSONObject {
         // Save each list to its repository format, then collect the JSON files
         // We leverage the existing repository serialization by temporarily saving and reading
@@ -77,6 +81,8 @@ object SnapshotManager {
             json.put("categories", org.json.JSONArray(catFile.readText()))
         }
 
+        json.put("sharedSettings", SharedSettingsRepository.toJson(sharedSettings))
+
         return json
     }
 
@@ -113,13 +119,21 @@ object SnapshotManager {
             }
         }
 
+        val loadedSettings = if (json.has("sharedSettings")) {
+            val settingsJson = json.getJSONObject("sharedSettings")
+            val settings = SharedSettingsRepository.fromJson(settingsJson)
+            SharedSettingsRepository.save(context, settings)
+            settings
+        } else SharedSettings()
+
         return FullState(
             transactions = TransactionRepository.load(context),
             recurringExpenses = RecurringExpenseRepository.load(context),
             incomeSources = IncomeSourceRepository.load(context),
             savingsGoals = SavingsGoalRepository.load(context),
             amortizationEntries = AmortizationRepository.load(context),
-            categories = CategoryRepository.load(context)
+            categories = CategoryRepository.load(context),
+            sharedSettings = loadedSettings
         )
     }
 }

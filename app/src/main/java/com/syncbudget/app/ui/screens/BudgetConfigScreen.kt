@@ -114,6 +114,8 @@ fun BudgetConfigScreen(
     onResetBudget: () -> Unit = {},
     budgetStartDate: String? = null,
     dateFormatPattern: String = "yyyy-MM-dd",
+    isSyncConfigured: Boolean = false,
+    isAdmin: Boolean = true,
     onBack: () -> Unit,
     onHelpClick: () -> Unit = {}
 ) {
@@ -126,6 +128,7 @@ fun BudgetConfigScreen(
     var showResetDialog by remember { mutableStateOf(false) }
     var showResetBudgetConfirm by remember { mutableStateOf(false) }
     var periodExpanded by remember { mutableStateOf(false) }
+    val isLocked = isSyncConfigured && !isAdmin
 
     val textFieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = MaterialTheme.colorScheme.onBackground,
@@ -184,8 +187,8 @@ fun BudgetConfigScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     ExposedDropdownMenuBox(
-                        expanded = periodExpanded,
-                        onExpandedChange = { periodExpanded = it },
+                        expanded = if (isLocked) false else periodExpanded,
+                        onExpandedChange = { if (!isLocked) periodExpanded = it },
                         modifier = Modifier.weight(1f)
                     ) {
                         OutlinedTextField(
@@ -225,7 +228,10 @@ fun BudgetConfigScreen(
                         }
                     }
                     Spacer(modifier = Modifier.width(12.dp))
-                    OutlinedButton(onClick = { showResetDialog = true }) {
+                    OutlinedButton(
+                        onClick = { showResetDialog = true },
+                        enabled = !isLocked
+                    ) {
                         Text(S.common.reset)
                     }
                 }
@@ -277,7 +283,8 @@ fun BudgetConfigScreen(
                 ) {
                     Checkbox(
                         checked = isManualBudgetEnabled,
-                        onCheckedChange = onManualBudgetToggle
+                        onCheckedChange = if (isLocked) null else onManualBudgetToggle,
+                        enabled = !isLocked
                     )
                     Text(
                         text = S.budgetConfig.manualBudgetOverride,
@@ -317,6 +324,14 @@ fun BudgetConfigScreen(
                         color = Color(0xFFFF9800)
                     )
                 }
+                if (isLocked) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = S.sync.adminOnly,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFFFF9800)
+                    )
+                }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             }
 
@@ -329,7 +344,8 @@ fun BudgetConfigScreen(
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedButton(
                     onClick = { showAddDialog = true },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isLocked
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Add,
@@ -345,7 +361,7 @@ fun BudgetConfigScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { editingSource = source }
+                        .then(if (!isLocked) Modifier.clickable { editingSource = source } else Modifier)
                         .padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -361,12 +377,14 @@ fun BudgetConfigScreen(
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                         )
                     }
-                    IconButton(onClick = { deletingSource = source }) {
-                        Icon(
-                            imageVector = Icons.Filled.Delete,
-                            contentDescription = S.common.delete,
-                            tint = Color(0xFFF44336)
-                        )
+                    if (!isLocked) {
+                        IconButton(onClick = { deletingSource = source }) {
+                            Icon(
+                                imageVector = Icons.Filled.Delete,
+                                contentDescription = S.common.delete,
+                                tint = Color(0xFFF44336)
+                            )
+                        }
                     }
                 }
             }
@@ -507,10 +525,10 @@ private fun AddEditIncomeDialog(
     val isAmountValid = amount != null && amount > 0
 
     val isRepeatValid = when (repeatType) {
-        RepeatType.DAYS -> interval != null && interval in 1..60 && startDate != null
-        RepeatType.WEEKS -> interval != null && interval in 1..18 && startDate != null
+        RepeatType.DAYS -> interval != null && interval in 1..365 && startDate != null
+        RepeatType.WEEKS -> interval != null && interval in 1..52 && startDate != null
         RepeatType.BI_WEEKLY -> startDate != null
-        RepeatType.MONTHS -> interval != null && interval in 1..3 && monthDay1 != null && monthDay1 in 1..28
+        RepeatType.MONTHS -> interval != null && interval in 1..12 && monthDay1 != null && monthDay1 in 1..28
         RepeatType.BI_MONTHLY -> monthDay1 != null && monthDay1 in 1..28 && monthDay2 != null && monthDay2 in 1..28
     }
 
@@ -601,7 +619,7 @@ private fun AddEditIncomeDialog(
                             expanded = typeExpanded,
                             onDismissRequest = { typeExpanded = false }
                         ) {
-                            RepeatType.entries.forEach { type ->
+                            RepeatType.entries.filter { it != RepeatType.BI_WEEKLY }.forEach { type ->
                                 DropdownMenuItem(
                                     text = {
                                         Text(when (type) {
@@ -632,11 +650,11 @@ private fun AddEditIncomeDialog(
                         RepeatType.DAYS -> {
                             OutlinedTextField(
                                 value = intervalText,
-                                onValueChange = { intervalText = it },
+                                onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) intervalText = it },
                                 label = { Text(S.common.everyXDays) },
                                 singleLine = true,
-                                isError = showValidation && (interval == null || interval !in 1..60),
-                                supportingText = if (showValidation && (interval == null || interval !in 1..60)) ({
+                                isError = showValidation && (interval == null || interval !in 1..365),
+                                supportingText = if (showValidation && (interval == null || interval !in 1..365)) ({
                                     Text(S.common.exampleDays, color = Color(0xFFF44336))
                                 }) else null,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -662,11 +680,11 @@ private fun AddEditIncomeDialog(
                         RepeatType.WEEKS -> {
                             OutlinedTextField(
                                 value = intervalText,
-                                onValueChange = { intervalText = it },
+                                onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) intervalText = it },
                                 label = { Text(S.common.intervalWeeks) },
                                 singleLine = true,
-                                isError = showValidation && (interval == null || interval !in 1..18),
-                                supportingText = if (showValidation && (interval == null || interval !in 1..18)) ({
+                                isError = showValidation && (interval == null || interval !in 1..52),
+                                supportingText = if (showValidation && (interval == null || interval !in 1..52)) ({
                                     Text(S.common.exampleWeeks, color = Color(0xFFF44336))
                                 }) else null,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -725,11 +743,11 @@ private fun AddEditIncomeDialog(
                         RepeatType.MONTHS -> {
                             OutlinedTextField(
                                 value = intervalText,
-                                onValueChange = { intervalText = it },
+                                onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) intervalText = it },
                                 label = { Text(S.common.everyXMonths) },
                                 singleLine = true,
-                                isError = showValidation && (interval == null || interval !in 1..3),
-                                supportingText = if (showValidation && (interval == null || interval !in 1..3)) ({
+                                isError = showValidation && (interval == null || interval !in 1..12),
+                                supportingText = if (showValidation && (interval == null || interval !in 1..12)) ({
                                     Text(S.common.exampleMonths, color = Color(0xFFF44336))
                                 }) else null,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -738,7 +756,7 @@ private fun AddEditIncomeDialog(
                             )
                             OutlinedTextField(
                                 value = monthDay1Text,
-                                onValueChange = { monthDay1Text = it },
+                                onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) monthDay1Text = it },
                                 label = { Text(S.common.dayOfMonth) },
                                 singleLine = true,
                                 isError = showValidation && (monthDay1 == null || monthDay1 !in 1..28),
@@ -753,7 +771,7 @@ private fun AddEditIncomeDialog(
                         RepeatType.BI_MONTHLY -> {
                             OutlinedTextField(
                                 value = monthDay1Text,
-                                onValueChange = { monthDay1Text = it },
+                                onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) monthDay1Text = it },
                                 label = { Text(S.common.firstDayOfMonth) },
                                 singleLine = true,
                                 isError = showValidation && (monthDay1 == null || monthDay1 !in 1..28),
@@ -766,7 +784,7 @@ private fun AddEditIncomeDialog(
                             )
                             OutlinedTextField(
                                 value = monthDay2Text,
-                                onValueChange = { monthDay2Text = it },
+                                onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) monthDay2Text = it },
                                 label = { Text(S.common.secondDayOfMonth) },
                                 singleLine = true,
                                 isError = showValidation && (monthDay2 == null || monthDay2 !in 1..28),
@@ -977,7 +995,7 @@ private fun BudgetResetDialog(
                     if (budgetPeriod == BudgetPeriod.MONTHLY) {
                         OutlinedTextField(
                             value = dayOfMonthText,
-                            onValueChange = { dayOfMonthText = it },
+                            onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) dayOfMonthText = it },
                             label = { Text(S.budgetConfig.dayOfMonthReset) },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),

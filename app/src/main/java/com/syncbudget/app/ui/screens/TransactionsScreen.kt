@@ -188,7 +188,10 @@ fun TransactionsScreen(
     onDeleteTransactions: (Set<Int>) -> Unit,
     chartPalette: String = "Bright",
     onBack: () -> Unit,
-    onHelpClick: () -> Unit = {}
+    onHelpClick: () -> Unit = {},
+    showAttribution: Boolean = false,
+    deviceNameMap: Map<String, String> = emptyMap(),
+    localDeviceId: String = ""
 ) {
     val S = LocalStrings.current
     val customColors = LocalSyncBudgetColors.current
@@ -263,6 +266,7 @@ fun TransactionsScreen(
     var selectedBankFormat by remember { mutableStateOf(BankFormat.US_BANK) }
     var importStage by remember { mutableStateOf<ImportStage?>(null) }
     val parsedTransactions = remember { mutableStateListOf<Transaction>() }
+    var totalFileTransactions by remember { mutableIntStateOf(0) }
     val importApproved = remember { mutableStateListOf<Transaction>() }
     var importIndex by remember { mutableIntStateOf(0) }
     var ignoreAllDuplicates by remember { mutableStateOf(false) }
@@ -417,6 +421,7 @@ fun TransactionsScreen(
                 parsedTransactions.addAll(processed)
 
                 // Pre-filter days that are already fully loaded (date+amount multiset match)
+                totalFileTransactions = parsedTransactions.size
                 val filtered = filterAlreadyLoadedDays(parsedTransactions.toList(), transactions)
                 parsedTransactions.clear()
                 parsedTransactions.addAll(filtered)
@@ -440,11 +445,15 @@ fun TransactionsScreen(
             // All done — add approved transactions
             importApproved.forEach { txn -> onAddTransaction(txn) }
             val count = importApproved.size
-            val totalParsed = parsedTransactions.size
             importApproved.clear()
             parsedTransactions.clear()
             importStage = ImportStage.COMPLETE
-            Toast.makeText(context, S.transactions.loadedSuccessfully(count, totalParsed), Toast.LENGTH_SHORT).show()
+            val message = if (count == 0 && totalFileTransactions > 0) {
+                S.transactions.allSkipped(totalFileTransactions)
+            } else {
+                S.transactions.loadedSuccessfully(count, totalFileTransactions)
+            }
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
             importStage = null
             return@LaunchedEffect
         }
@@ -831,7 +840,11 @@ fun TransactionsScreen(
                             viewFilter = ViewFilter.ALL
                             selectionMode = false
                             selectedIds.clear()
-                        }
+                        },
+                        attributionLabel = if (showAttribution && transaction.deviceId.isNotEmpty()) {
+                            if (transaction.deviceId == localDeviceId) S.sync.you
+                            else deviceNameMap[transaction.deviceId] ?: transaction.deviceId.take(8)
+                        } else null
                     )
                     HorizontalDivider(
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f)
@@ -1494,6 +1507,7 @@ fun TransactionsScreen(
                         }
                         parsedTransactions.clear()
                         parsedTransactions.addAll(categorized)
+                        totalFileTransactions = parsedTransactions.size
                         val filtered = filterAlreadyLoadedDays(parsedTransactions.toList(), transactions)
                         parsedTransactions.clear()
                         parsedTransactions.addAll(filtered)
@@ -1587,7 +1601,7 @@ fun TransactionsScreen(
     if (importStage == ImportStage.DUPLICATE_CHECK && currentImportRecurring != null && importIndex < parsedTransactions.size) {
         val importTxn = parsedTransactions[importIndex]
         val recurringMatch = currentImportRecurring!!
-        val recurringCategoryId = categories.find { it.name == "Recurring" }?.id
+        val recurringCategoryId = categories.find { it.tag == "recurring" }?.id
         val dateCloseEnough = isRecurringDateCloseEnough(importTxn.date, recurringMatch)
         RecurringExpenseConfirmDialog(
             transaction = importTxn,
@@ -1616,7 +1630,7 @@ fun TransactionsScreen(
 
     // Manual recurring expense match dialog
     if (showRecurringDialog && pendingRecurringTxn != null && pendingRecurringMatch != null) {
-        val recurringCategoryId = categories.find { it.name == "Recurring" }?.id
+        val recurringCategoryId = categories.find { it.tag == "recurring" }?.id
         val dateCloseEnough = isRecurringDateCloseEnough(pendingRecurringTxn!!.date, pendingRecurringMatch!!)
         RecurringExpenseConfirmDialog(
             transaction = pendingRecurringTxn!!,
@@ -1653,7 +1667,7 @@ fun TransactionsScreen(
     if (importStage == ImportStage.DUPLICATE_CHECK && currentImportAmortization != null && importIndex < parsedTransactions.size) {
         val importTxn = parsedTransactions[importIndex]
         val amortizationMatch = currentImportAmortization!!
-        val amortizationCategoryId = categories.find { it.name == "Amortization" }?.id
+        val amortizationCategoryId = categories.find { it.tag == "amortization" }?.id
         AmortizationConfirmDialog(
             transaction = importTxn,
             amortizationEntry = amortizationMatch,
@@ -1680,7 +1694,7 @@ fun TransactionsScreen(
 
     // Manual amortization match dialog
     if (showAmortizationDialog && pendingAmortizationTxn != null && pendingAmortizationMatch != null) {
-        val amortizationCategoryId = categories.find { it.name == "Amortization" }?.id
+        val amortizationCategoryId = categories.find { it.tag == "amortization" }?.id
         AmortizationConfirmDialog(
             transaction = pendingAmortizationTxn!!,
             amortizationEntry = pendingAmortizationMatch!!,
@@ -1719,7 +1733,7 @@ fun TransactionsScreen(
             currencySymbol = currencySymbol,
             dateFormatter = dateFormatter,
             onConfirmBudgetIncome = {
-                val recurringIncomeCatId = categories.find { it.name == "Recurring Income" }?.id
+                val recurringIncomeCatId = categories.find { it.tag == "recurring_income" }?.id
                 val baseTxn = pendingBudgetIncomeTxn!!
                 val txn = baseTxn.copy(
                     isBudgetIncome = true,
@@ -1954,7 +1968,8 @@ private fun TransactionRow(
     onLongPress: () -> Unit,
     onToggleSelection: (Boolean) -> Unit,
     onToggleExpand: () -> Unit,
-    onCategoryFilter: (Int) -> Unit = {}
+    onCategoryFilter: (Int) -> Unit = {},
+    attributionLabel: String? = null
 ) {
     val S = LocalStrings.current
     val isExpense = transaction.type == TransactionType.EXPENSE
@@ -2024,13 +2039,22 @@ private fun TransactionRow(
                     Spacer(modifier = Modifier.width(12.dp))
                 }
 
-                Text(
-                    text = transaction.source,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.weight(1f),
-                    maxLines = if (useExpandedLayout) 2 else 1
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = transaction.source,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        maxLines = if (useExpandedLayout) 2 else 1
+                    )
+                    if (attributionLabel != null) {
+                        Text(
+                            text = attributionLabel,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                            maxLines = 1
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
                     text = formattedAmount,

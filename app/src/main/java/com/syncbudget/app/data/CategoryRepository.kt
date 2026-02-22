@@ -15,6 +15,7 @@ object CategoryRepository {
             obj.put("id", c.id)
             obj.put("name", c.name)
             obj.put("iconName", c.iconName)
+            obj.put("tag", c.tag)
             // Sync fields
             obj.put("deviceId", c.deviceId)
             obj.put("deleted", c.deleted)
@@ -42,6 +43,7 @@ object CategoryRepository {
                     id = obj.getInt("id"),
                     name = obj.getString("name"),
                     iconName = obj.getString("iconName"),
+                    tag = obj.optString("tag", ""),
                     deviceId = obj.optString("deviceId", ""),
                     deleted = obj.optBoolean("deleted", false),
                     name_clock = obj.optLong("name_clock", 0L),

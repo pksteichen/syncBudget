@@ -280,10 +280,10 @@ private fun AddEditExpenseDialog(
     val isAmountValid = amount != null && amount > 0
 
     val isRepeatValid = when (repeatType) {
-        RepeatType.DAYS -> interval != null && interval in 1..60 && startDate != null
-        RepeatType.WEEKS -> interval != null && interval in 1..18 && startDate != null
+        RepeatType.DAYS -> interval != null && interval in 1..365 && startDate != null
+        RepeatType.WEEKS -> interval != null && interval in 1..52 && startDate != null
         RepeatType.BI_WEEKLY -> startDate != null
-        RepeatType.MONTHS -> interval != null && interval in 1..3 && monthDay1 != null && monthDay1 in 1..28
+        RepeatType.MONTHS -> interval != null && interval in 1..12 && monthDay1 != null && monthDay1 in 1..28
         RepeatType.BI_MONTHLY -> monthDay1 != null && monthDay1 in 1..28 && monthDay2 != null && monthDay2 in 1..28
     }
 
@@ -325,7 +325,7 @@ private fun AddEditExpenseDialog(
                     OutlinedTextField(
                         value = sourceName,
                         onValueChange = { sourceName = it },
-                        label = { Text(S.common.sourceName) },
+                        label = { Text(S.recurringExpenses.descriptionLabel) },
                         singleLine = true,
                         isError = showValidation && !isSourceValid,
                         supportingText = if (showValidation && !isSourceValid) ({
@@ -376,7 +376,7 @@ private fun AddEditExpenseDialog(
                             expanded = typeExpanded,
                             onDismissRequest = { typeExpanded = false }
                         ) {
-                            RepeatType.entries.forEach { type ->
+                            RepeatType.entries.filter { it != RepeatType.BI_WEEKLY }.forEach { type ->
                                 DropdownMenuItem(
                                     text = { Text(getRepeatTypeLabel(type)) },
                                     onClick = {
@@ -399,11 +399,11 @@ private fun AddEditExpenseDialog(
                         RepeatType.DAYS -> {
                             OutlinedTextField(
                                 value = intervalText,
-                                onValueChange = { intervalText = it },
+                                onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) intervalText = it },
                                 label = { Text(S.common.everyXDays) },
                                 singleLine = true,
-                                isError = showValidation && (interval == null || interval !in 1..60),
-                                supportingText = if (showValidation && (interval == null || interval !in 1..60)) ({
+                                isError = showValidation && (interval == null || interval !in 1..365),
+                                supportingText = if (showValidation && (interval == null || interval !in 1..365)) ({
                                     Text(S.common.exampleDays, color = Color(0xFFF44336))
                                 }) else null,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -429,11 +429,11 @@ private fun AddEditExpenseDialog(
                         RepeatType.WEEKS -> {
                             OutlinedTextField(
                                 value = intervalText,
-                                onValueChange = { intervalText = it },
+                                onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) intervalText = it },
                                 label = { Text(S.common.intervalWeeks) },
                                 singleLine = true,
-                                isError = showValidation && (interval == null || interval !in 1..18),
-                                supportingText = if (showValidation && (interval == null || interval !in 1..18)) ({
+                                isError = showValidation && (interval == null || interval !in 1..52),
+                                supportingText = if (showValidation && (interval == null || interval !in 1..52)) ({
                                     Text(S.common.exampleWeeks, color = Color(0xFFF44336))
                                 }) else null,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -492,11 +492,11 @@ private fun AddEditExpenseDialog(
                         RepeatType.MONTHS -> {
                             OutlinedTextField(
                                 value = intervalText,
-                                onValueChange = { intervalText = it },
+                                onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) intervalText = it },
                                 label = { Text(S.common.everyXMonths) },
                                 singleLine = true,
-                                isError = showValidation && (interval == null || interval !in 1..3),
-                                supportingText = if (showValidation && (interval == null || interval !in 1..3)) ({
+                                isError = showValidation && (interval == null || interval !in 1..12),
+                                supportingText = if (showValidation && (interval == null || interval !in 1..12)) ({
                                     Text(S.common.exampleMonths, color = Color(0xFFF44336))
                                 }) else null,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -505,7 +505,7 @@ private fun AddEditExpenseDialog(
                             )
                             OutlinedTextField(
                                 value = monthDay1Text,
-                                onValueChange = { monthDay1Text = it },
+                                onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) monthDay1Text = it },
                                 label = { Text(S.common.dayOfMonth) },
                                 singleLine = true,
                                 isError = showValidation && (monthDay1 == null || monthDay1 !in 1..28),
@@ -520,7 +520,7 @@ private fun AddEditExpenseDialog(
                         RepeatType.BI_MONTHLY -> {
                             OutlinedTextField(
                                 value = monthDay1Text,
-                                onValueChange = { monthDay1Text = it },
+                                onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) monthDay1Text = it },
                                 label = { Text(S.common.firstDayOfMonth) },
                                 singleLine = true,
                                 isError = showValidation && (monthDay1 == null || monthDay1 !in 1..28),
@@ -533,7 +533,7 @@ private fun AddEditExpenseDialog(
                             )
                             OutlinedTextField(
                                 value = monthDay2Text,
-                                onValueChange = { monthDay2Text = it },
+                                onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) monthDay2Text = it },
                                 label = { Text(S.common.secondDayOfMonth) },
                                 singleLine = true,
                                 isError = showValidation && (monthDay2 == null || monthDay2 !in 1..28),

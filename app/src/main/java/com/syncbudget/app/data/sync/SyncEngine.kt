@@ -9,6 +9,8 @@ import com.syncbudget.app.data.CryptoHelper
 import com.syncbudget.app.data.IncomeSource
 import com.syncbudget.app.data.RecurringExpense
 import com.syncbudget.app.data.SavingsGoal
+import com.syncbudget.app.data.SharedSettings
+import com.syncbudget.app.data.SharedSettingsRepository
 import com.syncbudget.app.data.Transaction
 import org.json.JSONObject
 import java.time.Instant
@@ -24,6 +26,8 @@ data class SyncResult(
     val mergedSavingsGoals: List<SavingsGoal>? = null,
     val mergedAmortizationEntries: List<AmortizationEntry>? = null,
     val mergedCategories: List<Category>? = null,
+    val mergedSharedSettings: SharedSettings? = null,
+    val pendingAdminClaim: AdminClaim? = null,
     val error: String? = null
 )
 
@@ -51,12 +55,26 @@ class SyncEngine(
         incomeSources: List<IncomeSource>,
         savingsGoals: List<SavingsGoal>,
         amortizationEntries: List<AmortizationEntry>,
-        categories: List<Category>
+        categories: List<Category>,
+        sharedSettings: SharedSettings = SharedSettingsRepository.load(context)
     ): SyncResult {
         try {
+            // Step 0: Stale check — block sync if too many days without success
+            val lastSync = prefs.getLong("lastSuccessfulSync", 0L)
+            if (lastSync > 0L) {
+                val daysSinceSync = (System.currentTimeMillis() - lastSync) / (24 * 60 * 60 * 1000L)
+                if (daysSinceSync >= 90) {
+                    return SyncResult(success = false, error = "sync_blocked_stale")
+                }
+            }
+
             // Step 1: Check stale — if too far behind, use snapshot
             val snapshot = FirestoreService.getSnapshot(groupId)
             val deviceRecord = FirestoreService.getDeviceRecord(groupId, deviceId)
+            if (deviceRecord == null && snapshot == null) {
+                // Device not registered and no snapshot — possibly removed from group
+                return SyncResult(success = false, error = "removed_from_group")
+            }
             if (deviceRecord == null && snapshot != null) {
                 // New device joining — apply snapshot first
                 return applySnapshot(snapshot)
@@ -86,6 +104,8 @@ class SyncEngine(
             var mergedSg = savingsGoals.toMutableList()
             var mergedAe = amortizationEntries.toMutableList()
             var mergedCat = categories.toMutableList()
+            var mergedSettings = sharedSettings
+            var settingsChanged = false
             var budgetRecalcNeeded = false
 
             for (packet in packets) {
@@ -119,6 +139,22 @@ class SyncEngine(
                         "category" -> mergedCat = mergeRecordIntoList(
                             mergedCat, change, deviceId
                         ) { local, remote -> CrdtMerge.mergeCategory(local, remote, deviceId) }
+                        "shared_settings" -> {
+                            val remoteSettings = deserializeSharedSettings(change, mergedSettings)
+                            val before = mergedSettings
+                            mergedSettings = CrdtMerge.mergeSharedSettings(mergedSettings, remoteSettings, deviceId)
+                            if (mergedSettings != before) {
+                                settingsChanged = true
+                                if (mergedSettings.budgetPeriod != before.budgetPeriod ||
+                                    mergedSettings.resetHour != before.resetHour ||
+                                    mergedSettings.resetDayOfWeek != before.resetDayOfWeek ||
+                                    mergedSettings.resetDayOfMonth != before.resetDayOfMonth ||
+                                    mergedSettings.isManualBudgetEnabled != before.isManualBudgetEnabled ||
+                                    mergedSettings.manualBudgetAmount != before.manualBudgetAmount) {
+                                    budgetRecalcNeeded = true
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -144,6 +180,7 @@ class SyncEngine(
             for (cat in categories) {
                 DeltaBuilder.buildCategoryDelta(cat, pushClock)?.let { localDeltas.add(it) }
             }
+            DeltaBuilder.buildSharedSettingsDelta(sharedSettings, pushClock)?.let { localDeltas.add(it) }
 
             var deltasPushed = 0
             if (localDeltas.isNotEmpty()) {
@@ -171,16 +208,47 @@ class SyncEngine(
             lastSyncVersion = newSyncVersion
             FirestoreService.updateDeviceMetadata(groupId, deviceId, newSyncVersion)
 
+            // Save merged settings if changed
+            if (settingsChanged) {
+                SharedSettingsRepository.save(context, mergedSettings)
+            }
+
             // Step 8: Snapshot maintenance (every 50 deltas)
             if (newSyncVersion > 0 && newSyncVersion % 50 == 0L) {
                 val snapshotJson = SnapshotManager.serializeFullState(
-                    context, mergedTxns, mergedRe, mergedIs, mergedSg, mergedAe, mergedCat
+                    context, mergedTxns, mergedRe, mergedIs, mergedSg, mergedAe, mergedCat, mergedSettings
                 )
                 val snapshotBytes = snapshotJson.toString().toByteArray()
                 val encryptedSnapshot = CryptoHelper.encryptWithKey(snapshotBytes, encryptionKey)
                 val encodedSnapshot = Base64.encodeToString(encryptedSnapshot, Base64.NO_WRAP)
                 FirestoreService.writeSnapshot(groupId, newSyncVersion, deviceId, encodedSnapshot)
             }
+
+            // Step 9: Record successful sync time
+            prefs.edit().putLong("lastSuccessfulSync", System.currentTimeMillis()).apply()
+
+            // Step 10: Check admin claim status
+            var adminClaim: AdminClaim? = null
+            try {
+                val claim = FirestoreService.getAdminClaim(groupId)
+                if (claim != null && claim.status == "pending") {
+                    if (System.currentTimeMillis() > claim.expiresAt) {
+                        if (claim.objections.isEmpty()) {
+                            // Find current admin from devices
+                            val devices = FirestoreService.getDevices(groupId)
+                            val currentAdmin = devices.find { it.isAdmin }
+                            if (currentAdmin != null) {
+                                FirestoreService.transferAdmin(groupId, currentAdmin.deviceId, claim.claimantDeviceId)
+                            }
+                            FirestoreService.resolveAdminClaim(groupId, "approved")
+                        } else {
+                            FirestoreService.resolveAdminClaim(groupId, "rejected")
+                        }
+                    } else {
+                        adminClaim = claim
+                    }
+                }
+            } catch (_: Exception) {}
 
             val hasRemoteChanges = packets.isNotEmpty()
             return SyncResult(
@@ -193,10 +261,18 @@ class SyncEngine(
                 mergedIncomeSources = if (hasRemoteChanges) mergedIs else null,
                 mergedSavingsGoals = if (hasRemoteChanges) mergedSg else null,
                 mergedAmortizationEntries = if (hasRemoteChanges) mergedAe else null,
-                mergedCategories = if (hasRemoteChanges) mergedCat else null
+                mergedCategories = if (hasRemoteChanges) mergedCat else null,
+                mergedSharedSettings = if (settingsChanged) mergedSettings else null,
+                pendingAdminClaim = adminClaim
             )
         } catch (e: Exception) {
-            return SyncResult(success = false, error = e.message)
+            val errorCode = when {
+                e.message?.contains("NOT_FOUND") == true -> "group_deleted"
+                e.message?.contains("PERMISSION_DENIED") == true -> "removed_from_group"
+                e is javax.crypto.AEADBadTagException -> "encryption_error"
+                else -> e.message
+            }
+            return SyncResult(success = false, error = errorCode)
         }
     }
 
@@ -217,11 +293,36 @@ class SyncEngine(
                 mergedIncomeSources = state.incomeSources,
                 mergedSavingsGoals = state.savingsGoals,
                 mergedAmortizationEntries = state.amortizationEntries,
-                mergedCategories = state.categories
+                mergedCategories = state.categories,
+                mergedSharedSettings = state.sharedSettings
             )
         } catch (e: Exception) {
             SyncResult(success = false, error = "Failed to apply snapshot: ${e.message}")
         }
+    }
+
+    private fun deserializeSharedSettings(change: RecordDelta, base: SharedSettings): SharedSettings {
+        var s = base.copy(lastChangedBy = change.deviceId)
+        for ((key, fd) in change.fields) {
+            when (key) {
+                "currency" -> s = s.copy(currency = fd.value as? String ?: s.currency, currency_clock = fd.clock)
+                "budgetPeriod" -> s = s.copy(budgetPeriod = fd.value as? String ?: s.budgetPeriod, budgetPeriod_clock = fd.clock)
+                "budgetStartDate" -> s = s.copy(budgetStartDate = fd.value as? String, budgetStartDate_clock = fd.clock)
+                "isManualBudgetEnabled" -> s = s.copy(isManualBudgetEnabled = fd.value as? Boolean ?: s.isManualBudgetEnabled, isManualBudgetEnabled_clock = fd.clock)
+                "manualBudgetAmount" -> s = s.copy(manualBudgetAmount = (fd.value as? Number)?.toDouble() ?: s.manualBudgetAmount, manualBudgetAmount_clock = fd.clock)
+                "weekStartSunday" -> s = s.copy(weekStartSunday = fd.value as? Boolean ?: s.weekStartSunday, weekStartSunday_clock = fd.clock)
+                "resetDayOfWeek" -> s = s.copy(resetDayOfWeek = (fd.value as? Number)?.toInt() ?: s.resetDayOfWeek, resetDayOfWeek_clock = fd.clock)
+                "resetDayOfMonth" -> s = s.copy(resetDayOfMonth = (fd.value as? Number)?.toInt() ?: s.resetDayOfMonth, resetDayOfMonth_clock = fd.clock)
+                "resetHour" -> s = s.copy(resetHour = (fd.value as? Number)?.toInt() ?: s.resetHour, resetHour_clock = fd.clock)
+                "familyTimezone" -> s = s.copy(familyTimezone = fd.value as? String ?: s.familyTimezone, familyTimezone_clock = fd.clock)
+                "matchDays" -> s = s.copy(matchDays = (fd.value as? Number)?.toInt() ?: s.matchDays, matchDays_clock = fd.clock)
+                "matchPercent" -> s = s.copy(matchPercent = (fd.value as? Number)?.toFloat() ?: s.matchPercent, matchPercent_clock = fd.clock)
+                "matchDollar" -> s = s.copy(matchDollar = (fd.value as? Number)?.toInt() ?: s.matchDollar, matchDollar_clock = fd.clock)
+                "matchChars" -> s = s.copy(matchChars = (fd.value as? Number)?.toInt() ?: s.matchChars, matchChars_clock = fd.clock)
+                "showAttribution" -> s = s.copy(showAttribution = fd.value as? Boolean ?: s.showAttribution, showAttribution_clock = fd.clock)
+            }
+        }
+        return s
     }
 
     @Suppress("UNCHECKED_CAST")

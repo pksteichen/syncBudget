@@ -1,6 +1,21 @@
 package com.syncbudget.app.ui.strings
 
+data class DefaultCategoryNames(
+    val other: String,
+    val recurring: String,
+    val amortization: String,
+    val recurringIncome: String,
+    val transportation: String,
+    val groceries: String,
+    val entertainment: String,
+    val homeSupplies: String,
+    val restaurants: String,
+    val charity: String,
+    val clothes: String
+)
+
 interface AppStrings {
+    val defaultCategoryNames: DefaultCategoryNames
     val common: CommonStrings
     val dashboard: DashboardStrings
     val settings: SettingsStrings
@@ -9,6 +24,7 @@ interface AppStrings {
     val futureExpenditures: FutureExpendituresStrings
     val amortization: AmortizationStrings
     val recurringExpenses: RecurringExpensesStrings
+    val sync: SyncStrings
     val dashboardHelp: DashboardHelpStrings
     val settingsHelp: SettingsHelpStrings
     val transactionsHelp: TransactionsHelpStrings
@@ -16,6 +32,7 @@ interface AppStrings {
     val futureExpendituresHelp: FutureExpendituresHelpStrings
     val amortizationHelp: AmortizationHelpStrings
     val recurringExpensesHelp: RecurringExpensesHelpStrings
+    val familySyncHelp: FamilySyncHelpStrings
 }
 
 data class CommonStrings(
@@ -226,6 +243,7 @@ data class TransactionsStrings(
     val dateAdvisory: String,
     val savedSuccessfully: (Int) -> String,
     val loadedSuccessfully: (Int, Int) -> String,
+    val allSkipped: (Int) -> String,
     val passwordMinLength: String,
     val passwordsMustMatch: String,
     val newMerchantName: String,
@@ -313,8 +331,80 @@ data class RecurringExpensesStrings(
     val editExpense: String,
     val deleteExpenseTitle: (String) -> String,
     val deleteExpenseBody: String,
+    val descriptionLabel: String,
     val requiredNetflixExample: String,
     val exampleAmount: String
+)
+
+data class SyncStrings(
+    val title: String,
+    val familySync: String,
+    val familySyncDescription: String,
+    val createGroup: String,
+    val createGroupDescription: String,
+    val joinGroup: String,
+    val joinGroupDescription: String,
+    val leaveGroup: String,
+    val dissolveGroup: String,
+    val syncNow: String,
+    val lastSynced: (String) -> String,
+    val syncing: String,
+    val syncError: String,
+    val notConfigured: String,
+    val groupId: String,
+    val pairingCode: String,
+    val enterPairingCode: String,
+    val pairingCodeExpiry: String,
+    val generateCode: String,
+    val deviceRoster: String,
+    val devices: String,
+    val thisDevice: String,
+    val admin: String,
+    val transferAdmin: String,
+    val removeDevice: String,
+    val confirmLeave: String,
+    val confirmDissolve: String,
+    val connected: String,
+    val disconnected: String,
+    val syncStatusSynced: String,
+    val syncStatusSyncing: String,
+    val syncStatusStale: String,
+    val syncStatusError: String,
+    val syncStatusOff: String,
+    val groupCreated: String,
+    val joinedGroup: String,
+    val leftGroup: String,
+    val groupDissolved: String,
+    val pairingCodeCopied: String,
+    val invalidPairingCode: String,
+    val encryptionKey: String,
+    val deviceName: String,
+    val adminOnly: String,
+    val familyTimezone: String,
+    val selectTimezone: String,
+    // Attribution (5.2)
+    val showAttributionLabel: String,
+    val you: String,
+    // Stale warnings (5.3)
+    val staleWarning60: String,
+    val staleWarning75: String,
+    val staleWarning85: String,
+    val staleBlocked: String,
+    // Admin claim (5.4)
+    val claimAdmin: String,
+    val objectClaim: String,
+    val claimPending: String,
+    val claimApproved: String,
+    val claimRejected: String,
+    val claimExpiry: (String) -> String,
+    val claimBy: (String) -> String,
+    // Error messages (5.5)
+    val errorRemovedFromGroup: String,
+    val errorGroupDeleted: String,
+    val errorEncryption: String,
+    // Join warning (5.6)
+    val joinWarningTitle: String,
+    val joinWarningBody: String
 )
 
 // ── Help Screen Strings ──
@@ -903,4 +993,28 @@ data class RecurringExpensesHelpStrings(
     val tip4: String,
     val tip5: String,
     val tip6: String
+)
+
+data class FamilySyncHelpStrings(
+    val title: String,
+    val whatTitle: String,
+    val whatBody: String,
+    val adminRoleTitle: String,
+    val adminRoleBody: String,
+    val gettingStartedTitle: String,
+    val gettingStartedBody: String,
+    val joiningTitle: String,
+    val joiningBody: String,
+    val syncStatusTitle: String,
+    val syncStatusBody: String,
+    val staleWarningsTitle: String,
+    val staleWarningsBody: String,
+    val attributionTitle: String,
+    val attributionBody: String,
+    val adminClaimsTitle: String,
+    val adminClaimsBody: String,
+    val leavingTitle: String,
+    val leavingBody: String,
+    val privacyTitle: String,
+    val privacyBody: String
 )

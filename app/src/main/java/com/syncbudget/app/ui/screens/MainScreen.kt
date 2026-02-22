@@ -240,7 +240,9 @@ fun MainScreen(
     weekStartDay: DayOfWeek = DayOfWeek.SUNDAY,
     chartPalette: String = "Bright",
     dateFormatPattern: String = "yyyy-MM-dd",
-    budgetPeriod: BudgetPeriod = BudgetPeriod.DAILY
+    budgetPeriod: BudgetPeriod = BudgetPeriod.DAILY,
+    syncStatus: String = "off",
+    staleDays: Int = 0
 ) {
     val customColors = LocalSyncBudgetColors.current
     val S = LocalStrings.current
@@ -361,6 +363,56 @@ fun MainScreen(
                         contentDescription = S.dashboard.supercharge,
                         tint = pulseColor,
                         modifier = Modifier.size(44.dp)
+                    )
+                }
+                if (syncStatus != "off") {
+                    val syncColor = when (syncStatus) {
+                        "synced" -> Color(0xFF4CAF50)
+                        "syncing" -> Color(0xFFFFEB3B)
+                        "stale" -> Color(0xFFFF9800)
+                        "error" -> Color(0xFFF44336)
+                        else -> Color(0xFF9E9E9E)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 20.dp, bottom = 20.dp)
+                            .size(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Sync,
+                            contentDescription = S.sync.title,
+                            tint = syncColor,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Canvas(modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .size(8.dp)) {
+                            drawCircle(color = syncColor)
+                        }
+                    }
+                }
+            }
+
+            // Stale device warning banner
+            if (staleDays >= 60) {
+                val (staleBannerColor, staleBannerText) = when {
+                    staleDays >= 90 -> Color(0xFFB71C1C) to S.sync.staleBlocked
+                    staleDays >= 85 -> Color(0xFFF44336) to S.sync.staleWarning85
+                    staleDays >= 75 -> Color(0xFFFF5722) to S.sync.staleWarning75
+                    else -> Color(0xFFFF9800) to S.sync.staleWarning60
+                }
+                Surface(
+                    color = staleBannerColor.copy(alpha = 0.15f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = staleBannerText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = staleBannerColor,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                        textAlign = TextAlign.Center
                     )
                 }
             }
@@ -495,7 +547,6 @@ fun MainScreen(
         SavingsSuperchargeDialog(
             savingsGoals = savingsGoals,
             currencySymbol = currencySymbol,
-            showDecimals = showDecimals,
             availableExtra = availableCash,
             budgetPeriod = budgetPeriod,
             dateFormatPattern = dateFormatPattern,
@@ -524,7 +575,7 @@ private fun SpendingPieChart(
     val context = LocalContext.current
     val S = LocalStrings.current
     val categoryMap = remember(categories) { categories.associateBy { it.id } }
-    val otherCatId = remember(categories) { categories.find { it.name == "Other" }?.id ?: -1 }
+    val otherCatId = remember(categories) { categories.find { it.tag == "other" }?.id ?: -1 }
 
     val today = LocalDate.now()
     val startDate = when (selectedRange) {
@@ -718,7 +769,6 @@ private fun SpendingPieChart(
 private fun SavingsSuperchargeDialog(
     savingsGoals: List<SavingsGoal>,
     currencySymbol: String,
-    showDecimals: Boolean,
     availableExtra: Double,
     budgetPeriod: BudgetPeriod = BudgetPeriod.DAILY,
     dateFormatPattern: String = "yyyy-MM-dd",
@@ -726,7 +776,7 @@ private fun SavingsSuperchargeDialog(
     onDismiss: () -> Unit,
     onApply: (Map<Int, Double>, Map<Int, SuperchargeMode>) -> Unit
 ) {
-    val maxDecimalPlaces = if (showDecimals) (CURRENCY_DECIMALS[currencySymbol] ?: 2) else 0
+    val maxDecimalPlaces = CURRENCY_DECIMALS[currencySymbol] ?: 2
     val S = LocalStrings.current
     val dateFormatter = remember(dateFormatPattern) { DateTimeFormatter.ofPattern(dateFormatPattern) }
     val eligibleGoals = savingsGoals.filter { it.totalSavedSoFar < it.targetAmount }

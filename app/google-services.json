@@ -1,22 +1,28 @@
 {
   "project_info": {
-    "project_number": "000000000000",
-    "project_id": "syncbudget-placeholder",
-    "storage_bucket": "syncbudget-placeholder.appspot.com"
+    "project_number": "620762828182",
+    "project_id": "sync-23ce9",
+    "storage_bucket": "sync-23ce9.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:000000000000:android:0000000000000000",
+        "mobilesdk_app_id": "1:620762828182:android:b4d31d83a40e742ccca1b7",
         "android_client_info": {
-          "package_name": "com.syncbudget.app"
+          "package_name": "com.securesync.app"
         }
       },
+      "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyPlaceholderKeyForBuildOnly000"
+          "current_key": "AIzaSyCtqxugvlVWlOSVRnDS86Wba9VVey6SDTE"
         }
-      ]
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
     }
   ],
   "configuration_version": "1"

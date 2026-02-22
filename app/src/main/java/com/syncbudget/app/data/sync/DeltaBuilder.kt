@@ -6,6 +6,7 @@ import com.syncbudget.app.data.CategoryAmount
 import com.syncbudget.app.data.IncomeSource
 import com.syncbudget.app.data.RecurringExpense
 import com.syncbudget.app.data.SavingsGoal
+import com.syncbudget.app.data.SharedSettings
 import com.syncbudget.app.data.Transaction
 import org.json.JSONArray
 import org.json.JSONObject
@@ -92,7 +93,29 @@ object DeltaBuilder {
         if (cat.name_clock > lastPushedClock) fields["name"] = FieldDelta(cat.name, cat.name_clock)
         if (cat.iconName_clock > lastPushedClock) fields["iconName"] = FieldDelta(cat.iconName, cat.iconName_clock)
         if (cat.deleted_clock > lastPushedClock) fields["deleted"] = FieldDelta(cat.deleted, cat.deleted_clock)
+        if (cat.tag.isNotEmpty()) fields["tag"] = FieldDelta(cat.tag, 0L)
         if (fields.isEmpty()) return null
         return RecordDelta("category", "upsert", cat.id, cat.deviceId, fields)
+    }
+
+    fun buildSharedSettingsDelta(settings: SharedSettings, lastPushedClock: Long): RecordDelta? {
+        val fields = mutableMapOf<String, FieldDelta>()
+        if (settings.currency_clock > lastPushedClock) fields["currency"] = FieldDelta(settings.currency, settings.currency_clock)
+        if (settings.budgetPeriod_clock > lastPushedClock) fields["budgetPeriod"] = FieldDelta(settings.budgetPeriod, settings.budgetPeriod_clock)
+        if (settings.budgetStartDate_clock > lastPushedClock) fields["budgetStartDate"] = FieldDelta(settings.budgetStartDate, settings.budgetStartDate_clock)
+        if (settings.isManualBudgetEnabled_clock > lastPushedClock) fields["isManualBudgetEnabled"] = FieldDelta(settings.isManualBudgetEnabled, settings.isManualBudgetEnabled_clock)
+        if (settings.manualBudgetAmount_clock > lastPushedClock) fields["manualBudgetAmount"] = FieldDelta(settings.manualBudgetAmount, settings.manualBudgetAmount_clock)
+        if (settings.weekStartSunday_clock > lastPushedClock) fields["weekStartSunday"] = FieldDelta(settings.weekStartSunday, settings.weekStartSunday_clock)
+        if (settings.resetDayOfWeek_clock > lastPushedClock) fields["resetDayOfWeek"] = FieldDelta(settings.resetDayOfWeek, settings.resetDayOfWeek_clock)
+        if (settings.resetDayOfMonth_clock > lastPushedClock) fields["resetDayOfMonth"] = FieldDelta(settings.resetDayOfMonth, settings.resetDayOfMonth_clock)
+        if (settings.resetHour_clock > lastPushedClock) fields["resetHour"] = FieldDelta(settings.resetHour, settings.resetHour_clock)
+        if (settings.familyTimezone_clock > lastPushedClock) fields["familyTimezone"] = FieldDelta(settings.familyTimezone, settings.familyTimezone_clock)
+        if (settings.matchDays_clock > lastPushedClock) fields["matchDays"] = FieldDelta(settings.matchDays, settings.matchDays_clock)
+        if (settings.matchPercent_clock > lastPushedClock) fields["matchPercent"] = FieldDelta(settings.matchPercent.toDouble(), settings.matchPercent_clock)
+        if (settings.matchDollar_clock > lastPushedClock) fields["matchDollar"] = FieldDelta(settings.matchDollar, settings.matchDollar_clock)
+        if (settings.matchChars_clock > lastPushedClock) fields["matchChars"] = FieldDelta(settings.matchChars, settings.matchChars_clock)
+        if (settings.showAttribution_clock > lastPushedClock) fields["showAttribution"] = FieldDelta(settings.showAttribution, settings.showAttribution_clock)
+        if (fields.isEmpty()) return null
+        return RecordDelta("shared_settings", "upsert", 0, settings.lastChangedBy, fields)
     }
 }

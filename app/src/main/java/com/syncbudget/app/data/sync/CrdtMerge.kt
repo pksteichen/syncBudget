@@ -5,6 +5,7 @@ import com.syncbudget.app.data.Category
 import com.syncbudget.app.data.IncomeSource
 import com.syncbudget.app.data.RecurringExpense
 import com.syncbudget.app.data.SavingsGoal
+import com.syncbudget.app.data.SharedSettings
 import com.syncbudget.app.data.Transaction
 
 object CrdtMerge {
@@ -193,11 +194,53 @@ object CrdtMerge {
             id = local.id,
             name = if (shouldAcceptRemote(local.name_clock, remote.name_clock, localDeviceId, remoteDeviceId)) remote.name else local.name,
             iconName = if (shouldAcceptRemote(local.iconName_clock, remote.iconName_clock, localDeviceId, remoteDeviceId)) remote.iconName else local.iconName,
+            tag = local.tag.ifEmpty { remote.tag },
             deviceId = local.deviceId,
             deleted = mergedDeleted,
             name_clock = maxOf(local.name_clock, remote.name_clock),
             iconName_clock = maxOf(local.iconName_clock, remote.iconName_clock),
             deleted_clock = mergedDeletedClock
+        )
+    }
+
+    fun mergeSharedSettings(
+        local: SharedSettings,
+        remote: SharedSettings,
+        localDeviceId: String
+    ): SharedSettings {
+        val remoteDeviceId = remote.lastChangedBy
+        return SharedSettings(
+            currency = if (shouldAcceptRemote(local.currency_clock, remote.currency_clock, localDeviceId, remoteDeviceId)) remote.currency else local.currency,
+            budgetPeriod = if (shouldAcceptRemote(local.budgetPeriod_clock, remote.budgetPeriod_clock, localDeviceId, remoteDeviceId)) remote.budgetPeriod else local.budgetPeriod,
+            budgetStartDate = if (shouldAcceptRemote(local.budgetStartDate_clock, remote.budgetStartDate_clock, localDeviceId, remoteDeviceId)) remote.budgetStartDate else local.budgetStartDate,
+            isManualBudgetEnabled = if (shouldAcceptRemote(local.isManualBudgetEnabled_clock, remote.isManualBudgetEnabled_clock, localDeviceId, remoteDeviceId)) remote.isManualBudgetEnabled else local.isManualBudgetEnabled,
+            manualBudgetAmount = if (shouldAcceptRemote(local.manualBudgetAmount_clock, remote.manualBudgetAmount_clock, localDeviceId, remoteDeviceId)) remote.manualBudgetAmount else local.manualBudgetAmount,
+            weekStartSunday = if (shouldAcceptRemote(local.weekStartSunday_clock, remote.weekStartSunday_clock, localDeviceId, remoteDeviceId)) remote.weekStartSunday else local.weekStartSunday,
+            resetDayOfWeek = if (shouldAcceptRemote(local.resetDayOfWeek_clock, remote.resetDayOfWeek_clock, localDeviceId, remoteDeviceId)) remote.resetDayOfWeek else local.resetDayOfWeek,
+            resetDayOfMonth = if (shouldAcceptRemote(local.resetDayOfMonth_clock, remote.resetDayOfMonth_clock, localDeviceId, remoteDeviceId)) remote.resetDayOfMonth else local.resetDayOfMonth,
+            resetHour = if (shouldAcceptRemote(local.resetHour_clock, remote.resetHour_clock, localDeviceId, remoteDeviceId)) remote.resetHour else local.resetHour,
+            familyTimezone = if (shouldAcceptRemote(local.familyTimezone_clock, remote.familyTimezone_clock, localDeviceId, remoteDeviceId)) remote.familyTimezone else local.familyTimezone,
+            matchDays = if (shouldAcceptRemote(local.matchDays_clock, remote.matchDays_clock, localDeviceId, remoteDeviceId)) remote.matchDays else local.matchDays,
+            matchPercent = if (shouldAcceptRemote(local.matchPercent_clock, remote.matchPercent_clock, localDeviceId, remoteDeviceId)) remote.matchPercent else local.matchPercent,
+            matchDollar = if (shouldAcceptRemote(local.matchDollar_clock, remote.matchDollar_clock, localDeviceId, remoteDeviceId)) remote.matchDollar else local.matchDollar,
+            matchChars = if (shouldAcceptRemote(local.matchChars_clock, remote.matchChars_clock, localDeviceId, remoteDeviceId)) remote.matchChars else local.matchChars,
+            showAttribution = if (shouldAcceptRemote(local.showAttribution_clock, remote.showAttribution_clock, localDeviceId, remoteDeviceId)) remote.showAttribution else local.showAttribution,
+            lastChangedBy = remote.lastChangedBy,
+            currency_clock = maxOf(local.currency_clock, remote.currency_clock),
+            budgetPeriod_clock = maxOf(local.budgetPeriod_clock, remote.budgetPeriod_clock),
+            budgetStartDate_clock = maxOf(local.budgetStartDate_clock, remote.budgetStartDate_clock),
+            isManualBudgetEnabled_clock = maxOf(local.isManualBudgetEnabled_clock, remote.isManualBudgetEnabled_clock),
+            manualBudgetAmount_clock = maxOf(local.manualBudgetAmount_clock, remote.manualBudgetAmount_clock),
+            weekStartSunday_clock = maxOf(local.weekStartSunday_clock, remote.weekStartSunday_clock),
+            resetDayOfWeek_clock = maxOf(local.resetDayOfWeek_clock, remote.resetDayOfWeek_clock),
+            resetDayOfMonth_clock = maxOf(local.resetDayOfMonth_clock, remote.resetDayOfMonth_clock),
+            resetHour_clock = maxOf(local.resetHour_clock, remote.resetHour_clock),
+            familyTimezone_clock = maxOf(local.familyTimezone_clock, remote.familyTimezone_clock),
+            matchDays_clock = maxOf(local.matchDays_clock, remote.matchDays_clock),
+            matchPercent_clock = maxOf(local.matchPercent_clock, remote.matchPercent_clock),
+            matchDollar_clock = maxOf(local.matchDollar_clock, remote.matchDollar_clock),
+            matchChars_clock = maxOf(local.matchChars_clock, remote.matchChars_clock),
+            showAttribution_clock = maxOf(local.showAttribution_clock, remote.showAttribution_clock)
         )
     }
 }

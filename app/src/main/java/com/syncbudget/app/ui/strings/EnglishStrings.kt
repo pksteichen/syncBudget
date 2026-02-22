@@ -2,6 +2,20 @@ package com.syncbudget.app.ui.strings
 
 object EnglishStrings : AppStrings {
 
+    override val defaultCategoryNames = DefaultCategoryNames(
+        other = "Other",
+        recurring = "Recurring",
+        amortization = "Amortization",
+        recurringIncome = "Recurring Income",
+        transportation = "Transportation/Gas",
+        groceries = "Groceries",
+        entertainment = "Entertainment",
+        homeSupplies = "Home Supplies",
+        restaurants = "Restaurants",
+        charity = "Charity",
+        clothes = "Clothes"
+    )
+
     override val common = CommonStrings(
         ok = "OK",
         cancel = "Cancel",
@@ -19,22 +33,22 @@ object EnglishStrings : AppStrings {
         periodMonths = "months",
         addNewIncomeTransaction = "Add New Income Transaction",
         addNewExpenseTransaction = "Add New Expense Transaction",
-        sourceLabel = "Source",
-        merchantLabel = "Merchant",
-        repeatTypeDays = "Every X Days",
-        repeatTypeWeeks = "Every X Weeks",
+        sourceLabel = "Description",
+        merchantLabel = "Description",
+        repeatTypeDays = "Day",
+        repeatTypeWeeks = "Week",
         repeatTypeBiWeekly = "Every 2 Weeks",
-        repeatTypeMonths = "Every X Months",
+        repeatTypeMonths = "Month",
         repeatTypeBiMonthly = "Twice per Month",
         budgetPeriodDaily = "Daily",
         budgetPeriodWeekly = "Weekly",
         budgetPeriodMonthly = "Monthly",
-        sourceName = "Source Name",
+        sourceName = "Description",
         amount = "Amount",
         repeatType = "Repeat Type",
-        everyXDays = "Every X Days (1-60)",
-        intervalWeeks = "Every X Weeks (1-18)",
-        everyXMonths = "Every X Months (1-3)",
+        everyXDays = "Days Between Repeats (1-365)",
+        intervalWeeks = "Weeks Between Repeats (1-52)",
+        everyXMonths = "Months Between Repeats (1-12)",
         dayOfMonth = "Day of Month (1-28)",
         firstDayOfMonth = "First Day (1-28)",
         secondDayOfMonth = "Second Day (1-28)",
@@ -210,9 +224,10 @@ object EnglishStrings : AppStrings {
         dateAdvisory = "Note: This transaction's date differs from the expected schedule by more than 2 days. Consider updating your recurring expense configuration.",
         savedSuccessfully = { count -> "$count transactions saved successfully." },
         loadedSuccessfully = { loaded, total -> "$loaded of $total transactions loaded." },
+        allSkipped = { total -> "0 of $total transactions loaded. Previously loaded data skipped." },
         passwordMinLength = "Password must be at least 8 characters",
         passwordsMustMatch = "Passwords do not match",
-        newMerchantName = "Merchant/Source",
+        newMerchantName = "Description",
         filterByCategory = { name -> "Filtered by: $name" },
         tapToClearFilter = "Tap to clear filter",
         startDate = "Select Start Date",
@@ -239,7 +254,7 @@ object EnglishStrings : AppStrings {
         manualOverrideWarning = "Manual Budget Override is enabled. Savings Goal deductions are NOT being subtracted from your budget.",
         addSavingsGoal = "Add Savings Goal",
         editSavingsGoal = "Edit Savings Goal",
-        name = "Name",
+        name = "Description",
         targetAmount = "Target Amount",
         startingSavedAmount = "Starting Saved Amount",
         targetDate = "Target Date",
@@ -274,7 +289,7 @@ object EnglishStrings : AppStrings {
         manualOverrideWarning = "Manual Budget Override is enabled. Amortization deductions are NOT being subtracted from your budget.",
         addEntry = "Add Amortization Entry",
         editEntry = "Edit Amortization Entry",
-        sourceName = "Source Name",
+        sourceName = "Description",
         totalAmount = "Total Amount",
         budgetPeriods = { period -> "Budget Periods ($period)" },
         selectStartDate = "Pick Start Date",
@@ -297,8 +312,75 @@ object EnglishStrings : AppStrings {
         editExpense = "Edit Recurring Expense",
         deleteExpenseTitle = { name -> "Delete $name?" },
         deleteExpenseBody = "This recurring expense will be permanently removed.",
+        descriptionLabel = "Description",
         requiredNetflixExample = "Required, e.g. Netflix",
         exampleAmount = "e.g. 15.99"
+    )
+
+    override val sync = SyncStrings(
+        title = "Family Sync",
+        familySync = "Family Sync",
+        familySyncDescription = "Sync your budget across up to 5 devices in your household.",
+        createGroup = "Create Family Group",
+        createGroupDescription = "Start a new sync group and invite family members with a pairing code.",
+        joinGroup = "Join Family Group",
+        joinGroupDescription = "Enter a pairing code from a family member to join their sync group.",
+        leaveGroup = "Leave Group",
+        dissolveGroup = "Dissolve Group",
+        syncNow = "Sync Now",
+        lastSynced = { time -> "Last synced: $time" },
+        syncing = "Syncing...",
+        syncError = "Sync error",
+        notConfigured = "Not configured",
+        groupId = "Group ID",
+        pairingCode = "Pairing Code",
+        enterPairingCode = "Enter pairing code",
+        pairingCodeExpiry = "Code expires in 10 minutes",
+        generateCode = "Generate Pairing Code",
+        deviceRoster = "Device Roster",
+        devices = "Devices",
+        thisDevice = "This device",
+        admin = "Admin",
+        transferAdmin = "Transfer Admin",
+        removeDevice = "Remove Device",
+        confirmLeave = "Are you sure you want to leave this sync group? Your local data will be kept but will no longer sync.",
+        confirmDissolve = "Are you sure you want to dissolve this group? All members will be disconnected and sync data will be deleted.",
+        connected = "Connected",
+        disconnected = "Disconnected",
+        syncStatusSynced = "Synced",
+        syncStatusSyncing = "Syncing",
+        syncStatusStale = "Stale",
+        syncStatusError = "Error",
+        syncStatusOff = "Off",
+        groupCreated = "Family group created",
+        joinedGroup = "Joined family group",
+        leftGroup = "Left family group",
+        groupDissolved = "Group dissolved",
+        pairingCodeCopied = "Pairing code copied",
+        invalidPairingCode = "Invalid or expired pairing code",
+        encryptionKey = "Encryption Key",
+        deviceName = "Device Name",
+        adminOnly = "Admin only",
+        familyTimezone = "Family Timezone",
+        selectTimezone = "Select Timezone",
+        showAttributionLabel = "Show Attribution",
+        you = "You",
+        staleWarning60 = "Sync soon to keep your data current",
+        staleWarning75 = "15 days until sync data expires",
+        staleWarning85 = "5 days to sync or local changes will need to be discarded",
+        staleBlocked = "Sync blocked \u2014 full refresh required",
+        claimAdmin = "Claim Admin Role",
+        objectClaim = "Object",
+        claimPending = "Admin claim pending",
+        claimApproved = "Admin role transferred",
+        claimRejected = "Admin claim rejected",
+        claimExpiry = { time -> "Claim expires: $time" },
+        claimBy = { name -> "$name is claiming admin role" },
+        errorRemovedFromGroup = "You have been removed from this group",
+        errorGroupDeleted = "This group has been dissolved",
+        errorEncryption = "Encryption error \u2014 check your pairing",
+        joinWarningTitle = "Replace Local Data?",
+        joinWarningBody = "Joining a family group will replace your local budget data with the group's shared data. Your current transactions, goals, and settings will be overwritten. This cannot be undone."
     )
 
     // ── Help Screen Strings ──
@@ -399,7 +481,7 @@ object EnglishStrings : AppStrings {
         step2Title = "Configure Your Budget",
         step2Desc = "In Settings, tap \"Configure Your Budget\" to open Budget Configuration. Choose a budget period (Daily is recommended for most people).",
         step3Title = "Add Income Sources",
-        step3Desc = "In Budget Configuration, add all reliable income sources \u2014 your salary, regular side income, etc. Set the repeat schedule for each (e.g., \"Every X Months\" on the 1st and 15th for bi-monthly pay).",
+        step3Desc = "In Budget Configuration, add all reliable income sources \u2014 your salary, regular side income, etc. Set the repeat schedule for each (e.g., \"Month\" on the 1st and 15th for bi-monthly pay).",
         step4Title = "Add Recurring Expenses",
         step4Desc = "Navigate to Recurring Expenses (the sync icon on the dashboard) and add all your regular bills: rent, utilities, insurance, subscriptions, loan payments.",
         step5Title = "Hit Recalculate",
@@ -828,20 +910,18 @@ object EnglishStrings : AppStrings {
         repeatBody = "Every income source needs a repeat schedule so the budget calculator knows " +
             "when to expect payments. The same repeat types are available for income sources " +
             "and recurring expenses:",
-        everyXDaysTitle = "Every X Days",
-        everyXDaysBody = "Income arrives every N days (1\u201360). Requires a Start Date \u2014 the date " +
+        everyXDaysTitle = "Day",
+        everyXDaysBody = "Income arrives every N days (1\u2013365). Requires a Start Date \u2014 the date " +
             "of any past or future occurrence. The engine calculates all future dates from " +
             "this reference point.",
-        everyXWeeksTitle = "Every X Weeks",
-        everyXWeeksBody = "Income arrives every N weeks (1\u201318). Requires a Start Date. The day of " +
+        everyXWeeksTitle = "Week",
+        everyXWeeksBody = "Income arrives every N weeks (1\u201352). Requires a Start Date. The day of " +
             "the week is determined by your start date (e.g., if your start date falls on " +
             "a Friday, income repeats every N Fridays).",
-        biWeeklyTitle = "Every 2 Weeks (Bi-Weekly)",
-        biWeeklyBody = "A common pay schedule. Requires a Start Date. Income arrives every 14 days " +
-            "from the start date. This is different from \"Twice per Month\" \u2014 bi-weekly " +
-            "results in 26 pay periods per year, not 24.",
-        everyXMonthsTitle = "Every X Months",
-        everyXMonthsBody = "Income arrives on a specific day of the month, every N months (1\u20133). " +
+        biWeeklyTitle = "",
+        biWeeklyBody = "",
+        everyXMonthsTitle = "Month",
+        everyXMonthsBody = "Income arrives on a specific day of the month, every N months (1\u201312). " +
             "Enter the Day of Month (1\u201328). No start date is needed \u2014 the engine " +
             "uses the day number directly.",
         biMonthlyTitle = "Twice per Month (Bi-Monthly)",
@@ -1043,24 +1123,23 @@ object EnglishStrings : AppStrings {
         helpDesc = "Opens this help page.",
         addingTitle = "Adding a Recurring Expense",
         addingBody = "Tap \"Add Recurring Expense\" and fill in:",
-        addStep1 = "Source Name",
+        addStep1 = "Description",
         addStep1Desc = "A descriptive name for the expense (e.g., \"Rent\", \"Netflix\", \"Car Insurance\"). Important: this name is matched against bank transaction merchant names for automatic recognition.",
         addStep2 = "Amount",
         addStep2Desc = "The amount per occurrence.",
         repeatTitle = "Repeat Settings",
         repeatBody = "Every recurring expense needs a repeat schedule so the budget calculator " +
             "knows when to expect the charge. Tap the sync icon on any expense to configure:",
-        everyXDaysTitle = "Every X Days",
-        everyXDaysBody = "The expense occurs every N days (1\u201360). Requires a Start Date. " +
+        everyXDaysTitle = "Day",
+        everyXDaysBody = "The expense occurs every N days (1\u2013365). Requires a Start Date. " +
             "Useful for irregular-interval expenses like medication refills.",
-        everyXWeeksTitle = "Every X Weeks",
-        everyXWeeksBody = "The expense occurs every N weeks (1\u201318). Requires a Start Date. " +
+        everyXWeeksTitle = "Week",
+        everyXWeeksBody = "The expense occurs every N weeks (1\u201352). Requires a Start Date. " +
             "The day of the week is determined by the start date.",
-        biWeeklyTitle = "Every 2 Weeks (Bi-Weekly)",
-        biWeeklyBody = "Occurs every 14 days from the start date. Useful for bi-weekly " +
-            "recurring charges. Results in 26 occurrences per year.",
-        everyXMonthsTitle = "Every X Months",
-        everyXMonthsBody = "Occurs on a specific day of the month, every N months (1\u20133). " +
+        biWeeklyTitle = "",
+        biWeeklyBody = "",
+        everyXMonthsTitle = "Month",
+        everyXMonthsBody = "Occurs on a specific day of the month, every N months (1\u201312). " +
             "Enter the Day of Month (1\u201328). Most bills use this type: rent on the 1st, " +
             "phone bill on the 15th, etc.",
         biMonthlyTitle = "Twice per Month (Bi-Monthly)",
@@ -1070,7 +1149,7 @@ object EnglishStrings : AppStrings {
             "month, including February.",
         expenseListTitle = "Expense List",
         expenseListBody = "Each recurring expense in the list shows:",
-        expenseSource = "Source name",
+        expenseSource = "Description",
         expenseAmount = "Amount per occurrence",
         actionsTitle = "Actions",
         editNote = "Tap an expense to edit its name and amount.",
@@ -1110,5 +1189,63 @@ object EnglishStrings : AppStrings {
         tip4 = "Common expenses to add: rent/mortgage, utilities (electric, gas, water), insurance (car, health, home), subscriptions (streaming, gym, software), loan payments, phone bill.",
         tip5 = "If an expense is truly one-time, don't add it here. Use Amortization instead to spread it over time.",
         tip6 = "Check your bank statements to make sure you haven't missed any recurring charges."
+    )
+
+    override val familySyncHelp = FamilySyncHelpStrings(
+        title = "Family Sync Help",
+        whatTitle = "What is Family Sync?",
+        whatBody = "Family Sync lets you share a single household budget across up to 5 devices. " +
+            "All transactions, income sources, recurring expenses, savings goals, and settings " +
+            "are kept in sync automatically using end-to-end encrypted cloud relay. " +
+            "No one \u2014 not even the server \u2014 can read your financial data.",
+        adminRoleTitle = "The Admin Role",
+        adminRoleBody = "The person who creates the family group becomes the admin. The admin can " +
+            "change shared budget settings (currency, budget period, reset schedule), " +
+            "generate pairing codes to invite new devices, set the family timezone, " +
+            "enable transaction attribution, and dissolve the group. Non-admin members " +
+            "can view settings but cannot change them.",
+        gettingStartedTitle = "Getting Started",
+        gettingStartedBody = "To set up Family Sync: Open Settings, tap Family Sync, and tap " +
+            "\"Create Family Group\". A sync group is created with you as admin. " +
+            "Then tap \"Generate Pairing Code\" and share the 6-character code with " +
+            "family members. They enter the code on their device to join. " +
+            "Codes expire after 10 minutes for security.",
+        joiningTitle = "Joining a Group",
+        joiningBody = "To join an existing group, tap \"Join Family Group\" and enter the " +
+            "6-character pairing code. Important: joining replaces your local budget data " +
+            "with the group's shared data. Your current transactions, goals, and settings " +
+            "will be overwritten. Make sure to back up first if needed.",
+        syncStatusTitle = "Sync Status",
+        syncStatusBody = "The colored dot on the dashboard and the status card on this screen " +
+            "show the current sync state: Green (Synced) means all data is up to date. " +
+            "Yellow (Syncing) means a sync is in progress. Orange (Stale) means " +
+            "it has been a while since the last sync. Red (Error) means the last " +
+            "sync attempt failed.",
+        staleWarningsTitle = "Stale Warnings",
+        staleWarningsBody = "If your device hasn't synced for an extended period, escalating " +
+            "warnings appear on the dashboard: at 60 days a gentle reminder, " +
+            "at 75 days a countdown, at 85 days an urgent warning, and at 90 days " +
+            "sync is blocked and a full refresh from the group snapshot is required. " +
+            "Sync regularly to avoid this.",
+        attributionTitle = "Transaction Attribution",
+        attributionBody = "When enabled by the admin, each transaction in the list shows which device " +
+            "created it. Your own transactions show \"You\" and transactions from other " +
+            "devices show the device name. This helps families see who recorded each expense.",
+        adminClaimsTitle = "Admin Claims",
+        adminClaimsBody = "If the admin device is lost or unavailable, any member can claim the " +
+            "admin role. Tap \"Claim Admin Role\" on the Family Sync screen. Other members " +
+            "have 24 hours to object. If no one objects, the claim is approved and you " +
+            "become the new admin. If someone objects, the claim is rejected.",
+        leavingTitle = "Leaving or Dissolving",
+        leavingBody = "Non-admin members can leave a group at any time. Your local data is kept " +
+            "but stops syncing. The admin can dissolve the group entirely, which " +
+            "disconnects all members and deletes all sync data from the server. " +
+            "Local data on each device is preserved.",
+        privacyTitle = "Privacy & Security",
+        privacyBody = "All sync data is encrypted end-to-end with a 256-bit key generated " +
+            "when the group is created. The key is shared only via the pairing code " +
+            "mechanism. The server stores only encrypted blobs \u2014 it cannot read " +
+            "your transactions, amounts, merchant names, or any financial data. " +
+            "Your money, your data, your control."
     )
 }

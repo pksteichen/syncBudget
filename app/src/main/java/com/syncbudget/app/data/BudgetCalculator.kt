@@ -1,7 +1,9 @@
 package com.syncbudget.app.data
 
 import java.time.DayOfWeek
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
 
@@ -136,9 +138,14 @@ object BudgetCalculator {
     fun currentPeriodStart(
         budgetPeriod: BudgetPeriod,
         resetDayOfWeek: Int,
-        resetDayOfMonth: Int
+        resetDayOfMonth: Int,
+        timezone: ZoneId? = null
     ): LocalDate {
-        val today = LocalDate.now()
+        val today = if (timezone != null) {
+            Instant.now().atZone(timezone).toLocalDate()
+        } else {
+            LocalDate.now()
+        }
         return when (budgetPeriod) {
             BudgetPeriod.DAILY -> today
             BudgetPeriod.WEEKLY -> {

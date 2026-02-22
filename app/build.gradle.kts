@@ -10,7 +10,7 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.syncbudget.app"
+        applicationId = "com.securesync.app"
         minSdk = 28
         targetSdk = 34
         versionCode = 1

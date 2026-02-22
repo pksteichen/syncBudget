@@ -171,10 +171,6 @@ fun RecurringExpensesHelpScreen(onBack: () -> Unit) {
             HelpBodyText(S.recurringExpensesHelp.everyXWeeksBody)
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpSubSectionTitle(S.recurringExpensesHelp.biWeeklyTitle)
-            HelpBodyText(S.recurringExpensesHelp.biWeeklyBody)
-            Spacer(modifier = Modifier.height(10.dp))
-
             HelpSubSectionTitle(S.recurringExpensesHelp.everyXMonthsTitle)
             HelpBodyText(S.recurringExpensesHelp.everyXMonthsBody)
             Spacer(modifier = Modifier.height(10.dp))

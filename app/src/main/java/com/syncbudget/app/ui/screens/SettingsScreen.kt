@@ -119,6 +119,9 @@ fun SettingsScreen(
     weekStartSunday: Boolean = true,
     onWeekStartChange: (Boolean) -> Unit = {},
     onNavigateToBudgetConfig: () -> Unit = {},
+    onNavigateToFamilySync: () -> Unit = {},
+    isSyncConfigured: Boolean = false,
+    isAdmin: Boolean = true,
     onBack: () -> Unit,
     onHelpClick: () -> Unit = {}
 ) {
@@ -126,6 +129,7 @@ fun SettingsScreen(
     val S = LocalStrings.current
     var showAddCategory by remember { mutableStateOf(false) }
     var editingCategory by remember { mutableStateOf<Category?>(null) }
+    val isLocked = isSyncConfigured && !isAdmin
 
     val textFieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = MaterialTheme.colorScheme.onBackground,
@@ -187,12 +191,21 @@ fun SettingsScreen(
                 }
             }
 
+            item {
+                OutlinedButton(
+                    onClick = onNavigateToFamilySync,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(S.sync.familySync)
+                }
+            }
+
             // Currency dropdown
             item {
                 var currencyExpanded by remember { mutableStateOf(false) }
                 ExposedDropdownMenuBox(
-                    expanded = currencyExpanded,
-                    onExpandedChange = { currencyExpanded = it }
+                    expanded = if (isLocked) false else currencyExpanded,
+                    onExpandedChange = { if (!isLocked) currencyExpanded = it }
                 ) {
                     OutlinedTextField(
                         value = currencySymbol,
@@ -282,8 +295,8 @@ fun SettingsScreen(
             item {
                 var weekStartExpanded by remember { mutableStateOf(false) }
                 ExposedDropdownMenuBox(
-                    expanded = weekStartExpanded,
-                    onExpandedChange = { weekStartExpanded = it }
+                    expanded = if (isLocked) false else weekStartExpanded,
+                    onExpandedChange = { if (!isLocked) weekStartExpanded = it }
                 ) {
                     OutlinedTextField(
                         value = if (weekStartSunday) S.settings.sunday else S.settings.monday,
@@ -406,6 +419,13 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onBackground
                 )
+                if (isLocked) {
+                    Text(
+                        text = S.sync.adminOnly,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFFFF9800)
+                    )
+                }
             }
 
             item {
@@ -420,6 +440,7 @@ fun SettingsScreen(
                     },
                     label = { Text(S.settings.matchDays) },
                     singleLine = true,
+                    enabled = !isLocked,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     colors = textFieldColors,
                     modifier = Modifier.fillMaxWidth()
@@ -438,6 +459,7 @@ fun SettingsScreen(
                     },
                     label = { Text(S.settings.matchPercent) },
                     singleLine = true,
+                    enabled = !isLocked,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     colors = textFieldColors,
                     modifier = Modifier.fillMaxWidth()
@@ -456,6 +478,7 @@ fun SettingsScreen(
                     },
                     label = { Text(S.settings.matchDollar) },
                     singleLine = true,
+                    enabled = !isLocked,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     colors = textFieldColors,
                     modifier = Modifier.fillMaxWidth()
@@ -474,6 +497,7 @@ fun SettingsScreen(
                     },
                     label = { Text(S.settings.matchChars) },
                     singleLine = true,
+                    enabled = !isLocked,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     colors = textFieldColors,
                     modifier = Modifier.fillMaxWidth()
@@ -510,7 +534,7 @@ fun SettingsScreen(
             }
 
             items(categories) { category ->
-                val isProtected = category.name == "Other" || category.name == "Recurring" || category.name == "Amortization" || category.name == "Recurring Income"
+                val isProtected = category.tag in setOf("other", "recurring", "amortization", "recurring_income")
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -762,7 +786,7 @@ private fun EditCategoryDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(S.settings.editCategory, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                    if (category.name != "Other" && category.name != "Recurring" && category.name != "Amortization" && category.name != "Recurring Income") {
+                    if (category.tag !in setOf("other", "recurring", "amortization", "recurring_income")) {
                         IconButton(onClick = {
                             if (txnCount > 0) {
                                 showReassignDialog = true

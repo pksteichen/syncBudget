@@ -29,7 +29,7 @@ fun autoCategorize(
     } else null
 
     val categoryId = bestCategoryId
-        ?: categories.find { it.name == "Other" }?.id
+        ?: categories.find { it.tag == "other" }?.id
         ?: return imported
 
     return imported.copy(

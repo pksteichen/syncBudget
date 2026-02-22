@@ -299,10 +299,6 @@ fun BudgetConfigHelpScreen(onBack: () -> Unit) {
             HelpBodyText(S.budgetConfigHelp.everyXWeeksBody)
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpSubSectionTitle(S.budgetConfigHelp.biWeeklyTitle)
-            HelpBodyText(S.budgetConfigHelp.biWeeklyBody)
-            Spacer(modifier = Modifier.height(10.dp))
-
             HelpSubSectionTitle(S.budgetConfigHelp.everyXMonthsTitle)
             HelpBodyText(S.budgetConfigHelp.everyXMonthsBody)
             Spacer(modifier = Modifier.height(10.dp))

@@ -7,6 +7,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
@@ -15,6 +16,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import com.syncbudget.app.data.AmortizationEntry
 import com.syncbudget.app.data.BudgetCalculator
@@ -22,6 +24,9 @@ import com.syncbudget.app.data.BudgetPeriod
 import com.syncbudget.app.data.Category
 import com.syncbudget.app.data.CategoryAmount
 import com.syncbudget.app.data.CategoryRepository
+import com.syncbudget.app.data.DEFAULT_CATEGORY_DEFS
+import com.syncbudget.app.data.getAllKnownNamesForTag
+import com.syncbudget.app.data.getDefaultCategoryName
 import com.syncbudget.app.data.AmortizationRepository
 import com.syncbudget.app.data.SavingsGoalRepository
 import com.syncbudget.app.data.SuperchargeMode
@@ -34,10 +39,21 @@ import com.syncbudget.app.data.RecurringExpenseRepository
 import com.syncbudget.app.data.Transaction
 import com.syncbudget.app.data.TransactionRepository
 import com.syncbudget.app.data.TransactionType
+import com.syncbudget.app.data.SharedSettings
+import com.syncbudget.app.data.SharedSettingsRepository
+import com.syncbudget.app.data.sync.DeviceInfo
+import com.syncbudget.app.data.sync.FirestoreService
+import com.syncbudget.app.data.sync.GroupManager
+import java.time.ZoneId
 import com.syncbudget.app.data.sync.LamportClock
 import com.syncbudget.app.data.sync.PeriodLedgerEntry
 import com.syncbudget.app.data.sync.PeriodLedgerRepository
+import com.syncbudget.app.data.sync.SyncEngine
+import com.syncbudget.app.data.sync.SyncIdGenerator
+import com.syncbudget.app.data.sync.SyncWorker
 import com.syncbudget.app.data.sync.active
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import com.syncbudget.app.data.findAmortizationMatch
 import com.syncbudget.app.data.findBudgetIncomeMatch
 import com.syncbudget.app.data.findDuplicate
@@ -52,6 +68,9 @@ import com.syncbudget.app.ui.screens.BudgetConfigScreen
 import com.syncbudget.app.ui.screens.BudgetIncomeConfirmDialog
 import com.syncbudget.app.ui.screens.DashboardHelpScreen
 import com.syncbudget.app.ui.screens.DuplicateResolutionDialog
+import com.syncbudget.app.data.sync.AdminClaim
+import com.syncbudget.app.ui.screens.FamilySyncHelpScreen
+import com.syncbudget.app.ui.screens.FamilySyncScreen
 import com.syncbudget.app.ui.screens.FutureExpendituresHelpScreen
 import com.syncbudget.app.ui.screens.FutureExpendituresScreen
 import com.syncbudget.app.ui.screens.MainScreen
@@ -154,35 +173,26 @@ class MainActivity : ComponentActivity() {
             }
             val categories = remember {
                 val loaded = CategoryRepository.load(context).toMutableList()
-                if (loaded.none { it.name == "Other" }) {
-                    val usedIds = loaded.map { it.id }.toSet()
-                    var id: Int
-                    do { id = (0..65535).random() } while (id in usedIds)
-                    val otherCat = Category(id, "Other", "CreditCard")
-                    loaded.add(otherCat)
-                    CategoryRepository.save(context, loaded)
+                var changed = false
+                for (def in DEFAULT_CATEGORY_DEFS) {
+                    val byTag = loaded.indexOfFirst { it.tag == def.tag }
+                    if (byTag >= 0) continue
+                    // Backward compat: check if a category with a matching name exists but no tag
+                    val allNames = getAllKnownNamesForTag(def.tag)
+                    val byName = loaded.indexOfFirst { it.tag.isEmpty() && it.name in allNames }
+                    if (byName >= 0) {
+                        loaded[byName] = loaded[byName].copy(tag = def.tag)
+                        changed = true
+                    } else {
+                        val usedIds = loaded.map { it.id }.toSet()
+                        var id: Int
+                        do { id = (0..65535).random() } while (id in usedIds)
+                        val name = getDefaultCategoryName(def.tag, strings) ?: def.tag
+                        loaded.add(Category(id = id, name = name, iconName = def.iconName, tag = def.tag))
+                        changed = true
+                    }
                 }
-                if (loaded.none { it.name == "Recurring" }) {
-                    val usedIds = loaded.map { it.id }.toSet()
-                    var id: Int
-                    do { id = (0..65535).random() } while (id in usedIds)
-                    loaded.add(Category(id, "Recurring", "Sync"))
-                    CategoryRepository.save(context, loaded)
-                }
-                if (loaded.none { it.name == "Amortization" }) {
-                    val usedIds = loaded.map { it.id }.toSet()
-                    var id: Int
-                    do { id = (0..65535).random() } while (id in usedIds)
-                    loaded.add(Category(id, "Amortization", "Schedule"))
-                    CategoryRepository.save(context, loaded)
-                }
-                if (loaded.none { it.name == "Recurring Income" }) {
-                    val usedIds = loaded.map { it.id }.toSet()
-                    var id: Int
-                    do { id = (0..65535).random() } while (id in usedIds)
-                    loaded.add(Category(id, "Recurring Income", "Payments"))
-                    CategoryRepository.save(context, loaded)
-                }
+                if (changed) CategoryRepository.save(context, loaded)
                 mutableStateListOf(*loaded.toTypedArray())
             }
 
@@ -267,6 +277,161 @@ class MainActivity : ComponentActivity() {
                 PeriodLedgerRepository.save(context, periodLedger.toList())
             }
 
+            // ── Shared Settings (for sync) ──
+            var sharedSettings by remember { mutableStateOf(SharedSettingsRepository.load(context)) }
+
+            // ── Family Sync state ──
+            val syncPrefs = remember { context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE) }
+            var isSyncConfigured by remember { mutableStateOf(GroupManager.isConfigured(context)) }
+            var syncGroupId by remember { mutableStateOf(GroupManager.getGroupId(context)) }
+            var isSyncAdmin by remember { mutableStateOf(GroupManager.isAdmin(context)) }
+            var syncStatus by remember { mutableStateOf(if (GroupManager.isConfigured(context)) "synced" else "off") }
+            var lastSyncTime by remember { mutableStateOf<String?>(null) }
+            var syncDevices by remember { mutableStateOf<List<DeviceInfo>>(emptyList()) }
+            var generatedPairingCode by remember { mutableStateOf<String?>(null) }
+            val localDeviceId = remember { SyncIdGenerator.getOrCreateDeviceId(context) }
+            val coroutineScope = rememberCoroutineScope()
+            var staleDays by remember { mutableIntStateOf(0) }
+            var syncErrorMessage by remember { mutableStateOf<String?>(null) }
+            var pendingAdminClaim by remember { mutableStateOf<AdminClaim?>(null) }
+
+            // Foreground flag
+            DisposableEffect(Unit) {
+                syncPrefs.edit().putBoolean("isInForeground", true).apply()
+                onDispose {
+                    syncPrefs.edit().putBoolean("isInForeground", false).apply()
+                }
+            }
+
+            // Foreground sync loop
+            LaunchedEffect(isSyncConfigured) {
+                if (!isSyncConfigured) return@LaunchedEffect
+                val groupId = GroupManager.getGroupId(context) ?: return@LaunchedEffect
+                val key = GroupManager.getEncryptionKey(context) ?: return@LaunchedEffect
+                val engine = SyncEngine(context, groupId, localDeviceId, key, lamportClock)
+
+                // Initial device list fetch
+                try {
+                    syncDevices = GroupManager.getDevices(groupId)
+                } catch (_: Exception) {}
+
+                while (true) {
+                    try {
+                        syncStatus = "syncing"
+                        val result = engine.sync(
+                            transactions.toList(),
+                            recurringExpenses.toList(),
+                            incomeSources.toList(),
+                            savingsGoals.toList(),
+                            amortizationEntries.toList(),
+                            categories.toList(),
+                            sharedSettings
+                        )
+                        if (result.success) {
+                            result.mergedTransactions?.let { merged ->
+                                transactions.clear()
+                                transactions.addAll(merged)
+                                saveTransactions()
+                            }
+                            result.mergedRecurringExpenses?.let { merged ->
+                                recurringExpenses.clear()
+                                recurringExpenses.addAll(merged)
+                                saveRecurringExpenses()
+                            }
+                            result.mergedIncomeSources?.let { merged ->
+                                incomeSources.clear()
+                                incomeSources.addAll(merged)
+                                saveIncomeSources()
+                            }
+                            result.mergedSavingsGoals?.let { merged ->
+                                savingsGoals.clear()
+                                savingsGoals.addAll(merged)
+                                saveSavingsGoals()
+                            }
+                            result.mergedAmortizationEntries?.let { merged ->
+                                amortizationEntries.clear()
+                                amortizationEntries.addAll(merged)
+                                saveAmortizationEntries()
+                            }
+                            result.mergedCategories?.let { merged ->
+                                categories.clear()
+                                categories.addAll(merged)
+                                saveCategories()
+                            }
+                            result.mergedSharedSettings?.let { merged ->
+                                sharedSettings = merged
+                                // Apply synced settings to local state
+                                currencySymbol = merged.currency
+                                budgetPeriod = try { BudgetPeriod.valueOf(merged.budgetPeriod) } catch (_: Exception) { budgetPeriod }
+                                resetHour = merged.resetHour
+                                resetDayOfWeek = merged.resetDayOfWeek
+                                resetDayOfMonth = merged.resetDayOfMonth
+                                isManualBudgetEnabled = merged.isManualBudgetEnabled
+                                manualBudgetAmount = merged.manualBudgetAmount
+                                weekStartSunday = merged.weekStartSunday
+                                matchDays = merged.matchDays
+                                matchPercent = merged.matchPercent
+                                matchDollar = merged.matchDollar
+                                matchChars = merged.matchChars
+                                // Also write to app_prefs for backward compat
+                                prefs.edit()
+                                    .putString("currencySymbol", merged.currency)
+                                    .putString("budgetPeriod", merged.budgetPeriod)
+                                    .putInt("resetHour", merged.resetHour)
+                                    .putInt("resetDayOfWeek", merged.resetDayOfWeek)
+                                    .putInt("resetDayOfMonth", merged.resetDayOfMonth)
+                                    .putBoolean("isManualBudgetEnabled", merged.isManualBudgetEnabled)
+                                    .putFloat("manualBudgetAmount", merged.manualBudgetAmount.toFloat())
+                                    .putBoolean("weekStartSunday", merged.weekStartSunday)
+                                    .putInt("matchDays", merged.matchDays)
+                                    .putFloat("matchPercent", merged.matchPercent)
+                                    .putInt("matchDollar", merged.matchDollar)
+                                    .putInt("matchChars", merged.matchChars)
+                                    .apply()
+                            }
+                            syncStatus = "synced"
+                            syncErrorMessage = null
+                            lastSyncTime = "just now"
+                            pendingAdminClaim = result.pendingAdminClaim
+                            // Compute stale days
+                            val lastSync = syncPrefs.getLong("lastSuccessfulSync", 0L)
+                            staleDays = if (lastSync > 0L) ((System.currentTimeMillis() - lastSync) / (24 * 60 * 60 * 1000L)).toInt() else 0
+                            // Refresh device list & admin status
+                            try {
+                                syncDevices = GroupManager.getDevices(groupId)
+                                isSyncAdmin = GroupManager.isAdmin(context)
+                            } catch (_: Exception) {}
+                        } else {
+                            syncStatus = "error"
+                            syncErrorMessage = result.error
+                            pendingAdminClaim = result.pendingAdminClaim
+                            // Handle auto-leave on removal
+                            if (result.error == "removed_from_group" || result.error == "group_deleted") {
+                                GroupManager.leaveGroup(context)
+                                isSyncConfigured = false
+                                syncGroupId = null
+                                isSyncAdmin = false
+                                syncStatus = "off"
+                                lastSyncTime = null
+                                syncDevices = emptyList()
+                                pendingAdminClaim = null
+                                return@LaunchedEffect
+                            }
+                        }
+                    } catch (_: Exception) {
+                        syncStatus = "error"
+                    }
+                    delay(60_000)
+                }
+            }
+
+            // Schedule background sync when configured
+            LaunchedEffect(isSyncConfigured) {
+                if (isSyncConfigured) {
+                    SyncWorker.schedule(context)
+                }
+            }
+
             // Percent tolerance for matching
             val percentTolerance = matchPercent / 100f
 
@@ -274,8 +439,8 @@ class MainActivity : ComponentActivity() {
             // (recurring expenses and amortization are built into the safe budget amount)
             fun isBudgetAccountedExpense(txn: Transaction): Boolean {
                 if (txn.type != TransactionType.EXPENSE) return false
-                val recurringCatId = categories.find { it.name == "Recurring" }?.id
-                val amortCatId = categories.find { it.name == "Amortization" }?.id
+                val recurringCatId = categories.find { it.tag == "recurring" }?.id
+                val amortCatId = categories.find { it.tag == "amortization" }?.id
                 return txn.categoryAmounts.any {
                     it.categoryId == recurringCatId || it.categoryId == amortCatId
                 }
@@ -416,6 +581,8 @@ class MainActivity : ComponentActivity() {
                             "recurring_expenses_help" -> "recurring_expenses"
                             "budget_config_help" -> "budget_config"
                             "budget_config" -> "settings"
+                            "family_sync" -> "settings"
+                            "family_sync_help" -> "family_sync"
                             else -> "main"
                         }
                     }
@@ -450,6 +617,8 @@ class MainActivity : ComponentActivity() {
                         chartPalette = chartPalette,
                         dateFormatPattern = dateFormatPattern,
                         budgetPeriod = budgetPeriod,
+                        syncStatus = syncStatus,
+                        staleDays = staleDays,
                         onSupercharge = { allocations, modes ->
                             var totalDeducted = 0.0
                             for ((goalId, amount) in allocations) {
@@ -521,24 +690,82 @@ class MainActivity : ComponentActivity() {
                         onLanguageChange = { lang ->
                             appLanguage = lang
                             prefs.edit().putString("appLanguage", lang).apply()
+                            val newStrings: AppStrings = if (lang == "es") SpanishStrings else EnglishStrings
+                            var catChanged = false
+                            categories.forEachIndexed { idx, cat ->
+                                if (cat.tag.isNotEmpty()) {
+                                    val allKnown = getAllKnownNamesForTag(cat.tag)
+                                    if (cat.name in allKnown) {
+                                        val newName = getDefaultCategoryName(cat.tag, newStrings)
+                                        if (newName != null && newName != cat.name) {
+                                            categories[idx] = cat.copy(name = newName)
+                                            catChanged = true
+                                        }
+                                    }
+                                }
+                            }
+                            if (catChanged) saveCategories()
                         },
                         onNavigateToBudgetConfig = { currentScreen = "budget_config" },
+                        onNavigateToFamilySync = { currentScreen = "family_sync" },
                         matchDays = matchDays,
-                        onMatchDaysChange = { matchDays = it; prefs.edit().putInt("matchDays", it).apply() },
+                        onMatchDaysChange = {
+                            matchDays = it; prefs.edit().putInt("matchDays", it).apply()
+                            if (isSyncConfigured) {
+                                val clock = lamportClock.tick()
+                                sharedSettings = sharedSettings.copy(matchDays = it, matchDays_clock = clock, lastChangedBy = localDeviceId)
+                                SharedSettingsRepository.save(context, sharedSettings)
+                            }
+                        },
                         matchPercent = matchPercent,
-                        onMatchPercentChange = { matchPercent = it; prefs.edit().putFloat("matchPercent", it).apply() },
+                        onMatchPercentChange = {
+                            matchPercent = it; prefs.edit().putFloat("matchPercent", it).apply()
+                            if (isSyncConfigured) {
+                                val clock = lamportClock.tick()
+                                sharedSettings = sharedSettings.copy(matchPercent = it, matchPercent_clock = clock, lastChangedBy = localDeviceId)
+                                SharedSettingsRepository.save(context, sharedSettings)
+                            }
+                        },
                         matchDollar = matchDollar,
-                        onMatchDollarChange = { matchDollar = it; prefs.edit().putInt("matchDollar", it).apply() },
+                        onMatchDollarChange = {
+                            matchDollar = it; prefs.edit().putInt("matchDollar", it).apply()
+                            if (isSyncConfigured) {
+                                val clock = lamportClock.tick()
+                                sharedSettings = sharedSettings.copy(matchDollar = it, matchDollar_clock = clock, lastChangedBy = localDeviceId)
+                                SharedSettingsRepository.save(context, sharedSettings)
+                            }
+                        },
                         matchChars = matchChars,
-                        onMatchCharsChange = { matchChars = it; prefs.edit().putInt("matchChars", it).apply() },
+                        onMatchCharsChange = {
+                            matchChars = it; prefs.edit().putInt("matchChars", it).apply()
+                            if (isSyncConfigured) {
+                                val clock = lamportClock.tick()
+                                sharedSettings = sharedSettings.copy(matchChars = it, matchChars_clock = clock, lastChangedBy = localDeviceId)
+                                SharedSettingsRepository.save(context, sharedSettings)
+                            }
+                        },
                         chartPalette = chartPalette,
                         onChartPaletteChange = { chartPalette = it; prefs.edit().putString("chartPalette", it).apply() },
                         weekStartSunday = weekStartSunday,
-                        onWeekStartChange = { weekStartSunday = it; prefs.edit().putBoolean("weekStartSunday", it).apply() },
+                        onWeekStartChange = {
+                            weekStartSunday = it; prefs.edit().putBoolean("weekStartSunday", it).apply()
+                            if (isSyncConfigured) {
+                                val clock = lamportClock.tick()
+                                sharedSettings = sharedSettings.copy(weekStartSunday = it, weekStartSunday_clock = clock, lastChangedBy = localDeviceId)
+                                SharedSettingsRepository.save(context, sharedSettings)
+                            }
+                        },
                         onCurrencyChange = {
                             currencySymbol = it
                             prefs.edit().putString("currencySymbol", it).apply()
+                            if (isSyncConfigured) {
+                                val clock = lamportClock.tick()
+                                sharedSettings = sharedSettings.copy(currency = it, currency_clock = clock, lastChangedBy = localDeviceId)
+                                SharedSettingsRepository.save(context, sharedSettings)
+                            }
                         },
+                        isSyncConfigured = isSyncConfigured,
+                        isAdmin = isSyncAdmin,
                         showDecimals = showDecimals,
                         onDecimalsChange = {
                             showDecimals = it
@@ -614,6 +841,9 @@ class MainActivity : ComponentActivity() {
                         matchDollar = matchDollar,
                         matchChars = matchChars,
                         chartPalette = chartPalette,
+                        showAttribution = sharedSettings.showAttribution && isSyncConfigured,
+                        deviceNameMap = syncDevices.associate { it.deviceId to it.deviceName.ifEmpty { it.deviceId.take(8) } },
+                        localDeviceId = localDeviceId,
                         onAddTransaction = { txn ->
                             addTransactionWithBudgetEffect(txn)
                         },
@@ -765,27 +995,67 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         budgetPeriod = budgetPeriod,
-                        onBudgetPeriodChange = { budgetPeriod = it; prefs.edit().putString("budgetPeriod", it.name).apply() },
+                        onBudgetPeriodChange = {
+                            budgetPeriod = it; prefs.edit().putString("budgetPeriod", it.name).apply()
+                            if (isSyncConfigured) {
+                                val clock = lamportClock.tick()
+                                sharedSettings = sharedSettings.copy(budgetPeriod = it.name, budgetPeriod_clock = clock, lastChangedBy = localDeviceId)
+                                SharedSettingsRepository.save(context, sharedSettings)
+                            }
+                        },
                         resetHour = resetHour,
-                        onResetHourChange = { resetHour = it; prefs.edit().putInt("resetHour", it).apply() },
+                        onResetHourChange = {
+                            resetHour = it; prefs.edit().putInt("resetHour", it).apply()
+                            if (isSyncConfigured) {
+                                val clock = lamportClock.tick()
+                                sharedSettings = sharedSettings.copy(resetHour = it, resetHour_clock = clock, lastChangedBy = localDeviceId)
+                                SharedSettingsRepository.save(context, sharedSettings)
+                            }
+                        },
                         resetDayOfWeek = resetDayOfWeek,
-                        onResetDayOfWeekChange = { resetDayOfWeek = it; prefs.edit().putInt("resetDayOfWeek", it).apply() },
+                        onResetDayOfWeekChange = {
+                            resetDayOfWeek = it; prefs.edit().putInt("resetDayOfWeek", it).apply()
+                            if (isSyncConfigured) {
+                                val clock = lamportClock.tick()
+                                sharedSettings = sharedSettings.copy(resetDayOfWeek = it, resetDayOfWeek_clock = clock, lastChangedBy = localDeviceId)
+                                SharedSettingsRepository.save(context, sharedSettings)
+                            }
+                        },
                         resetDayOfMonth = resetDayOfMonth,
-                        onResetDayOfMonthChange = { resetDayOfMonth = it; prefs.edit().putInt("resetDayOfMonth", it).apply() },
+                        onResetDayOfMonthChange = {
+                            resetDayOfMonth = it; prefs.edit().putInt("resetDayOfMonth", it).apply()
+                            if (isSyncConfigured) {
+                                val clock = lamportClock.tick()
+                                sharedSettings = sharedSettings.copy(resetDayOfMonth = it, resetDayOfMonth_clock = clock, lastChangedBy = localDeviceId)
+                                SharedSettingsRepository.save(context, sharedSettings)
+                            }
+                        },
                         safeBudgetAmount = safeBudgetAmount,
                         isManualBudgetEnabled = isManualBudgetEnabled,
                         manualBudgetAmount = manualBudgetAmount,
                         onManualBudgetToggle = { enabled ->
                             isManualBudgetEnabled = enabled
                             prefs.edit().putBoolean("isManualBudgetEnabled", enabled).apply()
+                            if (isSyncConfigured) {
+                                val clock = lamportClock.tick()
+                                sharedSettings = sharedSettings.copy(isManualBudgetEnabled = enabled, isManualBudgetEnabled_clock = clock, lastChangedBy = localDeviceId)
+                                SharedSettingsRepository.save(context, sharedSettings)
+                            }
                         },
                         onManualBudgetAmountChange = { amount ->
                             manualBudgetAmount = amount
                             prefs.edit().putFloat("manualBudgetAmount", amount.toFloat()).apply()
+                            if (isSyncConfigured) {
+                                val clock = lamportClock.tick()
+                                sharedSettings = sharedSettings.copy(manualBudgetAmount = amount, manualBudgetAmount_clock = clock, lastChangedBy = localDeviceId)
+                                SharedSettingsRepository.save(context, sharedSettings)
+                            }
                         },
                         budgetStartDate = budgetStartDate?.format(DateTimeFormatter.ofPattern(dateFormatPattern)),
                         onResetBudget = {
-                            budgetStartDate = BudgetCalculator.currentPeriodStart(budgetPeriod, resetDayOfWeek, resetDayOfMonth)
+                            val tz = if (isSyncConfigured && sharedSettings.familyTimezone.isNotEmpty())
+                                ZoneId.of(sharedSettings.familyTimezone) else null
+                            budgetStartDate = BudgetCalculator.currentPeriodStart(budgetPeriod, resetDayOfWeek, resetDayOfMonth, tz)
                             lastRefreshDate = LocalDate.now()
                             availableCash = budgetAmount
                             // Record period ledger entry
@@ -797,6 +1067,11 @@ class MainActivity : ComponentActivity() {
                                 )
                             )
                             savePeriodLedger()
+                            if (isSyncConfigured) {
+                                val clock = lamportClock.tick()
+                                sharedSettings = sharedSettings.copy(budgetStartDate = budgetStartDate?.toString(), budgetStartDate_clock = clock, lastChangedBy = localDeviceId)
+                                SharedSettingsRepository.save(context, sharedSettings)
+                            }
                             prefs.edit()
                                 .putString("budgetStartDate", budgetStartDate.toString())
                                 .putString("lastRefreshDate", lastRefreshDate.toString())
@@ -805,7 +1080,9 @@ class MainActivity : ComponentActivity() {
                         },
                         onRecalculate = {
                             if (budgetStartDate == null || availableCash == 0.0) {
-                                budgetStartDate = BudgetCalculator.currentPeriodStart(budgetPeriod, resetDayOfWeek, resetDayOfMonth)
+                                val tz = if (isSyncConfigured && sharedSettings.familyTimezone.isNotEmpty())
+                                    ZoneId.of(sharedSettings.familyTimezone) else null
+                                budgetStartDate = BudgetCalculator.currentPeriodStart(budgetPeriod, resetDayOfWeek, resetDayOfMonth, tz)
                                 lastRefreshDate = LocalDate.now()
                                 availableCash = budgetAmount
                                 prefs.edit()
@@ -815,8 +1092,266 @@ class MainActivity : ComponentActivity() {
                                     .apply()
                             }
                         },
+                        isSyncConfigured = isSyncConfigured,
+                        isAdmin = isSyncAdmin,
                         onBack = { currentScreen = "settings" },
                         onHelpClick = { currentScreen = "budget_config_help" }
+                    )
+                    "family_sync" -> FamilySyncScreen(
+                        isConfigured = isSyncConfigured,
+                        groupId = syncGroupId,
+                        isAdmin = isSyncAdmin,
+                        deviceName = GroupManager.getDeviceName(context),
+                        localDeviceId = localDeviceId,
+                        devices = syncDevices,
+                        syncStatus = syncStatus,
+                        lastSyncTime = lastSyncTime,
+                        familyTimezone = sharedSettings.familyTimezone,
+                        onTimezoneChange = { tz ->
+                            val clock = lamportClock.tick()
+                            sharedSettings = sharedSettings.copy(
+                                familyTimezone = tz,
+                                familyTimezone_clock = clock,
+                                lastChangedBy = localDeviceId
+                            )
+                            SharedSettingsRepository.save(context, sharedSettings)
+                        },
+                        showAttribution = sharedSettings.showAttribution,
+                        onShowAttributionChange = { enabled ->
+                            val clock = lamportClock.tick()
+                            sharedSettings = sharedSettings.copy(
+                                showAttribution = enabled,
+                                showAttribution_clock = clock,
+                                lastChangedBy = localDeviceId
+                            )
+                            SharedSettingsRepository.save(context, sharedSettings)
+                        },
+                        staleDays = staleDays,
+                        pendingAdminClaim = pendingAdminClaim,
+                        onClaimAdmin = {
+                            coroutineScope.launch {
+                                try {
+                                    val gId = syncGroupId ?: return@launch
+                                    val now = System.currentTimeMillis()
+                                    val claim = AdminClaim(
+                                        claimantDeviceId = localDeviceId,
+                                        claimantName = GroupManager.getDeviceName(context),
+                                        claimedAt = now,
+                                        expiresAt = now + 24 * 60 * 60 * 1000L
+                                    )
+                                    FirestoreService.createAdminClaim(gId, claim)
+                                    pendingAdminClaim = FirestoreService.getAdminClaim(gId)
+                                } catch (_: Exception) {}
+                            }
+                        },
+                        onObjectClaim = {
+                            coroutineScope.launch {
+                                try {
+                                    val gId = syncGroupId ?: return@launch
+                                    FirestoreService.addObjection(gId, localDeviceId)
+                                    pendingAdminClaim = FirestoreService.getAdminClaim(gId)
+                                } catch (_: Exception) {}
+                            }
+                        },
+                        syncErrorMessage = syncErrorMessage,
+                        onCreateGroup = {
+                            coroutineScope.launch {
+                                try {
+                                    val info = GroupManager.createGroup(context)
+                                    // Register this device as admin
+                                    FirestoreService.registerDevice(
+                                        info.groupId,
+                                        localDeviceId,
+                                        GroupManager.getDeviceName(context),
+                                        isAdmin = true
+                                    )
+                                    // Initialize group doc with nextDeltaVersion
+                                    val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                    db.collection("groups").document(info.groupId)
+                                        .set(mapOf("nextDeltaVersion" to 1L, "createdAt" to System.currentTimeMillis()))
+                                    // Initialize SharedSettings from current app_prefs
+                                    val clock = lamportClock.tick()
+                                    sharedSettings = SharedSettings(
+                                        currency = currencySymbol,
+                                        budgetPeriod = budgetPeriod.name,
+                                        budgetStartDate = budgetStartDate?.toString(),
+                                        isManualBudgetEnabled = isManualBudgetEnabled,
+                                        manualBudgetAmount = manualBudgetAmount,
+                                        weekStartSunday = weekStartSunday,
+                                        resetDayOfWeek = resetDayOfWeek,
+                                        resetDayOfMonth = resetDayOfMonth,
+                                        resetHour = resetHour,
+                                        familyTimezone = java.util.TimeZone.getDefault().id,
+                                        matchDays = matchDays,
+                                        matchPercent = matchPercent,
+                                        matchDollar = matchDollar,
+                                        matchChars = matchChars,
+                                        lastChangedBy = localDeviceId,
+                                        currency_clock = clock,
+                                        budgetPeriod_clock = clock,
+                                        budgetStartDate_clock = clock,
+                                        isManualBudgetEnabled_clock = clock,
+                                        manualBudgetAmount_clock = clock,
+                                        weekStartSunday_clock = clock,
+                                        resetDayOfWeek_clock = clock,
+                                        resetDayOfMonth_clock = clock,
+                                        resetHour_clock = clock,
+                                        familyTimezone_clock = clock,
+                                        matchDays_clock = clock,
+                                        matchPercent_clock = clock,
+                                        matchDollar_clock = clock,
+                                        matchChars_clock = clock
+                                    )
+                                    SharedSettingsRepository.save(context, sharedSettings)
+                                    syncGroupId = info.groupId
+                                    isSyncAdmin = true
+                                    isSyncConfigured = true
+                                    syncStatus = "synced"
+                                } catch (_: Exception) {
+                                    syncStatus = "error"
+                                }
+                            }
+                        },
+                        onJoinGroup = { code ->
+                            coroutineScope.launch {
+                                try {
+                                    val success = GroupManager.joinGroup(context, code)
+                                    if (success) {
+                                        syncGroupId = GroupManager.getGroupId(context)
+                                        isSyncAdmin = false
+                                        isSyncConfigured = true
+                                        syncStatus = "synced"
+                                    }
+                                } catch (_: Exception) {
+                                    syncStatus = "error"
+                                }
+                            }
+                        },
+                        onLeaveGroup = {
+                            GroupManager.leaveGroup(context)
+                            isSyncConfigured = false
+                            syncGroupId = null
+                            isSyncAdmin = false
+                            syncStatus = "off"
+                            lastSyncTime = null
+                            syncDevices = emptyList()
+                        },
+                        onDissolveGroup = {
+                            val gId = syncGroupId
+                            if (gId != null) {
+                                coroutineScope.launch {
+                                    try {
+                                        GroupManager.dissolveGroup(context, gId)
+                                        isSyncConfigured = false
+                                        syncGroupId = null
+                                        isSyncAdmin = false
+                                        syncStatus = "off"
+                                        lastSyncTime = null
+                                        syncDevices = emptyList()
+                                    } catch (_: Exception) {}
+                                }
+                            }
+                        },
+                        onSyncNow = {
+                            coroutineScope.launch {
+                                val gId = GroupManager.getGroupId(context) ?: return@launch
+                                val key = GroupManager.getEncryptionKey(context) ?: return@launch
+                                val engine = SyncEngine(context, gId, localDeviceId, key, lamportClock)
+                                syncStatus = "syncing"
+                                try {
+                                    val result = engine.sync(
+                                        transactions.toList(),
+                                        recurringExpenses.toList(),
+                                        incomeSources.toList(),
+                                        savingsGoals.toList(),
+                                        amortizationEntries.toList(),
+                                        categories.toList(),
+                                        sharedSettings
+                                    )
+                                    if (result.success) {
+                                        result.mergedTransactions?.let { transactions.clear(); transactions.addAll(it); saveTransactions() }
+                                        result.mergedRecurringExpenses?.let { recurringExpenses.clear(); recurringExpenses.addAll(it); saveRecurringExpenses() }
+                                        result.mergedIncomeSources?.let { incomeSources.clear(); incomeSources.addAll(it); saveIncomeSources() }
+                                        result.mergedSavingsGoals?.let { savingsGoals.clear(); savingsGoals.addAll(it); saveSavingsGoals() }
+                                        result.mergedAmortizationEntries?.let { amortizationEntries.clear(); amortizationEntries.addAll(it); saveAmortizationEntries() }
+                                        result.mergedCategories?.let { categories.clear(); categories.addAll(it); saveCategories() }
+                                        result.mergedSharedSettings?.let { merged ->
+                                            sharedSettings = merged
+                                            currencySymbol = merged.currency
+                                            budgetPeriod = try { BudgetPeriod.valueOf(merged.budgetPeriod) } catch (_: Exception) { budgetPeriod }
+                                            resetHour = merged.resetHour
+                                            resetDayOfWeek = merged.resetDayOfWeek
+                                            resetDayOfMonth = merged.resetDayOfMonth
+                                            isManualBudgetEnabled = merged.isManualBudgetEnabled
+                                            manualBudgetAmount = merged.manualBudgetAmount
+                                            weekStartSunday = merged.weekStartSunday
+                                            matchDays = merged.matchDays
+                                            matchPercent = merged.matchPercent
+                                            matchDollar = merged.matchDollar
+                                            matchChars = merged.matchChars
+                                            prefs.edit()
+                                                .putString("currencySymbol", merged.currency)
+                                                .putString("budgetPeriod", merged.budgetPeriod)
+                                                .putInt("resetHour", merged.resetHour)
+                                                .putInt("resetDayOfWeek", merged.resetDayOfWeek)
+                                                .putInt("resetDayOfMonth", merged.resetDayOfMonth)
+                                                .putBoolean("isManualBudgetEnabled", merged.isManualBudgetEnabled)
+                                                .putFloat("manualBudgetAmount", merged.manualBudgetAmount.toFloat())
+                                                .putBoolean("weekStartSunday", merged.weekStartSunday)
+                                                .putInt("matchDays", merged.matchDays)
+                                                .putFloat("matchPercent", merged.matchPercent)
+                                                .putInt("matchDollar", merged.matchDollar)
+                                                .putInt("matchChars", merged.matchChars)
+                                                .apply()
+                                        }
+                                        syncStatus = "synced"
+                                        syncErrorMessage = null
+                                        lastSyncTime = "just now"
+                                        pendingAdminClaim = result.pendingAdminClaim
+                                        val lastSync = syncPrefs.getLong("lastSuccessfulSync", 0L)
+                                        staleDays = if (lastSync > 0L) ((System.currentTimeMillis() - lastSync) / (24 * 60 * 60 * 1000L)).toInt() else 0
+                                        try {
+                                            syncDevices = GroupManager.getDevices(gId)
+                                            isSyncAdmin = GroupManager.isAdmin(context)
+                                        } catch (_: Exception) {}
+                                    } else {
+                                        syncStatus = "error"
+                                        syncErrorMessage = result.error
+                                        pendingAdminClaim = result.pendingAdminClaim
+                                        if (result.error == "removed_from_group" || result.error == "group_deleted") {
+                                            GroupManager.leaveGroup(context)
+                                            isSyncConfigured = false
+                                            syncGroupId = null
+                                            isSyncAdmin = false
+                                            syncStatus = "off"
+                                            lastSyncTime = null
+                                            syncDevices = emptyList()
+                                            pendingAdminClaim = null
+                                        }
+                                    }
+                                } catch (_: Exception) {
+                                    syncStatus = "error"
+                                }
+                            }
+                        },
+                        onGeneratePairingCode = {
+                            val gId = syncGroupId
+                            val key = GroupManager.getEncryptionKey(context)
+                            if (gId != null && key != null) {
+                                coroutineScope.launch {
+                                    try {
+                                        generatedPairingCode = GroupManager.generatePairingCode(context, gId, key)
+                                    } catch (_: Exception) {}
+                                }
+                            }
+                        },
+                        generatedPairingCode = generatedPairingCode,
+                        onDismissPairingCode = { generatedPairingCode = null },
+                        onHelpClick = { currentScreen = "family_sync_help" },
+                        onBack = {
+                            generatedPairingCode = null
+                            currentScreen = "settings"
+                        }
                     )
                     "dashboard_help" -> DashboardHelpScreen(
                         onBack = { currentScreen = "main" }
@@ -838,6 +1373,9 @@ class MainActivity : ComponentActivity() {
                     )
                     "budget_config_help" -> BudgetConfigHelpScreen(
                         onBack = { currentScreen = "budget_config" }
+                    )
+                    "family_sync_help" -> FamilySyncHelpScreen(
+                        onBack = { currentScreen = "family_sync" }
                     )
                 }
 
@@ -923,7 +1461,7 @@ class MainActivity : ComponentActivity() {
 
                 // Dashboard recurring expense match dialog
                 if (dashShowRecurringDialog && dashPendingRecurringTxn != null && dashPendingRecurringMatch != null) {
-                    val recurringCategoryId = categories.find { it.name == "Recurring" }?.id
+                    val recurringCategoryId = categories.find { it.tag == "recurring" }?.id
                     val dateCloseEnough = isRecurringDateCloseEnough(dashPendingRecurringTxn!!.date, dashPendingRecurringMatch!!)
                     RecurringExpenseConfirmDialog(
                         transaction = dashPendingRecurringTxn!!,
@@ -955,7 +1493,7 @@ class MainActivity : ComponentActivity() {
 
                 // Dashboard amortization match dialog
                 if (dashShowAmortizationDialog && dashPendingAmortizationTxn != null && dashPendingAmortizationMatch != null) {
-                    val amortizationCategoryId = categories.find { it.name == "Amortization" }?.id
+                    val amortizationCategoryId = categories.find { it.tag == "amortization" }?.id
                     AmortizationConfirmDialog(
                         transaction = dashPendingAmortizationTxn!!,
                         amortizationEntry = dashPendingAmortizationMatch!!,
@@ -991,7 +1529,7 @@ class MainActivity : ComponentActivity() {
                         currencySymbol = currencySymbol,
                         dateFormatter = dateFormatter,
                         onConfirmBudgetIncome = {
-                            val recurringIncomeCatId = categories.find { it.name == "Recurring Income" }?.id
+                            val recurringIncomeCatId = categories.find { it.tag == "recurring_income" }?.id
                             val baseTxn = dashPendingBudgetIncomeTxn!!
                             val txn = baseTxn.copy(
                                 isBudgetIncome = true,
