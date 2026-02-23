@@ -68,6 +68,7 @@ object GroupManager {
         random.nextBytes(key)
 
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        // TODO(security): Move encryption key to EncryptedSharedPreferences
         prefs.edit()
             .putString("groupId", groupId)
             .putString("encryptionKey", Base64.encodeToString(key, Base64.NO_WRAP))
@@ -87,6 +88,7 @@ object GroupManager {
         val pairingData = FirestoreService.redeemPairingCode(pairingCode) ?: return false
 
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        // TODO(security): Move encryption key to EncryptedSharedPreferences
         prefs.edit()
             .putString("groupId", pairingData.groupId)
             .putString("encryptionKey", pairingData.encryptedKey)

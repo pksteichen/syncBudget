@@ -25,6 +25,7 @@ class SyncWorker(
     override suspend fun doWork(): Result {
         val syncPrefs = applicationContext.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
         val groupId = syncPrefs.getString("groupId", null) ?: return Result.success()
+        // TODO(security): Move encryption key to EncryptedSharedPreferences
         val keyBase64 = syncPrefs.getString("encryptionKey", null) ?: return Result.success()
 
         // Check if app is in foreground — skip to avoid race

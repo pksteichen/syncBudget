@@ -2,24 +2,28 @@ package com.syncbudget.app.data.sync
 
 import android.content.Context
 import android.content.SharedPreferences
+import java.util.concurrent.atomic.AtomicLong
 
 class LamportClock(context: Context) {
 
     private val prefs: SharedPreferences =
         context.getSharedPreferences("lamport_clock", Context.MODE_PRIVATE)
 
-    private var counter: Long = prefs.getLong("clock", 0L)
+    private val counter = AtomicLong(prefs.getLong("clock", 0L))
 
-    val value: Long get() = counter
+    val value: Long get() = counter.get()
 
+    @Synchronized
     fun tick(): Long {
-        counter++
-        prefs.edit().putLong("clock", counter).apply()
-        return counter
+        val newVal = counter.incrementAndGet()
+        prefs.edit().putLong("clock", newVal).apply()
+        return newVal
     }
 
+    @Synchronized
     fun merge(remoteClock: Long) {
-        counter = maxOf(counter, remoteClock) + 1
-        prefs.edit().putLong("clock", counter).apply()
+        val newVal = maxOf(counter.get(), remoteClock) + 1
+        counter.set(newVal)
+        prefs.edit().putLong("clock", newVal).apply()
     }
 }

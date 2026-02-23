@@ -100,7 +100,8 @@ class SyncEngine(
                     val json = JSONObject(String(decrypted))
                     packets.add(DeltaSerializer.deserialize(json))
                 } catch (e: Exception) {
-                    continue // skip unreadable deltas
+                    android.util.Log.w("SyncEngine", "Skipping unreadable delta from ${delta.sourceDeviceId}: ${e.message}")
+                    continue
                 }
             }
 
@@ -183,6 +184,8 @@ class SyncEngine(
             }
 
             // Step 5: Remap category IDs in transactions (handles different random IDs per device)
+            // Only Transaction has categoryAmounts with categoryId references.
+            // RecurringExpense, IncomeSource, SavingsGoal, AmortizationEntry do not reference categories.
             if (catIdRemap.isNotEmpty()) {
                 for (i in mergedTxns.indices) {
                     val txn = mergedTxns[i]
@@ -253,7 +256,7 @@ class SyncEngine(
             // Step 8: Snapshot maintenance (every 50 deltas)
             if (newSyncVersion > 0 && newSyncVersion % 50 == 0L) {
                 val snapshotJson = SnapshotManager.serializeFullState(
-                    context, mergedTxns, mergedRe, mergedIs, mergedSg, mergedAe, mergedCat, mergedSettings
+                    mergedTxns, mergedRe, mergedIs, mergedSg, mergedAe, mergedCat, mergedSettings
                 )
                 val snapshotBytes = snapshotJson.toString().toByteArray()
                 val encryptedSnapshot = CryptoHelper.encryptWithKey(snapshotBytes, encryptionKey)
@@ -286,7 +289,9 @@ class SyncEngine(
                         adminClaim = claim
                     }
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                android.util.Log.w("SyncEngine", "Failed to check/resolve admin claim", e)
+            }
 
             val hasRemoteChanges = packets.isNotEmpty()
             return SyncResult(
@@ -320,7 +325,7 @@ class SyncEngine(
             val encrypted = Base64.decode(snapshot.encryptedData, Base64.NO_WRAP)
             val decrypted = CryptoHelper.decryptWithKey(encrypted, encryptionKey)
             val json = JSONObject(String(decrypted))
-            val state = SnapshotManager.deserializeFullState(context, json)
+            val state = SnapshotManager.deserializeFullState(json)
             lastSyncVersion = snapshot.snapshotVersion
             FirestoreService.updateDeviceMetadata(groupId, deviceId, snapshot.snapshotVersion)
             SyncResult(

@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -322,7 +323,9 @@ class MainActivity : ComponentActivity() {
                 // Initial device list fetch
                 try {
                     syncDevices = GroupManager.getDevices(groupId)
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    android.util.Log.w("SyncLoop", "Failed to fetch initial device list", e)
+                }
 
                 while (true) {
                     try {
@@ -347,36 +350,38 @@ class MainActivity : ComponentActivity() {
                             existingCatIdRemap = existingRemap
                         )
                         if (result.success) {
-                            result.mergedTransactions?.let { merged ->
-                                transactions.clear()
-                                transactions.addAll(merged)
-                                saveTransactions()
+                            Snapshot.withMutableSnapshot {
+                                result.mergedTransactions?.let { merged ->
+                                    transactions.clear()
+                                    transactions.addAll(merged)
+                                }
+                                result.mergedRecurringExpenses?.let { merged ->
+                                    recurringExpenses.clear()
+                                    recurringExpenses.addAll(merged)
+                                }
+                                result.mergedIncomeSources?.let { merged ->
+                                    incomeSources.clear()
+                                    incomeSources.addAll(merged)
+                                }
+                                result.mergedSavingsGoals?.let { merged ->
+                                    savingsGoals.clear()
+                                    savingsGoals.addAll(merged)
+                                }
+                                result.mergedAmortizationEntries?.let { merged ->
+                                    amortizationEntries.clear()
+                                    amortizationEntries.addAll(merged)
+                                }
+                                result.mergedCategories?.let { merged ->
+                                    categories.clear()
+                                    categories.addAll(merged)
+                                }
                             }
-                            result.mergedRecurringExpenses?.let { merged ->
-                                recurringExpenses.clear()
-                                recurringExpenses.addAll(merged)
-                                saveRecurringExpenses()
-                            }
-                            result.mergedIncomeSources?.let { merged ->
-                                incomeSources.clear()
-                                incomeSources.addAll(merged)
-                                saveIncomeSources()
-                            }
-                            result.mergedSavingsGoals?.let { merged ->
-                                savingsGoals.clear()
-                                savingsGoals.addAll(merged)
-                                saveSavingsGoals()
-                            }
-                            result.mergedAmortizationEntries?.let { merged ->
-                                amortizationEntries.clear()
-                                amortizationEntries.addAll(merged)
-                                saveAmortizationEntries()
-                            }
-                            result.mergedCategories?.let { merged ->
-                                categories.clear()
-                                categories.addAll(merged)
-                                saveCategories()
-                            }
+                            result.mergedTransactions?.let { saveTransactions() }
+                            result.mergedRecurringExpenses?.let { saveRecurringExpenses() }
+                            result.mergedIncomeSources?.let { saveIncomeSources() }
+                            result.mergedSavingsGoals?.let { saveSavingsGoals() }
+                            result.mergedAmortizationEntries?.let { saveAmortizationEntries() }
+                            result.mergedCategories?.let { saveCategories() }
                             result.mergedSharedSettings?.let { merged ->
                                 sharedSettings = merged
                                 // Apply synced settings to local state
@@ -440,7 +445,9 @@ class MainActivity : ComponentActivity() {
                             try {
                                 syncDevices = GroupManager.getDevices(groupId)
                                 isSyncAdmin = GroupManager.isAdmin(context)
-                            } catch (_: Exception) {}
+                            } catch (e: Exception) {
+                                android.util.Log.w("SyncLoop", "Failed to refresh device list", e)
+                            }
                         } else {
                             syncStatus = "error"
                             syncErrorMessage = result.error
@@ -459,7 +466,8 @@ class MainActivity : ComponentActivity() {
                                 return@LaunchedEffect
                             }
                         }
-                    } catch (_: Exception) {
+                    } catch (e: Exception) {
+                        android.util.Log.e("SyncLoop", "Foreground sync failed", e)
                         syncStatus = "error"
                     }
                     delay(60_000)

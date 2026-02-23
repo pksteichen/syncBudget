@@ -40,3 +40,17 @@
     b) Scheduled Cloud Function to delete expired codes daily
 
     See firebase-setup.txt section 8 for full details.
+
+[ ] Migrate Encryption Key to EncryptedSharedPreferences (Audit #8)
+    ─────────────────────────────────────────────────────────────────
+    The sync encryption key is currently stored as Base64 in plain
+    SharedPreferences. While only accessible to the app itself
+    (MODE_PRIVATE), it is exposed on rooted devices or via backups.
+
+    Migration plan:
+    1. Add dependency: androidx.security:security-crypto:1.1.0-alpha06
+    2. Create SecureKeyStore helper using EncryptedSharedPreferences
+    3. On first access, migrate key from old prefs to encrypted prefs
+    4. Update GroupManager.kt, SyncWorker.kt, SyncEngine.kt
+
+    Affected files marked with TODO(security) comments.

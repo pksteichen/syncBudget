@@ -22,6 +22,7 @@ object BudgetCalculator {
         when (repeatType) {
             RepeatType.DAYS -> {
                 val sd = startDate ?: return dates
+                if (repeatInterval <= 0) return dates
                 var d = sd
                 // Advance to rangeStart
                 if (d.isBefore(rangeStart)) {
@@ -37,6 +38,7 @@ object BudgetCalculator {
             }
             RepeatType.WEEKS -> {
                 val sd = startDate ?: return dates
+                if (repeatInterval <= 0) return dates
                 val stepDays = (repeatInterval * 7).toLong()
                 var d = sd
                 if (d.isBefore(rangeStart)) {
@@ -66,6 +68,7 @@ object BudgetCalculator {
             }
             RepeatType.MONTHS -> {
                 val day = monthDay1 ?: return dates
+                if (repeatInterval <= 0) return dates
                 // Use startDate to anchor the phase for multi-month intervals
                 var month = if (startDate != null && repeatInterval > 1) {
                     var m = startDate.withDayOfMonth(1)
@@ -196,6 +199,7 @@ object BudgetCalculator {
         var total = 0.0
         for (entry in entries) {
             if (entry.isPaused) continue
+            if (entry.totalPeriods <= 0) continue
             val elapsed = when (budgetPeriod) {
                 BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(entry.startDate, today).toInt()
                 BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(entry.startDate, today).toInt()
