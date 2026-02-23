@@ -1,5 +1,6 @@
 package com.syncbudget.app.data.sync
 
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
@@ -158,7 +159,7 @@ object FirestoreService {
             val current = snapshot.getLong("nextDeltaVersion") ?: 1L
             transaction.set(groupRef, mapOf(
                 "nextDeltaVersion" to current + 1,
-                "lastActivity" to System.currentTimeMillis()
+                "lastActivity" to FieldValue.serverTimestamp()
             ), SetOptions.merge())
             current
         }.await()
@@ -166,7 +167,7 @@ object FirestoreService {
 
     suspend fun updateGroupActivity(groupId: String) {
         db.collection("groups").document(groupId)
-            .set(mapOf("lastActivity" to System.currentTimeMillis()), SetOptions.merge())
+            .set(mapOf("lastActivity" to FieldValue.serverTimestamp()), SetOptions.merge())
             .await()
     }
 

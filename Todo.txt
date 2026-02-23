@@ -1,0 +1,42 @@
+================================================================================
+  SecureSync Budget — Outstanding Tasks
+================================================================================
+
+[ ] TTL Policies (requires Blaze plan)
+    ─────────────────────────────────────
+    The Spark (free) plan does not support TTL policies. When you upgrade to
+    the Blaze (pay-as-you-go) plan, create the following TTL policies in the
+    Google Cloud Console:
+
+    Navigate to: https://console.cloud.google.com/firestore/databases/-default-/ttl
+
+    1. Collection group: groups       | Timestamp field: lastActivity
+    2. Collection group: pairing_codes | Timestamp field: expiresAt
+
+    The app code is already updated to write Firestore server timestamps for
+    lastActivity (FieldValue.serverTimestamp() in FirestoreService.kt), so
+    TTL will work correctly once enabled.
+
+    See firebase-setup.txt sections 5 and 8 for full details.
+
+[ ] Cloud Function for Subcollection Cleanup (requires Blaze plan)
+    ─────────────────────────────────────────────────────────────────
+    When a group document is deleted (by TTL or dissolveGroup), its
+    subcollections (deltas, devices, snapshots, adminClaim) are NOT
+    auto-deleted. Deploy a Cloud Function to clean these up automatically.
+
+    This is optional — orphaned subcollections are encrypted and cost
+    very little storage. But for a cleaner setup, deploy the function
+    described in firebase-setup.txt section 7.
+
+    Requires: Blaze plan + Firebase CLI (npm install -g firebase-tools)
+
+[ ] Expired Pairing Code Cleanup (requires Blaze plan)
+    ─────────────────────────────────────────────────────
+    Pairing codes expire after 10 minutes but unredeemed codes stay in
+    Firestore. Two cleanup options:
+
+    a) TTL policy on pairing_codes (covered above in TTL Policies task)
+    b) Scheduled Cloud Function to delete expired codes daily
+
+    See firebase-setup.txt section 8 for full details.
