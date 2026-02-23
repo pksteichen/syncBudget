@@ -414,7 +414,7 @@ class SyncEngine(
         localDeviceId: String,
         mergeFn: (T, T) -> T
     ): MutableList<T> {
-        val remote = when (change.type) {
+        val deserialized: Any = when (change.type) {
             "transaction" -> deserializeTransaction(change)
             "recurring_expense" -> deserializeRecurringExpense(change)
             "income_source" -> deserializeIncomeSource(change)
@@ -422,7 +422,14 @@ class SyncEngine(
             "amortization_entry" -> deserializeAmortizationEntry(change)
             "category" -> deserializeCategory(change)
             else -> return list
-        } as? T ?: return list
+        }
+        val remote = deserialized as? T
+        if (remote == null) {
+            android.util.Log.w("SyncEngine", "Type mismatch merging ${change.type} id=${change.id}: " +
+                "expected ${list.firstOrNull()?.javaClass?.simpleName ?: "unknown"}, " +
+                "got ${deserialized.javaClass.simpleName}")
+            return list
+        }
 
         val existingIndex = list.indexOfFirst { getId(it) == change.id }
         if (existingIndex >= 0) {

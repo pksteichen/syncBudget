@@ -204,7 +204,8 @@ object BudgetCalculator {
                 BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(entry.startDate, today).toInt()
                 BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(entry.startDate, today).toInt()
                 BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(entry.startDate, today).toInt()
-            }.coerceIn(0, entry.totalPeriods)
+            }.coerceAtLeast(0)
+            // Active when elapsed periods < totalPeriods (elapsed == totalPeriods means fully amortized)
             if (elapsed < entry.totalPeriods) {
                 total += entry.amount / entry.totalPeriods.toDouble()
             }

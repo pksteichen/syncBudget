@@ -157,8 +157,14 @@ class MainActivity : ComponentActivity() {
 
             // Budget state
             var isManualBudgetEnabled by remember { mutableStateOf(prefs.getBoolean("isManualBudgetEnabled", false)) }
-            var manualBudgetAmount by remember { mutableDoubleStateOf(prefs.getFloat("manualBudgetAmount", 0f).toDouble()) }
-            var availableCash by remember { mutableDoubleStateOf(prefs.getFloat("availableCash", 0f).toDouble()) }
+            var manualBudgetAmount by remember { mutableDoubleStateOf(
+                prefs.getString("manualBudgetAmount", null)?.toDoubleOrNull()
+                    ?: prefs.getFloat("manualBudgetAmount", 0f).toDouble()
+            ) }
+            var availableCash by remember { mutableDoubleStateOf(
+                prefs.getString("availableCash", null)?.toDoubleOrNull()
+                    ?: prefs.getFloat("availableCash", 0f).toDouble()
+            ) }
             var budgetStartDate by remember {
                 mutableStateOf<LocalDate?>(
                     prefs.getString("budgetStartDate", null)?.let { LocalDate.parse(it) }
@@ -292,8 +298,10 @@ class MainActivity : ComponentActivity() {
             var syncErrorMessage by remember { mutableStateOf<String?>(null) }
             var pendingAdminClaim by remember { mutableStateOf<AdminClaim?>(null) }
 
+            // availableCash may go negative (= overspent). Guard against NaN/Infinity.
             fun persistAvailableCash() {
-                prefs.edit().putFloat("availableCash", availableCash.toFloat()).apply()
+                if (availableCash.isNaN() || availableCash.isInfinite()) availableCash = 0.0
+                prefs.edit().putString("availableCash", availableCash.toString()).apply()
                 if (isSyncConfigured) {
                     val acClock = lamportClock.tick()
                     sharedSettings = sharedSettings.copy(
@@ -442,7 +450,7 @@ class MainActivity : ComponentActivity() {
                                     .putInt("resetDayOfWeek", merged.resetDayOfWeek)
                                     .putInt("resetDayOfMonth", merged.resetDayOfMonth)
                                     .putBoolean("isManualBudgetEnabled", merged.isManualBudgetEnabled)
-                                    .putFloat("manualBudgetAmount", merged.manualBudgetAmount.toFloat())
+                                    .putString("manualBudgetAmount", merged.manualBudgetAmount.toString())
                                     .putBoolean("weekStartSunday", merged.weekStartSunday)
                                     .putInt("matchDays", merged.matchDays)
                                     .putFloat("matchPercent", merged.matchPercent)
@@ -452,7 +460,7 @@ class MainActivity : ComponentActivity() {
                                     prefsEditor
                                         .putString("budgetStartDate", syncedStartDate.toString())
                                         .putString("lastRefreshDate", lastRefreshDate.toString())
-                                        .putFloat("availableCash", availableCash.toFloat())
+                                        .putString("availableCash", availableCash.toString())
                                 }
                                 prefsEditor.apply()
                             }
@@ -662,7 +670,7 @@ class MainActivity : ComponentActivity() {
                         saveSavingsGoals()
 
                         prefs.edit()
-                            .putFloat("availableCash", availableCash.toFloat())
+                            .putString("availableCash", availableCash.toString())
                             .putString("lastRefreshDate", lastRefreshDate.toString())
                             .apply()
                         // Sync availableCash to family group
@@ -1095,8 +1103,10 @@ class MainActivity : ComponentActivity() {
                             resetDayOfWeek = prefs.getInt("resetDayOfWeek", 7)
                             resetDayOfMonth = prefs.getInt("resetDayOfMonth", 1)
                             isManualBudgetEnabled = prefs.getBoolean("isManualBudgetEnabled", false)
-                            manualBudgetAmount = prefs.getFloat("manualBudgetAmount", 0f).toDouble()
-                            availableCash = prefs.getFloat("availableCash", 0f).toDouble()
+                            manualBudgetAmount = prefs.getString("manualBudgetAmount", null)?.toDoubleOrNull()
+                                ?: prefs.getFloat("manualBudgetAmount", 0f).toDouble()
+                            availableCash = prefs.getString("availableCash", null)?.toDoubleOrNull()
+                                ?: prefs.getFloat("availableCash", 0f).toDouble()
                             budgetStartDate = prefs.getString("budgetStartDate", null)?.let { LocalDate.parse(it) }
                             lastRefreshDate = prefs.getString("lastRefreshDate", null)?.let { LocalDate.parse(it) }
                             weekStartSunday = prefs.getBoolean("weekStartSunday", true)
@@ -1373,7 +1383,7 @@ class MainActivity : ComponentActivity() {
                         },
                         onManualBudgetAmountChange = { amount ->
                             manualBudgetAmount = amount
-                            prefs.edit().putFloat("manualBudgetAmount", amount.toFloat()).apply()
+                            prefs.edit().putString("manualBudgetAmount", amount.toString()).apply()
                             if (isSyncConfigured) {
                                 val clock = lamportClock.tick()
                                 sharedSettings = sharedSettings.copy(manualBudgetAmount = amount, manualBudgetAmount_clock = clock, lastChangedBy = localDeviceId)
@@ -1404,7 +1414,7 @@ class MainActivity : ComponentActivity() {
                             prefs.edit()
                                 .putString("budgetStartDate", budgetStartDate.toString())
                                 .putString("lastRefreshDate", lastRefreshDate.toString())
-                                .putFloat("availableCash", availableCash.toFloat())
+                                .putString("availableCash", availableCash.toString())
                                 .apply()
                         },
                         isSyncConfigured = isSyncConfigured,
@@ -1717,7 +1727,7 @@ class MainActivity : ComponentActivity() {
                                                 .putInt("resetDayOfWeek", merged.resetDayOfWeek)
                                                 .putInt("resetDayOfMonth", merged.resetDayOfMonth)
                                                 .putBoolean("isManualBudgetEnabled", merged.isManualBudgetEnabled)
-                                                .putFloat("manualBudgetAmount", merged.manualBudgetAmount.toFloat())
+                                                .putString("manualBudgetAmount", merged.manualBudgetAmount.toString())
                                                 .putBoolean("weekStartSunday", merged.weekStartSunday)
                                                 .putInt("matchDays", merged.matchDays)
                                                 .putFloat("matchPercent", merged.matchPercent)

@@ -112,7 +112,7 @@ object DeltaBuilder {
         if (settings.resetHour_clock > lastPushedClock) fields["resetHour"] = FieldDelta(settings.resetHour, settings.resetHour_clock)
         if (settings.familyTimezone_clock > lastPushedClock) fields["familyTimezone"] = FieldDelta(settings.familyTimezone, settings.familyTimezone_clock)
         if (settings.matchDays_clock > lastPushedClock) fields["matchDays"] = FieldDelta(settings.matchDays, settings.matchDays_clock)
-        if (settings.matchPercent_clock > lastPushedClock) fields["matchPercent"] = FieldDelta(settings.matchPercent.toDouble(), settings.matchPercent_clock)
+        if (settings.matchPercent_clock > lastPushedClock) fields["matchPercent"] = FieldDelta(settings.matchPercent, settings.matchPercent_clock)
         if (settings.matchDollar_clock > lastPushedClock) fields["matchDollar"] = FieldDelta(settings.matchDollar, settings.matchDollar_clock)
         if (settings.matchChars_clock > lastPushedClock) fields["matchChars"] = FieldDelta(settings.matchChars, settings.matchChars_clock)
         if (settings.showAttribution_clock > lastPushedClock) fields["showAttribution"] = FieldDelta(settings.showAttribution, settings.showAttribution_clock)
