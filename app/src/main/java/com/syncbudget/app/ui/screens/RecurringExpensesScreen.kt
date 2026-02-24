@@ -54,8 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import com.syncbudget.app.ui.theme.AdAwareDialog
 import com.syncbudget.app.data.RecurringExpense
 import com.syncbudget.app.data.RepeatType
 import com.syncbudget.app.data.generateRecurringExpenseId
@@ -303,9 +302,8 @@ private fun AddEditExpenseDialog(
         RepeatType.ANNUAL -> S.common.repeatTypeAnnual
     }
 
-    Dialog(
+    AdAwareDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
         Surface(
             modifier = Modifier

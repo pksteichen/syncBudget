@@ -1,13 +1,24 @@
 package com.syncbudget.app.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.syncbudget.app.ui.strings.AppStrings
 import com.syncbudget.app.ui.strings.EnglishStrings
 import com.syncbudget.app.ui.strings.LocalStrings
@@ -32,6 +43,40 @@ val LocalSyncBudgetColors = staticCompositionLocalOf {
         displayBorder = DarkDisplayBorder,
         userCategoryIconTint = LightCardBackground
     )
+}
+
+/** Height of the ad banner (0.dp when hidden for paid users). */
+val LocalAdBannerHeight = compositionLocalOf { 0.dp }
+
+/**
+ * Drop-in replacement for Dialog that avoids overlapping the ad banner.
+ * Wraps content in a full-size Box with status-bar + ad-banner top padding,
+ * centering the dialog content in the remaining space.
+ */
+@Composable
+fun AdAwareDialog(
+    onDismissRequest: () -> Unit,
+    properties: DialogProperties = DialogProperties(
+        usePlatformDefaultWidth = false,
+        decorFitsSystemWindows = false
+    ),
+    content: @Composable () -> Unit
+) {
+    val adPadding = LocalAdBannerHeight.current
+    Dialog(
+        onDismissRequest = onDismissRequest,
+        properties = properties
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(top = adPadding),
+            contentAlignment = Alignment.Center
+        ) {
+            content()
+        }
+    }
 }
 
 private val DarkColorScheme = darkColorScheme(

@@ -57,8 +57,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import com.syncbudget.app.ui.theme.AdAwareDialog
 import com.syncbudget.app.data.BudgetPeriod
 import com.syncbudget.app.data.IncomeSource
 import com.syncbudget.app.data.RepeatType
@@ -532,9 +531,8 @@ private fun AddEditIncomeDialog(
 
     val isValid = isSourceValid && isAmountValid && isRepeatValid
 
-    Dialog(
+    AdAwareDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
         Surface(
             modifier = Modifier
@@ -982,9 +980,8 @@ private fun BudgetResetDialog(
     val selectedDayOfWeekName = DayOfWeek.of(selectedDayOfWeek)
         .getDisplayName(TextStyle.FULL, Locale.getDefault())
 
-    Dialog(
+    AdAwareDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(0.92f).imePadding(),

@@ -88,6 +88,22 @@ import com.syncbudget.app.ui.strings.AppStrings
 import com.syncbudget.app.ui.strings.EnglishStrings
 import com.syncbudget.app.ui.strings.SpanishStrings
 import com.syncbudget.app.ui.theme.SyncBudgetTheme
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.CompositionLocalProvider
+import com.syncbudget.app.ui.theme.LocalAdBannerHeight
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -694,6 +710,25 @@ class MainActivity : ComponentActivity() {
             }
 
             SyncBudgetTheme(strings = strings) {
+              val adBannerHeight = if (!isPaidUser) 50.dp else 0.dp
+              CompositionLocalProvider(LocalAdBannerHeight provides adBannerHeight) {
+              Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+                // Ad banner placeholder (320x50 standard banner)
+                if (!isPaidUser) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp)
+                            .background(Color.Black)
+                            .border(1.dp, Color.Gray),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Ad", color = Color.Gray, fontSize = 12.sp)
+                    }
+                }
+
+                // Screen content
+                Box(modifier = Modifier.weight(1f)) {
                 if (currentScreen != "main") {
                     BackHandler {
                         currentScreen = when (currentScreen) {
@@ -2026,7 +2061,10 @@ class MainActivity : ComponentActivity() {
                         }
                     )
                 }
-            }
+                } // Box(weight)
+              } // Column
+              } // CompositionLocalProvider
+            } // SyncBudgetTheme
         }
     }
 }

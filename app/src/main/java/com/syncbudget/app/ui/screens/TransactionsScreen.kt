@@ -88,8 +88,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import com.syncbudget.app.ui.theme.AdAwareDialog
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -1222,9 +1221,8 @@ fun TransactionsScreen(
     if (showBulkMerchantEdit) {
         var newMerchant by remember { mutableStateOf("") }
         val count = selectedIds.count { it.value }
-        Dialog(
+        AdAwareDialog(
             onDismissRequest = { showBulkMerchantEdit = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
         ) {
             Surface(
                 modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
@@ -1287,14 +1285,13 @@ fun TransactionsScreen(
 
     // Save dialog
     if (showSaveDialog) {
-        Dialog(
+        AdAwareDialog(
             onDismissRequest = {
                 showSaveDialog = false
                 savePassword = ""
                 savePasswordConfirm = ""
                 saveError = null
             },
-            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
         ) {
             Surface(
                 modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
@@ -1539,12 +1536,11 @@ fun TransactionsScreen(
     // Import / Load format selection dialog
     if (showImportFormatDialog) {
         var formatDropdownExpanded by remember { mutableStateOf(false) }
-        Dialog(
+        AdAwareDialog(
             onDismissRequest = {
                 showImportFormatDialog = false
                 encryptedLoadPassword = ""
             },
-            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
         ) {
             Surface(
                 modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
@@ -2393,12 +2389,8 @@ fun TransactionDialog(
 
     val focusManager = LocalFocusManager.current
 
-    Dialog(
+    AdAwareDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false
-        )
     ) {
         Surface(
             modifier = Modifier
@@ -3273,9 +3265,8 @@ private fun TextSearchDialog(
     val S = LocalStrings.current
     var query by remember { mutableStateOf("") }
 
-    Dialog(
+    AdAwareDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
@@ -3333,9 +3324,8 @@ private fun AmountSearchDialog(
         unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
     )
 
-    Dialog(
+    AdAwareDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(0.92f).imePadding(),

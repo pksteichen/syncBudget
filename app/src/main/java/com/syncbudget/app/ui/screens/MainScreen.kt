@@ -74,8 +74,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import com.syncbudget.app.ui.theme.AdAwareDialog
 import com.syncbudget.app.data.BudgetPeriod
 import com.syncbudget.app.data.Category
 import com.syncbudget.app.data.SavingsGoal
@@ -217,6 +216,11 @@ private data class PieWedge(
     val startAngle: Float,
     val sweepAngle: Float
 )
+
+private fun contrastColor(bg: Color): Color {
+    val luminance = 0.299f * bg.red + 0.587f * bg.green + 0.114f * bg.blue
+    return if (luminance > 0.5f) Color.Black else Color.White
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -707,8 +711,8 @@ private fun SpendingPieChart(
                 contentAlignment = Alignment.Center
             ) {
                 val chartSize = min(maxWidth, maxHeight)
-                val pieRadiusDp = chartSize / 2 - 30.dp
-                val iconRadiusDp = pieRadiusDp + 18.dp
+                val pieRadiusDp = chartSize / 2 - 8.dp
+                val iconPlacementRadius = pieRadiusDp * 0.65f
                 val iconSize = 20.dp
 
                 // Draw pie
@@ -731,20 +735,27 @@ private fun SpendingPieChart(
                     }
                 }
 
-                // Position category icons around the pie
-                for (w in wedges) {
-                    val pct = if (totalSpending > 0) w.amount / totalSpending else 0.0
-                    if (pct < 0.04) continue
+                // Separate large and small wedges
+                val largeWedges = wedges.filter {
+                    val pct = if (totalSpending > 0) it.amount / totalSpending else 0.0
+                    pct >= 0.04
+                }
+                val smallWedges = wedges.filter {
+                    val pct = if (totalSpending > 0) it.amount / totalSpending else 0.0
+                    pct < 0.04
+                }
 
+                // Position category icons inside the large pie wedges
+                for (w in largeWedges) {
                     val midAngle = w.startAngle + w.sweepAngle / 2f
                     val rad = Math.toRadians(midAngle.toDouble())
-                    val iconX = iconRadiusDp * cos(rad).toFloat()
-                    val iconY = iconRadiusDp * sin(rad).toFloat()
+                    val iconX = iconPlacementRadius * cos(rad).toFloat()
+                    val iconY = iconPlacementRadius * sin(rad).toFloat()
 
                     Icon(
                         imageVector = getCategoryIcon(w.iconName),
                         contentDescription = w.categoryName,
-                        tint = w.color,
+                        tint = contrastColor(w.color),
                         modifier = Modifier
                             .offset(x = iconX, y = iconY)
                             .size(iconSize)
@@ -758,6 +769,36 @@ private fun SpendingPieChart(
                                     .show()
                             }
                     )
+                }
+
+                // Stack small-wedge icons along the left margin, centered vertically
+                if (smallWedges.isNotEmpty()) {
+                    val totalStackHeight = smallWedges.size * iconSize.value +
+                        (smallWedges.size - 1) * 4f // 4dp spacing
+                    val startY = (maxHeight.value - totalStackHeight) / 2f
+
+                    smallWedges.forEachIndexed { index, w ->
+                        Icon(
+                            imageVector = getCategoryIcon(w.iconName),
+                            contentDescription = w.categoryName,
+                            tint = w.color,
+                            modifier = Modifier
+                                .offset(
+                                    x = -maxWidth / 2 + iconSize / 2 + 4.dp,
+                                    y = (startY + index * (iconSize.value + 4f) - maxHeight.value / 2f + iconSize.value / 2f).dp
+                                )
+                                .size(iconSize)
+                                .clickable {
+                                    Toast
+                                        .makeText(
+                                            context,
+                                            "${w.categoryName}: ${formatCurrency(w.amount, currencySymbol)}",
+                                            Toast.LENGTH_SHORT
+                                        )
+                                        .show()
+                                }
+                        )
+                    }
                 }
             }
         }
@@ -821,9 +862,8 @@ private fun SavingsSuperchargeDialog(
         label = "previewPulseColor"
     )
 
-    Dialog(
+    AdAwareDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(0.92f).imePadding(),

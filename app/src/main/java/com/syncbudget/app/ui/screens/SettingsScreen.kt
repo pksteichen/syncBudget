@@ -57,8 +57,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import com.syncbudget.app.ui.theme.AdAwareDialog
 import com.syncbudget.app.data.Category
 import com.syncbudget.app.data.CATEGORY_ICON_MAP
 import com.syncbudget.app.data.Transaction
@@ -639,9 +638,8 @@ private fun AddCategoryDialog(
     val iconEntries = remember { CATEGORY_ICON_MAP.entries.toList() }
     var showValidation by remember { mutableStateOf(false) }
 
-    Dialog(
+    AdAwareDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
@@ -784,9 +782,8 @@ private fun EditCategoryDialog(
         return
     }
 
-    Dialog(
+    AdAwareDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
