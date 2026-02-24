@@ -23,7 +23,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.AlertDialog
+import com.syncbudget.app.ui.theme.AdAwareAlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -213,7 +213,7 @@ fun RecurringExpensesScreen(
     }
 
     deletingExpense?.let { expense ->
-        AlertDialog(
+        AdAwareAlertDialog(
             onDismissRequest = { deletingExpense = null },
             title = { Text(S.recurringExpenses.deleteExpenseTitle(expense.source)) },
             text = { Text(S.recurringExpenses.deleteExpenseBody) },

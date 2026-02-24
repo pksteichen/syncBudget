@@ -27,7 +27,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.AlertDialog
+import com.syncbudget.app.ui.theme.AdAwareAlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -369,7 +369,7 @@ fun FutureExpendituresScreen(
     }
 
     deletingGoal?.let { goal ->
-        AlertDialog(
+        AdAwareAlertDialog(
             onDismissRequest = { deletingGoal = null },
             title = { Text(S.futureExpenditures.deleteSavingsGoal) },
             text = { Text(S.futureExpenditures.deleteGoalConfirm(goal.name)) },

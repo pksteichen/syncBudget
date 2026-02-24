@@ -47,7 +47,7 @@ import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AlertDialog
+import com.syncbudget.app.ui.theme.AdAwareAlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Checkbox
@@ -1105,7 +1105,7 @@ fun TransactionsScreen(
     if (showBulkDeleteConfirm) {
         val count = selectedIds.count { it.value }
         val isAllWithoutSearch = allSelected && !searchActive && categoryFilterId == null
-        AlertDialog(
+        AdAwareAlertDialog(
             onDismissRequest = { showBulkDeleteConfirm = false },
             title = {
                 Text(
@@ -1142,7 +1142,7 @@ fun TransactionsScreen(
     // Bulk category change dialog
     if (showBulkCategoryChange) {
         var bulkSelectedCatId by remember { mutableStateOf<Int?>(null) }
-        AlertDialog(
+        AdAwareAlertDialog(
             onDismissRequest = {
                 showBulkCategoryChange = false
             },
@@ -1463,7 +1463,7 @@ fun TransactionsScreen(
 
     // Full backup load confirmation dialog
     if (showFullBackupDialog && pendingFullBackupContent != null) {
-        AlertDialog(
+        AdAwareAlertDialog(
             onDismissRequest = {
                 showFullBackupDialog = false
                 pendingFullBackupContent = null
@@ -1637,7 +1637,7 @@ fun TransactionsScreen(
 
     // Parse error dialog
     if (importStage == ImportStage.PARSE_ERROR) {
-        AlertDialog(
+        AdAwareAlertDialog(
             onDismissRequest = {
                 importStage = null
                 parsedTransactions.clear()
@@ -1923,7 +1923,7 @@ fun BudgetIncomeConfirmDialog(
     onNotBudgetIncome: () -> Unit
 ) {
     val S = LocalStrings.current
-    AlertDialog(
+    AdAwareAlertDialog(
         onDismissRequest = onNotBudgetIncome,
         title = { Text(S.transactions.budgetIncomeMatchTitle(transaction.source)) },
         text = {
@@ -1962,7 +1962,7 @@ fun AmortizationConfirmDialog(
     onNotAmortized: () -> Unit
 ) {
     val S = LocalStrings.current
-    AlertDialog(
+    AdAwareAlertDialog(
         onDismissRequest = onNotAmortized,
         title = { Text(S.transactions.amortizationMatchTitle(transaction.source)) },
         text = {
@@ -2002,7 +2002,7 @@ fun RecurringExpenseConfirmDialog(
     onNotRecurring: () -> Unit
 ) {
     val S = LocalStrings.current
-    AlertDialog(
+    AdAwareAlertDialog(
         onDismissRequest = onNotRecurring,
         title = { Text(S.transactions.recurringMatchTitle(transaction.source)) },
         text = {
@@ -2053,7 +2053,7 @@ fun DuplicateResolutionDialog(
     onIgnoreAll: () -> Unit
 ) {
     val S = LocalStrings.current
-    AlertDialog(
+    AdAwareAlertDialog(
         onDismissRequest = onKeepExisting,
         title = { Text(S.transactions.duplicateDetected) },
         text = {
@@ -2481,13 +2481,15 @@ fun TransactionDialog(
 
                     // Category selector — button that opens picker dialog
                     if (categories.isNotEmpty()) {
+                        val categoryError = showValidation && selectedCats.isEmpty()
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
                                 .border(
                                     1.dp,
-                                    MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+                                    if (categoryError) MaterialTheme.colorScheme.error
+                                    else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
                                     RoundedCornerShape(8.dp)
                                 )
                                 .clickable { showCategoryPicker = true }
@@ -2849,18 +2851,16 @@ fun TransactionDialog(
                     Spacer(modifier = Modifier.width(8.dp))
                     TextButton(
                         onClick = {
-                            if (source.isBlank()) { showValidation = true; return@TextButton }
+                            if (source.isBlank() || selectedCats.isEmpty()) { showValidation = true; return@TextButton }
                             val type = if (isExpense) TransactionType.EXPENSE else TransactionType.INCOME
                             val catAmounts: List<CategoryAmount>
                             val totalAmount: Double
 
-                            if (selectedCats.size <= 1) {
+                            if (selectedCats.size == 1) {
                                 val amt = singleAmountText.toDoubleOrNull()
                                 if (amt == null || amt <= 0) { showValidation = true; return@TextButton }
                                 totalAmount = amt
-                                catAmounts = if (selectedCats.size == 1) {
-                                    listOf(CategoryAmount(selectedCats[0].id, amt))
-                                } else emptyList()
+                                catAmounts = listOf(CategoryAmount(selectedCats[0].id, amt))
                             } else {
                                 if (usePercentage) {
                                     val total = totalAmountText.toDoubleOrNull() ?: return@TextButton
@@ -2920,7 +2920,7 @@ fun TransactionDialog(
 
     // Category picker dialog
     if (showCategoryPicker) {
-        AlertDialog(
+        AdAwareAlertDialog(
             onDismissRequest = { showCategoryPicker = false },
             title = { Text(S.transactions.category) },
             text = {
@@ -3033,7 +3033,7 @@ fun TransactionDialog(
     }
 
     if (showDeleteConfirm && onDelete != null) {
-        AlertDialog(
+        AdAwareAlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             title = { Text("${S.common.delete}?") },
             text = { Text("") },
@@ -3055,7 +3055,7 @@ fun TransactionDialog(
         val valueLabel = if (usePercentage) "$pendingDeselectValue%"
             else "$currencySymbol$pendingDeselectValue"
 
-        AlertDialog(
+        AdAwareAlertDialog(
             onDismissRequest = {
                 showMoveValueDialog = false
                 pendingDeselect = null
@@ -3162,7 +3162,7 @@ fun TransactionDialog(
         }
         val mismatchTotal = totalAmountText.toDoubleOrNull() ?: 0.0
 
-        AlertDialog(
+        AdAwareAlertDialog(
             onDismissRequest = { showSumMismatchDialog = false; adjustTargetId = null },
             title = { Text(S.transactions.sumMismatch) },
             text = {

@@ -27,7 +27,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.AlertDialog
+import com.syncbudget.app.ui.theme.AdAwareAlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
@@ -913,7 +913,7 @@ private fun ReassignCategoryDialog(
     var selectedTargetId by remember { mutableStateOf<Int?>(null) }
     val otherCategories = categories.filter { it.id != deletingCategory.id }
 
-    AlertDialog(
+    AdAwareAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(S.settings.reassignCategoryTitle(deletingCategory.name, txnCount)) },
         text = {

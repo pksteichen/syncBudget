@@ -532,16 +532,16 @@ fun MainScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = { onNavigate("transactions") }, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.AutoMirrored.Filled.List, S.dashboard.transactions, tint = customColors.headerBackground, modifier = Modifier.size(32.dp))
+                    Icon(Icons.AutoMirrored.Filled.List, S.dashboard.transactions, tint = customColors.headerText, modifier = Modifier.size(32.dp))
                 }
                 IconButton(onClick = { onNavigate("future_expenditures") }, modifier = Modifier.size(48.dp)) {
-                    Icon(painter = painterResource(id = R.drawable.ic_coins), contentDescription = S.dashboard.savingsGoals, tint = customColors.headerBackground, modifier = Modifier.size(32.dp))
+                    Icon(painter = painterResource(id = R.drawable.ic_coins), contentDescription = S.dashboard.savingsGoals, tint = customColors.headerText, modifier = Modifier.size(32.dp))
                 }
                 IconButton(onClick = { onNavigate("amortization") }, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Filled.Schedule, S.dashboard.amortization, tint = customColors.headerBackground, modifier = Modifier.size(32.dp))
+                    Icon(Icons.Filled.Schedule, S.dashboard.amortization, tint = customColors.headerText, modifier = Modifier.size(32.dp))
                 }
                 IconButton(onClick = { onNavigate("recurring_expenses") }, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Filled.Sync, S.dashboard.recurringExpenses, tint = customColors.headerBackground, modifier = Modifier.size(32.dp))
+                    Icon(Icons.Filled.Sync, S.dashboard.recurringExpenses, tint = customColors.headerText, modifier = Modifier.size(32.dp))
                 }
             }
         }

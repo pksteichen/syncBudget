@@ -1,24 +1,32 @@
 package com.syncbudget.app.ui.theme
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import com.syncbudget.app.ui.strings.AppStrings
 import com.syncbudget.app.ui.strings.EnglishStrings
 import com.syncbudget.app.ui.strings.LocalStrings
@@ -50,8 +58,8 @@ val LocalAdBannerHeight = compositionLocalOf { 0.dp }
 
 /**
  * Drop-in replacement for Dialog that avoids overlapping the ad banner.
- * Wraps content in a full-size Box with status-bar + ad-banner top padding,
- * centering the dialog content in the remaining space.
+ * Disables system dim so the ad stays bright, and adds a custom dim
+ * overlay only below the status-bar + ad-banner area.
  */
 @Composable
 fun AdAwareDialog(
@@ -67,16 +75,65 @@ fun AdAwareDialog(
         onDismissRequest = onDismissRequest,
         properties = properties
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .padding(top = adPadding),
-            contentAlignment = Alignment.Center
-        ) {
-            content()
+        // Disable system dim so the ad banner stays fully visible
+        (LocalView.current.parent as? DialogWindowProvider)?.window?.let { window ->
+            SideEffect { window.setDimAmount(0f) }
+        }
+
+        Box(modifier = Modifier.fillMaxSize()) {
+            // Custom dim overlay below status bar + ad banner
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .padding(top = adPadding)
+                    .background(Color.Black.copy(alpha = 0.6f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { onDismissRequest() }
+            )
+
+            // Dialog content centered below ad banner
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .padding(top = adPadding),
+                contentAlignment = Alignment.Center
+            ) {
+                content()
+            }
         }
     }
+}
+
+/**
+ * Drop-in replacement for AlertDialog that avoids dimming the ad banner.
+ * Removes system dim so the ad stays bright; the AlertDialog's own Surface
+ * elevation provides visual separation from the background.
+ */
+@Composable
+fun AdAwareAlertDialog(
+    onDismissRequest: () -> Unit,
+    confirmButton: @Composable () -> Unit,
+    dismissButton: @Composable (() -> Unit)? = null,
+    title: @Composable (() -> Unit)? = null,
+    text: @Composable (() -> Unit)? = null,
+) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        confirmButton = {
+            // Remove system dim so the ad banner stays bright
+            (LocalView.current.parent as? DialogWindowProvider)?.window?.let { window ->
+                SideEffect { window.setDimAmount(0f) }
+            }
+            confirmButton()
+        },
+        dismissButton = dismissButton,
+        title = title,
+        text = text,
+    )
 }
 
 private val DarkColorScheme = darkColorScheme(

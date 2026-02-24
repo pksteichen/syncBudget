@@ -22,7 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material3.AlertDialog
+import com.syncbudget.app.ui.theme.AdAwareAlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -563,7 +563,7 @@ fun FamilySyncScreen(
 
         // Create group dialog (nickname input)
         if (showCreateDialog) {
-            AlertDialog(
+            AdAwareAlertDialog(
                 onDismissRequest = {
                     showCreateDialog = false
                     createNicknameInput = ""
@@ -604,7 +604,7 @@ fun FamilySyncScreen(
 
         // Join dialog
         if (showJoinDialog) {
-            AlertDialog(
+            AdAwareAlertDialog(
                 onDismissRequest = {
                     showJoinDialog = false
                     joinCodeInput = ""
@@ -661,7 +661,7 @@ fun FamilySyncScreen(
 
         // Pairing code display dialog
         if (generatedPairingCode != null) {
-            AlertDialog(
+            AdAwareAlertDialog(
                 onDismissRequest = onDismissPairingCode,
                 title = { Text(S.sync.pairingCode) },
                 text = {
@@ -704,7 +704,7 @@ fun FamilySyncScreen(
 
         // Leave confirmation
         if (showLeaveConfirm) {
-            AlertDialog(
+            AdAwareAlertDialog(
                 onDismissRequest = { showLeaveConfirm = false },
                 title = { Text(S.sync.leaveGroup) },
                 text = { Text(S.sync.confirmLeave) },
@@ -726,7 +726,7 @@ fun FamilySyncScreen(
 
         // Dissolve confirmation
         if (showDissolveConfirm) {
-            AlertDialog(
+            AdAwareAlertDialog(
                 onDismissRequest = { showDissolveConfirm = false },
                 title = { Text(S.sync.dissolveGroup) },
                 text = { Text(S.sync.confirmDissolve) },
@@ -748,7 +748,7 @@ fun FamilySyncScreen(
 
         // Join warning dialog
         if (showJoinWarning) {
-            AlertDialog(
+            AdAwareAlertDialog(
                 onDismissRequest = {
                     showJoinWarning = false
                     joinCodeInput = ""
@@ -780,7 +780,7 @@ fun FamilySyncScreen(
 
         // Rename device dialog (admin only)
         if (showRenameDialog && renameTargetDevice != null) {
-            AlertDialog(
+            AdAwareAlertDialog(
                 onDismissRequest = {
                     showRenameDialog = false
                     renameTargetDevice = null
@@ -825,7 +825,7 @@ fun FamilySyncScreen(
 
         // Timezone picker dialog
         if (showTimezoneDialog) {
-            AlertDialog(
+            AdAwareAlertDialog(
                 onDismissRequest = { showTimezoneDialog = false },
                 title = { Text(S.sync.selectTimezone) },
                 text = {

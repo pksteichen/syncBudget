@@ -24,7 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.AlertDialog
+import com.syncbudget.app.ui.theme.AdAwareAlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DatePicker
@@ -413,7 +413,7 @@ fun BudgetConfigScreen(
     }
 
     deletingSource?.let { source ->
-        AlertDialog(
+        AdAwareAlertDialog(
             onDismissRequest = { deletingSource = null },
             title = { Text(S.budgetConfig.deleteSourceConfirmTitle(source.source)) },
             text = { Text(S.budgetConfig.deleteSourceConfirmBody) },
@@ -448,7 +448,7 @@ fun BudgetConfigScreen(
     }
 
     if (showResetBudgetConfirm) {
-        AlertDialog(
+        AdAwareAlertDialog(
             onDismissRequest = { showResetBudgetConfirm = false },
             title = { Text(S.budgetConfig.resetBudgetConfirmTitle) },
             text = {
