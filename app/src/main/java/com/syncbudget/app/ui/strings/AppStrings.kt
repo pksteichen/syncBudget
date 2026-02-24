@@ -278,6 +278,7 @@ data class TransactionsStrings(
     val fullBackupBody: String,
     val loadTransactionsOnly: String,
     val loadAllDataOverwrite: String,
+    val fullRestoreWarning: String,
     val fullBackupRestored: String,
     val fullBackupSaved: String,
     val fullBackupSyncWarning: String,

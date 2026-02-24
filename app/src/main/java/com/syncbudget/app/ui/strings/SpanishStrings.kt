@@ -259,6 +259,7 @@ object SpanishStrings : AppStrings {
         fullBackupBody = "Este archivo contiene ajustes, categor\u00edas, gastos recurrentes, metas de ahorro, entradas de amortizaci\u00f3n y todos los dem\u00e1s datos. \u00bfC\u00f3mo desea cargarlo?",
         loadTransactionsOnly = "Cargar solo transacciones",
         loadAllDataOverwrite = "Cargar todo y sobrescribir",
+        fullRestoreWarning = "Advertencia: Una restauraci\u00f3n completa eliminar\u00e1 cualquier transacci\u00f3n o cambio realizado desde que se cre\u00f3 este respaldo. Las transacciones ingresadas despu\u00e9s deber\u00e1n volver a ingresarse o recargarse desde un CSV bancario.",
         fullBackupRestored = "Respaldo completo restaurado exitosamente",
         fullBackupSaved = "Respaldo completo guardado exitosamente",
         fullBackupSyncWarning = "Restaurar un respaldo completo disolverá el grupo de sincronización familiar actual. Deberás crear un nuevo grupo y compartir un nuevo código de emparejamiento con los miembros de la familia.",

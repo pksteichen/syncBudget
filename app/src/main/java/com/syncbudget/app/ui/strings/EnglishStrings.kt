@@ -259,6 +259,7 @@ object EnglishStrings : AppStrings {
         fullBackupBody = "This file contains settings, categories, recurring expenses, savings goals, amortization entries, and all other app data. How would you like to load it?",
         loadTransactionsOnly = "Load Transactions Only",
         loadAllDataOverwrite = "Load All Data & Overwrite",
+        fullRestoreWarning = "Warning: A full restore will delete any transactions or changes made since this save was created. Transactions entered after that point will need to be re-entered or reloaded from a bank CSV.",
         fullBackupRestored = "Full backup restored successfully",
         fullBackupSaved = "Full backup saved successfully",
         fullBackupSyncWarning = "Restoring a full backup will dissolve the current family sync group. You will need to create a new group and share a new pairing code with family members.",

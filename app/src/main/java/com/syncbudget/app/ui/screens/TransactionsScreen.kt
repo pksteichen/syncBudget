@@ -1472,6 +1472,12 @@ fun TransactionsScreen(
             text = {
                 Column {
                     Text(S.transactions.fullBackupBody)
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        S.transactions.fullRestoreWarning,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
                     if (isSyncConfigured) {
                         Spacer(Modifier.height(12.dp))
                         Text(

@@ -23,12 +23,21 @@ object FullBackupSerializer {
             return try { JSONArray(text) } catch (_: Exception) { null }
         }
 
-        readFileArray("transactions.json")?.let { json.put("transactions", it) }
-        readFileArray("categories.json")?.let { json.put("categories", it) }
-        readFileArray("recurring_expenses.json")?.let { json.put("recurringExpenses", it) }
-        readFileArray("income_sources.json")?.let { json.put("incomeSources", it) }
-        readFileArray("amortization_entries.json")?.let { json.put("amortizationEntries", it) }
-        readFileArray("future_expenditures.json")?.let { json.put("savingsGoals", it) }
+        // Filter out tombstoned (deleted=true) records from backup
+        fun filterActive(arr: JSONArray): JSONArray {
+            val active = JSONArray()
+            for (i in 0 until arr.length()) {
+                val obj = arr.optJSONObject(i) ?: continue
+                if (!obj.optBoolean("deleted", false)) active.put(obj)
+            }
+            return active
+        }
+        readFileArray("transactions.json")?.let { json.put("transactions", filterActive(it)) }
+        readFileArray("categories.json")?.let { json.put("categories", filterActive(it)) }
+        readFileArray("recurring_expenses.json")?.let { json.put("recurringExpenses", filterActive(it)) }
+        readFileArray("income_sources.json")?.let { json.put("incomeSources", filterActive(it)) }
+        readFileArray("amortization_entries.json")?.let { json.put("amortizationEntries", filterActive(it)) }
+        readFileArray("future_expenditures.json")?.let { json.put("savingsGoals", filterActive(it)) }
         readFileArray("period_ledger.json")?.let { json.put("periodLedger", it) }
 
         // Shared settings
@@ -38,7 +47,11 @@ object FullBackupSerializer {
         // Local prefs
         val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
         val localPrefs = JSONObject()
-        localPrefs.put("availableCash", prefs.getFloat("availableCash", 0f).toDouble())
+        localPrefs.put("availableCash",
+            try { prefs.getString("availableCash", null)?.toDoubleOrNull() }
+            catch (_: ClassCastException) { null }
+                ?: prefs.getFloat("availableCash", 0f).toDouble()
+        )
         localPrefs.put("lastRefreshDate", prefs.getString("lastRefreshDate", null) ?: JSONObject.NULL)
         localPrefs.put("budgetStartDate", prefs.getString("budgetStartDate", null) ?: JSONObject.NULL)
         localPrefs.put("currencySymbol", prefs.getString("currencySymbol", "$"))
@@ -52,7 +65,11 @@ object FullBackupSerializer {
         localPrefs.put("resetDayOfWeek", prefs.getInt("resetDayOfWeek", 7))
         localPrefs.put("resetDayOfMonth", prefs.getInt("resetDayOfMonth", 1))
         localPrefs.put("isManualBudgetEnabled", prefs.getBoolean("isManualBudgetEnabled", false))
-        localPrefs.put("manualBudgetAmount", prefs.getFloat("manualBudgetAmount", 0f).toDouble())
+        localPrefs.put("manualBudgetAmount",
+            try { prefs.getString("manualBudgetAmount", null)?.toDoubleOrNull() }
+            catch (_: ClassCastException) { null }
+                ?: prefs.getFloat("manualBudgetAmount", 0f).toDouble()
+        )
         localPrefs.put("weekStartSunday", prefs.getBoolean("weekStartSunday", true))
         localPrefs.put("matchDays", prefs.getInt("matchDays", 7))
         localPrefs.put("matchPercent", prefs.getFloat("matchPercent", 1.0f).toDouble())
@@ -85,6 +102,7 @@ object FullBackupSerializer {
             for (i in 0 until txnArray.length()) {
                 try {
                     val obj = txnArray.getJSONObject(i)
+                    if (obj.optBoolean("deleted", false)) continue
                     val originalId = obj.getInt("id")
                     val id = if (originalId !in usedIds) originalId
                              else generateTransactionId(usedIds)
@@ -157,7 +175,7 @@ object FullBackupSerializer {
             val lp = json.getJSONObject("localPrefs")
             val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
             prefs.edit().apply {
-                putFloat("availableCash", lp.optDouble("availableCash", 0.0).toFloat())
+                putString("availableCash", lp.optDouble("availableCash", 0.0).toString())
                 if (!lp.isNull("lastRefreshDate")) {
                     putString("lastRefreshDate", lp.getString("lastRefreshDate"))
                 } else {
@@ -179,7 +197,7 @@ object FullBackupSerializer {
                 putInt("resetDayOfWeek", lp.optInt("resetDayOfWeek", 7))
                 putInt("resetDayOfMonth", lp.optInt("resetDayOfMonth", 1))
                 putBoolean("isManualBudgetEnabled", lp.optBoolean("isManualBudgetEnabled", false))
-                putFloat("manualBudgetAmount", lp.optDouble("manualBudgetAmount", 0.0).toFloat())
+                putString("manualBudgetAmount", lp.optDouble("manualBudgetAmount", 0.0).toString())
                 putBoolean("weekStartSunday", lp.optBoolean("weekStartSunday", true))
                 putInt("matchDays", lp.optInt("matchDays", 7))
                 putFloat("matchPercent", lp.optDouble("matchPercent", 1.0).toFloat())

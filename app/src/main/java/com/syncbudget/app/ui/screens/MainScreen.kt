@@ -494,7 +494,7 @@ fun MainScreen(
                     .padding(horizontal = 8.dp)
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             // +/- buttons
             Row(
