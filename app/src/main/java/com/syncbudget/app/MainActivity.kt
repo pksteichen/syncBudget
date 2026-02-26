@@ -795,87 +795,91 @@ class MainActivity : ComponentActivity() {
             val existingIds = transactions.map { it.id }.toSet()
             val categoryMap = categories.associateBy { it.id }
 
-            // Period refresh on app open
-            remember {
-                if (budgetStartDate != null && lastRefreshDate != null) {
-                    val today = LocalDate.now()
-                    val missedPeriods = BudgetCalculator.countPeriodsCompleted(lastRefreshDate!!, today, budgetPeriod)
-                    if (missedPeriods > 0) {
-                        availableCash += budgetAmount * missedPeriods
-                        lastRefreshDate = today
+            // Period refresh — checks immediately on launch and every 30s
+            // while the app is open so the UI updates when a period boundary
+            // passes without needing a restart.
+            LaunchedEffect(Unit) {
+                while (true) {
+                    if (budgetStartDate != null && lastRefreshDate != null) {
+                        val today = LocalDate.now()
+                        val missedPeriods = BudgetCalculator.countPeriodsCompleted(lastRefreshDate!!, today, budgetPeriod)
+                        if (missedPeriods > 0) {
+                            availableCash += budgetAmount * missedPeriods
+                            lastRefreshDate = today
 
-                        // Record period ledger entry (deduplicate across devices)
-                        val nowDateTime = LocalDateTime.now()
-                        val alreadyRecorded = periodLedger.any {
-                            it.periodStartDate.toLocalDate() == nowDateTime.toLocalDate()
-                        }
-                        if (!alreadyRecorded) {
-                            periodLedger.add(
-                                PeriodLedgerEntry(
-                                    periodStartDate = nowDateTime,
-                                    appliedAmount = budgetAmount,
-                                    clockAtReset = lamportClock.value
+                            // Record period ledger entry (deduplicate across devices)
+                            val nowDateTime = LocalDateTime.now()
+                            val alreadyRecorded = periodLedger.any {
+                                it.periodStartDate.toLocalDate() == nowDateTime.toLocalDate()
+                            }
+                            if (!alreadyRecorded) {
+                                periodLedger.add(
+                                    PeriodLedgerEntry(
+                                        periodStartDate = nowDateTime,
+                                        appliedAmount = budgetAmount,
+                                        clockAtReset = lamportClock.value
+                                    )
                                 )
-                            )
-                            savePeriodLedger()
-                        }
+                                savePeriodLedger()
+                            }
 
-                        // Update savings goals totalSavedSoFar for non-paused, non-complete items
-                        for (period in 0 until missedPeriods) {
-                            savingsGoals.forEachIndexed { idx, goal ->
-                                if (!goal.isPaused && !goal.deleted) {
-                                    val remaining = goal.targetAmount - goal.totalSavedSoFar
-                                    if (remaining > 0) {
-                                        if (goal.targetDate != null) {
-                                            if (LocalDate.now().isBefore(goal.targetDate)) {
-                                                val periods = when (budgetPeriod) {
-                                                    BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(LocalDate.now(), goal.targetDate)
-                                                    BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(LocalDate.now(), goal.targetDate)
-                                                    BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(LocalDate.now(), goal.targetDate)
+                            // Update savings goals totalSavedSoFar for non-paused, non-complete items
+                            for (period in 0 until missedPeriods) {
+                                savingsGoals.forEachIndexed { idx, goal ->
+                                    if (!goal.isPaused && !goal.deleted) {
+                                        val remaining = goal.targetAmount - goal.totalSavedSoFar
+                                        if (remaining > 0) {
+                                            if (goal.targetDate != null) {
+                                                if (LocalDate.now().isBefore(goal.targetDate)) {
+                                                    val periods = when (budgetPeriod) {
+                                                        BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(LocalDate.now(), goal.targetDate)
+                                                        BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(LocalDate.now(), goal.targetDate)
+                                                        BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(LocalDate.now(), goal.targetDate)
+                                                    }
+                                                    if (periods > 0) {
+                                                        val deduction = minOf(remaining / periods.toDouble(), remaining)
+                                                        savingsGoals[idx] = goal.copy(
+                                                            totalSavedSoFar = goal.totalSavedSoFar + deduction
+                                                        )
+                                                    }
                                                 }
-                                                if (periods > 0) {
-                                                    val deduction = minOf(remaining / periods.toDouble(), remaining)
+                                            } else {
+                                                val contribution = minOf(
+                                                    goal.contributionPerPeriod,
+                                                    remaining
+                                                )
+                                                if (contribution > 0) {
                                                     savingsGoals[idx] = goal.copy(
-                                                        totalSavedSoFar = goal.totalSavedSoFar + deduction
+                                                        totalSavedSoFar = goal.totalSavedSoFar + contribution
                                                     )
                                                 }
-                                            }
-                                        } else {
-                                            val contribution = minOf(
-                                                goal.contributionPerPeriod,
-                                                remaining
-                                            )
-                                            if (contribution > 0) {
-                                                savingsGoals[idx] = goal.copy(
-                                                    totalSavedSoFar = goal.totalSavedSoFar + contribution
-                                                )
                                             }
                                         }
                                     }
                                 }
                             }
-                        }
-                        saveSavingsGoals()
+                            saveSavingsGoals()
 
-                        prefs.edit()
-                            .putString("availableCash", availableCash.toString())
-                            .putString("lastRefreshDate", lastRefreshDate.toString())
-                            .apply()
+                            prefs.edit()
+                                .putString("availableCash", availableCash.toString())
+                                .putString("lastRefreshDate", lastRefreshDate.toString())
+                                .apply()
 
-                        // Admin pushes refreshed cash to CRDT so non-admin devices
-                        // can adopt it on next sync
-                        if (isSyncConfigured && isSyncAdmin) {
-                            val clock = lamportClock.tick()
-                            sharedSettings = sharedSettings.copy(
-                                availableCash = availableCash,
-                                availableCash_clock = clock,
-                                lastChangedBy = localDeviceId
-                            )
-                            SharedSettingsRepository.save(context, sharedSettings)
+                            // Admin pushes refreshed cash to CRDT so non-admin devices
+                            // can adopt it on next sync
+                            if (isSyncConfigured && isSyncAdmin) {
+                                val clock = lamportClock.tick()
+                                sharedSettings = sharedSettings.copy(
+                                    availableCash = availableCash,
+                                    availableCash_clock = clock,
+                                    lastChangedBy = localDeviceId
+                                )
+                                SharedSettingsRepository.save(context, sharedSettings)
+                            }
                         }
                     }
+                    delay(30_000) // Re-check every 30 seconds
                 }
-                true // return value for remember
             }
 
             // ── One-time CRDT state dump to Downloads ──
