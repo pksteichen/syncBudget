@@ -32,10 +32,4 @@ class LamportClock(context: Context) {
         counter.set(newVal)
         prefs.edit().putLong("clock", newVal).commit()
     }
-
-    @Synchronized
-    fun reset() {
-        counter.set(0L)
-        prefs.edit().putLong("clock", 0L).commit()
-    }
 }

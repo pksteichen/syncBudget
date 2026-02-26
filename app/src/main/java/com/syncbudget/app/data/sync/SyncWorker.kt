@@ -103,8 +103,7 @@ class SyncWorker(
                     val newRemoteTxns = result.mergedTransactions!!.filter {
                         it.deviceId != deviceId && it.id !in premergeLocalTxnIds
                     }
-                    var cash = appPrefs.getString("availableCash", null)?.toDoubleOrNull()
-                        ?: appPrefs.getFloat("availableCash", 0f).toDouble()
+                    var cash = appPrefs.getString("availableCash", null)?.toDoubleOrNull() ?: 0.0
                     var cashChanged = false
                     for (txn in newRemoteTxns) {
                         val isBudgetAccounted = txn.type == TransactionType.EXPENSE &&

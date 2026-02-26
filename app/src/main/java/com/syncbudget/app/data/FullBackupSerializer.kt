@@ -48,9 +48,7 @@ object FullBackupSerializer {
         val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
         val localPrefs = JSONObject()
         localPrefs.put("availableCash",
-            try { prefs.getString("availableCash", null)?.toDoubleOrNull() }
-            catch (_: ClassCastException) { null }
-                ?: prefs.getFloat("availableCash", 0f).toDouble()
+            prefs.getString("availableCash", null)?.toDoubleOrNull() ?: 0.0
         )
         localPrefs.put("lastRefreshDate", prefs.getString("lastRefreshDate", null) ?: JSONObject.NULL)
         localPrefs.put("budgetStartDate", prefs.getString("budgetStartDate", null) ?: JSONObject.NULL)
@@ -66,9 +64,7 @@ object FullBackupSerializer {
         localPrefs.put("resetDayOfMonth", prefs.getInt("resetDayOfMonth", 1))
         localPrefs.put("isManualBudgetEnabled", prefs.getBoolean("isManualBudgetEnabled", false))
         localPrefs.put("manualBudgetAmount",
-            try { prefs.getString("manualBudgetAmount", null)?.toDoubleOrNull() }
-            catch (_: ClassCastException) { null }
-                ?: prefs.getFloat("manualBudgetAmount", 0f).toDouble()
+            prefs.getString("manualBudgetAmount", null)?.toDoubleOrNull() ?: 0.0
         )
         localPrefs.put("weekStartSunday", prefs.getBoolean("weekStartSunday", true))
         localPrefs.put("matchDays", prefs.getInt("matchDays", 7))

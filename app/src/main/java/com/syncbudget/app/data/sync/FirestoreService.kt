@@ -65,29 +65,6 @@ object FirestoreService {
         }
     }
 
-    suspend fun pushDelta(
-        groupId: String,
-        sourceDeviceId: String,
-        encryptedPayload: String,
-        version: Long
-    ) {
-        require(groupId.isNotBlank()) { "Group ID required" }
-        require(sourceDeviceId.isNotBlank()) { "Device ID required" }
-        require(version > 0) { "Version must be positive" }
-        val data = mapOf(
-            "version" to version,
-            "sourceDeviceId" to sourceDeviceId,
-            "encryptedPayload" to encryptedPayload,
-            "timestamp" to System.currentTimeMillis()
-        )
-        db.collection("groups")
-            .document(groupId)
-            .collection("deltas")
-            .document("v$version")
-            .set(data)
-            .await()
-    }
-
     suspend fun updateDeviceMetadata(groupId: String, deviceId: String, syncVersion: Long) {
         val data = mapOf(
             "lastSyncVersion" to syncVersion,
@@ -154,19 +131,6 @@ object FirestoreService {
             .document("latest")
             .set(data)
             .await()
-    }
-
-    suspend fun getNextDeltaVersion(groupId: String): Long {
-        val groupRef = db.collection("groups").document(groupId)
-        return db.runTransaction { transaction ->
-            val snapshot = transaction.get(groupRef)
-            val current = snapshot.getLong("nextDeltaVersion") ?: 1L
-            transaction.set(groupRef, mapOf(
-                "nextDeltaVersion" to current + 1,
-                "lastActivity" to FieldValue.serverTimestamp()
-            ), SetOptions.merge())
-            current
-        }.await()
     }
 
     /**

@@ -1,7 +1,5 @@
 package com.syncbudget.app.data
 
-import java.time.LocalDate
-
 fun autoCategorize(
     imported: Transaction,
     existing: List<Transaction>,

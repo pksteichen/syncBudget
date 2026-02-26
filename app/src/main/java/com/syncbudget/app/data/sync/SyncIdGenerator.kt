@@ -16,19 +16,4 @@ object SyncIdGenerator {
         prefs.edit().putString(KEY_DEVICE_ID, id).apply()
         return id
     }
-
-    fun deviceHash(deviceId: String): Int {
-        // 16-bit hash from UUID
-        return deviceId.hashCode() and 0xFFFF
-    }
-
-    fun generateId(deviceId: String, existingIds: Set<Int>): Int {
-        val upper = deviceHash(deviceId) shl 16
-        var id: Int
-        do {
-            val lower = (0..0xFFFF).random()
-            id = upper or lower
-        } while (id in existingIds)
-        return id
-    }
 }

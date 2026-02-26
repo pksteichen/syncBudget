@@ -95,7 +95,6 @@ val CATEGORY_ICON_MAP: Map<String, ImageVector> = linkedMapOf(
     "Snowboarding" to Icons.Filled.Snowboarding,
     "Nightlife" to Icons.Filled.Nightlife,
     "Celebration" to Icons.Filled.Celebration,
-    "Balloon" to Icons.Filled.Celebration,
 
     // Photography & Art
     "CameraAlt" to Icons.Filled.CameraAlt,
