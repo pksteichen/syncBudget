@@ -162,6 +162,58 @@ class CrdtMergeTest {
         assertEquals(deviceA, merged.deviceId)
     }
 
+    @Test
+    fun mergeTransaction_undelete_remoteNotDeletedHigherClock() {
+        // With standard LWW, undelete is possible: remote says deleted=false
+        // with higher clock overrides local deleted=true
+        val local = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Store", amount = 50.0, deviceId = deviceA,
+            deleted = true, deleted_clock = 3)
+        val remote = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Store", amount = 50.0, deviceId = deviceB,
+            deleted = false, deleted_clock = 7)
+
+        val merged = CrdtMerge.mergeTransaction(local, remote, deviceA)
+        assertFalse(merged.deleted) // remote's false wins with higher clock
+    }
+
+    @Test
+    fun mergeTransaction_commutativity_deleteField() {
+        // merge(A, B) must equal merge(B, A)
+        val a = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Store", amount = 50.0, deviceId = deviceA,
+            deleted = true, deleted_clock = 5,
+            source_clock = 3, amount_clock = 8)
+        val b = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Remote", amount = 99.0, deviceId = deviceB,
+            deleted = false, deleted_clock = 7,
+            source_clock = 6, amount_clock = 2)
+
+        val mergeAB = CrdtMerge.mergeTransaction(a, b, deviceA)
+        val mergeBA = CrdtMerge.mergeTransaction(b, a, deviceB)
+
+        assertEquals(mergeAB.deleted, mergeBA.deleted)
+        assertEquals(mergeAB.source, mergeBA.source)
+        assertEquals(mergeAB.amount, mergeBA.amount, 0.001)
+        assertEquals(mergeAB.deleted_clock, mergeBA.deleted_clock)
+        assertEquals(mergeAB.source_clock, mergeBA.source_clock)
+        assertEquals(mergeAB.amount_clock, mergeBA.amount_clock)
+    }
+
+    @Test
+    fun mergeTransaction_deletedClockUsesMax() {
+        val local = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "S", amount = 10.0, deviceId = deviceA,
+            deleted = false, deleted_clock = 10)
+        val remote = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "S", amount = 10.0, deviceId = deviceB,
+            deleted = true, deleted_clock = 5)
+
+        val merged = CrdtMerge.mergeTransaction(local, remote, deviceA)
+        // deleted_clock should be max(10, 5) = 10
+        assertEquals(10L, merged.deleted_clock)
+    }
+
     // ── mergeCategory ───────────────────────────────────────────────
 
     @Test
@@ -266,6 +318,38 @@ class CrdtMergeTest {
         assertEquals(7, merged.matchDays)           // local 5 > 3
         assertEquals(0.5f, merged.matchPercent)      // remote 6 > 2
         assertEquals(1, merged.matchDollar)          // local 8 > 4
+    }
+
+    @Test
+    fun mergeSharedSettings_lastChangedBy_commutativity() {
+        // merge(A, B).lastChangedBy must equal merge(B, A).lastChangedBy
+        val settingsA = SharedSettings(
+            currency = "$", budgetPeriod = "DAILY", lastChangedBy = deviceA,
+            currency_clock = 3, budgetPeriod_clock = 8)
+        val settingsB = SharedSettings(
+            currency = "€", budgetPeriod = "WEEKLY", lastChangedBy = deviceB,
+            currency_clock = 7, budgetPeriod_clock = 2)
+
+        val mergeAB = CrdtMerge.mergeSharedSettings(settingsA, settingsB, deviceA)
+        val mergeBA = CrdtMerge.mergeSharedSettings(settingsB, settingsA, deviceB)
+
+        assertEquals(mergeAB.lastChangedBy, mergeBA.lastChangedBy)
+        assertEquals(mergeAB.currency, mergeBA.currency)
+        assertEquals(mergeAB.budgetPeriod, mergeBA.budgetPeriod)
+    }
+
+    @Test
+    fun mergeSharedSettings_lastChangedBy_highestClockWins() {
+        val settingsA = SharedSettings(
+            currency = "$", lastChangedBy = deviceA,
+            currency_clock = 10, budgetPeriod_clock = 1)
+        val settingsB = SharedSettings(
+            currency = "€", lastChangedBy = deviceB,
+            currency_clock = 3, budgetPeriod_clock = 5)
+
+        val merged = CrdtMerge.mergeSharedSettings(settingsA, settingsB, deviceA)
+        // deviceA has maxClock=10, deviceB has maxClock=5 → deviceA wins
+        assertEquals(deviceA, merged.lastChangedBy)
     }
 
     // ── mergeSavingsGoal ────────────────────────────────────────────

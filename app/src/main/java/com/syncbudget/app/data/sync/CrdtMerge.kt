@@ -27,11 +27,10 @@ object CrdtMerge {
         localDeviceId: String
     ): Transaction {
         val remoteDeviceId = remote.deviceId
-        // Delete-wins: if remote marks deleted, result is deleted
-        val mergedDeleted = if (remote.deleted && shouldAcceptRemote(local.deleted_clock, remote.deleted_clock, localDeviceId, remoteDeviceId))
-            true else local.deleted
-        val mergedDeletedClock = if (shouldAcceptRemote(local.deleted_clock, remote.deleted_clock, localDeviceId, remoteDeviceId))
-            remote.deleted_clock else local.deleted_clock
+        // Standard LWW — highest clock wins (commutative)
+        val remoteWinsDeleted = shouldAcceptRemote(local.deleted_clock, remote.deleted_clock, localDeviceId, remoteDeviceId)
+        val mergedDeleted = if (remoteWinsDeleted) remote.deleted else local.deleted
+        val mergedDeletedClock = maxOf(local.deleted_clock, remote.deleted_clock)
 
         return Transaction(
             id = local.id,
@@ -61,10 +60,9 @@ object CrdtMerge {
         localDeviceId: String
     ): RecurringExpense {
         val remoteDeviceId = remote.deviceId
-        val mergedDeleted = if (remote.deleted && shouldAcceptRemote(local.deleted_clock, remote.deleted_clock, localDeviceId, remoteDeviceId))
-            true else local.deleted
-        val mergedDeletedClock = if (shouldAcceptRemote(local.deleted_clock, remote.deleted_clock, localDeviceId, remoteDeviceId))
-            remote.deleted_clock else local.deleted_clock
+        val remoteWinsDeleted = shouldAcceptRemote(local.deleted_clock, remote.deleted_clock, localDeviceId, remoteDeviceId)
+        val mergedDeleted = if (remoteWinsDeleted) remote.deleted else local.deleted
+        val mergedDeletedClock = maxOf(local.deleted_clock, remote.deleted_clock)
 
         return RecurringExpense(
             id = local.id,
@@ -94,10 +92,9 @@ object CrdtMerge {
         localDeviceId: String
     ): IncomeSource {
         val remoteDeviceId = remote.deviceId
-        val mergedDeleted = if (remote.deleted && shouldAcceptRemote(local.deleted_clock, remote.deleted_clock, localDeviceId, remoteDeviceId))
-            true else local.deleted
-        val mergedDeletedClock = if (shouldAcceptRemote(local.deleted_clock, remote.deleted_clock, localDeviceId, remoteDeviceId))
-            remote.deleted_clock else local.deleted_clock
+        val remoteWinsDeleted = shouldAcceptRemote(local.deleted_clock, remote.deleted_clock, localDeviceId, remoteDeviceId)
+        val mergedDeleted = if (remoteWinsDeleted) remote.deleted else local.deleted
+        val mergedDeletedClock = maxOf(local.deleted_clock, remote.deleted_clock)
 
         return IncomeSource(
             id = local.id,
@@ -127,10 +124,9 @@ object CrdtMerge {
         localDeviceId: String
     ): SavingsGoal {
         val remoteDeviceId = remote.deviceId
-        val mergedDeleted = if (remote.deleted && shouldAcceptRemote(local.deleted_clock, remote.deleted_clock, localDeviceId, remoteDeviceId))
-            true else local.deleted
-        val mergedDeletedClock = if (shouldAcceptRemote(local.deleted_clock, remote.deleted_clock, localDeviceId, remoteDeviceId))
-            remote.deleted_clock else local.deleted_clock
+        val remoteWinsDeleted = shouldAcceptRemote(local.deleted_clock, remote.deleted_clock, localDeviceId, remoteDeviceId)
+        val mergedDeleted = if (remoteWinsDeleted) remote.deleted else local.deleted
+        val mergedDeletedClock = maxOf(local.deleted_clock, remote.deleted_clock)
 
         return SavingsGoal(
             id = local.id,
@@ -158,10 +154,9 @@ object CrdtMerge {
         localDeviceId: String
     ): AmortizationEntry {
         val remoteDeviceId = remote.deviceId
-        val mergedDeleted = if (remote.deleted && shouldAcceptRemote(local.deleted_clock, remote.deleted_clock, localDeviceId, remoteDeviceId))
-            true else local.deleted
-        val mergedDeletedClock = if (shouldAcceptRemote(local.deleted_clock, remote.deleted_clock, localDeviceId, remoteDeviceId))
-            remote.deleted_clock else local.deleted_clock
+        val remoteWinsDeleted = shouldAcceptRemote(local.deleted_clock, remote.deleted_clock, localDeviceId, remoteDeviceId)
+        val mergedDeleted = if (remoteWinsDeleted) remote.deleted else local.deleted
+        val mergedDeletedClock = maxOf(local.deleted_clock, remote.deleted_clock)
 
         return AmortizationEntry(
             id = local.id,
@@ -187,10 +182,9 @@ object CrdtMerge {
         localDeviceId: String
     ): Category {
         val remoteDeviceId = remote.deviceId
-        val mergedDeleted = if (remote.deleted && shouldAcceptRemote(local.deleted_clock, remote.deleted_clock, localDeviceId, remoteDeviceId))
-            true else local.deleted
-        val mergedDeletedClock = if (shouldAcceptRemote(local.deleted_clock, remote.deleted_clock, localDeviceId, remoteDeviceId))
-            remote.deleted_clock else local.deleted_clock
+        val remoteWinsDeleted = shouldAcceptRemote(local.deleted_clock, remote.deleted_clock, localDeviceId, remoteDeviceId)
+        val mergedDeleted = if (remoteWinsDeleted) remote.deleted else local.deleted
+        val mergedDeletedClock = maxOf(local.deleted_clock, remote.deleted_clock)
 
         return Category(
             id = local.id,
@@ -212,6 +206,29 @@ object CrdtMerge {
         localDeviceId: String
     ): SharedSettings {
         val remoteDeviceId = remote.lastChangedBy
+        // Derive lastChangedBy deterministically from the highest clock across
+        // all fields so merge(A,B) == merge(B,A) — commutative.
+        val localMaxClock = maxOf(local.currency_clock, local.budgetPeriod_clock,
+            local.budgetStartDate_clock, local.isManualBudgetEnabled_clock,
+            local.manualBudgetAmount_clock, local.weekStartSunday_clock,
+            local.resetDayOfWeek_clock, local.resetDayOfMonth_clock,
+            local.resetHour_clock, local.familyTimezone_clock,
+            local.matchDays_clock, local.matchPercent_clock,
+            local.matchDollar_clock, local.matchChars_clock,
+            local.showAttribution_clock, local.availableCash_clock)
+        val remoteMaxClock = maxOf(remote.currency_clock, remote.budgetPeriod_clock,
+            remote.budgetStartDate_clock, remote.isManualBudgetEnabled_clock,
+            remote.manualBudgetAmount_clock, remote.weekStartSunday_clock,
+            remote.resetDayOfWeek_clock, remote.resetDayOfMonth_clock,
+            remote.resetHour_clock, remote.familyTimezone_clock,
+            remote.matchDays_clock, remote.matchPercent_clock,
+            remote.matchDollar_clock, remote.matchChars_clock,
+            remote.showAttribution_clock, remote.availableCash_clock)
+        val mergedLastChangedBy = when {
+            remoteMaxClock > localMaxClock -> remote.lastChangedBy
+            localMaxClock > remoteMaxClock -> local.lastChangedBy
+            else -> if (remoteDeviceId > localDeviceId) remote.lastChangedBy else local.lastChangedBy
+        }
         return SharedSettings(
             currency = if (shouldAcceptRemote(local.currency_clock, remote.currency_clock, localDeviceId, remoteDeviceId)) remote.currency else local.currency,
             budgetPeriod = if (shouldAcceptRemote(local.budgetPeriod_clock, remote.budgetPeriod_clock, localDeviceId, remoteDeviceId)) remote.budgetPeriod else local.budgetPeriod,
@@ -229,7 +246,7 @@ object CrdtMerge {
             matchChars = if (shouldAcceptRemote(local.matchChars_clock, remote.matchChars_clock, localDeviceId, remoteDeviceId)) remote.matchChars else local.matchChars,
             showAttribution = if (shouldAcceptRemote(local.showAttribution_clock, remote.showAttribution_clock, localDeviceId, remoteDeviceId)) remote.showAttribution else local.showAttribution,
             availableCash = if (shouldAcceptRemote(local.availableCash_clock, remote.availableCash_clock, localDeviceId, remoteDeviceId)) remote.availableCash else local.availableCash,
-            lastChangedBy = remote.lastChangedBy,
+            lastChangedBy = mergedLastChangedBy,
             currency_clock = maxOf(local.currency_clock, remote.currency_clock),
             budgetPeriod_clock = maxOf(local.budgetPeriod_clock, remote.budgetPeriod_clock),
             budgetStartDate_clock = maxOf(local.budgetStartDate_clock, remote.budgetStartDate_clock),

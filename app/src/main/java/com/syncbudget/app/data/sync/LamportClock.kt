@@ -20,7 +20,7 @@ class LamportClock(context: Context) {
         val current = maxOf(counter.get(), prefsVal)
         val newVal = current + 1
         counter.set(newVal)
-        prefs.edit().putLong("clock", newVal).apply()
+        prefs.edit().putLong("clock", newVal).commit()
         return newVal
     }
 
@@ -30,12 +30,12 @@ class LamportClock(context: Context) {
         val current = maxOf(counter.get(), prefsVal)
         val newVal = maxOf(current, remoteClock) + 1
         counter.set(newVal)
-        prefs.edit().putLong("clock", newVal).apply()
+        prefs.edit().putLong("clock", newVal).commit()
     }
 
     @Synchronized
     fun reset() {
         counter.set(0L)
-        prefs.edit().putLong("clock", 0L).apply()
+        prefs.edit().putLong("clock", 0L).commit()
     }
 }

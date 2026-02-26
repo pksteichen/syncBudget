@@ -520,8 +520,9 @@ class MainActivity : ComponentActivity() {
                 }
 
                 while (true) {
-                    // Acquire sync lock to prevent race with SyncWorker
-                    if (!SyncWorker.syncLock.tryLock()) {
+                    // File-based lock works across processes (unlike ReentrantLock)
+                    val syncFileLock = SyncWorker.createSyncLock(context)
+                    if (!syncFileLock.tryLock()) {
                         delay(5_000)
                         continue
                     }
@@ -625,8 +626,7 @@ class MainActivity : ComponentActivity() {
                                 // Only non-admin devices adopt remote cash — admin is authoritative.
                                 val lastSeenAcClock = syncPrefs.getLong("lastSeenAvailableCash_clock", 0L)
                                 val cashPushedByRemote = !isSyncAdmin &&
-                                    merged.availableCash_clock > lastSeenAcClock &&
-                                    merged.lastChangedBy != localDeviceId
+                                    merged.availableCash_clock > lastSeenAcClock
                                 if (budgetStartChanged) {
                                     budgetStartDate = syncedStartDate
                                     lastRefreshDate = LocalDate.now()
@@ -636,6 +636,7 @@ class MainActivity : ComponentActivity() {
                                 } else if (cashPushedByRemote) {
                                     // Admin used "Sync Cash to Admin" — adopt their value
                                     availableCash = merged.availableCash
+                                    persistAvailableCash()
                                     syncPrefs.edit().putLong("lastSeenAvailableCash_clock", merged.availableCash_clock).apply()
                                 }
                                 // Write all synced settings to app_prefs
@@ -656,10 +657,10 @@ class MainActivity : ComponentActivity() {
                                     prefsEditor
                                         .putString("budgetStartDate", budgetStartDate.toString())
                                         .putString("lastRefreshDate", lastRefreshDate.toString())
-                                        .putString("availableCash", availableCash.toString())
-                                } else if (cashPushedByRemote) {
-                                    prefsEditor.putString("availableCash", availableCash.toString())
                                 }
+                                // Always persist availableCash after sync to keep
+                                // prefs in sync with Compose state
+                                prefsEditor.putString("availableCash", availableCash.toString())
                                 prefsEditor.apply()
                             }
                             // Persist updated category ID remap
@@ -710,7 +711,7 @@ class MainActivity : ComponentActivity() {
                         android.util.Log.e("SyncLoop", "Foreground sync failed", e)
                         syncStatus = "error"
                     } finally {
-                        SyncWorker.syncLock.unlock()
+                        syncFileLock.unlock()
                     }
                     delay(60_000)
                 }
@@ -1202,7 +1203,8 @@ class MainActivity : ComponentActivity() {
                             categories.add(cat.copy(
                                 deviceId = localDeviceId,
                                 name_clock = clock,
-                                iconName_clock = clock
+                                iconName_clock = clock,
+                                tag_clock = if (cat.tag.isNotEmpty()) clock else 0L
                             ))
                             saveCategories()
                         },
@@ -1457,8 +1459,10 @@ class MainActivity : ComponentActivity() {
                                 }
                                 saveAmortizationEntries()
 
-                                // Reset lamport clock and sync engine state
-                                lamportClock.reset()
+                                // Reset lastPushedClock so all records get pushed to new group.
+                                // Do NOT reset the lamport clock — it must stay monotonic.
+                                // Higher clock values are harmless; resetting could cause
+                                // collisions if SyncWorker is still running with the old group.
                                 context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
                                     .edit().putLong("lastPushedClock", 0L)
                                     .putBoolean("pushClockFixApplied", true).apply()
@@ -2086,8 +2090,7 @@ class MainActivity : ComponentActivity() {
                                             val budgetStartChanged = syncedStartDate != null && syncedStartDate != budgetStartDate
                                             val lastSeenAcClock2 = syncPrefs.getLong("lastSeenAvailableCash_clock", 0L)
                                             val cashPushedByRemote2 = !isSyncAdmin &&
-                                                merged.availableCash_clock > lastSeenAcClock2 &&
-                                                merged.lastChangedBy != localDeviceId
+                                                merged.availableCash_clock > lastSeenAcClock2
                                             if (budgetStartChanged) {
                                                 budgetStartDate = syncedStartDate
                                                 lastRefreshDate = LocalDate.now()
@@ -2095,6 +2098,7 @@ class MainActivity : ComponentActivity() {
                                                 syncPrefs.edit().putLong("lastSeenAvailableCash_clock", merged.availableCash_clock).apply()
                                             } else if (cashPushedByRemote2) {
                                                 availableCash = merged.availableCash
+                                                persistAvailableCash()
                                                 syncPrefs.edit().putLong("lastSeenAvailableCash_clock", merged.availableCash_clock).apply()
                                             }
                                             val prefsEditor = prefs.edit()
@@ -2110,12 +2114,12 @@ class MainActivity : ComponentActivity() {
                                                 .putFloat("matchPercent", merged.matchPercent)
                                                 .putInt("matchDollar", merged.matchDollar)
                                                 .putInt("matchChars", merged.matchChars)
-                                            if (budgetStartChanged || cashPushedByRemote2) {
+                                            if (budgetStartChanged) {
                                                 prefsEditor
                                                     .putString("budgetStartDate", budgetStartDate.toString())
                                                     .putString("lastRefreshDate", lastRefreshDate.toString())
-                                                    .putString("availableCash", availableCash.toString())
                                             }
+                                            prefsEditor.putString("availableCash", availableCash.toString())
                                             prefsEditor.apply()
                                         }
                                         result.catIdRemap?.let { remap ->

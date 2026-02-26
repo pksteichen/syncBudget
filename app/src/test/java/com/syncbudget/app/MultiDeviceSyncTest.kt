@@ -150,7 +150,7 @@ class MultiDeviceSyncTest {
     // ── Scenario 4: Delete on one device, edit on another ───────────
 
     @Test
-    fun scenario4_deleteVsEdit_deleteWins() {
+    fun scenario4_deleteVsEdit_higherDeleteClockWins() {
         val localTxn = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
             source = "Edited Source", amount = 75.0, deviceId = deviceA,
             source_clock = 3, amount_clock = 3, deleted = false, deleted_clock = 1)

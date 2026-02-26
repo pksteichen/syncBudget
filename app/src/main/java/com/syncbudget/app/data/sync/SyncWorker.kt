@@ -18,7 +18,6 @@ import android.util.Base64
 import java.time.LocalDate
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.locks.ReentrantLock
 
 class SyncWorker(
     appContext: Context,
@@ -26,12 +25,13 @@ class SyncWorker(
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
-        // Acquire sync lock to prevent race with foreground sync
-        if (!syncLock.tryLock()) return Result.success()
+        // File-based lock works across processes (unlike ReentrantLock)
+        val fileLock = SyncFileLock(applicationContext)
+        if (!fileLock.tryLock()) return Result.success()
         try {
             return doSyncWork()
         } finally {
-            syncLock.unlock()
+            fileLock.unlock()
         }
     }
 
@@ -133,9 +133,10 @@ class SyncWorker(
     }
 
     companion object {
-        /** Lock shared between SyncWorker and foreground sync to prevent concurrent syncs. */
-        val syncLock = ReentrantLock()
         private const val WORK_NAME = "sync_budget_background_sync"
+
+        /** Create a file-based lock for preventing concurrent syncs. */
+        fun createSyncLock(context: Context): SyncFileLock = SyncFileLock(context)
 
         fun schedule(context: Context) {
             val request = PeriodicWorkRequestBuilder<SyncWorker>(

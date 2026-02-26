@@ -169,6 +169,39 @@ object FirestoreService {
         }.await()
     }
 
+    /**
+     * Atomically allocate the next delta version AND write the delta document
+     * in a single Firestore transaction. Prevents version gaps if the app
+     * crashes between getNextDeltaVersion() and pushDelta().
+     */
+    suspend fun pushDeltaAtomically(
+        groupId: String,
+        sourceDeviceId: String,
+        encryptedPayload: String
+    ): Long {
+        require(groupId.isNotBlank()) { "Group ID required" }
+        require(sourceDeviceId.isNotBlank()) { "Device ID required" }
+        val groupRef = db.collection("groups").document(groupId)
+        return db.runTransaction { transaction ->
+            val snapshot = transaction.get(groupRef)
+            val version = snapshot.getLong("nextDeltaVersion") ?: 1L
+            // Increment version counter
+            transaction.set(groupRef, mapOf(
+                "nextDeltaVersion" to version + 1,
+                "lastActivity" to FieldValue.serverTimestamp()
+            ), SetOptions.merge())
+            // Write the delta document in the same transaction
+            val deltaRef = groupRef.collection("deltas").document("v$version")
+            transaction.set(deltaRef, mapOf(
+                "version" to version,
+                "sourceDeviceId" to sourceDeviceId,
+                "encryptedPayload" to encryptedPayload,
+                "timestamp" to System.currentTimeMillis()
+            ))
+            version
+        }.await()
+    }
+
     suspend fun updateGroupActivity(groupId: String) {
         db.collection("groups").document(groupId)
             .set(mapOf("lastActivity" to FieldValue.serverTimestamp()), SetOptions.merge())

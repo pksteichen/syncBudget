@@ -146,7 +146,12 @@ class SyncEngine(
             val catIdRemap = existingCatIdRemap.toMutableMap() // remote ID -> local ID (seeded from persistent map)
 
             for (packet in packets) {
-                lamportClock.merge(packet.timestamp.epochSecond)
+                // Merge with max field clock from the packet (NOT the wall-clock
+                // timestamp, which would inflate our logical counter to ~1.7 billion).
+                val maxFieldClock = packet.changes.maxOfOrNull { change ->
+                    change.fields.values.maxOfOrNull { it.clock } ?: 0L
+                } ?: 0L
+                lamportClock.merge(maxFieldClock)
                 for (change in packet.changes) {
                     when (change.type) {
                         "transaction" -> mergedTxns = mergeRecordIntoList(
@@ -223,6 +228,27 @@ class SyncEngine(
             // Step 5: Remap category IDs in transactions (handles different random IDs per device)
             // Only Transaction has categoryAmounts with categoryId references.
             // RecurringExpense, IncomeSource, SavingsGoal, AmortizationEntry do not reference categories.
+
+            // 5a: Rebuild missing remap entries from received category deltas.
+            //     If the old pruning bug cleared the remap, incoming category
+            //     deltas let us reconstruct it by matching tag/name.
+            val localCatIds = mergedCat.map { it.id }.toSet()
+            val localCatByTag = mergedCat.filter { it.tag.isNotEmpty() }.associateBy { it.tag }
+            val localCatByName = mergedCat.associateBy { it.name }
+            for (packet in packets) {
+                for (change in packet.changes) {
+                    if (change.type == "category" && change.id !in localCatIds && change.id !in catIdRemap) {
+                        val remoteCat = deserializeCategory(change)
+                        val localMatch = if (remoteCat.tag.isNotEmpty()) localCatByTag[remoteCat.tag]
+                            else localCatByName[remoteCat.name]
+                        if (localMatch != null) {
+                            catIdRemap[change.id] = localMatch.id
+                        }
+                    }
+                }
+            }
+
+            // 5b: Apply remap to all transactions
             if (catIdRemap.isNotEmpty()) {
                 for (i in mergedTxns.indices) {
                     val txn = mergedTxns[i]
@@ -234,12 +260,6 @@ class SyncEngine(
                         mergedTxns[i] = txn.copy(categoryAmounts = remapped)
                     }
                 }
-                // Prune stale remap entries: remove mappings whose source ID
-                // no longer appears in any transaction's categoryAmounts
-                val usedCatIds = mergedTxns.flatMapTo(mutableSetOf()) { txn ->
-                    txn.categoryAmounts.map { it.categoryId }
-                }
-                catIdRemap.keys.removeAll { it !in usedCatIds }
             }
 
             // Step 6: Push local changes — only push records owned by this device
@@ -269,7 +289,10 @@ class SyncEngine(
             }
             for (cat in categories) {
                 if (cat.deviceId != deviceId && cat.deviceId.isNotEmpty()) continue
-                DeltaBuilder.buildCategoryDelta(cat, pushClock)?.let { localDeltas.add(it) }
+                // Always push categories (pushClock=0) so receiving devices
+                // can rebuild catIdRemap even if it was lost.  Categories are
+                // small and CRDT merge is idempotent, so re-sending is safe.
+                DeltaBuilder.buildCategoryDelta(cat, 0)?.let { localDeltas.add(it) }
             }
             // SharedSettings is always pushed (shared, not per-device)
             DeltaBuilder.buildSharedSettingsDelta(sharedSettings, pushClock)?.let { localDeltas.add(it) }
@@ -295,8 +318,7 @@ class SyncEngine(
                 val encrypted = CryptoHelper.encryptWithKey(serialized, encryptionKey)
                 val encoded = Base64.encodeToString(encrypted, Base64.NO_WRAP)
 
-                val version = FirestoreService.getNextDeltaVersion(groupId)
-                FirestoreService.pushDelta(groupId, deviceId, encoded, version)
+                FirestoreService.pushDeltaAtomically(groupId, deviceId, encoded)
                 deltasPushed = localDeltas.size
             }
 
