@@ -356,7 +356,19 @@ data class RecurringExpensesStrings(
     val deleteExpenseBody: String,
     val descriptionLabel: String,
     val requiredNetflixExample: String,
-    val exampleAmount: String
+    val exampleAmount: String,
+    val monthlyExpenses: String,
+    val annualExpenses: String,
+    val otherExpenses: String,
+    val noMonthlyExpenses: String,
+    val noAnnualExpenses: String,
+    val noOtherExpenses: String,
+    val nextOn: (String, String) -> String,
+    val everyNDays: (Int) -> String,
+    val everyNWeeks: (Int) -> String,
+    val everyNMonths: (Int) -> String,
+    val everyTwoWeeks: String,
+    val twicePerMonth: String
 )
 
 data class SyncStrings(

@@ -53,8 +53,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.syncbudget.app.ui.theme.AdAwareDialog
+import com.syncbudget.app.data.BudgetCalculator
 import com.syncbudget.app.data.RecurringExpense
 import com.syncbudget.app.data.RepeatType
 import com.syncbudget.app.data.generateRecurringExpenseId
@@ -63,7 +65,9 @@ import com.syncbudget.app.ui.components.CURRENCY_DECIMALS
 import com.syncbudget.app.ui.strings.LocalStrings
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -89,6 +93,7 @@ fun RecurringExpensesScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var editingExpense by remember { mutableStateOf<RecurringExpense?>(null) }
     var deletingExpense by remember { mutableStateOf<RecurringExpense?>(null) }
+    var sortByAlpha by remember { mutableStateOf(true) }
 
     Scaffold(
         topBar = {
@@ -153,33 +158,195 @@ fun RecurringExpensesScreen(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             }
 
-            items(recurringExpenses) { expense ->
+            // Group expenses into Monthly, Annual, Other
+            val today = LocalDate.now()
+            val monthly = recurringExpenses.filter {
+                it.repeatType == RepeatType.MONTHS && it.repeatInterval == 1
+            }
+            val annual = recurringExpenses.filter {
+                it.repeatType == RepeatType.ANNUAL
+            }
+            val other = recurringExpenses.filter {
+                it !in monthly && it !in annual
+            }
+
+            // Helper to compute next occurrence date
+            fun nextDate(expense: RecurringExpense): LocalDate? {
+                return BudgetCalculator.generateOccurrences(
+                    expense.repeatType, expense.repeatInterval,
+                    expense.startDate, expense.monthDay1, expense.monthDay2,
+                    today, today.plusDays(730)
+                ).firstOrNull()
+            }
+
+            // Helper to describe the period for "Other" expenses
+            fun periodLabel(expense: RecurringExpense): String = when (expense.repeatType) {
+                RepeatType.DAYS -> S.recurringExpenses.everyNDays(expense.repeatInterval)
+                RepeatType.WEEKS -> S.recurringExpenses.everyNWeeks(expense.repeatInterval)
+                RepeatType.BI_WEEKLY -> S.recurringExpenses.everyTwoWeeks
+                RepeatType.BI_MONTHLY -> S.recurringExpenses.twicePerMonth
+                RepeatType.MONTHS -> S.recurringExpenses.everyNMonths(expense.repeatInterval)
+                else -> ""
+            }
+
+            // Sort each group
+            fun sorted(list: List<RecurringExpense>): List<RecurringExpense> =
+                if (sortByAlpha) list.sortedBy { it.source.lowercase() }
+                else list.sortedByDescending { it.amount }
+
+            val sortedMonthly = sorted(monthly)
+            val sortedAnnual = sorted(annual)
+            val sortedOther = sorted(other)
+
+            val sortButtonLabel = if (sortByAlpha) "A" else currencySymbol
+
+            // --- Monthly section ---
+            item {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { editingExpense = expense }
-                        .padding(vertical = 8.dp),
+                        .background(customColors.headerBackground, RoundedCornerShape(6.dp))
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = expense.source,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                        Text(
-                            text = formatCurrency(expense.amount, currencySymbol),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
-                        )
-                    }
-                    IconButton(onClick = { deletingExpense = expense }) {
-                        Icon(
-                            imageVector = Icons.Filled.Delete,
-                            contentDescription = S.common.delete,
-                            tint = Color(0xFFF44336)
-                        )
-                    }
+                    Text(
+                        text = sortButtonLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = customColors.headerText,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .background(
+                                customColors.headerText.copy(alpha = 0.15f),
+                                RoundedCornerShape(4.dp)
+                            )
+                            .clickable { sortByAlpha = !sortByAlpha }
+                            .padding(horizontal = 6.dp, vertical = 4.dp)
+                    )
+                    Text(
+                        text = S.recurringExpenses.monthlyExpenses,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = customColors.headerText,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
+                }
+            }
+            if (sortedMonthly.isEmpty()) {
+                item {
+                    Text(
+                        text = S.recurringExpenses.noMonthlyExpenses,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                    )
+                }
+            } else {
+                items(sortedMonthly) { expense ->
+                    val next = nextDate(expense)
+                    ExpenseRow(expense, next, null, currencySymbol, dateFormatter, S,
+                        onEdit = { editingExpense = expense },
+                        onDelete = { deletingExpense = expense })
+                }
+            }
+
+            // --- Annual section ---
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(customColors.headerBackground, RoundedCornerShape(6.dp))
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = sortButtonLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = customColors.headerText,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .background(
+                                customColors.headerText.copy(alpha = 0.15f),
+                                RoundedCornerShape(4.dp)
+                            )
+                            .clickable { sortByAlpha = !sortByAlpha }
+                            .padding(horizontal = 6.dp, vertical = 4.dp)
+                    )
+                    Text(
+                        text = S.recurringExpenses.annualExpenses,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = customColors.headerText,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
+                }
+            }
+            if (sortedAnnual.isEmpty()) {
+                item {
+                    Text(
+                        text = S.recurringExpenses.noAnnualExpenses,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                    )
+                }
+            } else {
+                items(sortedAnnual) { expense ->
+                    val next = nextDate(expense)
+                    ExpenseRow(expense, next, null, currencySymbol, dateFormatter, S,
+                        onEdit = { editingExpense = expense },
+                        onDelete = { deletingExpense = expense })
+                }
+            }
+
+            // --- Other section ---
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(customColors.headerBackground, RoundedCornerShape(6.dp))
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = sortButtonLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = customColors.headerText,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .background(
+                                customColors.headerText.copy(alpha = 0.15f),
+                                RoundedCornerShape(4.dp)
+                            )
+                            .clickable { sortByAlpha = !sortByAlpha }
+                            .padding(horizontal = 6.dp, vertical = 4.dp)
+                    )
+                    Text(
+                        text = S.recurringExpenses.otherExpenses,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = customColors.headerText,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
+                }
+            }
+            if (sortedOther.isEmpty()) {
+                item {
+                    Text(
+                        text = S.recurringExpenses.noOtherExpenses,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                    )
+                }
+            } else {
+                items(sortedOther) { expense ->
+                    val next = nextDate(expense)
+                    ExpenseRow(expense, next, periodLabel(expense), currencySymbol, dateFormatter, S,
+                        onEdit = { editingExpense = expense },
+                        onDelete = { deletingExpense = expense })
                 }
             }
         }
@@ -229,6 +396,55 @@ fun RecurringExpensesScreen(
                 TextButton(onClick = { deletingExpense = null }) { Text(S.common.cancel) }
             }
         )
+    }
+}
+
+@Composable
+private fun ExpenseRow(
+    expense: RecurringExpense,
+    nextDate: LocalDate?,
+    periodDescription: String?,
+    currencySymbol: String,
+    dateFormatter: DateTimeFormatter,
+    S: com.syncbudget.app.ui.strings.AppStrings,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onEdit() }
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = expense.source,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            val amountStr = formatCurrency(expense.amount, currencySymbol)
+            val nextStr = nextDate?.format(dateFormatter) ?: "—"
+            Text(
+                text = S.recurringExpenses.nextOn(amountStr, nextStr),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+            )
+            if (periodDescription != null) {
+                Text(
+                    text = periodDescription,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                )
+            }
+        }
+        IconButton(onClick = { onDelete() }) {
+            Icon(
+                imageVector = Icons.Filled.Delete,
+                contentDescription = S.common.delete,
+                tint = Color(0xFFF44336)
+            )
+        }
     }
 }
 

@@ -871,6 +871,8 @@ class MainActivity : ComponentActivity() {
                         syncStatus = syncStatus,
                         staleDays = staleDays,
                         remoteCrdtCash = if (isSyncConfigured) sharedSettings.availableCash else null,
+                        syncDevices = syncDevices,
+                        localDeviceId = localDeviceId,
                         onSupercharge = { allocations, modes ->
                             var totalDeducted = 0.0
                             for ((goalId, amount) in allocations) {

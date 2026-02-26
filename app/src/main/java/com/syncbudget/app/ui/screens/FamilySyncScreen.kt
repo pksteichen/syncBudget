@@ -461,6 +461,10 @@ fun FamilySyncScreen(
                             modifier = Modifier.padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            Canvas(modifier = Modifier.size(12.dp)) {
+                                drawCircle(color = deviceSyncColor(device.lastSeen))
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(

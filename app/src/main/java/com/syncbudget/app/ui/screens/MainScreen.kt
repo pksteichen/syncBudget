@@ -87,6 +87,7 @@ import com.syncbudget.app.sound.FlipSoundPlayer
 import com.syncbudget.app.ui.components.CURRENCY_DECIMALS
 import com.syncbudget.app.ui.components.FlipDisplay
 import com.syncbudget.app.ui.components.formatCurrency
+import com.syncbudget.app.data.sync.DeviceInfo
 import com.syncbudget.app.ui.strings.LocalStrings
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 import java.time.DayOfWeek
@@ -222,6 +223,17 @@ private fun contrastColor(bg: Color): Color {
     return if (luminance > 0.5f) Color.Black else Color.White
 }
 
+internal fun deviceSyncColor(lastSeen: Long): Color {
+    if (lastSeen == 0L) return Color(0xFF9E9E9E)
+    val age = System.currentTimeMillis() - lastSeen
+    return when {
+        age < 5 * 60_000L -> Color(0xFF4CAF50)
+        age < 2 * 3_600_000L -> Color(0xFFFFEB3B)
+        age < 24 * 3_600_000L -> Color(0xFFFF9800)
+        else -> Color(0xFFF44336)
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
@@ -247,7 +259,9 @@ fun MainScreen(
     budgetPeriod: BudgetPeriod = BudgetPeriod.DAILY,
     syncStatus: String = "off",
     staleDays: Int = 0,
-    remoteCrdtCash: Double? = null
+    remoteCrdtCash: Double? = null,
+    syncDevices: List<DeviceInfo> = emptyList(),
+    localDeviceId: String = ""
 ) {
     val customColors = LocalSyncBudgetColors.current
     val S = LocalStrings.current
@@ -378,12 +392,12 @@ fun MainScreen(
                         "error" -> Color(0xFFF44336)
                         else -> Color(0xFF9E9E9E)
                     }
-                    Box(
+                    Row(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
-                            .padding(start = 20.dp, bottom = 20.dp)
-                            .size(32.dp),
-                        contentAlignment = Alignment.Center
+                            .padding(start = 20.dp, bottom = 20.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Sync,
@@ -391,10 +405,13 @@ fun MainScreen(
                             tint = syncColor,
                             modifier = Modifier.size(20.dp)
                         )
-                        Canvas(modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .size(8.dp)) {
-                            drawCircle(color = syncColor)
+                        val otherDevices = syncDevices
+                            .filter { it.deviceId != localDeviceId }
+                            .take(4)
+                        otherDevices.forEach { device ->
+                            Canvas(modifier = Modifier.size(8.dp)) {
+                                drawCircle(color = deviceSyncColor(device.lastSeen))
+                            }
                         }
                     }
                 }

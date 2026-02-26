@@ -337,7 +337,19 @@ object EnglishStrings : AppStrings {
         deleteExpenseBody = "This recurring expense will be permanently removed.",
         descriptionLabel = "Description",
         requiredNetflixExample = "Required, e.g. Netflix",
-        exampleAmount = "e.g. 15.99"
+        exampleAmount = "e.g. 15.99",
+        monthlyExpenses = "Monthly Expenses",
+        annualExpenses = "Annual Expenses",
+        otherExpenses = "Other Expense Periods",
+        noMonthlyExpenses = "No monthly expenses",
+        noAnnualExpenses = "No annual expenses",
+        noOtherExpenses = "No other recurring expenses",
+        nextOn = { amount, date -> "$amount on $date" },
+        everyNDays = { n -> "Every $n days" },
+        everyNWeeks = { n -> "Every $n weeks" },
+        everyNMonths = { n -> "Every $n months" },
+        everyTwoWeeks = "Every 2 weeks",
+        twicePerMonth = "Twice per month"
     )
 
     override val sync = SyncStrings(
