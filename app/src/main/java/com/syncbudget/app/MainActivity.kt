@@ -202,6 +202,31 @@ class MainActivity : ComponentActivity() {
             val categories = remember {
                 val loaded = CategoryRepository.load(context).toMutableList()
                 var changed = false
+
+                // Deduplicate: remove untagged copies of categories that already
+                // exist with a proper tag (caused by sync not pushing tag field)
+                val tagsPresent = loaded.filter { it.tag.isNotEmpty() }.map { it.tag }.toSet()
+                val iter = loaded.iterator()
+                while (iter.hasNext()) {
+                    val cat = iter.next()
+                    if (cat.tag.isEmpty()) {
+                        for (def in DEFAULT_CATEGORY_DEFS) {
+                            if (def.tag in tagsPresent) {
+                                val allNames = getAllKnownNamesForTag(def.tag)
+                                if (cat.name in allNames) {
+                                    iter.remove(); changed = true; break
+                                }
+                            }
+                        }
+                    }
+                }
+                // Also deduplicate by ID (first occurrence wins)
+                val seenIds = mutableSetOf<Int>()
+                val idIter = loaded.iterator()
+                while (idIter.hasNext()) {
+                    if (!seenIds.add(idIter.next().id)) { idIter.remove(); changed = true }
+                }
+
                 for (def in DEFAULT_CATEGORY_DEFS) {
                     val byTag = loaded.indexOfFirst { it.tag == def.tag }
                     if (byTag >= 0) continue
@@ -1674,10 +1699,12 @@ class MainActivity : ComponentActivity() {
                                     )
                                     SharedSettingsRepository.save(context, sharedSettings)
 
-                                    // Stamp all existing data with sync clocks so they push on first sync
+                                    // Stamp all existing data with sync clocks so they push on first sync.
+                                    // Also claim records that have a different deviceId (e.g., from backup/restore)
+                                    // so they are recognized as local records for push filtering.
                                     val stampClock = lamportClock.tick()
                                     transactions.forEachIndexed { i, t ->
-                                        if (t.source_clock == 0L) {
+                                        if (t.source_clock == 0L || t.deviceId != localDeviceId) {
                                             transactions[i] = t.copy(
                                                 deviceId = localDeviceId,
                                                 source_clock = stampClock, amount_clock = stampClock,
@@ -1690,16 +1717,17 @@ class MainActivity : ComponentActivity() {
                                     }
                                     saveTransactions()
                                     categories.forEachIndexed { i, c ->
-                                        if (c.name_clock == 0L) {
+                                        if (c.name_clock == 0L || c.deviceId != localDeviceId) {
                                             categories[i] = c.copy(
                                                 deviceId = localDeviceId,
-                                                name_clock = stampClock, iconName_clock = stampClock
+                                                name_clock = stampClock, iconName_clock = stampClock,
+                                                tag_clock = if (c.tag.isNotEmpty()) stampClock else 0L
                                             )
                                         }
                                     }
                                     saveCategories()
                                     savingsGoals.forEachIndexed { i, g ->
-                                        if (g.name_clock == 0L) {
+                                        if (g.name_clock == 0L || g.deviceId != localDeviceId) {
                                             savingsGoals[i] = g.copy(
                                                 deviceId = localDeviceId,
                                                 name_clock = stampClock, targetAmount_clock = stampClock,
@@ -1710,7 +1738,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                     saveSavingsGoals()
                                     amortizationEntries.forEachIndexed { i, e ->
-                                        if (e.source_clock == 0L) {
+                                        if (e.source_clock == 0L || e.deviceId != localDeviceId) {
                                             amortizationEntries[i] = e.copy(
                                                 deviceId = localDeviceId,
                                                 source_clock = stampClock, amount_clock = stampClock,
@@ -1721,7 +1749,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                     saveAmortizationEntries()
                                     recurringExpenses.forEachIndexed { i, r ->
-                                        if (r.source_clock == 0L) {
+                                        if (r.source_clock == 0L || r.deviceId != localDeviceId) {
                                             recurringExpenses[i] = r.copy(
                                                 deviceId = localDeviceId,
                                                 source_clock = stampClock, amount_clock = stampClock,

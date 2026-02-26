@@ -183,11 +183,20 @@ class SyncEngine(
                                 val byTag = if (remoteCat.tag.isNotEmpty())
                                     mergedCat.indexOfFirst { it.tag == remoteCat.tag } else -1
                                 if (byTag >= 0) {
-                                    // Record ID mapping: remote ID -> local ID
                                     catIdRemap[change.id] = mergedCat[byTag].id
                                     mergedCat[byTag] = CrdtMerge.mergeCategory(mergedCat[byTag], remoteCat, deviceId)
                                 } else {
-                                    mergedCat.add(remoteCat)
+                                    // Fallback: match by name against known defaults (handles
+                                    // remote categories arriving without a tag field)
+                                    val byName = if (remoteCat.tag.isEmpty() && remoteCat.name.isNotEmpty())
+                                        mergedCat.indexOfFirst { it.tag.isNotEmpty() && it.name == remoteCat.name }
+                                    else -1
+                                    if (byName >= 0) {
+                                        catIdRemap[change.id] = mergedCat[byName].id
+                                        mergedCat[byName] = CrdtMerge.mergeCategory(mergedCat[byName], remoteCat, deviceId)
+                                    } else {
+                                        mergedCat.add(remoteCat)
+                                    }
                                 }
                             }
                         }
@@ -233,39 +242,49 @@ class SyncEngine(
                 catIdRemap.keys.removeAll { it !in usedCatIds }
             }
 
-            // Step 6: Push local changes
+            // Step 6: Push local changes — only push records owned by this device
+            // to prevent echoed remote data from inflating lastPushedClock beyond
+            // the local lamport clock (which would silently suppress future pushes).
             val localDeltas = mutableListOf<RecordDelta>()
             val pushClock = lastPushedClock
             for (txn in transactions) {
+                if (txn.deviceId != deviceId && txn.deviceId.isNotEmpty()) continue
                 DeltaBuilder.buildTransactionDelta(txn, pushClock)?.let { localDeltas.add(it) }
             }
             for (re in recurringExpenses) {
+                if (re.deviceId != deviceId && re.deviceId.isNotEmpty()) continue
                 DeltaBuilder.buildRecurringExpenseDelta(re, pushClock)?.let { localDeltas.add(it) }
             }
             for (src in incomeSources) {
+                if (src.deviceId != deviceId && src.deviceId.isNotEmpty()) continue
                 DeltaBuilder.buildIncomeSourceDelta(src, pushClock)?.let { localDeltas.add(it) }
             }
             for (goal in savingsGoals) {
+                if (goal.deviceId != deviceId && goal.deviceId.isNotEmpty()) continue
                 DeltaBuilder.buildSavingsGoalDelta(goal, pushClock)?.let { localDeltas.add(it) }
             }
             for (entry in amortizationEntries) {
+                if (entry.deviceId != deviceId && entry.deviceId.isNotEmpty()) continue
                 DeltaBuilder.buildAmortizationEntryDelta(entry, pushClock)?.let { localDeltas.add(it) }
             }
             for (cat in categories) {
+                if (cat.deviceId != deviceId && cat.deviceId.isNotEmpty()) continue
                 DeltaBuilder.buildCategoryDelta(cat, pushClock)?.let { localDeltas.add(it) }
             }
+            // SharedSettings is always pushed (shared, not per-device)
             DeltaBuilder.buildSharedSettingsDelta(sharedSettings, pushClock)?.let { localDeltas.add(it) }
 
             var deltasPushed = 0
             if (localDeltas.isNotEmpty()) {
-                // Track the max clock of records actually being pushed, NOT the
-                // merged lamport value.  After merging remote packets the lamport
-                // clock can jump far above locally-stamped field clocks, which
-                // would cause DeltaBuilder to skip those fields on the next sync.
                 val maxDeltaClock = localDeltas.maxOf { delta ->
                     delta.fields.values.maxOfOrNull { it.clock } ?: 0L
                 }
                 lastPushedClock = maxDeltaClock
+                // Ensure lamport clock stays ahead of lastPushedClock so that
+                // future tick() calls produce values > lastPushedClock
+                if (maxDeltaClock > lamportClock.value) {
+                    lamportClock.merge(maxDeltaClock)
+                }
 
                 val packet = DeltaPacket(
                     sourceDeviceId = deviceId,

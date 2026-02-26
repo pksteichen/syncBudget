@@ -15,14 +15,20 @@ class LamportClock(context: Context) {
 
     @Synchronized
     fun tick(): Long {
-        val newVal = counter.incrementAndGet()
+        // Re-read from prefs to pick up any changes from SyncWorker
+        val prefsVal = prefs.getLong("clock", 0L)
+        val current = maxOf(counter.get(), prefsVal)
+        val newVal = current + 1
+        counter.set(newVal)
         prefs.edit().putLong("clock", newVal).apply()
         return newVal
     }
 
     @Synchronized
     fun merge(remoteClock: Long) {
-        val newVal = maxOf(counter.get(), remoteClock) + 1
+        val prefsVal = prefs.getLong("clock", 0L)
+        val current = maxOf(counter.get(), prefsVal)
+        val newVal = maxOf(current, remoteClock) + 1
         counter.set(newVal)
         prefs.edit().putLong("clock", newVal).apply()
     }
