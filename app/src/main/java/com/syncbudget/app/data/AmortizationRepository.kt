@@ -15,6 +15,7 @@ object AmortizationRepository {
             val obj = JSONObject()
             obj.put("id", e.id)
             obj.put("source", e.source)
+            obj.put("description", e.description)
             obj.put("amount", e.amount)
             obj.put("totalPeriods", e.totalPeriods)
             obj.put("startDate", e.startDate.toString())
@@ -22,6 +23,7 @@ object AmortizationRepository {
             obj.put("deviceId", e.deviceId)
             obj.put("deleted", e.deleted)
             obj.put("source_clock", e.source_clock)
+            obj.put("description_clock", e.description_clock)
             obj.put("amount_clock", e.amount_clock)
             obj.put("totalPeriods_clock", e.totalPeriods_clock)
             obj.put("startDate_clock", e.startDate_clock)
@@ -49,12 +51,14 @@ object AmortizationRepository {
                 AmortizationEntry(
                     id = obj.getInt("id"),
                     source = obj.getString("source"),
+                    description = obj.optString("description", ""),
                     amount = obj.getDouble("amount"),
                     totalPeriods = obj.getInt("totalPeriods"),
                     startDate = LocalDate.parse(obj.getString("startDate")),
                     deviceId = obj.optString("deviceId", ""),
                     deleted = obj.optBoolean("deleted", false),
                     source_clock = obj.optLong("source_clock", 0L),
+                    description_clock = obj.optLong("description_clock", 0L),
                     amount_clock = obj.optLong("amount_clock", 0L),
                     totalPeriods_clock = obj.optLong("totalPeriods_clock", 0L),
                     startDate_clock = obj.optLong("startDate_clock", 0L),

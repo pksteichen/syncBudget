@@ -53,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.unit.dp
 import com.syncbudget.app.ui.theme.AdAwareDialog
@@ -232,6 +233,15 @@ fun AmortizationScreen(
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = contentAlpha)
                         )
+                        if (entry.description.isNotBlank()) {
+                            Text(
+                                entry.description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                         Text(
                             text = S.amortization.totalPerPeriod(
                                 currencySymbol,
@@ -298,6 +308,7 @@ fun AmortizationScreen(
         AddEditAmortizationDialog(
             title = S.amortization.addEntry,
             initialSource = "",
+            initialDescription = "",
             initialAmount = "",
             initialTotalPeriods = "",
             initialStartDate = null,
@@ -305,9 +316,9 @@ fun AmortizationScreen(
             budgetPeriod = budgetPeriod,
             dateFormatter = dateFormatter,
             onDismiss = { showAddDialog = false },
-            onSave = { source, amount, totalPeriods, startDate ->
+            onSave = { source, description, amount, totalPeriods, startDate ->
                 val id = generateAmortizationEntryId(amortizationEntries.map { it.id }.toSet())
-                onAddEntry(AmortizationEntry(id = id, source = source, amount = amount, totalPeriods = totalPeriods, startDate = startDate))
+                onAddEntry(AmortizationEntry(id = id, source = source, description = description, amount = amount, totalPeriods = totalPeriods, startDate = startDate))
                 showAddDialog = false
             }
         )
@@ -317,6 +328,7 @@ fun AmortizationScreen(
         AddEditAmortizationDialog(
             title = S.amortization.editEntry,
             initialSource = entry.source,
+            initialDescription = entry.description,
             initialAmount = "%.${CURRENCY_DECIMALS[currencySymbol] ?: 2}f".format(entry.amount),
             initialTotalPeriods = entry.totalPeriods.toString(),
             initialStartDate = entry.startDate,
@@ -324,8 +336,8 @@ fun AmortizationScreen(
             budgetPeriod = budgetPeriod,
             dateFormatter = dateFormatter,
             onDismiss = { editingEntry = null },
-            onSave = { source, amount, totalPeriods, startDate ->
-                onUpdateEntry(entry.copy(source = source, amount = amount, totalPeriods = totalPeriods, startDate = startDate))
+            onSave = { source, description, amount, totalPeriods, startDate ->
+                onUpdateEntry(entry.copy(source = source, description = description, amount = amount, totalPeriods = totalPeriods, startDate = startDate))
                 editingEntry = null
             }
         )
@@ -356,6 +368,7 @@ fun AmortizationScreen(
 private fun AddEditAmortizationDialog(
     title: String,
     initialSource: String,
+    initialDescription: String = "",
     initialAmount: String,
     initialTotalPeriods: String,
     initialStartDate: LocalDate?,
@@ -363,11 +376,12 @@ private fun AddEditAmortizationDialog(
     budgetPeriod: BudgetPeriod,
     dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd"),
     onDismiss: () -> Unit,
-    onSave: (String, Double, Int, LocalDate) -> Unit
+    onSave: (String, String, Double, Int, LocalDate) -> Unit
 ) {
     val S = LocalStrings.current
 
     var source by remember { mutableStateOf(initialSource) }
+    var description by remember { mutableStateOf(initialDescription) }
     var amountText by remember { mutableStateOf(initialAmount) }
     var periodsText by remember { mutableStateOf(initialTotalPeriods) }
     var startDate by remember { mutableStateOf(initialStartDate) }
@@ -427,6 +441,14 @@ private fun AddEditAmortizationDialog(
                             Text(S.amortization.requiredLaptopExample, color = Color(0xFFF44336))
                         }) else null,
                         colors = textFieldColors,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = description,
+                        onValueChange = { description = it },
+                        label = { Text(S.common.descriptionFieldLabel) },
+                        colors = textFieldColors,
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
@@ -494,7 +516,7 @@ private fun AddEditAmortizationDialog(
                     TextButton(
                         onClick = {
                             if (isValid) {
-                                onSave(source.trim(), amount!!, periods!!, startDate!!)
+                                onSave(source.trim(), description.trim(), amount!!, periods!!, startDate!!)
                             } else {
                                 showValidation = true
                             }

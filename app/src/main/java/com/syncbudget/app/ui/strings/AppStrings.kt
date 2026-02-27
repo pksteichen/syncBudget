@@ -85,7 +85,8 @@ data class CommonStrings(
     val exampleBiMonthlyDay1: String,
     val exampleBiMonthlyDay2: String,
     val language: String,
-    val dateDayTooHigh: String
+    val dateDayTooHigh: String,
+    val descriptionFieldLabel: String
 )
 
 data class DashboardStrings(

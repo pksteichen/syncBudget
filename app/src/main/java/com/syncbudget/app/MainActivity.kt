@@ -356,6 +356,43 @@ class MainActivity : ComponentActivity() {
                     syncPrefs.edit().putBoolean("migration_tag_clock_done", true).apply()
                 }
 
+                // One-time migration: stamp description_clock on records with description_clock=0
+                if (!syncPrefs.getBoolean("migration_description_clock_done", false)) {
+                    val migClock = lamportClock.tick()
+                    var changed = false
+                    transactions.forEachIndexed { i, t ->
+                        if (t.description_clock == 0L) {
+                            transactions[i] = t.copy(description_clock = migClock)
+                            changed = true
+                        }
+                    }
+                    recurringExpenses.forEachIndexed { i, r ->
+                        if (r.description_clock == 0L) {
+                            recurringExpenses[i] = r.copy(description_clock = migClock)
+                            changed = true
+                        }
+                    }
+                    incomeSources.forEachIndexed { i, s ->
+                        if (s.description_clock == 0L) {
+                            incomeSources[i] = s.copy(description_clock = migClock)
+                            changed = true
+                        }
+                    }
+                    amortizationEntries.forEachIndexed { i, e ->
+                        if (e.description_clock == 0L) {
+                            amortizationEntries[i] = e.copy(description_clock = migClock)
+                            changed = true
+                        }
+                    }
+                    if (changed) {
+                        saveTransactions()
+                        saveRecurringExpenses()
+                        saveIncomeSources()
+                        saveAmortizationEntries()
+                    }
+                    syncPrefs.edit().putBoolean("migration_description_clock_done", true).apply()
+                }
+
                 while (true) {
                     // File-based lock works across processes (unlike ReentrantLock)
                     val syncFileLock = SyncWorker.createSyncLock(context)

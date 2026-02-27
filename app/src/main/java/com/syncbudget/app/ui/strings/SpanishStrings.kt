@@ -33,8 +33,8 @@ object SpanishStrings : AppStrings {
         periodMonths = "meses",
         addNewIncomeTransaction = "Nueva transacci\u00f3n de ingreso",
         addNewExpenseTransaction = "Nueva transacci\u00f3n de gasto",
-        sourceLabel = "Descripci\u00f3n",
-        merchantLabel = "Descripci\u00f3n",
+        sourceLabel = "Fuente",
+        merchantLabel = "Comercio/Servicio",
         repeatTypeDays = "D\u00eda",
         repeatTypeWeeks = "Semana",
         repeatTypeBiWeekly = "Cada 2 semanas",
@@ -44,7 +44,7 @@ object SpanishStrings : AppStrings {
         budgetPeriodDaily = "Diario",
         budgetPeriodWeekly = "Semanal",
         budgetPeriodMonthly = "Mensual",
-        sourceName = "Descripci\u00f3n",
+        sourceName = "Fuente",
         amount = "Monto",
         repeatType = "Tipo de repetici\u00f3n",
         everyXDays = "D\u00edas entre repeticiones (1-365)",
@@ -66,7 +66,8 @@ object SpanishStrings : AppStrings {
         exampleBiMonthlyDay1 = "ej. 1",
         exampleBiMonthlyDay2 = "ej. 15",
         language = "Idioma",
-        dateDayTooHigh = "Selecciona una fecha entre el 1 y el 28 del mes"
+        dateDayTooHigh = "Selecciona una fecha entre el 1 y el 28 del mes",
+        descriptionFieldLabel = "Descripción"
     )
 
     override val dashboard = DashboardStrings(
@@ -307,7 +308,7 @@ object SpanishStrings : AppStrings {
         description = "Distribuye un gasto grande a lo largo de varios per\u00edodos para que no golpee tu presupuesto de una sola vez.",
         addEntry = "Agregar entrada de amortizaci\u00f3n",
         editEntry = "Editar entrada de amortizaci\u00f3n",
-        sourceName = "Descripci\u00f3n",
+        sourceName = "Comercio/Servicio",
         totalAmount = "Monto total",
         budgetPeriods = { period -> "Per\u00edodos ($period)" },
         selectStartDate = "Elegir fecha de inicio",
@@ -335,7 +336,7 @@ object SpanishStrings : AppStrings {
         editExpense = "Editar gasto recurrente",
         deleteExpenseTitle = { name -> "\u00bfEliminar $name?" },
         deleteExpenseBody = "Este gasto recurrente se eliminar\u00e1 permanentemente.",
-        descriptionLabel = "Descripci\u00f3n",
+        descriptionLabel = "Comercio/Servicio",
         requiredNetflixExample = "Obligatorio, ej. Netflix",
         exampleAmount = "ej. 15.99",
         monthlyExpenses = "Gastos Mensuales",

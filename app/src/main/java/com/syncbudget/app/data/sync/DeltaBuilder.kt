@@ -23,6 +23,7 @@ object DeltaBuilder {
     fun buildTransactionDelta(txn: Transaction, lastPushedClock: Long): RecordDelta? {
         val fields = mutableMapOf<String, FieldDelta>()
         if (txn.source_clock > lastPushedClock) fields["source"] = FieldDelta(txn.source, txn.source_clock)
+        if (txn.description_clock > lastPushedClock) fields["description"] = FieldDelta(txn.description, txn.description_clock)
         if (txn.amount_clock > lastPushedClock) fields["amount"] = FieldDelta(txn.amount, txn.amount_clock)
         if (txn.date_clock > lastPushedClock) fields["date"] = FieldDelta(txn.date.toString(), txn.date_clock)
         if (txn.type_clock > lastPushedClock) fields["type"] = FieldDelta(txn.type.name, txn.type_clock)
@@ -65,6 +66,7 @@ object DeltaBuilder {
     fun buildRecurringExpenseDelta(re: RecurringExpense, lastPushedClock: Long): RecordDelta? {
         val fields = mutableMapOf<String, FieldDelta>()
         if (re.source_clock > lastPushedClock) fields["source"] = FieldDelta(re.source, re.source_clock)
+        if (re.description_clock > lastPushedClock) fields["description"] = FieldDelta(re.description, re.description_clock)
         if (re.amount_clock > lastPushedClock) fields["amount"] = FieldDelta(re.amount, re.amount_clock)
         if (re.repeatType_clock > lastPushedClock) fields["repeatType"] = FieldDelta(re.repeatType.name, re.repeatType_clock)
         if (re.repeatInterval_clock > lastPushedClock) fields["repeatInterval"] = FieldDelta(re.repeatInterval, re.repeatInterval_clock)
@@ -83,6 +85,7 @@ object DeltaBuilder {
     fun buildIncomeSourceDelta(src: IncomeSource, lastPushedClock: Long): RecordDelta? {
         val fields = mutableMapOf<String, FieldDelta>()
         if (src.source_clock > lastPushedClock) fields["source"] = FieldDelta(src.source, src.source_clock)
+        if (src.description_clock > lastPushedClock) fields["description"] = FieldDelta(src.description, src.description_clock)
         if (src.amount_clock > lastPushedClock) fields["amount"] = FieldDelta(src.amount, src.amount_clock)
         if (src.repeatType_clock > lastPushedClock) fields["repeatType"] = FieldDelta(src.repeatType.name, src.repeatType_clock)
         if (src.repeatInterval_clock > lastPushedClock) fields["repeatInterval"] = FieldDelta(src.repeatInterval, src.repeatInterval_clock)
@@ -117,6 +120,7 @@ object DeltaBuilder {
     fun buildAmortizationEntryDelta(entry: AmortizationEntry, lastPushedClock: Long): RecordDelta? {
         val fields = mutableMapOf<String, FieldDelta>()
         if (entry.source_clock > lastPushedClock) fields["source"] = FieldDelta(entry.source, entry.source_clock)
+        if (entry.description_clock > lastPushedClock) fields["description"] = FieldDelta(entry.description, entry.description_clock)
         if (entry.amount_clock > lastPushedClock) fields["amount"] = FieldDelta(entry.amount, entry.amount_clock)
         if (entry.totalPeriods_clock > lastPushedClock) fields["totalPeriods"] = FieldDelta(entry.totalPeriods, entry.totalPeriods_clock)
         if (entry.startDate_clock > lastPushedClock) fields["startDate"] = FieldDelta(entry.startDate.toString(), entry.startDate_clock)

@@ -46,6 +46,7 @@ object SnapshotManager {
             obj.put("type", t.type.name)
             obj.put("date", t.date.toString())
             obj.put("source", t.source)
+            obj.put("description", t.description)
             obj.put("amount", t.amount)
             obj.put("isUserCategorized", t.isUserCategorized)
             obj.put("isBudgetIncome", t.isBudgetIncome)
@@ -62,6 +63,7 @@ object SnapshotManager {
             obj.put("deviceId", t.deviceId)
             obj.put("deleted", t.deleted)
             obj.put("source_clock", t.source_clock)
+            obj.put("description_clock", t.description_clock)
             obj.put("amount_clock", t.amount_clock)
             obj.put("date_clock", t.date_clock)
             obj.put("type_clock", t.type_clock)
@@ -80,6 +82,7 @@ object SnapshotManager {
             val obj = JSONObject()
             obj.put("id", r.id)
             obj.put("source", r.source)
+            obj.put("description", r.description)
             obj.put("amount", r.amount)
             obj.put("repeatType", r.repeatType.name)
             obj.put("repeatInterval", r.repeatInterval)
@@ -89,6 +92,7 @@ object SnapshotManager {
             obj.put("deviceId", r.deviceId)
             obj.put("deleted", r.deleted)
             obj.put("source_clock", r.source_clock)
+            obj.put("description_clock", r.description_clock)
             obj.put("amount_clock", r.amount_clock)
             obj.put("repeatType_clock", r.repeatType_clock)
             obj.put("repeatInterval_clock", r.repeatInterval_clock)
@@ -107,6 +111,7 @@ object SnapshotManager {
             val obj = JSONObject()
             obj.put("id", s.id)
             obj.put("source", s.source)
+            obj.put("description", s.description)
             obj.put("amount", s.amount)
             obj.put("repeatType", s.repeatType.name)
             obj.put("repeatInterval", s.repeatInterval)
@@ -116,6 +121,7 @@ object SnapshotManager {
             obj.put("deviceId", s.deviceId)
             obj.put("deleted", s.deleted)
             obj.put("source_clock", s.source_clock)
+            obj.put("description_clock", s.description_clock)
             obj.put("amount_clock", s.amount_clock)
             obj.put("repeatType_clock", s.repeatType_clock)
             obj.put("repeatInterval_clock", s.repeatInterval_clock)
@@ -159,12 +165,14 @@ object SnapshotManager {
             val obj = JSONObject()
             obj.put("id", e.id)
             obj.put("source", e.source)
+            obj.put("description", e.description)
             obj.put("amount", e.amount)
             obj.put("totalPeriods", e.totalPeriods)
             obj.put("startDate", e.startDate.toString())
             obj.put("deviceId", e.deviceId)
             obj.put("deleted", e.deleted)
             obj.put("source_clock", e.source_clock)
+            obj.put("description_clock", e.description_clock)
             obj.put("amount_clock", e.amount_clock)
             obj.put("totalPeriods_clock", e.totalPeriods_clock)
             obj.put("startDate_clock", e.startDate_clock)
@@ -217,6 +225,7 @@ object SnapshotManager {
                     type = try { TransactionType.valueOf(obj.getString("type")) } catch (_: Exception) { TransactionType.EXPENSE },
                     date = try { LocalDate.parse(obj.getString("date")) } catch (_: Exception) { LocalDate.now() },
                     source = obj.getString("source"),
+                    description = obj.optString("description", ""),
                     categoryAmounts = categoryAmounts,
                     amount = obj.getDouble("amount"),
                     isUserCategorized = if (obj.has("isUserCategorized")) obj.getBoolean("isUserCategorized") else true,
@@ -224,6 +233,7 @@ object SnapshotManager {
                     deviceId = obj.optString("deviceId", ""),
                     deleted = obj.optBoolean("deleted", false),
                     source_clock = obj.optLong("source_clock", 0L),
+                    description_clock = obj.optLong("description_clock", 0L),
                     amount_clock = obj.optLong("amount_clock", 0L),
                     date_clock = obj.optLong("date_clock", 0L),
                     type_clock = obj.optLong("type_clock", 0L),
@@ -243,6 +253,7 @@ object SnapshotManager {
                 RecurringExpense(
                     id = obj.getInt("id"),
                     source = obj.getString("source"),
+                    description = obj.optString("description", ""),
                     amount = obj.getDouble("amount"),
                     repeatType = try { RepeatType.valueOf(obj.getString("repeatType")) } catch (_: Exception) { RepeatType.MONTHS },
                     repeatInterval = obj.optInt("repeatInterval", 1),
@@ -252,6 +263,7 @@ object SnapshotManager {
                     deviceId = obj.optString("deviceId", ""),
                     deleted = obj.optBoolean("deleted", false),
                     source_clock = obj.optLong("source_clock", 0L),
+                    description_clock = obj.optLong("description_clock", 0L),
                     amount_clock = obj.optLong("amount_clock", 0L),
                     repeatType_clock = obj.optLong("repeatType_clock", 0L),
                     repeatInterval_clock = obj.optLong("repeatInterval_clock", 0L),
@@ -271,6 +283,7 @@ object SnapshotManager {
                 IncomeSource(
                     id = obj.getInt("id"),
                     source = obj.getString("source"),
+                    description = obj.optString("description", ""),
                     amount = obj.getDouble("amount"),
                     repeatType = try { RepeatType.valueOf(obj.getString("repeatType")) } catch (_: Exception) { RepeatType.MONTHS },
                     repeatInterval = obj.optInt("repeatInterval", 1),
@@ -280,6 +293,7 @@ object SnapshotManager {
                     deviceId = obj.optString("deviceId", ""),
                     deleted = obj.optBoolean("deleted", false),
                     source_clock = obj.optLong("source_clock", 0L),
+                    description_clock = obj.optLong("description_clock", 0L),
                     amount_clock = obj.optLong("amount_clock", 0L),
                     repeatType_clock = obj.optLong("repeatType_clock", 0L),
                     repeatInterval_clock = obj.optLong("repeatInterval_clock", 0L),
@@ -330,6 +344,7 @@ object SnapshotManager {
                 AmortizationEntry(
                     id = obj.getInt("id"),
                     source = obj.getString("source"),
+                    description = obj.optString("description", ""),
                     amount = obj.getDouble("amount"),
                     totalPeriods = obj.getInt("totalPeriods"),
                     startDate = try { LocalDate.parse(obj.getString("startDate")) } catch (_: Exception) { LocalDate.now() },
@@ -337,6 +352,7 @@ object SnapshotManager {
                     deleted = obj.optBoolean("deleted", false),
                     isPaused = if (obj.has("isPaused")) obj.getBoolean("isPaused") else false,
                     source_clock = obj.optLong("source_clock", 0L),
+                    description_clock = obj.optLong("description_clock", 0L),
                     amount_clock = obj.optLong("amount_clock", 0L),
                     totalPeriods_clock = obj.optLong("totalPeriods_clock", 0L),
                     startDate_clock = obj.optLong("startDate_clock", 0L),

@@ -229,6 +229,69 @@ class DeltaBuilderTest {
         assertTrue(delta.fields.containsKey("isPaused"))
     }
 
+    // ── description field in deltas ──────────────────────────────────
+
+    @Test
+    fun buildTransactionDelta_descriptionIncludedWhenClockAboveThreshold() {
+        val txn = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Store", description = "weekly groceries", amount = 42.0, deviceId = "dev1",
+            source_clock = 5, description_clock = 5, amount_clock = 5)
+
+        val delta = DeltaBuilder.buildTransactionDelta(txn, 0)
+        assertNotNull(delta)
+        assertTrue(delta!!.fields.containsKey("description"))
+        assertEquals("weekly groceries", delta.fields["description"]?.value)
+        assertEquals(5L, delta.fields["description"]?.clock)
+    }
+
+    @Test
+    fun buildTransactionDelta_descriptionExcludedWhenClockBelowThreshold() {
+        val txn = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Store", description = "note", amount = 42.0, deviceId = "dev1",
+            source_clock = 10, description_clock = 3, amount_clock = 10)
+
+        val delta = DeltaBuilder.buildTransactionDelta(txn, 5)
+        assertNotNull(delta)
+        // description_clock (3) < threshold (5) and it's not a critical field → not piggybacked
+        assertFalse(delta!!.fields.containsKey("description"))
+    }
+
+    @Test
+    fun buildRecurringExpenseDelta_descriptionIncluded() {
+        val re = RecurringExpense(id = 1, source = "Netflix", description = "family plan",
+            amount = 15.99, deviceId = "dev1",
+            source_clock = 5, description_clock = 5, amount_clock = 5)
+
+        val delta = DeltaBuilder.buildRecurringExpenseDelta(re, 0)
+        assertNotNull(delta)
+        assertTrue(delta!!.fields.containsKey("description"))
+        assertEquals("family plan", delta.fields["description"]?.value)
+    }
+
+    @Test
+    fun buildIncomeSourceDelta_descriptionIncluded() {
+        val src = IncomeSource(id = 1, source = "Salary", description = "base pay",
+            amount = 3000.0, deviceId = "dev1",
+            source_clock = 5, description_clock = 5, amount_clock = 5)
+
+        val delta = DeltaBuilder.buildIncomeSourceDelta(src, 0)
+        assertNotNull(delta)
+        assertTrue(delta!!.fields.containsKey("description"))
+    }
+
+    @Test
+    fun buildAmortizationEntryDelta_descriptionIncluded() {
+        val entry = AmortizationEntry(id = 1, source = "Laptop", description = "work laptop",
+            amount = 1200.0, totalPeriods = 12, startDate = today, deviceId = "dev1",
+            source_clock = 5, description_clock = 5, amount_clock = 5,
+            totalPeriods_clock = 5, startDate_clock = 5)
+
+        val delta = DeltaBuilder.buildAmortizationEntryDelta(entry, 0)
+        assertNotNull(delta)
+        assertTrue(delta!!.fields.containsKey("description"))
+        assertEquals("work laptop", delta.fields["description"]?.value)
+    }
+
     // ── Edge: lastPushedClock = 0 ───────────────────────────────────
 
     @Test

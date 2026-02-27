@@ -433,6 +433,74 @@ class CrdtMergeTest {
         assertTrue(merged.isPaused)
     }
 
+    // ── description LWW merge ────────────────────────────────────────
+
+    @Test
+    fun mergeTransaction_descriptionLWW_remoteHigherClock() {
+        val local = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Store", description = "local note", amount = 50.0, deviceId = deviceA,
+            description_clock = 3)
+        val remote = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Store", description = "remote note", amount = 50.0, deviceId = deviceB,
+            description_clock = 7)
+
+        val merged = CrdtMerge.mergeTransaction(local, remote, deviceA)
+        assertEquals("remote note", merged.description)
+        assertEquals(7L, merged.description_clock)
+    }
+
+    @Test
+    fun mergeTransaction_descriptionLWW_localHigherClock() {
+        val local = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Store", description = "local note", amount = 50.0, deviceId = deviceA,
+            description_clock = 10)
+        val remote = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Store", description = "remote note", amount = 50.0, deviceId = deviceB,
+            description_clock = 3)
+
+        val merged = CrdtMerge.mergeTransaction(local, remote, deviceA)
+        assertEquals("local note", merged.description)
+        assertEquals(10L, merged.description_clock)
+    }
+
+    @Test
+    fun mergeRecurringExpense_descriptionLWW() {
+        val local = RecurringExpense(id = 1, source = "Netflix", description = "old",
+            amount = 15.99, deviceId = deviceA, description_clock = 2)
+        val remote = RecurringExpense(id = 1, source = "Netflix", description = "new",
+            amount = 15.99, deviceId = deviceB, description_clock = 5)
+
+        val merged = CrdtMerge.mergeRecurringExpense(local, remote, deviceA)
+        assertEquals("new", merged.description)
+        assertEquals(5L, merged.description_clock)
+    }
+
+    @Test
+    fun mergeIncomeSource_descriptionLWW() {
+        val local = IncomeSource(id = 1, source = "Salary", description = "old",
+            amount = 3000.0, deviceId = deviceA, description_clock = 2)
+        val remote = IncomeSource(id = 1, source = "Salary", description = "new",
+            amount = 3000.0, deviceId = deviceB, description_clock = 5)
+
+        val merged = CrdtMerge.mergeIncomeSource(local, remote, deviceA)
+        assertEquals("new", merged.description)
+        assertEquals(5L, merged.description_clock)
+    }
+
+    @Test
+    fun mergeAmortizationEntry_descriptionLWW() {
+        val local = AmortizationEntry(id = 1, source = "Laptop", description = "old",
+            amount = 1200.0, totalPeriods = 12, startDate = today, deviceId = deviceA,
+            description_clock = 2)
+        val remote = AmortizationEntry(id = 1, source = "Laptop", description = "new",
+            amount = 1200.0, totalPeriods = 12, startDate = today, deviceId = deviceB,
+            description_clock = 5)
+
+        val merged = CrdtMerge.mergeAmortizationEntry(local, remote, deviceA)
+        assertEquals("new", merged.description)
+        assertEquals(5L, merged.description_clock)
+    }
+
     @Test
     fun mergeAmortizationEntry_sourceAndAmountMerge() {
         val local = AmortizationEntry(id = 1, source = "Old Laptop", amount = 1000.0,

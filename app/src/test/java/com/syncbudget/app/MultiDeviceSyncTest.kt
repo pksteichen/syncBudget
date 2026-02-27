@@ -949,4 +949,69 @@ class MultiDeviceSyncTest {
         val merged2 = CrdtMerge.mergeAmortizationEntry(local2, remote2, deviceA)
         assertFalse(merged2.isPaused) // local 8 > 5
     }
+
+    // ── Scenario: description field syncs across devices ──────────────
+
+    @Test
+    fun scenario_descriptionSyncsAcrossDevices() {
+        // Device A creates a transaction with a description
+        val txnA = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Grocery Store", description = "weekly groceries", amount = 50.0,
+            deviceId = deviceA,
+            source_clock = 1, description_clock = 1, amount_clock = 1,
+            date_clock = 1, type_clock = 1, deviceId_clock = 1)
+
+        // Build and transmit to Device B
+        val packet = buildAndTransmit(transactions = listOf(txnA), sourceDeviceId = deviceA)
+        assertEquals(1, packet.changes.size)
+
+        // Verify description survived serialization
+        val change = packet.changes[0]
+        assertEquals("weekly groceries", change.fields["description"]?.value)
+        assertEquals(1L, change.fields["description"]?.clock)
+
+        // Device B merges with empty local
+        val localB = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Grocery Store", description = "", amount = 50.0,
+            deviceId = deviceB, description_clock = 0)
+
+        // Simulate deserialization on Device B
+        val remoteB = Transaction(
+            id = change.id,
+            type = TransactionType.EXPENSE,
+            date = today,
+            source = change.fields["source"]?.value as String,
+            description = change.fields["description"]?.value as? String ?: "",
+            amount = (change.fields["amount"]?.value as Number).toDouble(),
+            deviceId = change.fields["deviceId"]?.value as? String ?: deviceA,
+            source_clock = change.fields["source"]?.clock ?: 0L,
+            description_clock = change.fields["description"]?.clock ?: 0L,
+            amount_clock = change.fields["amount"]?.clock ?: 0L,
+            date_clock = change.fields["date"]?.clock ?: 0L,
+            type_clock = change.fields["type"]?.clock ?: 0L,
+            deviceId_clock = change.fields["deviceId"]?.clock ?: 0L
+        )
+
+        val merged = CrdtMerge.mergeTransaction(localB, remoteB, deviceB)
+        assertEquals("weekly groceries", merged.description)
+        assertEquals(1L, merged.description_clock)
+    }
+
+    @Test
+    fun scenario_descriptionConflict_higherClockWins() {
+        val local = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Store", description = "local note", amount = 50.0,
+            deviceId = deviceA, description_clock = 3)
+        val remote = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Store", description = "remote note", amount = 50.0,
+            deviceId = deviceB, description_clock = 7)
+
+        val mergedAB = CrdtMerge.mergeTransaction(local, remote, deviceA)
+        val mergedBA = CrdtMerge.mergeTransaction(remote, local, deviceB)
+
+        // Both merge orders must produce the same result (commutativity)
+        assertEquals("remote note", mergedAB.description)
+        assertEquals("remote note", mergedBA.description)
+        assertEquals(mergedAB.description_clock, mergedBA.description_clock)
+    }
 }

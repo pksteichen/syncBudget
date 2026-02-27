@@ -54,6 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.syncbudget.app.ui.theme.AdAwareDialog
 import com.syncbudget.app.data.BudgetCalculator
@@ -428,6 +429,15 @@ private fun ExpenseRow(
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onBackground
             )
+            if (expense.description.isNotBlank()) {
+                Text(
+                    expense.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             val amountStr = formatCurrency(expense.amount, currencySymbol)
             val nextStr = nextDate?.format(dateFormatter) ?: "—"
             Text(
@@ -469,6 +479,7 @@ private fun AddEditExpenseDialog(
     val maxDecimalPlaces = CURRENCY_DECIMALS[currencySymbol] ?: 2
 
     var sourceName by remember { mutableStateOf(existingExpense?.source ?: "") }
+    var description by remember { mutableStateOf(existingExpense?.description ?: "") }
     var amountText by remember {
         mutableStateOf(
             if (existingExpense != null && existingExpense.amount > 0.0)
@@ -557,6 +568,14 @@ private fun AddEditExpenseDialog(
                             Text(S.recurringExpenses.requiredNetflixExample, color = Color(0xFFF44336))
                         }) else null,
                         colors = textFieldColors,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = description,
+                        onValueChange = { description = it },
+                        label = { Text(S.common.descriptionFieldLabel) },
+                        colors = textFieldColors,
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
@@ -814,6 +833,7 @@ private fun AddEditExpenseDialog(
                                     RepeatType.DAYS -> RecurringExpense(
                                         id = existingExpense?.id ?: 0,
                                         source = sourceName.trim(),
+                                        description = description.trim(),
                                         amount = amount!!,
                                         repeatType = repeatType,
                                         repeatInterval = interval!!,
@@ -824,6 +844,7 @@ private fun AddEditExpenseDialog(
                                     RepeatType.WEEKS -> RecurringExpense(
                                         id = existingExpense?.id ?: 0,
                                         source = sourceName.trim(),
+                                        description = description.trim(),
                                         amount = amount!!,
                                         repeatType = repeatType,
                                         repeatInterval = interval!!,
@@ -834,6 +855,7 @@ private fun AddEditExpenseDialog(
                                     RepeatType.BI_WEEKLY -> RecurringExpense(
                                         id = existingExpense?.id ?: 0,
                                         source = sourceName.trim(),
+                                        description = description.trim(),
                                         amount = amount!!,
                                         repeatType = repeatType,
                                         repeatInterval = 1,
@@ -844,6 +866,7 @@ private fun AddEditExpenseDialog(
                                     RepeatType.MONTHS -> RecurringExpense(
                                         id = existingExpense?.id ?: 0,
                                         source = sourceName.trim(),
+                                        description = description.trim(),
                                         amount = amount!!,
                                         repeatType = repeatType,
                                         repeatInterval = interval!!,
@@ -854,6 +877,7 @@ private fun AddEditExpenseDialog(
                                     RepeatType.BI_MONTHLY -> RecurringExpense(
                                         id = existingExpense?.id ?: 0,
                                         source = sourceName.trim(),
+                                        description = description.trim(),
                                         amount = amount!!,
                                         repeatType = repeatType,
                                         repeatInterval = 1,
@@ -864,6 +888,7 @@ private fun AddEditExpenseDialog(
                                     RepeatType.ANNUAL -> RecurringExpense(
                                         id = existingExpense?.id ?: 0,
                                         source = sourceName.trim(),
+                                        description = description.trim(),
                                         amount = amount!!,
                                         repeatType = repeatType,
                                         repeatInterval = 1,

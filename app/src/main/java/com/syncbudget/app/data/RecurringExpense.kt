@@ -5,6 +5,7 @@ import java.time.LocalDate
 data class RecurringExpense(
     val id: Int,
     val source: String,
+    val description: String = "",
     val amount: Double,
     val repeatType: RepeatType = RepeatType.MONTHS,
     val repeatInterval: Int = 1,
@@ -15,6 +16,7 @@ data class RecurringExpense(
     val deviceId: String = "",
     val deleted: Boolean = false,
     val source_clock: Long = 0L,
+    val description_clock: Long = 0L,
     val amount_clock: Long = 0L,
     val repeatType_clock: Long = 0L,
     val repeatInterval_clock: Long = 0L,

@@ -33,8 +33,8 @@ object EnglishStrings : AppStrings {
         periodMonths = "months",
         addNewIncomeTransaction = "Add New Income Transaction",
         addNewExpenseTransaction = "Add New Expense Transaction",
-        sourceLabel = "Description",
-        merchantLabel = "Description",
+        sourceLabel = "Source",
+        merchantLabel = "Merchant/Service",
         repeatTypeDays = "Day",
         repeatTypeWeeks = "Week",
         repeatTypeBiWeekly = "Every 2 Weeks",
@@ -44,7 +44,7 @@ object EnglishStrings : AppStrings {
         budgetPeriodDaily = "Daily",
         budgetPeriodWeekly = "Weekly",
         budgetPeriodMonthly = "Monthly",
-        sourceName = "Description",
+        sourceName = "Source",
         amount = "Amount",
         repeatType = "Repeat Type",
         everyXDays = "Days Between Repeats (1-365)",
@@ -66,7 +66,8 @@ object EnglishStrings : AppStrings {
         exampleBiMonthlyDay1 = "e.g. 1",
         exampleBiMonthlyDay2 = "e.g. 15",
         language = "Language",
-        dateDayTooHigh = "Please select a date between the 1st and 28th of the month"
+        dateDayTooHigh = "Please select a date between the 1st and 28th of the month",
+        descriptionFieldLabel = "Description"
     )
 
     override val dashboard = DashboardStrings(
@@ -307,7 +308,7 @@ object EnglishStrings : AppStrings {
         description = "Spread a large past expense across multiple budget periods so it doesn't hit your budget all at once.",
         addEntry = "Add Amortization Entry",
         editEntry = "Edit Amortization Entry",
-        sourceName = "Description",
+        sourceName = "Merchant/Service",
         totalAmount = "Total Amount",
         budgetPeriods = { period -> "Budget Periods ($period)" },
         selectStartDate = "Pick Start Date",
@@ -335,7 +336,7 @@ object EnglishStrings : AppStrings {
         editExpense = "Edit Recurring Expense",
         deleteExpenseTitle = { name -> "Delete $name?" },
         deleteExpenseBody = "This recurring expense will be permanently removed.",
-        descriptionLabel = "Description",
+        descriptionLabel = "Merchant/Service",
         requiredNetflixExample = "Required, e.g. Netflix",
         exampleAmount = "e.g. 15.99",
         monthlyExpenses = "Monthly Expenses",

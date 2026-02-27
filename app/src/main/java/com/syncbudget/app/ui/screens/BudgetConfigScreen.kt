@@ -56,6 +56,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.syncbudget.app.ui.theme.AdAwareDialog
 import com.syncbudget.app.data.BudgetPeriod
@@ -365,6 +366,15 @@ fun BudgetConfigScreen(
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onBackground
                         )
+                        if (source.description.isNotBlank()) {
+                            Text(
+                                source.description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                         Text(
                             text = formatCurrency(source.amount, currencySymbol),
                             style = MaterialTheme.typography.bodyMedium,
@@ -495,6 +505,7 @@ private fun AddEditIncomeDialog(
     }
     var repeatType by remember { mutableStateOf(existingSource?.repeatType ?: RepeatType.MONTHS) }
     var intervalText by remember { mutableStateOf(existingSource?.repeatInterval?.toString() ?: "1") }
+    var description by remember { mutableStateOf(existingSource?.description ?: "") }
     var startDate by remember { mutableStateOf(existingSource?.startDate) }
     var monthDay1Text by remember { mutableStateOf(existingSource?.monthDay1?.toString() ?: "") }
     var monthDay2Text by remember { mutableStateOf(existingSource?.monthDay2?.toString() ?: "") }
@@ -565,6 +576,14 @@ private fun AddEditIncomeDialog(
                             Text(S.budgetConfig.requiredPaycheckExample, color = Color(0xFFF44336))
                         }) else null,
                         colors = textFieldColors,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = description,
+                        onValueChange = { description = it },
+                        label = { Text(S.common.descriptionFieldLabel) },
+                        colors = textFieldColors,
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
@@ -838,6 +857,7 @@ private fun AddEditIncomeDialog(
                                     RepeatType.DAYS -> IncomeSource(
                                         id = existingSource?.id ?: 0,
                                         source = sourceName.trim(),
+                                        description = description.trim(),
                                         amount = amount!!,
                                         repeatType = repeatType,
                                         repeatInterval = interval!!,
@@ -848,6 +868,7 @@ private fun AddEditIncomeDialog(
                                     RepeatType.WEEKS -> IncomeSource(
                                         id = existingSource?.id ?: 0,
                                         source = sourceName.trim(),
+                                        description = description.trim(),
                                         amount = amount!!,
                                         repeatType = repeatType,
                                         repeatInterval = interval!!,
@@ -858,6 +879,7 @@ private fun AddEditIncomeDialog(
                                     RepeatType.BI_WEEKLY -> IncomeSource(
                                         id = existingSource?.id ?: 0,
                                         source = sourceName.trim(),
+                                        description = description.trim(),
                                         amount = amount!!,
                                         repeatType = repeatType,
                                         repeatInterval = 1,
@@ -868,6 +890,7 @@ private fun AddEditIncomeDialog(
                                     RepeatType.MONTHS -> IncomeSource(
                                         id = existingSource?.id ?: 0,
                                         source = sourceName.trim(),
+                                        description = description.trim(),
                                         amount = amount!!,
                                         repeatType = repeatType,
                                         repeatInterval = interval!!,
@@ -878,6 +901,7 @@ private fun AddEditIncomeDialog(
                                     RepeatType.BI_MONTHLY -> IncomeSource(
                                         id = existingSource?.id ?: 0,
                                         source = sourceName.trim(),
+                                        description = description.trim(),
                                         amount = amount!!,
                                         repeatType = repeatType,
                                         repeatInterval = 1,
@@ -888,6 +912,7 @@ private fun AddEditIncomeDialog(
                                     RepeatType.ANNUAL -> IncomeSource(
                                         id = existingSource?.id ?: 0,
                                         source = sourceName.trim(),
+                                        description = description.trim(),
                                         amount = amount!!,
                                         repeatType = repeatType,
                                         repeatInterval = 1,

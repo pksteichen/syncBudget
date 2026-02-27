@@ -15,6 +15,7 @@ object IncomeSourceRepository {
             val obj = JSONObject()
             obj.put("id", s.id)
             obj.put("source", s.source)
+            obj.put("description", s.description)
             obj.put("amount", s.amount)
             obj.put("repeatType", s.repeatType.name)
             obj.put("repeatInterval", s.repeatInterval)
@@ -25,6 +26,7 @@ object IncomeSourceRepository {
             obj.put("deviceId", s.deviceId)
             obj.put("deleted", s.deleted)
             obj.put("source_clock", s.source_clock)
+            obj.put("description_clock", s.description_clock)
             obj.put("amount_clock", s.amount_clock)
             obj.put("repeatType_clock", s.repeatType_clock)
             obj.put("repeatInterval_clock", s.repeatInterval_clock)
@@ -53,6 +55,7 @@ object IncomeSourceRepository {
                 IncomeSource(
                     id = obj.getInt("id"),
                     source = obj.getString("source"),
+                    description = obj.optString("description", ""),
                     amount = obj.getDouble("amount"),
                     repeatType = RepeatType.valueOf(obj.getString("repeatType")),
                     repeatInterval = obj.getInt("repeatInterval"),
@@ -62,6 +65,7 @@ object IncomeSourceRepository {
                     deviceId = obj.optString("deviceId", ""),
                     deleted = obj.optBoolean("deleted", false),
                     source_clock = obj.optLong("source_clock", 0L),
+                    description_clock = obj.optLong("description_clock", 0L),
                     amount_clock = obj.optLong("amount_clock", 0L),
                     repeatType_clock = obj.optLong("repeatType_clock", 0L),
                     repeatInterval_clock = obj.optLong("repeatInterval_clock", 0L),

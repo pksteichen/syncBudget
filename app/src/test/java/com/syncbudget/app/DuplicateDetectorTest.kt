@@ -150,6 +150,18 @@ class DuplicateDetectorTest {
         assertNull(result)
     }
 
+    @Test
+    fun findDuplicate_differentDescription_stillMatches() {
+        val incoming = Transaction(id = 100, type = TransactionType.EXPENSE, date = today,
+            source = "Walmart", description = "new note", amount = 42.99)
+        val existing = listOf(
+            Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+                source = "Walmart", description = "old note", amount = 42.99)
+        )
+        val result = findDuplicate(incoming, existing)
+        assertNotNull(result) // description is ignored for duplicate detection
+    }
+
     // ── findRecurringExpenseMatch ────────────────────────────────────
 
     @Test

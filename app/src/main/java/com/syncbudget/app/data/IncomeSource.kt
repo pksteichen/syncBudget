@@ -7,6 +7,7 @@ enum class RepeatType { DAYS, WEEKS, BI_WEEKLY, MONTHS, BI_MONTHLY, ANNUAL }
 data class IncomeSource(
     val id: Int,
     val source: String,
+    val description: String = "",
     val amount: Double,
     val repeatType: RepeatType = RepeatType.MONTHS,
     val repeatInterval: Int = 1,
@@ -17,6 +18,7 @@ data class IncomeSource(
     val deviceId: String = "",
     val deleted: Boolean = false,
     val source_clock: Long = 0L,
+    val description_clock: Long = 0L,
     val amount_clock: Long = 0L,
     val repeatType_clock: Long = 0L,
     val repeatInterval_clock: Long = 0L,

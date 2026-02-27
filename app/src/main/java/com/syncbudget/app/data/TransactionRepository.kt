@@ -17,6 +17,7 @@ object TransactionRepository {
             obj.put("type", t.type.name)
             obj.put("date", t.date.toString())
             obj.put("source", t.source)
+            obj.put("description", t.description)
             obj.put("amount", t.amount)
             obj.put("isUserCategorized", t.isUserCategorized)
             obj.put("isBudgetIncome", t.isBudgetIncome)
@@ -34,6 +35,7 @@ object TransactionRepository {
             obj.put("deviceId", t.deviceId)
             obj.put("deleted", t.deleted)
             obj.put("source_clock", t.source_clock)
+            obj.put("description_clock", t.description_clock)
             obj.put("amount_clock", t.amount_clock)
             obj.put("date_clock", t.date_clock)
             obj.put("type_clock", t.type_clock)
@@ -79,6 +81,7 @@ object TransactionRepository {
                     type = TransactionType.valueOf(obj.getString("type")),
                     date = LocalDate.parse(obj.getString("date")),
                     source = obj.getString("source"),
+                    description = obj.optString("description", ""),
                     categoryAmounts = categoryAmounts,
                     amount = amount,
                     isUserCategorized = isUserCategorized,
@@ -86,6 +89,7 @@ object TransactionRepository {
                     deviceId = obj.optString("deviceId", ""),
                     deleted = obj.optBoolean("deleted", false),
                     source_clock = obj.optLong("source_clock", 0L),
+                    description_clock = obj.optLong("description_clock", 0L),
                     amount_clock = obj.optLong("amount_clock", 0L),
                     date_clock = obj.optLong("date_clock", 0L),
                     type_clock = obj.optLong("type_clock", 0L),

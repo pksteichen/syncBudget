@@ -15,6 +15,7 @@ object RecurringExpenseRepository {
             val obj = JSONObject()
             obj.put("id", r.id)
             obj.put("source", r.source)
+            obj.put("description", r.description)
             obj.put("amount", r.amount)
             obj.put("repeatType", r.repeatType.name)
             obj.put("repeatInterval", r.repeatInterval)
@@ -25,6 +26,7 @@ object RecurringExpenseRepository {
             obj.put("deviceId", r.deviceId)
             obj.put("deleted", r.deleted)
             obj.put("source_clock", r.source_clock)
+            obj.put("description_clock", r.description_clock)
             obj.put("amount_clock", r.amount_clock)
             obj.put("repeatType_clock", r.repeatType_clock)
             obj.put("repeatInterval_clock", r.repeatInterval_clock)
@@ -53,6 +55,7 @@ object RecurringExpenseRepository {
                 RecurringExpense(
                     id = obj.getInt("id"),
                     source = obj.getString("source"),
+                    description = obj.optString("description", ""),
                     amount = obj.getDouble("amount"),
                     repeatType = RepeatType.valueOf(obj.getString("repeatType")),
                     repeatInterval = obj.getInt("repeatInterval"),
@@ -62,6 +65,7 @@ object RecurringExpenseRepository {
                     deviceId = obj.optString("deviceId", ""),
                     deleted = obj.optBoolean("deleted", false),
                     source_clock = obj.optLong("source_clock", 0L),
+                    description_clock = obj.optLong("description_clock", 0L),
                     amount_clock = obj.optLong("amount_clock", 0L),
                     repeatType_clock = obj.optLong("repeatType_clock", 0L),
                     repeatInterval_clock = obj.optLong("repeatInterval_clock", 0L),

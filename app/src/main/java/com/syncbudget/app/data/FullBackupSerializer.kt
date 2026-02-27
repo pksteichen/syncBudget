@@ -124,6 +124,7 @@ object FullBackupSerializer {
                             type = TransactionType.valueOf(obj.getString("type")),
                             date = java.time.LocalDate.parse(obj.getString("date")),
                             source = obj.getString("source"),
+                            description = obj.optString("description", ""),
                             amount = obj.getDouble("amount"),
                             categoryAmounts = categoryAmounts,
                             isUserCategorized = obj.optBoolean("isUserCategorized", false)

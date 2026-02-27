@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -94,6 +95,7 @@ import com.syncbudget.app.ui.theme.AdAwareDialog
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.syncbudget.app.data.BankFormat
 import com.syncbudget.app.data.Category
@@ -244,6 +246,19 @@ fun TransactionsScreen(
 
     // Expanded multi-category rows
     val expandedIds = remember { mutableStateMapOf<Int, Boolean>() }
+
+    // Auto-scroll to top when user adds transaction or loads backup
+    val listState = rememberLazyListState()
+    var scrollToTopTrigger by remember { mutableIntStateOf(0) }
+    val addAndScroll: (Transaction) -> Unit = { txn ->
+        onAddTransaction(txn)
+        scrollToTopTrigger++
+    }
+    LaunchedEffect(scrollToTopTrigger) {
+        if (scrollToTopTrigger > 0) {
+            listState.animateScrollToItem(0)
+        }
+    }
 
     // Manual duplicate check state
     var pendingManualSave by remember { mutableStateOf<Transaction?>(null) }
@@ -495,6 +510,7 @@ fun TransactionsScreen(
         if (importIndex >= parsedTransactions.size) {
             // All done — add approved transactions
             importApproved.forEach { txn -> onAddTransaction(txn) }
+            scrollToTopTrigger++
             val count = importApproved.size
             importApproved.clear()
             parsedTransactions.clear()
@@ -854,7 +870,7 @@ fun TransactionsScreen(
             }
 
             // Transaction list
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                 items(filteredTransactions, key = { it.id }) { transaction ->
                     TransactionRow(
                         transaction = transaction,
@@ -945,7 +961,7 @@ fun TransactionsScreen(
                                 pendingBudgetIncomeIsEdit = false
                                 showBudgetIncomeDialog = true
                             } else {
-                                onAddTransaction(txn)
+                                addAndScroll(txn)
                             }
                         }
                     }
@@ -989,7 +1005,7 @@ fun TransactionsScreen(
                             pendingAmortizationIsEdit = false
                             showAmortizationDialog = true
                         } else {
-                            onAddTransaction(txn)
+                            addAndScroll(txn)
                         }
                     }
                 }
@@ -1056,7 +1072,7 @@ fun TransactionsScreen(
         TextSearchDialog(
             onDismiss = { showTextSearch = false },
             onSearch = { query ->
-                searchPredicate = { t -> t.source.contains(query, ignoreCase = true) }
+                searchPredicate = { t -> t.source.contains(query, ignoreCase = true) || t.description.contains(query, ignoreCase = true) }
                 searchActive = true
                 viewFilter = ViewFilter.ALL
                 showTextSearch = false
@@ -1512,6 +1528,7 @@ fun TransactionsScreen(
                 } else {
                     TextButton(onClick = {
                         onLoadFullBackup(pendingFullBackupContent!!)
+                        scrollToTopTrigger++
                         showFullBackupDialog = false
                         pendingFullBackupContent = null
                         Toast.makeText(context, S.transactions.fullBackupRestored, Toast.LENGTH_SHORT).show()
@@ -1735,7 +1752,7 @@ fun TransactionsScreen(
             showIgnoreAll = false,
             onIgnore = {
                 if (pendingManualIsEdit) onUpdateTransaction(pendingManualSave!!)
-                else onAddTransaction(pendingManualSave!!)
+                else addAndScroll(pendingManualSave!!)
                 pendingManualSave = null
                 manualDuplicateMatch = null
                 showManualDuplicateDialog = false
@@ -1743,7 +1760,7 @@ fun TransactionsScreen(
             onKeepNew = {
                 onDeleteTransaction(manualDuplicateMatch!!)
                 if (pendingManualIsEdit) onUpdateTransaction(pendingManualSave!!)
-                else onAddTransaction(pendingManualSave!!)
+                else addAndScroll(pendingManualSave!!)
                 pendingManualSave = null
                 manualDuplicateMatch = null
                 showManualDuplicateDialog = false
@@ -1807,7 +1824,7 @@ fun TransactionsScreen(
                     )
                 } else txn
                 if (pendingRecurringIsEdit) onUpdateTransaction(updatedTxn)
-                else onAddTransaction(updatedTxn)
+                else addAndScroll(updatedTxn)
                 pendingRecurringTxn = null
                 pendingRecurringMatch = null
                 showRecurringDialog = false
@@ -1815,7 +1832,7 @@ fun TransactionsScreen(
             onNotRecurring = {
                 val txn = pendingRecurringTxn!!
                 if (pendingRecurringIsEdit) onUpdateTransaction(txn)
-                else onAddTransaction(txn)
+                else addAndScroll(txn)
                 pendingRecurringTxn = null
                 pendingRecurringMatch = null
                 showRecurringDialog = false
@@ -1869,7 +1886,7 @@ fun TransactionsScreen(
                     )
                 } else txn
                 if (pendingAmortizationIsEdit) onUpdateTransaction(updatedTxn)
-                else onAddTransaction(updatedTxn)
+                else addAndScroll(updatedTxn)
                 pendingAmortizationTxn = null
                 pendingAmortizationMatch = null
                 showAmortizationDialog = false
@@ -1877,7 +1894,7 @@ fun TransactionsScreen(
             onNotAmortized = {
                 val txn = pendingAmortizationTxn!!
                 if (pendingAmortizationIsEdit) onUpdateTransaction(txn)
-                else onAddTransaction(txn)
+                else addAndScroll(txn)
                 pendingAmortizationTxn = null
                 pendingAmortizationMatch = null
                 showAmortizationDialog = false
@@ -1903,7 +1920,7 @@ fun TransactionsScreen(
                     isUserCategorized = true
                 )
                 if (pendingBudgetIncomeIsEdit) onUpdateTransaction(txn)
-                else onAddTransaction(txn)
+                else addAndScroll(txn)
                 pendingBudgetIncomeTxn = null
                 pendingBudgetIncomeMatch = null
                 showBudgetIncomeDialog = false
@@ -1911,7 +1928,7 @@ fun TransactionsScreen(
             onNotBudgetIncome = {
                 val txn = pendingBudgetIncomeTxn!!
                 if (pendingBudgetIncomeIsEdit) onUpdateTransaction(txn)
-                else onAddTransaction(txn)
+                else addAndScroll(txn)
                 pendingBudgetIncomeTxn = null
                 pendingBudgetIncomeMatch = null
                 showBudgetIncomeDialog = false
@@ -2206,23 +2223,34 @@ private fun TransactionRow(
                         color = MaterialTheme.colorScheme.onBackground,
                         maxLines = if (useExpandedLayout) 2 else 1
                     )
-                    if (attributionLabel != null) {
+                    if (transaction.description.isNotBlank()) {
                         Text(
-                            text = attributionLabel,
+                            text = transaction.description,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
-                            maxLines = 1
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
                 Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = formattedAmount,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = amountColor,
-                    textAlign = TextAlign.End
-                )
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = formattedAmount,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = amountColor,
+                        textAlign = TextAlign.End
+                    )
+                    if (attributionLabel != null) {
+                        Text(
+                            text = attributionLabel,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            maxLines = 1
+                        )
+                    }
+                }
 
                 if (selectionMode && !useExpandedLayout) {
                     Spacer(modifier = Modifier.width(8.dp))
@@ -2339,6 +2367,7 @@ fun TransactionDialog(
         mutableStateOf(editTransaction?.date ?: LocalDate.now())
     }
     var source by remember { mutableStateOf(editTransaction?.source ?: "") }
+    var description by remember { mutableStateOf(editTransaction?.description ?: "") }
     var showDatePicker by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showValidation by remember { mutableStateOf(false) }
@@ -2570,6 +2599,16 @@ fun TransactionDialog(
                         supportingText = if (showValidation && source.isBlank()) ({
                             Text(S.transactions.requiredMerchantExample, color = Color(0xFFF44336))
                         }) else null,
+                        colors = textFieldColors,
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // Description field
+                    OutlinedTextField(
+                        value = description,
+                        onValueChange = { description = it },
+                        label = { Text(S.common.descriptionFieldLabel) },
                         colors = textFieldColors,
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
@@ -3026,6 +3065,7 @@ fun TransactionDialog(
                                     type = type,
                                     date = selectedDate,
                                     source = source.trim(),
+                                    description = description.trim(),
                                     categoryAmounts = catAmounts,
                                     amount = totalAmount
                                 )
