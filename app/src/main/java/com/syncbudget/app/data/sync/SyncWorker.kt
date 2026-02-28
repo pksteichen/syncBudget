@@ -106,6 +106,27 @@ class SyncWorker(
             syncPrefs.edit().putBoolean("migration_description_clock_done_v2", true).apply()
         }
 
+        // One-time migration: re-stamp linked field clocks so they get re-pushed.
+        // Fixes issue where non-admin received linking deltas on an old app version
+        // that didn't have linked fields, causing them to be silently dropped.
+        if (!syncPrefs.getBoolean("migration_restamp_linked_clocks", false)) {
+            val migClock = lamportClock.tick()
+            var changed = false
+            transactions = transactions.map { t ->
+                val needsRecurring = t.linkedRecurringExpenseId != null && t.linkedRecurringExpenseId_clock > 0L
+                val needsAmortization = t.linkedAmortizationEntryId != null && t.linkedAmortizationEntryId_clock > 0L
+                if (needsRecurring || needsAmortization) {
+                    changed = true
+                    t.copy(
+                        linkedRecurringExpenseId_clock = if (needsRecurring) migClock else t.linkedRecurringExpenseId_clock,
+                        linkedAmortizationEntryId_clock = if (needsAmortization) migClock else t.linkedAmortizationEntryId_clock
+                    )
+                } else t
+            }
+            if (changed) TransactionRepository.save(applicationContext, transactions)
+            syncPrefs.edit().putBoolean("migration_restamp_linked_clocks", true).apply()
+        }
+
         // One-time cleanup: remove skeleton categories (name_clock=0, empty name)
         if (!syncPrefs.getBoolean("migration_remove_skeleton_categories", false)) {
             val before = categories.size

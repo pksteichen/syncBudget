@@ -862,7 +862,11 @@ class MainActivity : ComponentActivity() {
                                 val name = categoryMap[ca.categoryId]?.name ?: "???"
                                 "${ca.categoryId}($name):${ca.amount}"
                             }
-                        dump.appendLine("  ${txn.date} ${txn.type} ${txn.amount} '${txn.source}' dev=${txn.deviceId.take(8)}… ba=$budgetAccounted aClk=${txn.amount_clock} cClk=${txn.categoryAmounts_clock} dIdClk=${txn.deviceId_clock} $catDesc")
+                        val linkDesc = listOfNotNull(
+                            txn.linkedRecurringExpenseId?.let { "reId=$it(clk=${txn.linkedRecurringExpenseId_clock})" },
+                            txn.linkedAmortizationEntryId?.let { "aeId=$it(clk=${txn.linkedAmortizationEntryId_clock})" }
+                        ).joinToString(" ").ifEmpty { "" }
+                        dump.appendLine("  ${txn.date} ${txn.type} ${txn.amount} '${txn.source}' dev=${txn.deviceId.take(8)}… ba=$budgetAccounted aClk=${txn.amount_clock} cClk=${txn.categoryAmounts_clock} dIdClk=${txn.deviceId_clock} $linkDesc $catDesc")
                         if (txn.type == TransactionType.EXPENSE && !budgetAccounted) totalExpense += txn.amount
                         else if (txn.type == TransactionType.INCOME && !txn.isBudgetIncome) totalIncome += txn.amount
                     }

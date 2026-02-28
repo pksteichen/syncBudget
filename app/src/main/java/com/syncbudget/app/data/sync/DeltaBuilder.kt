@@ -52,6 +52,9 @@ object DeltaBuilder {
         ensureField(fields, "date", txn.date.toString(), txn.date_clock)
         ensureField(fields, "type", txn.type.name, txn.type_clock)
         ensureField(fields, "deviceId", txn.deviceId, txn.deviceId_clock)
+        ensureField(fields, "linkedRecurringExpenseId", txn.linkedRecurringExpenseId, txn.linkedRecurringExpenseId_clock)
+        ensureField(fields, "linkedAmortizationEntryId", txn.linkedAmortizationEntryId, txn.linkedAmortizationEntryId_clock)
+        ensureField(fields, "isBudgetIncome", txn.isBudgetIncome, txn.isBudgetIncome_clock)
         if ("categoryAmounts" !in fields && txn.categoryAmounts_clock > 0L) {
             val catJson = JSONArray()
             for (ca in txn.categoryAmounts) {
