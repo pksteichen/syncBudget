@@ -8,8 +8,6 @@ data class DefaultCategoryDef(val tag: String, val iconName: String)
 
 val DEFAULT_CATEGORY_DEFS = listOf(
     DefaultCategoryDef("other", "CreditCard"),
-    DefaultCategoryDef("recurring", "Sync"),
-    DefaultCategoryDef("amortization", "Schedule"),
     DefaultCategoryDef("recurring_income", "Payments"),
     DefaultCategoryDef("transportation", "DirectionsCar"),
     DefaultCategoryDef("groceries", "LocalGroceryStore"),
@@ -24,8 +22,6 @@ fun getDefaultCategoryName(tag: String, strings: AppStrings): String? {
     val names = strings.defaultCategoryNames
     return when (tag) {
         "other" -> names.other
-        "recurring" -> names.recurring
-        "amortization" -> names.amortization
         "recurring_income" -> names.recurringIncome
         "transportation" -> names.transportation
         "groceries" -> names.groceries

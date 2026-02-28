@@ -611,6 +611,8 @@ class SyncEngine(
             amount = (f["amount"]?.value as? Number)?.toDouble() ?: 0.0,
             isUserCategorized = f["isUserCategorized"]?.value as? Boolean ?: true,
             isBudgetIncome = f["isBudgetIncome"]?.value as? Boolean ?: false,
+            linkedRecurringExpenseId = (f["linkedRecurringExpenseId"]?.value as? Number)?.toInt(),
+            linkedAmortizationEntryId = (f["linkedAmortizationEntryId"]?.value as? Number)?.toInt(),
             deviceId = f["deviceId"]?.value as? String ?: change.deviceId,
             deleted = f["deleted"]?.value as? Boolean ?: false,
             source_clock = f["source"]?.clock ?: 0L,
@@ -621,6 +623,8 @@ class SyncEngine(
             categoryAmounts_clock = f["categoryAmounts"]?.clock ?: 0L,
             isUserCategorized_clock = f["isUserCategorized"]?.clock ?: 0L,
             isBudgetIncome_clock = f["isBudgetIncome"]?.clock ?: 0L,
+            linkedRecurringExpenseId_clock = f["linkedRecurringExpenseId"]?.clock ?: 0L,
+            linkedAmortizationEntryId_clock = f["linkedAmortizationEntryId"]?.clock ?: 0L,
             deleted_clock = f["deleted"]?.clock ?: 0L,
             deviceId_clock = f["deviceId"]?.clock ?: 0L
         )

@@ -514,4 +514,54 @@ class CrdtMergeTest {
         assertEquals("New Laptop", merged.source) // remote 5 > 2
         assertEquals(1000.0, merged.amount, 0.001) // local 8 > 3
     }
+
+    // ── Linked ID fields ──
+
+    @Test
+    fun `mergeTransaction — linkedRecurringExpenseId LWW higher clock wins`() {
+        val local = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Netflix", amount = 15.0, deviceId = deviceA,
+            linkedRecurringExpenseId = null, linkedRecurringExpenseId_clock = 2,
+            source_clock = 1, amount_clock = 1)
+        val remote = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Netflix", amount = 15.0, deviceId = deviceB,
+            linkedRecurringExpenseId = 42, linkedRecurringExpenseId_clock = 5,
+            source_clock = 1, amount_clock = 1)
+
+        val merged = CrdtMerge.mergeTransaction(local, remote, deviceA)
+        assertEquals(42, merged.linkedRecurringExpenseId)
+        assertEquals(5L, merged.linkedRecurringExpenseId_clock)
+    }
+
+    @Test
+    fun `mergeTransaction — linkedAmortizationEntryId null to value`() {
+        val local = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Laptop", amount = 100.0, deviceId = deviceA,
+            linkedAmortizationEntryId = null, linkedAmortizationEntryId_clock = 0,
+            source_clock = 1, amount_clock = 1)
+        val remote = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Laptop", amount = 100.0, deviceId = deviceB,
+            linkedAmortizationEntryId = 7, linkedAmortizationEntryId_clock = 3,
+            source_clock = 1, amount_clock = 1)
+
+        val merged = CrdtMerge.mergeTransaction(local, remote, deviceA)
+        assertEquals(7, merged.linkedAmortizationEntryId)
+        assertEquals(3L, merged.linkedAmortizationEntryId_clock)
+    }
+
+    @Test
+    fun `mergeTransaction — unlink (value to null) with higher clock`() {
+        val local = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Netflix", amount = 15.0, deviceId = deviceA,
+            linkedRecurringExpenseId = 42, linkedRecurringExpenseId_clock = 3,
+            source_clock = 1, amount_clock = 1)
+        val remote = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Netflix", amount = 15.0, deviceId = deviceB,
+            linkedRecurringExpenseId = null, linkedRecurringExpenseId_clock = 5,
+            source_clock = 1, amount_clock = 1)
+
+        val merged = CrdtMerge.mergeTransaction(local, remote, deviceA)
+        assertNull(merged.linkedRecurringExpenseId)
+        assertEquals(5L, merged.linkedRecurringExpenseId_clock)
+    }
 }

@@ -155,17 +155,15 @@ class SyncWorker(
                     try { LocalDate.parse(it) } catch (_: Exception) { null }
                 }
                 if (budgetStartDate != null) {
-                    val mergedCats = result.mergedCategories ?: categories
-                    val recurringCatId = mergedCats.find { it.tag == "recurring" }?.id
-                    val amortCatId = mergedCats.find { it.tag == "amortization" }?.id
                     val newRemoteTxns = result.mergedTransactions!!.filter {
                         it.deviceId != deviceId && it.id !in premergeLocalTxnIds
                     }
                     var cash = appPrefs.getString("availableCash", null)?.toDoubleOrNull() ?: 0.0
                     var cashChanged = false
                     for (txn in newRemoteTxns) {
-                        val isBudgetAccounted = txn.type == TransactionType.EXPENSE &&
-                            txn.categoryAmounts.any { it.categoryId == recurringCatId || it.categoryId == amortCatId }
+                        val isBudgetAccounted = txn.type == TransactionType.EXPENSE && (
+                            txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null
+                        )
                         if (!txn.deleted && !txn.date.isBefore(budgetStartDate)) {
                             if (txn.type == TransactionType.EXPENSE && !isBudgetAccounted) {
                                 cash -= txn.amount

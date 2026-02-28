@@ -470,8 +470,10 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
             Spacer(modifier = Modifier.height(8.dp))
             NumberedItem(1, S.transactionsHelp.fieldDate, S.transactionsHelp.fieldDateDesc)
             NumberedItem(2, S.transactionsHelp.fieldMerchant, S.transactionsHelp.fieldMerchantDesc)
-            NumberedItem(3, S.transactionsHelp.fieldCategory, S.transactionsHelp.fieldCategoryDesc)
-            NumberedItem(4, S.transactionsHelp.fieldAmount, S.transactionsHelp.fieldAmountDesc)
+            NumberedItem(3, S.transactionsHelp.fieldDescription, S.transactionsHelp.fieldDescriptionDesc)
+            NumberedItem(4, S.transactionsHelp.fieldLinkButtons, S.transactionsHelp.fieldLinkButtonsDesc)
+            NumberedItem(5, S.transactionsHelp.fieldCategory, S.transactionsHelp.fieldCategoryDesc)
+            NumberedItem(6, S.transactionsHelp.fieldAmount, S.transactionsHelp.fieldAmountDesc)
             Spacer(modifier = Modifier.height(10.dp))
 
             SubSectionTitle(S.transactionsHelp.singleCatTitle)

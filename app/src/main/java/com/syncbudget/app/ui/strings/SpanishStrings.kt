@@ -4,8 +4,6 @@ object SpanishStrings : AppStrings {
 
     override val defaultCategoryNames = DefaultCategoryNames(
         other = "Otros",
-        recurring = "Recurrente",
-        amortization = "Amortizaci\u00f3n",
         recurringIncome = "Ingreso Recurrente",
         transportation = "Transporte/Gasolina",
         groceries = "Supermercado",
@@ -266,7 +264,15 @@ object SpanishStrings : AppStrings {
         fullBackupSyncWarning = "Restaurar un respaldo completo disolverá el grupo de sincronización familiar actual. Deberás crear un nuevo grupo y compartir un nuevo código de emparejamiento con los miembros de la familia.",
         fullBackupNonAdminBlock = "Solo el administrador del grupo puede restaurar un respaldo completo. Una restauración completa corrompería el estado de sincronización de todos los dispositivos.",
         fullBackupGroupRecreated = "Respaldo restaurado. Nuevo grupo familiar creado \u2014 comparte el código de emparejamiento con los miembros de la familia.",
-        fullBackupGroupDissolved = "Respaldo restaurado. Grupo familiar disuelto."
+        fullBackupGroupDissolved = "Respaldo restaurado. Grupo familiar disuelto.",
+        linkToRecurring = "Vincular a",
+        linkToAmortization = "Vincular a",
+        linkMismatchTitle = "Montos diferentes",
+        linkMismatchBody = { txnAmt, entryAmt -> "La transaccion ($txnAmt) difiere de la entrada ($entryAmt)." },
+        linkAnyway = "Vincular de todos modos",
+        updateTransactionAmount = "Actualizar transaccion",
+        linkedToRecurring = { name -> "Recurrente: $name" },
+        linkedToAmortization = { name -> "Amortizacion: $name" }
     )
 
     override val futureExpenditures = FutureExpendituresStrings(
@@ -663,10 +669,10 @@ object SpanishStrings : AppStrings {
         categoriesBody = "Las categor\u00edas te permiten clasificar tus transacciones para un mejor an\u00e1lisis de gastos. " +
             "Cada categor\u00eda tiene un nombre y un icono.",
         defaultCategoriesTitle = "Categor\u00edas predeterminadas",
-        defaultCategoriesBody = "Tres categor\u00edas est\u00e1n protegidas y no se pueden eliminar ni renombrar:",
+        defaultCategoriesBody = "Dos categor\u00edas est\u00e1n protegidas y no se pueden eliminar ni renombrar:",
         catOther = "Otros \u2014 la categor\u00eda predeterminada para transacciones sin clasificar",
-        catRecurring = "Recurrente \u2014 se asigna autom\u00e1ticamente a transacciones que coinciden con gastos recurrentes",
-        catAmortization = "Amortizaci\u00f3n \u2014 se asigna autom\u00e1ticamente a transacciones que coinciden con entradas de amortizaci\u00f3n",
+        catRecurring = "",
+        catAmortization = "",
         addCategoryTitle = "Agregar una categor\u00eda",
         addCategoryBody = "Toca \"Agregar categor\u00eda\" para crear una nueva. Escribe un nombre y elige un icono " +
             "de la cuadr\u00edcula de iconos. Los iconos se muestran en una cuadr\u00edcula visual por la que puedes desplazarte.",
@@ -743,8 +749,14 @@ object SpanishStrings : AppStrings {
         addEditBody = "Al agregar o editar una transacci\u00f3n, aparece un di\u00e1logo a pantalla completa con estos campos:",
         fieldDate = "Fecha",
         fieldDateDesc = "Toca el icono de calendario para elegir una fecha.",
-        fieldMerchant = "Comercio / Fuente",
+        fieldMerchant = "Comercio / Servicio",
         fieldMerchantDesc = "Escribe el nombre del beneficiario (gastos) o la fuente de ingreso.",
+        fieldDescription = "Descripci\u00f3n",
+        fieldDescriptionDesc = "Notas opcionales sobre la transacci\u00f3n (ej., qu\u00e9 se compr\u00f3).",
+        fieldLinkButtons = "Botones de vinculaci\u00f3n",
+        fieldLinkButtonsDesc = "Para gastos, aparecen dos botones opcionales: uno con icono de sincronizaci\u00f3n para vincular a un gasto recurrente, y otro con icono de reloj para vincular a una entrada de amortizaci\u00f3n. " +
+            "Las transacciones vinculadas ya est\u00e1n contabilizadas en tu presupuesto y NO reducen el efectivo disponible. " +
+            "Un peque\u00f1o icono aparece junto al monto en las transacciones vinculadas.",
         fieldCategory = "Categor\u00eda (requerida)",
         fieldCategoryDesc = "Toca para abrir el selector de categor\u00edas. Debes seleccionar al menos una categor\u00eda. " +
             "Puedes seleccionar varias para dividir la transacci\u00f3n. " +
@@ -1144,7 +1156,7 @@ object SpanishStrings : AppStrings {
         matchingBody = "Cuando agregas una transacci\u00f3n (manualmente o mediante importaci\u00f3n bancaria), la app verifica " +
             "si el nombre del comercio y el monto coinciden con alguna de tus entradas de amortizaci\u00f3n. " +
             "Si encuentra coincidencia, se te muestra un di\u00e1logo de confirmaci\u00f3n:",
-        yesAmortBullet = "\"S\u00ed, es amortizaci\u00f3n\" \u2014 la transacci\u00f3n se marca como amortizada y NO reduce tu efectivo disponible (ya que el costo ya se est\u00e1 deduciendo de tu presupuesto gradualmente)",
+        yesAmortBullet = "\"S\u00ed, es amortizaci\u00f3n\" \u2014 la transacci\u00f3n se vincula a la entrada de amortizaci\u00f3n y NO reduce tu efectivo disponible (ya que el costo ya se est\u00e1 deduciendo de tu presupuesto gradualmente)",
         noRegularBullet = "\"No, es regular\" \u2014 la transacci\u00f3n se trata como un gasto normal",
         sourceMatchingTitle = "Coincidencia por nombre de fuente",
         sourceMatchingBody = "Usa nombres descriptivos para tus fuentes de amortizaci\u00f3n. El algoritmo de coincidencia " +
@@ -1233,7 +1245,7 @@ object SpanishStrings : AppStrings {
         autoMatchBody = "Cuando agregas una transacci\u00f3n (manualmente o mediante importaci\u00f3n bancaria), la app verifica " +
             "si el nombre del comercio y el monto coinciden con alg\u00fan gasto recurrente. Si encuentra " +
             "coincidencia, se te muestra un di\u00e1logo de confirmaci\u00f3n:",
-        yesRecurringBullet = "\"S\u00ed, es recurrente\" \u2014 la transacci\u00f3n se marca como gasto recurrente y NO reduce tu efectivo disponible (ya que est\u00e1 contabilizado en el presupuesto)",
+        yesRecurringBullet = "\"S\u00ed, es recurrente\" \u2014 la transacci\u00f3n se vincula al gasto recurrente y NO reduce tu efectivo disponible (ya que est\u00e1 contabilizado en el presupuesto)",
         noRegularBullet = "\"No, es regular\" \u2014 la transacci\u00f3n se trata como un gasto normal",
         whyMatchingTitle = "Por qu\u00e9 importa la coincidencia",
         whyMatchingBody = "Tu monto de presupuesto ya tiene los gastos recurrentes \"incorporados\" \u2014 la " +

@@ -19,6 +19,8 @@ data class Transaction(
     val amount: Double,
     val isUserCategorized: Boolean = true,
     val isBudgetIncome: Boolean = false,
+    val linkedRecurringExpenseId: Int? = null,
+    val linkedAmortizationEntryId: Int? = null,
     // Sync fields
     val deviceId: String = "",
     val deleted: Boolean = false,
@@ -30,6 +32,8 @@ data class Transaction(
     val categoryAmounts_clock: Long = 0L,
     val isUserCategorized_clock: Long = 0L,
     val isBudgetIncome_clock: Long = 0L,
+    val linkedRecurringExpenseId_clock: Long = 0L,
+    val linkedAmortizationEntryId_clock: Long = 0L,
     val deleted_clock: Long = 0L,
     val deviceId_clock: Long = 0L
 )

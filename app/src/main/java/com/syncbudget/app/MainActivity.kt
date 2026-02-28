@@ -319,11 +319,7 @@ class MainActivity : ComponentActivity() {
             // (recurring expenses and amortization are built into the safe budget amount)
             fun isBudgetAccountedExpense(txn: Transaction): Boolean {
                 if (txn.type != TransactionType.EXPENSE) return false
-                val recurringCatId = categories.find { it.tag == "recurring" }?.id
-                val amortCatId = categories.find { it.tag == "amortization" }?.id
-                return txn.categoryAmounts.any {
-                    it.categoryId == recurringCatId || it.categoryId == amortCatId
-                }
+                return txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null
             }
 
             // Foreground sync loop
@@ -627,6 +623,8 @@ class MainActivity : ComponentActivity() {
                     categoryAmounts_clock = clock,
                     isUserCategorized_clock = clock,
                     isBudgetIncome_clock = clock,
+                    linkedRecurringExpenseId_clock = clock,
+                    linkedAmortizationEntryId_clock = clock,
                     deviceId_clock = clock
                 )
                 transactions.add(stamped)
@@ -643,6 +641,7 @@ class MainActivity : ComponentActivity() {
 
             // Matching chain for dashboard-added transactions
             fun runMatchingChain(txn: Transaction) {
+                val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null
                 val activeTransactions = transactions.toList().active
                 val activeRecurring = recurringExpenses.toList().active
                 val activeAmort = amortizationEntries.toList().active
@@ -652,7 +651,7 @@ class MainActivity : ComponentActivity() {
                     dashPendingManualSave = txn
                     dashManualDuplicateMatch = dup
                     dashShowManualDuplicateDialog = true
-                } else {
+                } else if (!alreadyLinked) {
                     val recurringMatch = findRecurringExpenseMatch(txn, activeRecurring, percentTolerance, matchDollar, matchChars, matchDays)
                     if (recurringMatch != null) {
                         dashPendingRecurringTxn = txn
@@ -675,6 +674,8 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
+                } else {
+                    addTransactionWithBudgetEffect(txn)
                 }
             }
 
@@ -1219,7 +1220,9 @@ class MainActivity : ComponentActivity() {
                                     type_clock = if (updated.type != prev.type) clock else prev.type_clock,
                                     categoryAmounts_clock = if (updated.categoryAmounts != prev.categoryAmounts) clock else prev.categoryAmounts_clock,
                                     isUserCategorized_clock = if (updated.isUserCategorized != prev.isUserCategorized) clock else prev.isUserCategorized_clock,
-                                    isBudgetIncome_clock = if (updated.isBudgetIncome != prev.isBudgetIncome) clock else prev.isBudgetIncome_clock
+                                    isBudgetIncome_clock = if (updated.isBudgetIncome != prev.isBudgetIncome) clock else prev.isBudgetIncome_clock,
+                                    linkedRecurringExpenseId_clock = if (updated.linkedRecurringExpenseId != prev.linkedRecurringExpenseId) clock else prev.linkedRecurringExpenseId_clock,
+                                    linkedAmortizationEntryId_clock = if (updated.linkedAmortizationEntryId != prev.linkedAmortizationEntryId) clock else prev.linkedAmortizationEntryId_clock
                                 )
                                 saveTransactions()
                             }
@@ -1345,7 +1348,10 @@ class MainActivity : ComponentActivity() {
                                         description_clock = 0L,
                                         amount_clock = 0L, date_clock = 0L, type_clock = 0L,
                                         categoryAmounts_clock = 0L, isUserCategorized_clock = 0L,
-                                        isBudgetIncome_clock = 0L, deleted_clock = 0L,
+                                        isBudgetIncome_clock = 0L,
+                                        linkedRecurringExpenseId_clock = 0L,
+                                        linkedAmortizationEntryId_clock = 0L,
+                                        deleted_clock = 0L,
                                         deviceId_clock = 0L)
                                 }
                                 saveTransactions()
@@ -1855,6 +1861,8 @@ class MainActivity : ComponentActivity() {
                                                 categoryAmounts_clock = stampClock,
                                                 isUserCategorized_clock = stampClock,
                                                 isBudgetIncome_clock = stampClock,
+                                                linkedRecurringExpenseId_clock = stampClock,
+                                                linkedAmortizationEntryId_clock = stampClock,
                                                 deviceId_clock = stampClock
                                             )
                                         }
@@ -1967,6 +1975,8 @@ class MainActivity : ComponentActivity() {
                                                     categoryAmounts_clock = stampClock,
                                                     isUserCategorized_clock = stampClock,
                                                     isBudgetIncome_clock = stampClock,
+                                                    linkedRecurringExpenseId_clock = stampClock,
+                                                    linkedAmortizationEntryId_clock = stampClock,
                                                     deviceId_clock = stampClock
                                                 )
                                             }
@@ -2352,7 +2362,6 @@ class MainActivity : ComponentActivity() {
 
                 // Dashboard recurring expense match dialog
                 if (dashShowRecurringDialog && dashPendingRecurringTxn != null && dashPendingRecurringMatch != null) {
-                    val recurringCategoryId = categories.find { it.tag == "recurring" }?.id
                     val dateCloseEnough = isRecurringDateCloseEnough(dashPendingRecurringTxn!!.date, dashPendingRecurringMatch!!)
                     RecurringExpenseConfirmDialog(
                         transaction = dashPendingRecurringTxn!!,
@@ -2362,12 +2371,7 @@ class MainActivity : ComponentActivity() {
                         showDateAdvisory = !dateCloseEnough,
                         onConfirmRecurring = {
                             val txn = dashPendingRecurringTxn!!
-                            val updatedTxn = if (recurringCategoryId != null) {
-                                txn.copy(
-                                    categoryAmounts = listOf(CategoryAmount(recurringCategoryId, txn.amount)),
-                                    isUserCategorized = true
-                                )
-                            } else txn
+                            val updatedTxn = txn.copy(linkedRecurringExpenseId = dashPendingRecurringMatch!!.id)
                             addTransactionWithBudgetEffect(updatedTxn)
                             dashPendingRecurringTxn = null
                             dashPendingRecurringMatch = null
@@ -2384,7 +2388,6 @@ class MainActivity : ComponentActivity() {
 
                 // Dashboard amortization match dialog
                 if (dashShowAmortizationDialog && dashPendingAmortizationTxn != null && dashPendingAmortizationMatch != null) {
-                    val amortizationCategoryId = categories.find { it.tag == "amortization" }?.id
                     AmortizationConfirmDialog(
                         transaction = dashPendingAmortizationTxn!!,
                         amortizationEntry = dashPendingAmortizationMatch!!,
@@ -2392,12 +2395,7 @@ class MainActivity : ComponentActivity() {
                         dateFormatter = dateFormatter,
                         onConfirmAmortization = {
                             val txn = dashPendingAmortizationTxn!!
-                            val updatedTxn = if (amortizationCategoryId != null) {
-                                txn.copy(
-                                    categoryAmounts = listOf(CategoryAmount(amortizationCategoryId, txn.amount)),
-                                    isUserCategorized = true
-                                )
-                            } else txn
+                            val updatedTxn = txn.copy(linkedAmortizationEntryId = dashPendingAmortizationMatch!!.id)
                             addTransactionWithBudgetEffect(updatedTxn)
                             dashPendingAmortizationTxn = null
                             dashPendingAmortizationMatch = null

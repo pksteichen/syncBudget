@@ -547,7 +547,7 @@ fun SettingsScreen(
             }
 
             items(categories) { category ->
-                val isProtected = category.tag in setOf("other", "recurring", "amortization", "recurring_income")
+                val isProtected = category.tag in setOf("other", "recurring_income")
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -797,7 +797,7 @@ private fun EditCategoryDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(S.settings.editCategory, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                    if (category.tag !in setOf("other", "recurring", "amortization", "recurring_income")) {
+                    if (category.tag !in setOf("other", "recurring_income")) {
                         IconButton(onClick = {
                             if (txnCount > 0) {
                                 showReassignDialog = true

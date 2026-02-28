@@ -42,6 +42,8 @@ object CrdtMerge {
             amount = if (shouldAcceptRemote(local.amount_clock, remote.amount_clock, localDeviceId, remoteDeviceId)) remote.amount else local.amount,
             isUserCategorized = if (shouldAcceptRemote(local.isUserCategorized_clock, remote.isUserCategorized_clock, localDeviceId, remoteDeviceId)) remote.isUserCategorized else local.isUserCategorized,
             isBudgetIncome = if (shouldAcceptRemote(local.isBudgetIncome_clock, remote.isBudgetIncome_clock, localDeviceId, remoteDeviceId)) remote.isBudgetIncome else local.isBudgetIncome,
+            linkedRecurringExpenseId = if (shouldAcceptRemote(local.linkedRecurringExpenseId_clock, remote.linkedRecurringExpenseId_clock, localDeviceId, remoteDeviceId)) remote.linkedRecurringExpenseId else local.linkedRecurringExpenseId,
+            linkedAmortizationEntryId = if (shouldAcceptRemote(local.linkedAmortizationEntryId_clock, remote.linkedAmortizationEntryId_clock, localDeviceId, remoteDeviceId)) remote.linkedAmortizationEntryId else local.linkedAmortizationEntryId,
             deviceId = if (shouldAcceptRemote(local.deviceId_clock, remote.deviceId_clock, localDeviceId, remoteDeviceId)) remote.deviceId else local.deviceId,
             deleted = mergedDeleted,
             source_clock = maxOf(local.source_clock, remote.source_clock),
@@ -52,6 +54,8 @@ object CrdtMerge {
             categoryAmounts_clock = maxOf(local.categoryAmounts_clock, remote.categoryAmounts_clock),
             isUserCategorized_clock = maxOf(local.isUserCategorized_clock, remote.isUserCategorized_clock),
             isBudgetIncome_clock = maxOf(local.isBudgetIncome_clock, remote.isBudgetIncome_clock),
+            linkedRecurringExpenseId_clock = maxOf(local.linkedRecurringExpenseId_clock, remote.linkedRecurringExpenseId_clock),
+            linkedAmortizationEntryId_clock = maxOf(local.linkedAmortizationEntryId_clock, remote.linkedAmortizationEntryId_clock),
             deleted_clock = mergedDeletedClock,
             deviceId_clock = maxOf(local.deviceId_clock, remote.deviceId_clock)
         )

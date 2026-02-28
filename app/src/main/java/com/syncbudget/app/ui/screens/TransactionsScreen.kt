@@ -47,7 +47,9 @@ import androidx.compose.material.icons.filled.Percent
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Sync
 import com.syncbudget.app.ui.theme.AdAwareAlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -872,6 +874,15 @@ fun TransactionsScreen(
             // Transaction list
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                 items(filteredTransactions, key = { it.id }) { transaction ->
+                    val isLinkedRecurring = transaction.linkedRecurringExpenseId != null
+                    val isLinkedAmortization = transaction.linkedAmortizationEntryId != null
+                    val isAmortComplete = if (isLinkedAmortization) {
+                        val entry = amortizationEntries.find { it.id == transaction.linkedAmortizationEntryId }
+                        if (entry != null) {
+                            val endDate = entry.startDate.plusMonths(entry.totalPeriods.toLong())
+                            !java.time.LocalDate.now().isBefore(endDate)
+                        } else false
+                    } else false
                     TransactionRow(
                         transaction = transaction,
                         currencySymbol = currencySymbol,
@@ -911,7 +922,10 @@ fun TransactionsScreen(
                         attributionLabel = if (showAttribution && transaction.deviceId.isNotEmpty()) {
                             if (transaction.deviceId == localDeviceId) S.sync.you
                             else deviceNameMap[transaction.deviceId] ?: transaction.deviceId.take(8)
-                        } else null
+                        } else null,
+                        isLinkedRecurring = isLinkedRecurring,
+                        isLinkedAmortization = isLinkedAmortization,
+                        isAmortComplete = isAmortComplete
                     )
                     HorizontalDivider(
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f)
@@ -931,14 +945,19 @@ fun TransactionsScreen(
             currencySymbol = currencySymbol,
             dateFormatter = dateFormatter,
             chartPalette = chartPalette,
+            recurringExpenses = recurringExpenses,
+            amortizationEntries = amortizationEntries,
             onDismiss = { showAddIncome = false },
             onSave = { txn ->
+                val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null
                 val dup = findDuplicate(txn, transactions, percentTolerance, matchDollar, matchDays, matchChars)
                 if (dup != null) {
                     pendingManualSave = txn
                     manualDuplicateMatch = dup
                     pendingManualIsEdit = false
                     showManualDuplicateDialog = true
+                } else if (alreadyLinked) {
+                    addAndScroll(txn)
                 } else {
                     val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
                     if (recurringMatch != null) {
@@ -982,14 +1001,19 @@ fun TransactionsScreen(
             dateFormatter = dateFormatter,
             isExpense = true,
             chartPalette = chartPalette,
+            recurringExpenses = recurringExpenses,
+            amortizationEntries = amortizationEntries,
             onDismiss = { showAddExpense = false },
             onSave = { txn ->
+                val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null
                 val dup = findDuplicate(txn, transactions, percentTolerance, matchDollar, matchDays, matchChars)
                 if (dup != null) {
                     pendingManualSave = txn
                     manualDuplicateMatch = dup
                     pendingManualIsEdit = false
                     showManualDuplicateDialog = true
+                } else if (alreadyLinked) {
+                    addAndScroll(txn)
                 } else {
                     val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
                     if (recurringMatch != null) {
@@ -1026,14 +1050,19 @@ fun TransactionsScreen(
             isExpense = txn.type == TransactionType.EXPENSE,
             editTransaction = txn,
             chartPalette = chartPalette,
+            recurringExpenses = recurringExpenses,
+            amortizationEntries = amortizationEntries,
             onDismiss = { editingTransaction = null },
             onSave = { updated ->
+                val alreadyLinked = updated.linkedRecurringExpenseId != null || updated.linkedAmortizationEntryId != null
                 val dup = findDuplicate(updated, transactions.filter { it.id != updated.id }, percentTolerance, matchDollar, matchDays, matchChars)
                 if (dup != null) {
                     pendingManualSave = updated
                     manualDuplicateMatch = dup
                     pendingManualIsEdit = true
                     showManualDuplicateDialog = true
+                } else if (alreadyLinked) {
+                    onUpdateTransaction(updated)
                 } else {
                     val recurringMatch = findRecurringExpenseMatch(updated, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
                     if (recurringMatch != null) {
@@ -1778,7 +1807,6 @@ fun TransactionsScreen(
     if (importStage == ImportStage.DUPLICATE_CHECK && currentImportRecurring != null && importIndex < parsedTransactions.size) {
         val importTxn = parsedTransactions[importIndex]
         val recurringMatch = currentImportRecurring!!
-        val recurringCategoryId = categories.find { it.tag == "recurring" }?.id
         val dateCloseEnough = isRecurringDateCloseEnough(importTxn.date, recurringMatch)
         RecurringExpenseConfirmDialog(
             transaction = importTxn,
@@ -1787,12 +1815,7 @@ fun TransactionsScreen(
             dateFormatter = dateFormatter,
             showDateAdvisory = !dateCloseEnough,
             onConfirmRecurring = {
-                val updatedTxn = if (recurringCategoryId != null) {
-                    importTxn.copy(
-                        categoryAmounts = listOf(CategoryAmount(recurringCategoryId, importTxn.amount)),
-                        isUserCategorized = true
-                    )
-                } else importTxn
+                val updatedTxn = importTxn.copy(linkedRecurringExpenseId = recurringMatch.id)
                 importApproved.add(updatedTxn)
                 currentImportRecurring = null
                 importIndex++
@@ -1807,7 +1830,6 @@ fun TransactionsScreen(
 
     // Manual recurring expense match dialog
     if (showRecurringDialog && pendingRecurringTxn != null && pendingRecurringMatch != null) {
-        val recurringCategoryId = categories.find { it.tag == "recurring" }?.id
         val dateCloseEnough = isRecurringDateCloseEnough(pendingRecurringTxn!!.date, pendingRecurringMatch!!)
         RecurringExpenseConfirmDialog(
             transaction = pendingRecurringTxn!!,
@@ -1817,12 +1839,7 @@ fun TransactionsScreen(
             showDateAdvisory = !dateCloseEnough,
             onConfirmRecurring = {
                 val txn = pendingRecurringTxn!!
-                val updatedTxn = if (recurringCategoryId != null) {
-                    txn.copy(
-                        categoryAmounts = listOf(CategoryAmount(recurringCategoryId, txn.amount)),
-                        isUserCategorized = true
-                    )
-                } else txn
+                val updatedTxn = txn.copy(linkedRecurringExpenseId = pendingRecurringMatch!!.id)
                 if (pendingRecurringIsEdit) onUpdateTransaction(updatedTxn)
                 else addAndScroll(updatedTxn)
                 pendingRecurringTxn = null
@@ -1844,19 +1861,13 @@ fun TransactionsScreen(
     if (importStage == ImportStage.DUPLICATE_CHECK && currentImportAmortization != null && importIndex < parsedTransactions.size) {
         val importTxn = parsedTransactions[importIndex]
         val amortizationMatch = currentImportAmortization!!
-        val amortizationCategoryId = categories.find { it.tag == "amortization" }?.id
         AmortizationConfirmDialog(
             transaction = importTxn,
             amortizationEntry = amortizationMatch,
             currencySymbol = currencySymbol,
             dateFormatter = dateFormatter,
             onConfirmAmortization = {
-                val updatedTxn = if (amortizationCategoryId != null) {
-                    importTxn.copy(
-                        categoryAmounts = listOf(CategoryAmount(amortizationCategoryId, importTxn.amount)),
-                        isUserCategorized = true
-                    )
-                } else importTxn
+                val updatedTxn = importTxn.copy(linkedAmortizationEntryId = amortizationMatch.id)
                 importApproved.add(updatedTxn)
                 currentImportAmortization = null
                 importIndex++
@@ -1871,7 +1882,6 @@ fun TransactionsScreen(
 
     // Manual amortization match dialog
     if (showAmortizationDialog && pendingAmortizationTxn != null && pendingAmortizationMatch != null) {
-        val amortizationCategoryId = categories.find { it.tag == "amortization" }?.id
         AmortizationConfirmDialog(
             transaction = pendingAmortizationTxn!!,
             amortizationEntry = pendingAmortizationMatch!!,
@@ -1879,12 +1889,7 @@ fun TransactionsScreen(
             dateFormatter = dateFormatter,
             onConfirmAmortization = {
                 val txn = pendingAmortizationTxn!!
-                val updatedTxn = if (amortizationCategoryId != null) {
-                    txn.copy(
-                        categoryAmounts = listOf(CategoryAmount(amortizationCategoryId, txn.amount)),
-                        isUserCategorized = true
-                    )
-                } else txn
+                val updatedTxn = txn.copy(linkedAmortizationEntryId = pendingAmortizationMatch!!.id)
                 if (pendingAmortizationIsEdit) onUpdateTransaction(updatedTxn)
                 else addAndScroll(updatedTxn)
                 pendingAmortizationTxn = null
@@ -2146,7 +2151,10 @@ private fun TransactionRow(
     onToggleSelection: (Boolean) -> Unit,
     onToggleExpand: () -> Unit,
     onCategoryFilter: (Int) -> Unit = {},
-    attributionLabel: String? = null
+    attributionLabel: String? = null,
+    isLinkedRecurring: Boolean = false,
+    isLinkedAmortization: Boolean = false,
+    isAmortComplete: Boolean = false
 ) {
     val S = LocalStrings.current
     val isExpense = transaction.type == TransactionType.EXPENSE
@@ -2234,21 +2242,40 @@ private fun TransactionRow(
                     }
                 }
                 Spacer(modifier = Modifier.width(12.dp))
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = formattedAmount,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = amountColor,
-                        textAlign = TextAlign.End
-                    )
-                    if (attributionLabel != null) {
-                        Text(
-                            text = attributionLabel,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                            maxLines = 1
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isLinkedRecurring) {
+                        Icon(
+                            imageVector = Icons.Filled.Sync,
+                            contentDescription = null,
+                            tint = Color(0xFF4CAF50),
+                            modifier = Modifier.size(14.dp)
                         )
+                        Spacer(Modifier.width(3.dp))
+                    } else if (isLinkedAmortization) {
+                        Icon(
+                            imageVector = Icons.Filled.Schedule,
+                            contentDescription = null,
+                            tint = if (isAmortComplete) Color(0xFF4CAF50) else Color(0xFFF44336),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(Modifier.width(3.dp))
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = formattedAmount,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = amountColor,
+                            textAlign = TextAlign.End
+                        )
+                        if (attributionLabel != null) {
+                            Text(
+                                text = attributionLabel,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
 
@@ -2355,6 +2382,8 @@ fun TransactionDialog(
     isExpense: Boolean = false,
     editTransaction: Transaction? = null,
     chartPalette: String = "Bright",
+    recurringExpenses: List<RecurringExpense> = emptyList(),
+    amortizationEntries: List<AmortizationEntry> = emptyList(),
     onDismiss: () -> Unit,
     onSave: (Transaction) -> Unit,
     onDelete: (() -> Unit)? = null
@@ -2371,6 +2400,14 @@ fun TransactionDialog(
     var showDatePicker by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showValidation by remember { mutableStateOf(false) }
+
+    // Linked entry state
+    var linkedRecurringId by remember { mutableStateOf(editTransaction?.linkedRecurringExpenseId) }
+    var linkedAmortizationId by remember { mutableStateOf(editTransaction?.linkedAmortizationEntryId) }
+    var showLinkRecurringPicker by remember { mutableStateOf(false) }
+    var showLinkAmortizationPicker by remember { mutableStateOf(false) }
+    var showLinkMismatchDialog by remember { mutableStateOf(false) }
+    var pendingLinkEntry by remember { mutableStateOf<Any?>(null) }
 
     // Category selection
     val selectedCategoryIds = remember {
@@ -2613,6 +2650,68 @@ fun TransactionDialog(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+
+                    // Link to recurring/amortization entry
+                    if (isExpense) {
+                        if (linkedRecurringId != null) {
+                            val linkedName = recurringExpenses.find { it.id == linkedRecurringId }?.source ?: "?"
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .border(1.dp, Color(0xFF4CAF50), RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                Icon(Icons.Filled.Sync, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(S.transactions.linkedToRecurring(linkedName), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                                IconButton(onClick = { linkedRecurringId = null }, modifier = Modifier.size(24.dp)) {
+                                    Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        } else if (linkedAmortizationId != null) {
+                            val linkedName = amortizationEntries.find { it.id == linkedAmortizationId }?.source ?: "?"
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .border(1.dp, Color(0xFFF44336), RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                Icon(Icons.Filled.Schedule, contentDescription = null, tint = Color(0xFFF44336), modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(S.transactions.linkedToAmortization(linkedName), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                                IconButton(onClick = { linkedAmortizationId = null }, modifier = Modifier.size(24.dp)) {
+                                    Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        } else {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                if (recurringExpenses.isNotEmpty()) {
+                                    OutlinedButton(
+                                        onClick = { showLinkRecurringPicker = true },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text(S.transactions.linkToRecurring)
+                                        Spacer(Modifier.width(4.dp))
+                                        Icon(Icons.Filled.Sync, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    }
+                                }
+                                if (amortizationEntries.isNotEmpty()) {
+                                    OutlinedButton(
+                                        onClick = { showLinkAmortizationPicker = true },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text(S.transactions.linkToAmortization)
+                                        Spacer(Modifier.width(4.dp))
+                                        Icon(Icons.Filled.Schedule, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     // Category selector — button that opens picker dialog
                     if (categories.isNotEmpty()) {
@@ -3067,7 +3166,9 @@ fun TransactionDialog(
                                     source = source.trim(),
                                     description = description.trim(),
                                     categoryAmounts = catAmounts,
-                                    amount = totalAmount
+                                    amount = totalAmount,
+                                    linkedRecurringExpenseId = linkedRecurringId,
+                                    linkedAmortizationEntryId = linkedAmortizationId
                                 )
                             )
                         }
@@ -3416,6 +3517,167 @@ fun TransactionDialog(
                 TextButton(onClick = {
                     showSumMismatchDialog = false
                     adjustTargetId = null
+                }) {
+                    Text(S.common.cancel)
+                }
+            }
+        )
+    }
+
+    // Link to recurring expense picker dialog
+    if (showLinkRecurringPicker) {
+        AdAwareAlertDialog(
+            onDismissRequest = { showLinkRecurringPicker = false },
+            title = { Text(S.transactions.linkToRecurring) },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    recurringExpenses.forEach { re ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    val txnAmt = totalAmountText.toDoubleOrNull() ?: 0.0
+                                    if (txnAmt > 0 && kotlin.math.abs(txnAmt - re.amount) > 0.01) {
+                                        pendingLinkEntry = re
+                                        showLinkRecurringPicker = false
+                                        showLinkMismatchDialog = true
+                                    } else {
+                                        linkedRecurringId = re.id
+                                        linkedAmortizationId = null
+                                        showLinkRecurringPicker = false
+                                    }
+                                }
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Filled.Sync, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(re.source, style = MaterialTheme.typography.bodyMedium)
+                            }
+                            Text(formatCurrency(re.amount, currencySymbol), style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showLinkRecurringPicker = false }) {
+                    Text(S.common.cancel)
+                }
+            }
+        )
+    }
+
+    // Link to amortization entry picker dialog
+    if (showLinkAmortizationPicker) {
+        AdAwareAlertDialog(
+            onDismissRequest = { showLinkAmortizationPicker = false },
+            title = { Text(S.transactions.linkToAmortization) },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    amortizationEntries.forEach { ae ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    val txnAmt = totalAmountText.toDoubleOrNull() ?: 0.0
+                                    if (txnAmt > 0 && kotlin.math.abs(txnAmt - ae.amount) > 0.01) {
+                                        pendingLinkEntry = ae
+                                        showLinkAmortizationPicker = false
+                                        showLinkMismatchDialog = true
+                                    } else {
+                                        linkedAmortizationId = ae.id
+                                        linkedRecurringId = null
+                                        showLinkAmortizationPicker = false
+                                    }
+                                }
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Filled.Schedule, contentDescription = null, tint = Color(0xFFF44336), modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(ae.source, style = MaterialTheme.typography.bodyMedium)
+                            }
+                            Text(formatCurrency(ae.amount, currencySymbol), style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showLinkAmortizationPicker = false }) {
+                    Text(S.common.cancel)
+                }
+            }
+        )
+    }
+
+    // Amount mismatch dialog when linking
+    if (showLinkMismatchDialog && pendingLinkEntry != null) {
+        val entryAmount = when (val e = pendingLinkEntry) {
+            is RecurringExpense -> e.amount
+            is AmortizationEntry -> e.amount
+            else -> 0.0
+        }
+        val txnAmt = totalAmountText.toDoubleOrNull() ?: 0.0
+        AdAwareAlertDialog(
+            onDismissRequest = {
+                showLinkMismatchDialog = false
+                pendingLinkEntry = null
+            },
+            title = { Text(S.transactions.linkMismatchTitle) },
+            text = {
+                Text(S.transactions.linkMismatchBody(
+                    formatCurrency(txnAmt, currencySymbol),
+                    formatCurrency(entryAmount, currencySymbol)
+                ))
+            },
+            confirmButton = {
+                Column {
+                    TextButton(onClick = {
+                        when (val e = pendingLinkEntry) {
+                            is RecurringExpense -> {
+                                linkedRecurringId = e.id
+                                linkedAmortizationId = null
+                            }
+                            is AmortizationEntry -> {
+                                linkedAmortizationId = e.id
+                                linkedRecurringId = null
+                            }
+                        }
+                        showLinkMismatchDialog = false
+                        pendingLinkEntry = null
+                    }) {
+                        Text(S.transactions.linkAnyway)
+                    }
+                    TextButton(onClick = {
+                        when (val e = pendingLinkEntry) {
+                            is RecurringExpense -> {
+                                linkedRecurringId = e.id
+                                linkedAmortizationId = null
+                                totalAmountText = e.amount.toBigDecimal().stripTrailingZeros().toPlainString()
+                            }
+                            is AmortizationEntry -> {
+                                linkedAmortizationId = e.id
+                                linkedRecurringId = null
+                                totalAmountText = e.amount.toBigDecimal().stripTrailingZeros().toPlainString()
+                            }
+                        }
+                        showLinkMismatchDialog = false
+                        pendingLinkEntry = null
+                    }) {
+                        Text(S.transactions.updateTransactionAmount)
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showLinkMismatchDialog = false
+                    pendingLinkEntry = null
                 }) {
                     Text(S.common.cancel)
                 }

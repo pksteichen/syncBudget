@@ -319,4 +319,47 @@ class DeltaBuilderTest {
         assertNotNull(delta)
         assertNull(delta!!.fields["startDate"]?.value)
     }
+
+    // ── Linked ID fields ──
+
+    @Test
+    fun `transaction delta includes linkedRecurringExpenseId when clock above threshold`() {
+        val txn = Transaction(id = 1, type = TransactionType.EXPENSE,
+            date = LocalDate.of(2026, 1, 15), source = "Netflix", amount = 15.0,
+            deviceId = "dev1", linkedRecurringExpenseId = 42,
+            source_clock = 5, amount_clock = 5, date_clock = 5, type_clock = 5,
+            deviceId_clock = 5, linkedRecurringExpenseId_clock = 10)
+
+        val delta = DeltaBuilder.buildTransactionDelta(txn, 7)
+        assertNotNull(delta)
+        assertEquals(42, delta!!.fields["linkedRecurringExpenseId"]?.value)
+        assertEquals(10L, delta.fields["linkedRecurringExpenseId"]?.clock)
+    }
+
+    @Test
+    fun `transaction delta excludes linked fields when clock below threshold`() {
+        val txn = Transaction(id = 1, type = TransactionType.EXPENSE,
+            date = LocalDate.of(2026, 1, 15), source = "Netflix", amount = 15.0,
+            deviceId = "dev1", linkedRecurringExpenseId = 42,
+            source_clock = 10, amount_clock = 10, date_clock = 10, type_clock = 10,
+            deviceId_clock = 10, linkedRecurringExpenseId_clock = 5)
+
+        val delta = DeltaBuilder.buildTransactionDelta(txn, 7)
+        assertNotNull(delta)
+        assertFalse(delta!!.fields.containsKey("linkedRecurringExpenseId"))
+    }
+
+    @Test
+    fun `transaction delta includes null linkedAmortizationEntryId`() {
+        val txn = Transaction(id = 1, type = TransactionType.EXPENSE,
+            date = LocalDate.of(2026, 1, 15), source = "Store", amount = 50.0,
+            deviceId = "dev1", linkedAmortizationEntryId = null,
+            source_clock = 5, amount_clock = 5, date_clock = 5, type_clock = 5,
+            deviceId_clock = 5, linkedAmortizationEntryId_clock = 8)
+
+        val delta = DeltaBuilder.buildTransactionDelta(txn, 3)
+        assertNotNull(delta)
+        assertNull(delta!!.fields["linkedAmortizationEntryId"]?.value)
+        assertEquals(8L, delta.fields["linkedAmortizationEntryId"]?.clock)
+    }
 }

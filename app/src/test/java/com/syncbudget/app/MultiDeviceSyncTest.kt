@@ -1014,4 +1014,57 @@ class MultiDeviceSyncTest {
         assertEquals("remote note", mergedBA.description)
         assertEquals(mergedAB.description_clock, mergedBA.description_clock)
     }
+
+    @Test
+    fun scenario_linkedRecurringExpenseId_syncsAcrossDevices() {
+        // Device A links a transaction to recurring expense id=42
+        val txnA = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Netflix", amount = 15.0, deviceId = deviceA,
+            linkedRecurringExpenseId = 42, linkedRecurringExpenseId_clock = 5,
+            source_clock = 1, amount_clock = 1, date_clock = 1, type_clock = 1,
+            deviceId_clock = 1)
+
+        // Device B has the same transaction unlinked
+        val txnB = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Netflix", amount = 15.0, deviceId = deviceA,
+            linkedRecurringExpenseId = null, linkedRecurringExpenseId_clock = 0,
+            source_clock = 1, amount_clock = 1, date_clock = 1, type_clock = 1,
+            deviceId_clock = 1)
+
+        // Build delta from A, merge on B
+        val delta = DeltaBuilder.buildTransactionDelta(txnA, 0)
+        assertNotNull(delta)
+        assertEquals(42, delta!!.fields["linkedRecurringExpenseId"]?.value)
+
+        // Merge
+        val merged = CrdtMerge.mergeTransaction(txnB, txnA, deviceB)
+        assertEquals(42, merged.linkedRecurringExpenseId)
+        assertEquals(5L, merged.linkedRecurringExpenseId_clock)
+    }
+
+    @Test
+    fun scenario_linkedAmortizationEntryId_concurrentConflict() {
+        // Device A links to amortization 10 at clock 3
+        val txnA = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Laptop", amount = 100.0, deviceId = deviceA,
+            linkedAmortizationEntryId = 10, linkedAmortizationEntryId_clock = 3,
+            source_clock = 1, amount_clock = 1, date_clock = 1, type_clock = 1,
+            deviceId_clock = 1)
+
+        // Device B links to amortization 20 at clock 3 (same clock, tie-break by deviceId)
+        val txnB = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Laptop", amount = 100.0, deviceId = deviceB,
+            linkedAmortizationEntryId = 20, linkedAmortizationEntryId_clock = 3,
+            source_clock = 1, amount_clock = 1, date_clock = 1, type_clock = 1,
+            deviceId_clock = 1)
+
+        val mergedAB = CrdtMerge.mergeTransaction(txnA, txnB, deviceA)
+        val mergedBA = CrdtMerge.mergeTransaction(txnB, txnA, deviceB)
+
+        // Commutativity: both orders produce same result
+        assertEquals(mergedAB.linkedAmortizationEntryId, mergedBA.linkedAmortizationEntryId)
+        assertEquals(mergedAB.linkedAmortizationEntryId_clock, mergedBA.linkedAmortizationEntryId_clock)
+        // deviceB > deviceA lexicographically, so B wins at equal clock
+        assertEquals(20, mergedAB.linkedAmortizationEntryId)
+    }
 }

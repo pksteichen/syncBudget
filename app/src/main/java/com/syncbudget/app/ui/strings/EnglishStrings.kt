@@ -4,8 +4,6 @@ object EnglishStrings : AppStrings {
 
     override val defaultCategoryNames = DefaultCategoryNames(
         other = "Other",
-        recurring = "Recurring",
-        amortization = "Amortization",
         recurringIncome = "Recurring Income",
         transportation = "Transportation/Gas",
         groceries = "Groceries",
@@ -266,7 +264,15 @@ object EnglishStrings : AppStrings {
         fullBackupSyncWarning = "Restoring a full backup will dissolve the current family sync group. You will need to create a new group and share a new pairing code with family members.",
         fullBackupNonAdminBlock = "Only the group admin can restore a full backup. A full restore would corrupt sync state for all devices.",
         fullBackupGroupRecreated = "Backup restored. New family group created \u2014 share the pairing code with family members.",
-        fullBackupGroupDissolved = "Backup restored. Family group dissolved."
+        fullBackupGroupDissolved = "Backup restored. Family group dissolved.",
+        linkToRecurring = "Link to",
+        linkToAmortization = "Link to",
+        linkMismatchTitle = "Amount Mismatch",
+        linkMismatchBody = { txnAmt, entryAmt -> "Transaction ($txnAmt) differs from entry ($entryAmt)." },
+        linkAnyway = "Link Anyway",
+        updateTransactionAmount = "Update Transaction",
+        linkedToRecurring = { name -> "Recurring: $name" },
+        linkedToAmortization = { name -> "Amortization: $name" }
     )
 
     override val futureExpenditures = FutureExpendituresStrings(
@@ -664,10 +670,10 @@ object EnglishStrings : AppStrings {
         categoriesBody = "Categories let you classify your transactions for better spending insight. " +
             "Each category has a name and an icon.",
         defaultCategoriesTitle = "Default Categories",
-        defaultCategoriesBody = "Three categories are protected and cannot be deleted or renamed:",
+        defaultCategoriesBody = "Two categories are protected and cannot be deleted or renamed:",
         catOther = "Other \u2014 the default fallback category for uncategorized transactions",
-        catRecurring = "Recurring \u2014 automatically assigned to transactions matched to recurring expenses",
-        catAmortization = "Amortization \u2014 automatically assigned to transactions matched to amortization entries",
+        catRecurring = "",
+        catAmortization = "",
         addCategoryTitle = "Adding a Category",
         addCategoryBody = "Tap \"Add Category\" to create a new category. Enter a name and choose an icon " +
             "from the icon grid. Icons are displayed as a visual grid you can scroll through.",
@@ -744,8 +750,14 @@ object EnglishStrings : AppStrings {
         addEditBody = "When adding or editing a transaction, a full-screen dialog appears with these fields:",
         fieldDate = "Date",
         fieldDateDesc = "Tap the calendar icon to pick a date.",
-        fieldMerchant = "Merchant / Source",
+        fieldMerchant = "Merchant / Service",
         fieldMerchantDesc = "Type the name of the payee (expenses) or income source.",
+        fieldDescription = "Description",
+        fieldDescriptionDesc = "Optional notes about the transaction (e.g., what was purchased).",
+        fieldLinkButtons = "Link Buttons",
+        fieldLinkButtonsDesc = "For expense transactions, two optional link buttons appear: one with a sync icon to link to a recurring expense, and one with a clock icon to link to an amortization entry. " +
+            "Linked transactions are already accounted for in your budget and do NOT reduce available cash. " +
+            "A small icon appears next to the amount on linked transactions.",
         fieldCategory = "Category (required)",
         fieldCategoryDesc = "Tap to open the category picker. You must select at least one category. " +
             "You can select multiple categories to split the transaction. " +
@@ -1145,7 +1157,7 @@ object EnglishStrings : AppStrings {
         matchingBody = "When you add a transaction (manually or via bank import), the app checks " +
             "whether the merchant name and amount match any of your amortization entries. " +
             "If a match is found, you're shown a confirmation dialog:",
-        yesAmortBullet = "\"Yes, Amortization\" \u2014 the transaction is tagged as amortized and does NOT reduce your available cash (since the cost is already being deducted from your budget over time)",
+        yesAmortBullet = "\"Yes, Amortization\" \u2014 the transaction is linked to the amortization entry and does NOT reduce your available cash (since the cost is already being deducted from your budget over time)",
         noRegularBullet = "\"No, Regular\" \u2014 the transaction is treated as a normal expense",
         sourceMatchingTitle = "Source Name Matching",
         sourceMatchingBody = "Use descriptive names for your amortization sources. The matching " +
@@ -1234,7 +1246,7 @@ object EnglishStrings : AppStrings {
         autoMatchBody = "When you add a transaction (manually or via bank import), the app checks " +
             "whether the merchant name and amount match any recurring expense. If a match " +
             "is found, you're shown a confirmation dialog:",
-        yesRecurringBullet = "\"Yes, Recurring\" \u2014 the transaction is tagged as a recurring expense and does NOT reduce your available cash (since it's already accounted for in the budget)",
+        yesRecurringBullet = "\"Yes, Recurring\" \u2014 the transaction is linked to the recurring expense and does NOT reduce your available cash (since it's already accounted for in the budget)",
         noRegularBullet = "\"No, Regular\" \u2014 the transaction is treated as a normal expense",
         whyMatchingTitle = "Why Matching Matters",
         whyMatchingBody = "Your budget amount already has recurring expenses \"baked in\" \u2014 the " +

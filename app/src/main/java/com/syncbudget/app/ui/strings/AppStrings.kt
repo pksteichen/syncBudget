@@ -2,8 +2,6 @@ package com.syncbudget.app.ui.strings
 
 data class DefaultCategoryNames(
     val other: String,
-    val recurring: String,
-    val amortization: String,
     val recurringIncome: String,
     val transportation: String,
     val groceries: String,
@@ -285,7 +283,15 @@ data class TransactionsStrings(
     val fullBackupSyncWarning: String,
     val fullBackupNonAdminBlock: String,
     val fullBackupGroupRecreated: String,
-    val fullBackupGroupDissolved: String
+    val fullBackupGroupDissolved: String,
+    val linkToRecurring: String,
+    val linkToAmortization: String,
+    val linkMismatchTitle: String,
+    val linkMismatchBody: (String, String) -> String,
+    val linkAnyway: String,
+    val updateTransactionAmount: String,
+    val linkedToRecurring: (String) -> String,
+    val linkedToAmortization: (String) -> String
 )
 
 data class FutureExpendituresStrings(
@@ -688,6 +694,10 @@ data class TransactionsHelpStrings(
     val fieldDateDesc: String,
     val fieldMerchant: String,
     val fieldMerchantDesc: String,
+    val fieldDescription: String,
+    val fieldDescriptionDesc: String,
+    val fieldLinkButtons: String,
+    val fieldLinkButtonsDesc: String,
     val fieldCategory: String,
     val fieldCategoryDesc: String,
     val fieldAmount: String,

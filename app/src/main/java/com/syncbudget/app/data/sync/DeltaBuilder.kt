@@ -39,6 +39,8 @@ object DeltaBuilder {
         }
         if (txn.isUserCategorized_clock > lastPushedClock) fields["isUserCategorized"] = FieldDelta(txn.isUserCategorized, txn.isUserCategorized_clock)
         if (txn.isBudgetIncome_clock > lastPushedClock) fields["isBudgetIncome"] = FieldDelta(txn.isBudgetIncome, txn.isBudgetIncome_clock)
+        if (txn.linkedRecurringExpenseId_clock > lastPushedClock) fields["linkedRecurringExpenseId"] = FieldDelta(txn.linkedRecurringExpenseId, txn.linkedRecurringExpenseId_clock)
+        if (txn.linkedAmortizationEntryId_clock > lastPushedClock) fields["linkedAmortizationEntryId"] = FieldDelta(txn.linkedAmortizationEntryId, txn.linkedAmortizationEntryId_clock)
         if (txn.deleted_clock > lastPushedClock) fields["deleted"] = FieldDelta(txn.deleted, txn.deleted_clock)
         if (txn.deviceId_clock > lastPushedClock) fields["deviceId"] = FieldDelta(txn.deviceId, txn.deviceId_clock)
         if (fields.isEmpty()) return null

@@ -92,13 +92,15 @@ private fun cleanMerchantName(raw: String): String {
 
 fun serializeTransactionsCsv(transactions: List<Transaction>): String {
     val sb = StringBuilder()
-    sb.appendLine("id,type,date,source,description,amount,categoryAmounts,isUserCategorized,isBudgetIncome,deviceId,deleted,source_clock,description_clock,amount_clock,date_clock,type_clock,categoryAmounts_clock,isUserCategorized_clock,isBudgetIncome_clock,deleted_clock")
+    sb.appendLine("id,type,date,source,description,amount,categoryAmounts,isUserCategorized,isBudgetIncome,deviceId,deleted,source_clock,description_clock,amount_clock,date_clock,type_clock,categoryAmounts_clock,isUserCategorized_clock,isBudgetIncome_clock,deleted_clock,linkedRecurringExpenseId,linkedAmortizationEntryId,linkedRecurringExpenseId_clock,linkedAmortizationEntryId_clock")
     for (t in transactions) {
         val categoryAmountsStr = t.categoryAmounts.joinToString(";") { "${it.categoryId}:${it.amount}" }
         val escapedSource = "\"${t.source.replace("\"", "\"\"")}\""
         val escapedDescription = "\"${t.description.replace("\"", "\"\"")}\""
         val escapedDeviceId = "\"${t.deviceId.replace("\"", "\"\"")}\""
-        sb.appendLine("${t.id},${t.type.name},${t.date},$escapedSource,$escapedDescription,${t.amount},\"$categoryAmountsStr\",${t.isUserCategorized},${t.isBudgetIncome},$escapedDeviceId,${t.deleted},${t.source_clock},${t.description_clock},${t.amount_clock},${t.date_clock},${t.type_clock},${t.categoryAmounts_clock},${t.isUserCategorized_clock},${t.isBudgetIncome_clock},${t.deleted_clock}")
+        val linkedRecStr = t.linkedRecurringExpenseId?.toString() ?: ""
+        val linkedAmortStr = t.linkedAmortizationEntryId?.toString() ?: ""
+        sb.appendLine("${t.id},${t.type.name},${t.date},$escapedSource,$escapedDescription,${t.amount},\"$categoryAmountsStr\",${t.isUserCategorized},${t.isBudgetIncome},$escapedDeviceId,${t.deleted},${t.source_clock},${t.description_clock},${t.amount_clock},${t.date_clock},${t.type_clock},${t.categoryAmounts_clock},${t.isUserCategorized_clock},${t.isBudgetIncome_clock},${t.deleted_clock},$linkedRecStr,$linkedAmortStr,${t.linkedRecurringExpenseId_clock},${t.linkedAmortizationEntryId_clock}")
     }
     return sb.toString()
 }
@@ -171,6 +173,10 @@ fun parseSyncBudgetCsv(reader: BufferedReader, existingIds: Set<Int>): CsvParseR
                 val isUserCatClock = if (fields.size > 15 + offset + clockOffset) fields[15 + offset + clockOffset].trim().toLongOrNull() ?: 0L else 0L
                 val isBudgetIncomeClock = if (fields.size > 16 + offset + clockOffset) fields[16 + offset + clockOffset].trim().toLongOrNull() ?: 0L else 0L
                 val deletedClock = if (fields.size > 17 + offset + clockOffset) fields[17 + offset + clockOffset].trim().toLongOrNull() ?: 0L else 0L
+                val linkedRecurringExpenseId = if (fields.size > 18 + offset + clockOffset) fields[18 + offset + clockOffset].trim().toIntOrNull() else null
+                val linkedAmortizationEntryId = if (fields.size > 19 + offset + clockOffset) fields[19 + offset + clockOffset].trim().toIntOrNull() else null
+                val linkedRecurringClock = if (fields.size > 20 + offset + clockOffset) fields[20 + offset + clockOffset].trim().toLongOrNull() ?: 0L else 0L
+                val linkedAmortizationClock = if (fields.size > 21 + offset + clockOffset) fields[21 + offset + clockOffset].trim().toLongOrNull() ?: 0L else 0L
 
                 transactions.add(
                     Transaction(
@@ -183,6 +189,8 @@ fun parseSyncBudgetCsv(reader: BufferedReader, existingIds: Set<Int>): CsvParseR
                         amount = amount,
                         isUserCategorized = isUserCategorized,
                         isBudgetIncome = isBudgetIncome,
+                        linkedRecurringExpenseId = linkedRecurringExpenseId,
+                        linkedAmortizationEntryId = linkedAmortizationEntryId,
                         deviceId = deviceId,
                         deleted = deleted,
                         source_clock = sourceClock,
@@ -193,6 +201,8 @@ fun parseSyncBudgetCsv(reader: BufferedReader, existingIds: Set<Int>): CsvParseR
                         categoryAmounts_clock = catAmountsClock,
                         isUserCategorized_clock = isUserCatClock,
                         isBudgetIncome_clock = isBudgetIncomeClock,
+                        linkedRecurringExpenseId_clock = linkedRecurringClock,
+                        linkedAmortizationEntryId_clock = linkedAmortizationClock,
                         deleted_clock = deletedClock
                     )
                 )

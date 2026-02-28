@@ -50,6 +50,8 @@ object SnapshotManager {
             obj.put("amount", t.amount)
             obj.put("isUserCategorized", t.isUserCategorized)
             obj.put("isBudgetIncome", t.isBudgetIncome)
+            obj.put("linkedRecurringExpenseId", t.linkedRecurringExpenseId ?: JSONObject.NULL)
+            obj.put("linkedAmortizationEntryId", t.linkedAmortizationEntryId ?: JSONObject.NULL)
             if (t.categoryAmounts.isNotEmpty()) {
                 val catArray = JSONArray()
                 for (ca in t.categoryAmounts) {
@@ -70,6 +72,8 @@ object SnapshotManager {
             obj.put("categoryAmounts_clock", t.categoryAmounts_clock)
             obj.put("isUserCategorized_clock", t.isUserCategorized_clock)
             obj.put("isBudgetIncome_clock", t.isBudgetIncome_clock)
+            obj.put("linkedRecurringExpenseId_clock", t.linkedRecurringExpenseId_clock)
+            obj.put("linkedAmortizationEntryId_clock", t.linkedAmortizationEntryId_clock)
             obj.put("deleted_clock", t.deleted_clock)
             obj.put("deviceId_clock", t.deviceId_clock)
             txnArray.put(obj)
@@ -230,6 +234,8 @@ object SnapshotManager {
                     amount = obj.getDouble("amount"),
                     isUserCategorized = if (obj.has("isUserCategorized")) obj.getBoolean("isUserCategorized") else true,
                     isBudgetIncome = if (obj.has("isBudgetIncome")) obj.getBoolean("isBudgetIncome") else false,
+                    linkedRecurringExpenseId = if (obj.has("linkedRecurringExpenseId") && !obj.isNull("linkedRecurringExpenseId")) obj.getInt("linkedRecurringExpenseId") else null,
+                    linkedAmortizationEntryId = if (obj.has("linkedAmortizationEntryId") && !obj.isNull("linkedAmortizationEntryId")) obj.getInt("linkedAmortizationEntryId") else null,
                     deviceId = obj.optString("deviceId", ""),
                     deleted = obj.optBoolean("deleted", false),
                     source_clock = obj.optLong("source_clock", 0L),
@@ -240,6 +246,8 @@ object SnapshotManager {
                     categoryAmounts_clock = obj.optLong("categoryAmounts_clock", 0L),
                     isUserCategorized_clock = obj.optLong("isUserCategorized_clock", 0L),
                     isBudgetIncome_clock = obj.optLong("isBudgetIncome_clock", 0L),
+                    linkedRecurringExpenseId_clock = obj.optLong("linkedRecurringExpenseId_clock", 0L),
+                    linkedAmortizationEntryId_clock = obj.optLong("linkedAmortizationEntryId_clock", 0L),
                     deleted_clock = obj.optLong("deleted_clock", 0L),
                     deviceId_clock = obj.optLong("deviceId_clock", 0L)
                 )
