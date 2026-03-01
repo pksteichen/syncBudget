@@ -326,6 +326,51 @@ class MainActivity : ComponentActivity() {
                 persistAvailableCash()
             }
 
+            // One-time migration: fix stale budget-start ledger entry.
+            // If the entry on budgetStartDate has a clock older than
+            // budgetStartDate_clock, it's from before the reset and wrong.
+            LaunchedEffect(Unit) {
+                if (!syncPrefs.getBoolean("migration_fix_stale_budgetstart_ledger_ui", false)) {
+                    val bsd = budgetStartDate
+                    if (bsd != null) {
+                        val bsdEpochDay = bsd.toEpochDay().toInt()
+                        val bsdEntry = periodLedger.find { it.id == bsdEpochDay }
+                        if (bsdEntry != null && bsdEntry.clock < sharedSettings.budgetStartDate_clock) {
+                            val nextDayEntry = periodLedger.find { it.id == bsdEpochDay + 1 }
+                            val correctAmount = nextDayEntry?.appliedAmount ?: budgetAmount
+                            val lamportClock = LamportClock(context)
+                            val migClock = lamportClock.tick()
+                            val idx = periodLedger.indexOfFirst { it.id == bsdEpochDay }
+                            if (idx >= 0) {
+                                periodLedger[idx] = periodLedger[idx].copy(
+                                    appliedAmount = correctAmount,
+                                    clock = migClock,
+                                    deviceId = localDeviceId
+                                )
+                                savePeriodLedger()
+                            }
+                        }
+                    }
+                    syncPrefs.edit().putBoolean("migration_fix_stale_budgetstart_ledger_ui", true).apply()
+                }
+                // Admin re-stamps ALL period ledger entries so they get re-pushed
+                // to non-admin devices that may be missing entries.
+                if (!syncPrefs.getBoolean("migration_restamp_all_period_ledger_ui", false)) {
+                    if (isSyncAdmin && periodLedger.isNotEmpty()) {
+                        val lc = LamportClock(context)
+                        val migClock = lc.tick()
+                        for (i in periodLedger.indices) {
+                            periodLedger[i] = periodLedger[i].copy(
+                                clock = migClock, deviceId = localDeviceId
+                            )
+                        }
+                        savePeriodLedger()
+                    }
+                    syncPrefs.edit().putBoolean("migration_restamp_all_period_ledger_ui", true).apply()
+                }
+                recomputeCash()
+            }
+
             // Check if an expense transaction is fully accounted for in the budget
             // (amortization entries are built into the safe budget amount)
             fun isBudgetAccountedExpense(txn: Transaction): Boolean {

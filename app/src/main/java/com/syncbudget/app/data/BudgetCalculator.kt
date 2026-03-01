@@ -281,12 +281,14 @@ object BudgetCalculator {
         activeTransactions: List<Transaction>,
         activeRecurringExpenses: List<RecurringExpense>
     ): Double {
-        // Sum period credits from synced ledger
+        // Sum period credits from synced ledger (dedup by date — keep highest clock)
         var cash = 0.0
-        for (entry in periodLedgerEntries) {
-            if (!entry.periodStartDate.toLocalDate().isBefore(budgetStartDate)) {
-                cash += entry.appliedAmount
-            }
+        val dedupedLedger = periodLedgerEntries
+            .filter { !it.periodStartDate.toLocalDate().isBefore(budgetStartDate) }
+            .groupBy { it.periodStartDate.toLocalDate() }
+            .values.map { entries -> entries.maxByOrNull { it.clock } ?: entries.first() }
+        for (entry in dedupedLedger) {
+            cash += entry.appliedAmount
         }
         // Apply transaction effects
         for (txn in activeTransactions) {

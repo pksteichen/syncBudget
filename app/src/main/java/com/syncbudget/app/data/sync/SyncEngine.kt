@@ -365,7 +365,9 @@ class SyncEngine(
             for (entry in amortizationEntries) {
                 DeltaBuilder.buildAmortizationEntryDelta(entry, pushClock)?.let { localDeltas.add(it) }
             }
-            for (entry in periodLedgerEntries) {
+            // Push deduped period ledger — avoids pushing multiple deltas for the
+            // same epoch-day ID which would create duplicates on receiving devices.
+            for (entry in PeriodLedgerRepository.dedup(periodLedgerEntries)) {
                 DeltaBuilder.buildPeriodLedgerDelta(entry, pushClock)?.let { localDeltas.add(it) }
             }
             // Categories always pushed with pushClock=0 so all fields are
@@ -462,6 +464,11 @@ class SyncEngine(
             } catch (e: Exception) {
                 android.util.Log.w("SyncEngine", "Failed to check/resolve admin claim", e)
             }
+
+            // Dedup period ledger: mergeRecordIntoList only merges with the
+            // first matching entry, leaving duplicates with the same epoch-day ID.
+            // This ensures the highest-clock entry wins before saving.
+            mergedPl = PeriodLedgerRepository.dedup(mergedPl).toMutableList()
 
             val hasChanges = packets.isNotEmpty() || snapshotApplied
             // If remap fixed orphaned category IDs, include transactions even

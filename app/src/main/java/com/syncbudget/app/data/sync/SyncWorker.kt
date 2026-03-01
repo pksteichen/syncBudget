@@ -134,6 +134,64 @@ class SyncWorker(
             syncPrefs.edit().putBoolean("migration_remove_skeleton_categories", true).apply()
         }
 
+        // One-time migration: fix stale budget-start ledger entry.
+        // If the period ledger entry on the budgetStartDate has a clock older
+        // than the budgetStartDate_clock, it was created BEFORE the budget reset
+        // and has the wrong appliedAmount.  Use the next day's appliedAmount
+        // (which reflects the correct budgetAmount after the reset).
+        if (!syncPrefs.getBoolean("migration_fix_stale_budgetstart_ledger", false)) {
+            val bsd = sharedSettings.budgetStartDate?.let {
+                try { java.time.LocalDate.parse(it) } catch (_: Exception) { null }
+            }
+            if (bsd != null) {
+                val periodLedgerMig = PeriodLedgerRepository.load(applicationContext)
+                val bsdEpochDay = bsd.toEpochDay().toInt()
+                val bsdEntry = periodLedgerMig.find { it.id == bsdEpochDay }
+                if (bsdEntry != null && bsdEntry.clock < sharedSettings.budgetStartDate_clock) {
+                    // Entry is from before the budget reset — find correct amount
+                    val nextDayEntry = periodLedgerMig.find { it.id == bsdEpochDay + 1 }
+                    val correctAmount = nextDayEntry?.appliedAmount
+                        ?: BudgetCalculator.computeFullBudgetAmount(
+                            incomeSources, recurringExpenses, amortizationEntries,
+                            SavingsGoalRepository.load(applicationContext),
+                            try { com.syncbudget.app.data.BudgetPeriod.valueOf(sharedSettings.budgetPeriod) }
+                            catch (_: Exception) { com.syncbudget.app.data.BudgetPeriod.DAILY },
+                            sharedSettings.isManualBudgetEnabled,
+                            sharedSettings.manualBudgetAmount,
+                            bsd
+                        )
+                    val migClock = lamportClock.tick()
+                    val fixed = periodLedgerMig.map { e ->
+                        if (e.id == bsdEpochDay) e.copy(
+                            appliedAmount = correctAmount,
+                            clock = migClock,
+                            deviceId = deviceId
+                        ) else e
+                    }
+                    PeriodLedgerRepository.save(applicationContext, fixed)
+                }
+            }
+            syncPrefs.edit().putBoolean("migration_fix_stale_budgetstart_ledger", true).apply()
+        }
+
+        // One-time migration: admin re-stamps ALL period ledger entries so they
+        // get re-pushed to Firestore.  Non-admin devices may be missing entries
+        // (e.g. joined after they were pushed) — this forces the admin's complete
+        // ledger to propagate via sync.
+        if (!syncPrefs.getBoolean("migration_restamp_all_period_ledger", false)) {
+            if (GroupManager.isAdmin(applicationContext)) {
+                val periodLedgerMig = PeriodLedgerRepository.load(applicationContext)
+                if (periodLedgerMig.isNotEmpty()) {
+                    val migClock = lamportClock.tick()
+                    val restamped = periodLedgerMig.map { e ->
+                        e.copy(clock = migClock, deviceId = deviceId)
+                    }
+                    PeriodLedgerRepository.save(applicationContext, restamped)
+                }
+            }
+            syncPrefs.edit().putBoolean("migration_restamp_all_period_ledger", true).apply()
+        }
+
         // Load persisted category ID remap
         val remapJson = syncPrefs.getString("catIdRemap", null)
         val existingRemap = if (remapJson != null) {
