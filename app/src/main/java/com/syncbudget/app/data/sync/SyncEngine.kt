@@ -473,11 +473,12 @@ class SyncEngine(
             for (entry in PeriodLedgerRepository.dedup(periodLedgerEntries)) {
                 DeltaBuilder.buildPeriodLedgerDelta(entry, pushClock)?.let { localDeltas.add(it) }
             }
-            // Categories always pushed with pushClock=0 so all fields are
-            // included — receiving devices need every device's category IDs
-            // to build catIdRemap for transaction categoryAmounts.
+            // Categories use the same pushClock threshold as other types.
+            // New devices get all categories from the snapshot bootstrap,
+            // and catIdRemap is persisted across syncs, so re-pushing
+            // unchanged categories every sync is unnecessary.
             for (cat in categories) {
-                DeltaBuilder.buildCategoryDelta(cat, 0)?.let { localDeltas.add(it) }
+                DeltaBuilder.buildCategoryDelta(cat, pushClock)?.let { localDeltas.add(it) }
             }
             // SharedSettings is always pushed (shared, not per-device)
             DeltaBuilder.buildSharedSettingsDelta(sharedSettings, pushClock)?.let { localDeltas.add(it) }
@@ -489,13 +490,12 @@ class SyncEngine(
                 // can have arbitrarily high field clocks that would inflate
                 // lastPushedClock past locally-created records' clocks,
                 // permanently stranding them (DeltaBuilder skips fields
-                // with clock ≤ lastPushedClock).
-                // Also exclude category (pushClock=0), shared_settings
-                // (high availableCash clocks), and period_ledger (whole-entry
-                // LWW with foreign clocks).
+                // with clock ≤ lastPushedClock).  The deviceId filter is
+                // sufficient — all local clocks come from our own lamport
+                // counter, and the lamport merge below ensures future ticks
+                // stay ahead of lastPushedClock.
                 val maxDeltaClock = localDeltas
-                    .filter { it.type != "category" && it.type != "shared_settings"
-                        && it.type != "period_ledger" && it.deviceId == deviceId }
+                    .filter { it.deviceId == deviceId }
                     .maxOfOrNull { delta ->
                         delta.fields.values.maxOfOrNull { it.clock } ?: 0L
                     } ?: lastPushedClock
