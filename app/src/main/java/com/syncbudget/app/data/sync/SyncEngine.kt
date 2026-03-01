@@ -45,6 +45,11 @@ class SyncEngine(
     private val encryptionKey: ByteArray,
     private val lamportClock: LamportClock
 ) {
+    companion object {
+        const val SNAPSHOT_CATCHUP_THRESHOLD = 500
+        const val SNAPSHOT_WRITE_THRESHOLD = 500
+        const val STALE_CHECK_DAYS = 3L
+    }
 
     private val prefs = context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
 
@@ -55,6 +60,49 @@ class SyncEngine(
     private var lastPushedClock: Long
         get() = prefs.getLong("lastPushedClock", 0L)
         set(value) = prefs.edit().putLong("lastPushedClock", value).apply()
+
+    private var lastSnapshotVersion: Long
+        get() = prefs.getLong("lastSnapshotVersion", 0L)
+        set(value) = prefs.edit().putLong("lastSnapshotVersion", value).apply()
+
+    /** Create a snapshot of current data for new device bootstrapping.
+     *  Call after a successful sync to ensure the snapshot is up-to-date. */
+    suspend fun writeSnapshot(
+        transactions: List<Transaction>,
+        recurringExpenses: List<RecurringExpense>,
+        incomeSources: List<IncomeSource>,
+        savingsGoals: List<SavingsGoal>,
+        amortizationEntries: List<AmortizationEntry>,
+        categories: List<Category>,
+        sharedSettings: SharedSettings,
+        periodLedgerEntries: List<PeriodLedgerEntry>
+    ) {
+        val snapshotJson = SnapshotManager.serializeFullState(
+            transactions, recurringExpenses, incomeSources, savingsGoals,
+            amortizationEntries, categories, sharedSettings, periodLedgerEntries
+        )
+        val snapshotBytes = snapshotJson.toString().toByteArray()
+        val encryptedSnapshot = CryptoHelper.encryptWithKey(snapshotBytes, encryptionKey)
+        val encodedSnapshot = Base64.encodeToString(encryptedSnapshot, Base64.NO_WRAP)
+        FirestoreService.writeSnapshot(groupId, lastSyncVersion, deviceId, encodedSnapshot)
+    }
+
+    private inline fun <T : Any> overlayRecords(
+        base: List<T>, local: List<T>, mergeFn: (T, T) -> T
+    ): List<T> {
+        val result = base.toMutableList()
+        val baseById = base.withIndex().associate { (i, r) -> getId(r) to i }
+        for (localRecord in local) {
+            val localId = getId(localRecord)
+            val baseIndex = baseById[localId]
+            if (baseIndex != null) {
+                result[baseIndex] = mergeFn(result[baseIndex], localRecord)
+            } else {
+                result.add(localRecord)
+            }
+        }
+        return result
+    }
 
     suspend fun sync(
         transactions: List<Transaction>,
@@ -77,17 +125,19 @@ class SyncEngine(
                 }
             }
 
-            // Step 1: Check stale — if too far behind, use snapshot
-            val snapshot = FirestoreService.getSnapshot(groupId)
+            // Step 1: Check device registration; bootstrap from snapshot if new
             val deviceRecord = FirestoreService.getDeviceRecord(groupId, deviceId)
-            if (deviceRecord == null && snapshot == null) {
-                // Device not registered and no snapshot — possibly removed from group
-                return SyncResult(success = false, error = "removed_from_group")
-            }
-            // Apply snapshot for new devices, then continue to fetch post-snapshot deltas
             var snapshotApplied = false
+            var snapshotCatchUp = false
             var snapshotState: FullState? = null
-            if (deviceRecord == null && snapshot != null) {
+            var catchUpSnapshotVersion = 0L
+            if (deviceRecord == null) {
+                // New device — try to bootstrap from snapshot
+                val snapshot = FirestoreService.getSnapshot(groupId)
+                if (snapshot == null) {
+                    // Device not registered and no snapshot — possibly removed from group
+                    return SyncResult(success = false, error = "removed_from_group")
+                }
                 snapshotState = decryptSnapshot(snapshot)
                 if (snapshotState == null) {
                     return SyncResult(success = false, error = "Failed to decrypt snapshot")
@@ -95,6 +145,29 @@ class SyncEngine(
                 lastSyncVersion = snapshot.snapshotVersion
                 FirestoreService.updateDeviceMetadata(groupId, deviceId, snapshot.snapshotVersion)
                 snapshotApplied = true
+            } else {
+                // Existing device — check if stale enough to benefit from snapshot catch-up
+                val lastSync = prefs.getLong("lastSuccessfulSync", 0L)
+                if (lastSync > 0L) {
+                    val daysSinceSync = (System.currentTimeMillis() - lastSync) / (24 * 60 * 60 * 1000L)
+                    if (daysSinceSync > STALE_CHECK_DAYS) {
+                        val nextVersion = FirestoreService.getGroupNextVersion(groupId)
+                        val deltasBehind = nextVersion - 1 - lastSyncVersion
+                        if (deltasBehind > SNAPSHOT_CATCHUP_THRESHOLD) {
+                            val snapshot = FirestoreService.getSnapshot(groupId)
+                            if (snapshot != null && snapshot.snapshotVersion > lastSyncVersion) {
+                                val decrypted = decryptSnapshot(snapshot)
+                                if (decrypted != null) {
+                                    snapshotState = decrypted
+                                    lastSyncVersion = snapshot.snapshotVersion
+                                    catchUpSnapshotVersion = snapshot.snapshotVersion
+                                    snapshotCatchUp = true
+                                }
+                            }
+                            // else: fall through to normal paginated fetch
+                        }
+                    }
+                }
             }
 
             // Step 2: Fetch remote deltas (including post-snapshot deltas for new devices)
@@ -116,14 +189,44 @@ class SyncEngine(
             }
 
             // Step 4: Per-field CRDT merge — use snapshot state as base if applied
-            val baseTxns = snapshotState?.transactions ?: transactions
-            val baseRe = snapshotState?.recurringExpenses ?: recurringExpenses
-            val baseIs = snapshotState?.incomeSources ?: incomeSources
-            val baseSg = snapshotState?.savingsGoals ?: savingsGoals
-            val baseAe = snapshotState?.amortizationEntries ?: amortizationEntries
-            val baseCat = snapshotState?.categories ?: categories
-            val basePl = snapshotState?.periodLedgerEntries ?: periodLedgerEntries
-            val baseSettings = snapshotState?.sharedSettings ?: sharedSettings
+            val baseTxns: List<Transaction>
+            val baseRe: List<RecurringExpense>
+            val baseIs: List<IncomeSource>
+            val baseSg: List<SavingsGoal>
+            val baseAe: List<AmortizationEntry>
+            val baseCat: List<Category>
+            val basePl: List<PeriodLedgerEntry>
+            val baseSettings: SharedSettings
+            if (snapshotCatchUp && snapshotState != null) {
+                // Overlay local dirty records onto snapshot using CRDT merge
+                baseTxns = overlayRecords(snapshotState.transactions, transactions) { a, b -> CrdtMerge.mergeTransaction(a, b, deviceId) }
+                baseRe = overlayRecords(snapshotState.recurringExpenses, recurringExpenses) { a, b -> CrdtMerge.mergeRecurringExpense(a, b, deviceId) }
+                baseIs = overlayRecords(snapshotState.incomeSources, incomeSources) { a, b -> CrdtMerge.mergeIncomeSource(a, b, deviceId) }
+                baseSg = overlayRecords(snapshotState.savingsGoals, savingsGoals) { a, b -> CrdtMerge.mergeSavingsGoal(a, b, deviceId) }
+                baseAe = overlayRecords(snapshotState.amortizationEntries, amortizationEntries) { a, b -> CrdtMerge.mergeAmortizationEntry(a, b, deviceId) }
+                baseCat = overlayRecords(snapshotState.categories, categories) { a, b -> CrdtMerge.mergeCategory(a, b, deviceId) }
+                basePl = overlayRecords(snapshotState.periodLedgerEntries, periodLedgerEntries) { a, b -> CrdtMerge.mergePeriodLedgerEntry(a, b, deviceId) }
+                baseSettings = CrdtMerge.mergeSharedSettings(snapshotState.sharedSettings, sharedSettings, deviceId)
+            } else if (snapshotState != null) {
+                // New device bootstrap — snapshot is the sole base
+                baseTxns = snapshotState.transactions
+                baseRe = snapshotState.recurringExpenses
+                baseIs = snapshotState.incomeSources
+                baseSg = snapshotState.savingsGoals
+                baseAe = snapshotState.amortizationEntries
+                baseCat = snapshotState.categories
+                basePl = snapshotState.periodLedgerEntries
+                baseSettings = snapshotState.sharedSettings
+            } else {
+                baseTxns = transactions
+                baseRe = recurringExpenses
+                baseIs = incomeSources
+                baseSg = savingsGoals
+                baseAe = amortizationEntries
+                baseCat = categories
+                basePl = periodLedgerEntries
+                baseSettings = sharedSettings
+            }
 
             var mergedTxns = baseTxns.toMutableList()
             var mergedRe = baseRe.toMutableList()
@@ -381,13 +484,18 @@ class SyncEngine(
 
             var deltasPushed = 0
             if (localDeltas.isNotEmpty()) {
-                // Exclude category and shared_settings deltas from maxDeltaClock.
-                // Categories use pushClock=0, so their high merged clocks must
-                // not inflate lastPushedClock.  SharedSettings can have very high
-                // clocks (from availableCash updates every period) that would
-                // strand lower-clock per-device records.
+                // Only count locally-owned records for maxDeltaClock.
+                // Foreign records (received from other devices and re-pushed)
+                // can have arbitrarily high field clocks that would inflate
+                // lastPushedClock past locally-created records' clocks,
+                // permanently stranding them (DeltaBuilder skips fields
+                // with clock ≤ lastPushedClock).
+                // Also exclude category (pushClock=0), shared_settings
+                // (high availableCash clocks), and period_ledger (whole-entry
+                // LWW with foreign clocks).
                 val maxDeltaClock = localDeltas
-                    .filter { it.type != "category" && it.type != "shared_settings" }
+                    .filter { it.type != "category" && it.type != "shared_settings"
+                        && it.type != "period_ledger" && it.deviceId == deviceId }
                     .maxOfOrNull { delta ->
                         delta.fields.values.maxOfOrNull { it.clock } ?: 0L
                     } ?: lastPushedClock
@@ -425,15 +533,26 @@ class SyncEngine(
                 SharedSettingsRepository.save(context, mergedSettings)
             }
 
-            // Step 8: Snapshot maintenance (every 50 deltas)
-            if (newSyncVersion > 0 && newSyncVersion % 50 == 0L) {
-                val snapshotJson = SnapshotManager.serializeFullState(
-                    mergedTxns, mergedRe, mergedIs, mergedSg, mergedAe, mergedCat, mergedSettings, mergedPl
-                )
-                val snapshotBytes = snapshotJson.toString().toByteArray()
-                val encryptedSnapshot = CryptoHelper.encryptWithKey(snapshotBytes, encryptionKey)
-                val encodedSnapshot = Base64.encodeToString(encryptedSnapshot, Base64.NO_WRAP)
-                FirestoreService.writeSnapshot(groupId, newSyncVersion, deviceId, encodedSnapshot)
+            // Step 8: Snapshot version bookkeeping & decentralized snapshot writing
+            // Seed lastSnapshotVersion on first run to prevent all devices racing
+            if (lastSnapshotVersion == 0L && newSyncVersion > 0L) {
+                lastSnapshotVersion = newSyncVersion
+            }
+            // During catch-up, seed from the snapshot we loaded
+            if (snapshotCatchUp) {
+                lastSnapshotVersion = maxOf(lastSnapshotVersion, catchUpSnapshotVersion)
+            }
+            // Write a snapshot if enough deltas have accumulated since last snapshot
+            if (newSyncVersion - lastSnapshotVersion >= SNAPSHOT_WRITE_THRESHOLD) {
+                try {
+                    writeSnapshot(
+                        mergedTxns, mergedRe, mergedIs, mergedSg,
+                        mergedAe, mergedCat, mergedSettings, mergedPl
+                    )
+                    lastSnapshotVersion = newSyncVersion
+                } catch (e: Exception) {
+                    android.util.Log.w("SyncEngine", "Failed to write snapshot", e)
+                }
             }
 
             // Step 9: Record successful sync time & update group activity for TTL
@@ -470,7 +589,7 @@ class SyncEngine(
             // This ensures the highest-clock entry wins before saving.
             mergedPl = PeriodLedgerRepository.dedup(mergedPl).toMutableList()
 
-            val hasChanges = packets.isNotEmpty() || snapshotApplied
+            val hasChanges = packets.isNotEmpty() || snapshotApplied || snapshotCatchUp
             // If remap fixed orphaned category IDs, include transactions even
             // when no new deltas arrived — otherwise the fix is never persisted.
             val txnsChanged = hasChanges || remapChangedTxns
@@ -478,7 +597,7 @@ class SyncEngine(
                 success = true,
                 deltasReceived = packets.sumOf { it.changes.size },
                 deltasPushed = deltasPushed,
-                budgetRecalcNeeded = budgetRecalcNeeded || snapshotApplied,
+                budgetRecalcNeeded = budgetRecalcNeeded || snapshotApplied || snapshotCatchUp,
                 mergedTransactions = if (txnsChanged) mergedTxns else null,
                 mergedRecurringExpenses = if (hasChanges) mergedRe else null,
                 mergedIncomeSources = if (hasChanges) mergedIs else null,
@@ -486,7 +605,7 @@ class SyncEngine(
                 mergedAmortizationEntries = if (hasChanges) mergedAe else null,
                 mergedCategories = if (hasChanges) mergedCat else null,
                 mergedPeriodLedgerEntries = if (hasChanges) mergedPl else null,
-                mergedSharedSettings = if (settingsChanged || snapshotApplied) mergedSettings else null,
+                mergedSharedSettings = if (settingsChanged || snapshotApplied || snapshotCatchUp) mergedSettings else null,
                 pendingAdminClaim = adminClaim,
                 catIdRemap = catIdRemap
             )

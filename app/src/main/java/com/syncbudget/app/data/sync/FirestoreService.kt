@@ -46,23 +46,43 @@ object FirestoreService {
 
     private val db: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
 
-    suspend fun fetchDeltas(groupId: String, lastSyncVersion: Long): List<FirestoreDelta> {
-        val snapshot = db.collection("groups")
+    suspend fun getGroupNextVersion(groupId: String): Long {
+        val doc = db.collection("groups")
             .document(groupId)
-            .collection("deltas")
-            .whereGreaterThan("version", lastSyncVersion)
-            .orderBy("version", Query.Direction.ASCENDING)
             .get()
             .await()
+        return doc.getLong("nextDeltaVersion") ?: 1L
+    }
 
-        return snapshot.documents.map { doc ->
-            FirestoreDelta(
-                version = doc.getLong("version") ?: 0L,
-                sourceDeviceId = doc.getString("sourceDeviceId") ?: "",
-                encryptedPayload = doc.getString("encryptedPayload") ?: "",
-                timestamp = doc.getLong("timestamp") ?: 0L
-            )
+    suspend fun fetchDeltas(groupId: String, lastSyncVersion: Long, pageSize: Int = 200): List<FirestoreDelta> {
+        val allDeltas = mutableListOf<FirestoreDelta>()
+        var cursor = lastSyncVersion
+
+        while (true) {
+            val snapshot = db.collection("groups")
+                .document(groupId)
+                .collection("deltas")
+                .whereGreaterThan("version", cursor)
+                .orderBy("version", Query.Direction.ASCENDING)
+                .limit(pageSize.toLong())
+                .get()
+                .await()
+
+            val page = snapshot.documents.map { doc ->
+                FirestoreDelta(
+                    version = doc.getLong("version") ?: 0L,
+                    sourceDeviceId = doc.getString("sourceDeviceId") ?: "",
+                    encryptedPayload = doc.getString("encryptedPayload") ?: "",
+                    timestamp = doc.getLong("timestamp") ?: 0L
+                )
+            }
+            allDeltas.addAll(page)
+
+            if (page.size < pageSize) break
+            cursor = page.last().version
         }
+
+        return allDeltas
     }
 
     suspend fun updateDeviceMetadata(groupId: String, deviceId: String, syncVersion: Long) {

@@ -230,28 +230,39 @@ class MainActivity : ComponentActivity() {
                 mutableStateListOf(*SavingsGoalRepository.load(context).toTypedArray())
             }
 
+            fun markSyncDirty() {
+                context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
+                    .edit().putBoolean("syncDirty", true).apply()
+            }
+
             fun saveIncomeSources() {
                 IncomeSourceRepository.save(context, incomeSources.toList())
+                markSyncDirty()
             }
 
             fun saveRecurringExpenses() {
                 RecurringExpenseRepository.save(context, recurringExpenses.toList())
+                markSyncDirty()
             }
 
             fun saveAmortizationEntries() {
                 AmortizationRepository.save(context, amortizationEntries.toList())
+                markSyncDirty()
             }
 
             fun saveSavingsGoals() {
                 SavingsGoalRepository.save(context, savingsGoals.toList())
+                markSyncDirty()
             }
 
             fun saveTransactions() {
                 TransactionRepository.save(context, transactions.toList())
+                markSyncDirty()
             }
 
             fun saveCategories() {
                 CategoryRepository.save(context, categories.toList())
+                markSyncDirty()
             }
 
             // persistAvailableCash declared after sync state variables below
@@ -288,6 +299,7 @@ class MainActivity : ComponentActivity() {
 
             fun savePeriodLedger() {
                 PeriodLedgerRepository.save(context, periodLedger.toList())
+                markSyncDirty()
             }
 
             // ── Shared Settings (for sync) ──
@@ -384,6 +396,19 @@ class MainActivity : ComponentActivity() {
                 if (txn.type != TransactionType.EXPENSE || txn.linkedRecurringExpenseId == null) return null
                 val re = recurringExpenses.find { it.id == txn.linkedRecurringExpenseId } ?: return null
                 return re.amount - txn.amount
+            }
+
+            // Trigger immediate sync when app returns to foreground
+            var syncTrigger by remember { mutableIntStateOf(0) }
+            val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+            DisposableEffect(lifecycleOwner) {
+                val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                    if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                        syncTrigger++
+                    }
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
             }
 
             // Foreground sync loop
@@ -484,38 +509,132 @@ class MainActivity : ComponentActivity() {
                             } catch (_: Exception) { emptyMap() }
                         } else emptyMap<Int, Int>()
 
+                        // Rescue stranded records: re-stamp any locally-owned records
+                        // whose max field clock is ≤ lastPushedClock.  These were
+                        // stranded by maxDeltaClock inflation from foreign records.
+                        val lpc = syncPrefs.getLong("lastPushedClock", 0L)
+                        if (lpc > 0) {
+                            var anyRescued = false
+                            for (i in transactions.indices) {
+                                val t = transactions[i]
+                                val mx = maxOf(t.source_clock, t.amount_clock, t.date_clock, t.type_clock,
+                                    t.categoryAmounts_clock, t.isUserCategorized_clock, t.isBudgetIncome_clock,
+                                    t.linkedRecurringExpenseId_clock, t.linkedAmortizationEntryId_clock,
+                                    t.deviceId_clock, t.deleted_clock, t.description_clock)
+                                if (t.deviceId == localDeviceId && mx in 1..lpc) {
+                                    anyRescued = true
+                                    val clk = lamportClock.tick()
+                                    transactions[i] = t.copy(source_clock = clk, description_clock = clk,
+                                        amount_clock = clk, date_clock = clk, type_clock = clk,
+                                        categoryAmounts_clock = clk, isUserCategorized_clock = clk,
+                                        isBudgetIncome_clock = clk, linkedRecurringExpenseId_clock = clk,
+                                        linkedAmortizationEntryId_clock = clk, deviceId_clock = clk,
+                                        deleted_clock = clk)
+                                }
+                            }
+                            if (anyRescued) saveTransactions()
+                            anyRescued = false
+                            for (i in recurringExpenses.indices) {
+                                val r = recurringExpenses[i]
+                                val mx = maxOf(r.source_clock, r.amount_clock, r.repeatType_clock,
+                                    r.repeatInterval_clock, r.startDate_clock, r.monthDay1_clock,
+                                    r.monthDay2_clock, r.deviceId_clock, r.deleted_clock, r.description_clock)
+                                if (r.deviceId == localDeviceId && mx in 1..lpc) {
+                                    anyRescued = true
+                                    val clk = lamportClock.tick()
+                                    recurringExpenses[i] = r.copy(source_clock = clk, description_clock = clk,
+                                        amount_clock = clk, repeatType_clock = clk, repeatInterval_clock = clk,
+                                        startDate_clock = clk, monthDay1_clock = clk, monthDay2_clock = clk,
+                                        deviceId_clock = clk, deleted_clock = clk)
+                                }
+                            }
+                            if (anyRescued) saveRecurringExpenses()
+                            anyRescued = false
+                            for (i in incomeSources.indices) {
+                                val s = incomeSources[i]
+                                val mx = maxOf(s.source_clock, s.amount_clock, s.repeatType_clock,
+                                    s.repeatInterval_clock, s.startDate_clock, s.monthDay1_clock,
+                                    s.monthDay2_clock, s.deviceId_clock, s.deleted_clock, s.description_clock)
+                                if (s.deviceId == localDeviceId && mx in 1..lpc) {
+                                    anyRescued = true
+                                    val clk = lamportClock.tick()
+                                    incomeSources[i] = s.copy(source_clock = clk, description_clock = clk,
+                                        amount_clock = clk, repeatType_clock = clk, repeatInterval_clock = clk,
+                                        startDate_clock = clk, monthDay1_clock = clk, monthDay2_clock = clk,
+                                        deviceId_clock = clk, deleted_clock = clk)
+                                }
+                            }
+                            if (anyRescued) saveIncomeSources()
+                        }
+
+                        // Capture snapshots before sync — records added to
+                        // live lists during the sync must be preserved.
+                        val syncTxns = transactions.toList()
+                        val syncRe = recurringExpenses.toList()
+                        val syncIs = incomeSources.toList()
+                        val syncSg = savingsGoals.toList()
+                        val syncAe = amortizationEntries.toList()
+                        val syncCat = categories.toList()
+                        val syncPl = periodLedger.toList()
+
                         val result = engine.sync(
-                            transactions.toList(),
-                            recurringExpenses.toList(),
-                            incomeSources.toList(),
-                            savingsGoals.toList(),
-                            amortizationEntries.toList(),
-                            categories.toList(),
+                            syncTxns, syncRe, syncIs, syncSg, syncAe, syncCat,
                             sharedSettings,
                             existingCatIdRemap = existingRemap,
-                            periodLedgerEntries = periodLedger.toList()
+                            periodLedgerEntries = syncPl
                         )
                         if (result.success) {
+                            // Find records added to live lists DURING the sync
+                            // (IDs not in the snapshot we passed to engine.sync).
+                            // Without this, clear()+addAll(merged) would silently
+                            // drop transactions the user entered while the sync
+                            // was doing network I/O.
+                            val syncTxnIds = syncTxns.map { it.id }.toSet()
+                            val addedTxns = transactions.filter { it.id !in syncTxnIds }
+                            val syncReIds = syncRe.map { it.id }.toSet()
+                            val addedRe = recurringExpenses.filter { it.id !in syncReIds }
+                            val syncIsIds = syncIs.map { it.id }.toSet()
+                            val addedIs = incomeSources.filter { it.id !in syncIsIds }
+                            val syncSgIds = syncSg.map { it.id }.toSet()
+                            val addedSg = savingsGoals.filter { it.id !in syncSgIds }
+                            val syncAeIds = syncAe.map { it.id }.toSet()
+                            val addedAe = amortizationEntries.filter { it.id !in syncAeIds }
+
                             Snapshot.withMutableSnapshot {
                                 result.mergedTransactions?.let { merged ->
                                     transactions.clear()
                                     transactions.addAll(merged)
+                                    for (txn in addedTxns) {
+                                        if (transactions.none { it.id == txn.id }) transactions.add(txn)
+                                    }
                                 }
                                 result.mergedRecurringExpenses?.let { merged ->
                                     recurringExpenses.clear()
                                     recurringExpenses.addAll(merged)
+                                    for (re in addedRe) {
+                                        if (recurringExpenses.none { it.id == re.id }) recurringExpenses.add(re)
+                                    }
                                 }
                                 result.mergedIncomeSources?.let { merged ->
                                     incomeSources.clear()
                                     incomeSources.addAll(merged)
+                                    for (src in addedIs) {
+                                        if (incomeSources.none { it.id == src.id }) incomeSources.add(src)
+                                    }
                                 }
                                 result.mergedSavingsGoals?.let { merged ->
                                     savingsGoals.clear()
                                     savingsGoals.addAll(merged)
+                                    for (sg in addedSg) {
+                                        if (savingsGoals.none { it.id == sg.id }) savingsGoals.add(sg)
+                                    }
                                 }
                                 result.mergedAmortizationEntries?.let { merged ->
                                     amortizationEntries.clear()
                                     amortizationEntries.addAll(merged)
+                                    for (ae in addedAe) {
+                                        if (amortizationEntries.none { it.id == ae.id }) amortizationEntries.add(ae)
+                                    }
                                 }
                                 result.mergedCategories?.let { merged ->
                                     categories.clear()
@@ -526,11 +645,96 @@ class MainActivity : ComponentActivity() {
                                     periodLedger.addAll(merged)
                                 }
                             }
+                            // Re-stamp records created during sync so their clocks
+                            // are above lastPushedClock (which may have been inflated
+                            // by foreign records in the push).  Without this, the
+                            // record stays in the local list but is never pushed
+                            // because DeltaBuilder skips fields with clock ≤ lastPushedClock.
+                            if (addedTxns.isNotEmpty()) {
+                                for (added in addedTxns) {
+                                    val idx = transactions.indexOfFirst { it.id == added.id }
+                                    if (idx >= 0) {
+                                        val clk = lamportClock.tick()
+                                        transactions[idx] = transactions[idx].copy(
+                                            source_clock = clk, description_clock = clk,
+                                            amount_clock = clk, date_clock = clk,
+                                            type_clock = clk, categoryAmounts_clock = clk,
+                                            isUserCategorized_clock = clk, isBudgetIncome_clock = clk,
+                                            linkedRecurringExpenseId_clock = clk,
+                                            linkedAmortizationEntryId_clock = clk,
+                                            deviceId_clock = clk, deleted_clock = clk
+                                        )
+                                    }
+                                }
+                            }
+                            if (addedRe.isNotEmpty()) {
+                                for (added in addedRe) {
+                                    val idx = recurringExpenses.indexOfFirst { it.id == added.id }
+                                    if (idx >= 0) {
+                                        val clk = lamportClock.tick()
+                                        recurringExpenses[idx] = recurringExpenses[idx].copy(
+                                            source_clock = clk, description_clock = clk,
+                                            amount_clock = clk, repeatType_clock = clk,
+                                            repeatInterval_clock = clk, startDate_clock = clk,
+                                            monthDay1_clock = clk, monthDay2_clock = clk,
+                                            deviceId_clock = clk, deleted_clock = clk
+                                        )
+                                    }
+                                }
+                            }
+                            if (addedIs.isNotEmpty()) {
+                                for (added in addedIs) {
+                                    val idx = incomeSources.indexOfFirst { it.id == added.id }
+                                    if (idx >= 0) {
+                                        val clk = lamportClock.tick()
+                                        incomeSources[idx] = incomeSources[idx].copy(
+                                            source_clock = clk, description_clock = clk,
+                                            amount_clock = clk, repeatType_clock = clk,
+                                            repeatInterval_clock = clk, startDate_clock = clk,
+                                            monthDay1_clock = clk, monthDay2_clock = clk,
+                                            deviceId_clock = clk, deleted_clock = clk
+                                        )
+                                    }
+                                }
+                            }
+                            if (addedSg.isNotEmpty()) {
+                                for (added in addedSg) {
+                                    val idx = savingsGoals.indexOfFirst { it.id == added.id }
+                                    if (idx >= 0) {
+                                        val clk = lamportClock.tick()
+                                        savingsGoals[idx] = savingsGoals[idx].copy(
+                                            name_clock = clk, targetAmount_clock = clk,
+                                            targetDate_clock = clk, totalSavedSoFar_clock = clk,
+                                            contributionPerPeriod_clock = clk, isPaused_clock = clk,
+                                            deviceId_clock = clk, deleted_clock = clk
+                                        )
+                                    }
+                                }
+                            }
+                            if (addedAe.isNotEmpty()) {
+                                for (added in addedAe) {
+                                    val idx = amortizationEntries.indexOfFirst { it.id == added.id }
+                                    if (idx >= 0) {
+                                        val clk = lamportClock.tick()
+                                        amortizationEntries[idx] = amortizationEntries[idx].copy(
+                                            source_clock = clk, description_clock = clk,
+                                            amount_clock = clk, totalPeriods_clock = clk,
+                                            startDate_clock = clk, isPaused_clock = clk,
+                                            deviceId_clock = clk, deleted_clock = clk
+                                        )
+                                    }
+                                }
+                            }
                             result.mergedTransactions?.let { saveTransactions() }
+                            if (addedTxns.isNotEmpty()) saveTransactions()
                             result.mergedRecurringExpenses?.let { saveRecurringExpenses() }
+                            if (addedRe.isNotEmpty()) saveRecurringExpenses()
                             result.mergedIncomeSources?.let { saveIncomeSources() }
+                            if (addedIs.isNotEmpty()) saveIncomeSources()
                             result.mergedSavingsGoals?.let { saveSavingsGoals() }
+                            if (addedSg.isNotEmpty()) saveSavingsGoals()
                             result.mergedAmortizationEntries?.let { saveAmortizationEntries() }
+                            if (addedAe.isNotEmpty()) saveAmortizationEntries()
                             result.mergedCategories?.let { saveCategories() }
                             result.mergedPeriodLedgerEntries?.let { savePeriodLedger() }
                             result.mergedSharedSettings?.let { merged ->
@@ -587,6 +791,7 @@ class MainActivity : ComponentActivity() {
                             }
                             syncStatus = "synced"
                             syncErrorMessage = null
+                            syncPrefs.edit().putBoolean("syncDirty", false).apply()
                             lastSyncTime = "just now"
                             pendingAdminClaim = result.pendingAdminClaim
                             // Compute stale days
@@ -630,7 +835,12 @@ class MainActivity : ComponentActivity() {
                     } finally {
                         syncFileLock.unlock()
                     }
-                    delay(60_000)
+                    // Wait up to 60s, but short-circuit if app returns to foreground
+                    val before = syncTrigger
+                    val deadline = System.currentTimeMillis() + 60_000
+                    while (syncTrigger == before && System.currentTimeMillis() < deadline) {
+                        delay(1_000)
+                    }
                 }
             }
 
@@ -2148,25 +2358,115 @@ class MainActivity : ComponentActivity() {
                                         try { val j = org.json.JSONObject(rmJson); j.keys().asSequence().associate { it.toInt() to j.getInt(it) } }
                                         catch (_: Exception) { emptyMap() }
                                     } else emptyMap<Int, Int>()
+                                    val sTxns = transactions.toList()
+                                    val sRe = recurringExpenses.toList()
+                                    val sIs = incomeSources.toList()
+                                    val sSg = savingsGoals.toList()
+                                    val sAe = amortizationEntries.toList()
+                                    val sCat = categories.toList()
+                                    val sPl = periodLedger.toList()
                                     val result = engine.sync(
-                                        transactions.toList(),
-                                        recurringExpenses.toList(),
-                                        incomeSources.toList(),
-                                        savingsGoals.toList(),
-                                        amortizationEntries.toList(),
-                                        categories.toList(),
+                                        sTxns, sRe, sIs, sSg, sAe, sCat,
                                         sharedSettings,
                                         existingCatIdRemap = existRemap,
-                                        periodLedgerEntries = periodLedger.toList()
+                                        periodLedgerEntries = sPl
                                     )
                                     if (result.success) {
-                                        result.mergedTransactions?.let { transactions.clear(); transactions.addAll(it); saveTransactions() }
-                                        result.mergedRecurringExpenses?.let { recurringExpenses.clear(); recurringExpenses.addAll(it); saveRecurringExpenses() }
-                                        result.mergedIncomeSources?.let { incomeSources.clear(); incomeSources.addAll(it); saveIncomeSources() }
-                                        result.mergedSavingsGoals?.let { savingsGoals.clear(); savingsGoals.addAll(it); saveSavingsGoals() }
-                                        result.mergedAmortizationEntries?.let { amortizationEntries.clear(); amortizationEntries.addAll(it); saveAmortizationEntries() }
+                                        // Preserve records added during sync
+                                        val sTxnIds = sTxns.map { it.id }.toSet()
+                                        val aT = transactions.filter { it.id !in sTxnIds }
+                                        val sReIds = sRe.map { it.id }.toSet()
+                                        val aR = recurringExpenses.filter { it.id !in sReIds }
+                                        val sIsIds = sIs.map { it.id }.toSet()
+                                        val aI = incomeSources.filter { it.id !in sIsIds }
+                                        val sSgIds = sSg.map { it.id }.toSet()
+                                        val aS = savingsGoals.filter { it.id !in sSgIds }
+                                        val sAeIds = sAe.map { it.id }.toSet()
+                                        val aE = amortizationEntries.filter { it.id !in sAeIds }
+                                        result.mergedTransactions?.let { m -> transactions.clear(); transactions.addAll(m); aT.forEach { t -> if (transactions.none { it.id == t.id }) transactions.add(t) }; saveTransactions() }
+                                        result.mergedRecurringExpenses?.let { m -> recurringExpenses.clear(); recurringExpenses.addAll(m); aR.forEach { r -> if (recurringExpenses.none { it.id == r.id }) recurringExpenses.add(r) }; saveRecurringExpenses() }
+                                        result.mergedIncomeSources?.let { m -> incomeSources.clear(); incomeSources.addAll(m); aI.forEach { s -> if (incomeSources.none { it.id == s.id }) incomeSources.add(s) }; saveIncomeSources() }
+                                        result.mergedSavingsGoals?.let { m -> savingsGoals.clear(); savingsGoals.addAll(m); aS.forEach { g -> if (savingsGoals.none { it.id == g.id }) savingsGoals.add(g) }; saveSavingsGoals() }
+                                        result.mergedAmortizationEntries?.let { m -> amortizationEntries.clear(); amortizationEntries.addAll(m); aE.forEach { e -> if (amortizationEntries.none { it.id == e.id }) amortizationEntries.add(e) }; saveAmortizationEntries() }
                                         result.mergedCategories?.let { categories.clear(); categories.addAll(it); saveCategories() }
                                         result.mergedPeriodLedgerEntries?.let { periodLedger.clear(); periodLedger.addAll(it); savePeriodLedger() }
+                                        // Re-stamp records added during sync so their clocks
+                                        // are above lastPushedClock
+                                        if (aT.isNotEmpty()) {
+                                            for (added in aT) {
+                                                val idx = transactions.indexOfFirst { it.id == added.id }
+                                                if (idx >= 0) {
+                                                    val clk = lamportClock.tick()
+                                                    transactions[idx] = transactions[idx].copy(
+                                                        source_clock = clk, description_clock = clk,
+                                                        amount_clock = clk, date_clock = clk,
+                                                        type_clock = clk, categoryAmounts_clock = clk,
+                                                        isUserCategorized_clock = clk, isBudgetIncome_clock = clk,
+                                                        linkedRecurringExpenseId_clock = clk,
+                                                        linkedAmortizationEntryId_clock = clk,
+                                                        deviceId_clock = clk, deleted_clock = clk)
+                                                }
+                                            }
+                                            saveTransactions()
+                                        }
+                                        if (aR.isNotEmpty()) {
+                                            for (added in aR) {
+                                                val idx = recurringExpenses.indexOfFirst { it.id == added.id }
+                                                if (idx >= 0) {
+                                                    val clk = lamportClock.tick()
+                                                    recurringExpenses[idx] = recurringExpenses[idx].copy(
+                                                        source_clock = clk, description_clock = clk,
+                                                        amount_clock = clk, repeatType_clock = clk,
+                                                        repeatInterval_clock = clk, startDate_clock = clk,
+                                                        monthDay1_clock = clk, monthDay2_clock = clk,
+                                                        deviceId_clock = clk, deleted_clock = clk)
+                                                }
+                                            }
+                                            saveRecurringExpenses()
+                                        }
+                                        if (aI.isNotEmpty()) {
+                                            for (added in aI) {
+                                                val idx = incomeSources.indexOfFirst { it.id == added.id }
+                                                if (idx >= 0) {
+                                                    val clk = lamportClock.tick()
+                                                    incomeSources[idx] = incomeSources[idx].copy(
+                                                        source_clock = clk, description_clock = clk,
+                                                        amount_clock = clk, repeatType_clock = clk,
+                                                        repeatInterval_clock = clk, startDate_clock = clk,
+                                                        monthDay1_clock = clk, monthDay2_clock = clk,
+                                                        deviceId_clock = clk, deleted_clock = clk)
+                                                }
+                                            }
+                                            saveIncomeSources()
+                                        }
+                                        if (aS.isNotEmpty()) {
+                                            for (added in aS) {
+                                                val idx = savingsGoals.indexOfFirst { it.id == added.id }
+                                                if (idx >= 0) {
+                                                    val clk = lamportClock.tick()
+                                                    savingsGoals[idx] = savingsGoals[idx].copy(
+                                                        name_clock = clk, targetAmount_clock = clk,
+                                                        targetDate_clock = clk, totalSavedSoFar_clock = clk,
+                                                        contributionPerPeriod_clock = clk, isPaused_clock = clk,
+                                                        deviceId_clock = clk, deleted_clock = clk)
+                                                }
+                                            }
+                                            saveSavingsGoals()
+                                        }
+                                        if (aE.isNotEmpty()) {
+                                            for (added in aE) {
+                                                val idx = amortizationEntries.indexOfFirst { it.id == added.id }
+                                                if (idx >= 0) {
+                                                    val clk = lamportClock.tick()
+                                                    amortizationEntries[idx] = amortizationEntries[idx].copy(
+                                                        source_clock = clk, description_clock = clk,
+                                                        amount_clock = clk, totalPeriods_clock = clk,
+                                                        startDate_clock = clk, isPaused_clock = clk,
+                                                        deviceId_clock = clk, deleted_clock = clk)
+                                                }
+                                            }
+                                            saveAmortizationEntries()
+                                        }
                                         result.mergedSharedSettings?.let { merged ->
                                             sharedSettings = merged
                                             currencySymbol = merged.currency
@@ -2216,6 +2516,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                         syncStatus = "synced"
                                         syncErrorMessage = null
+                                        syncPrefs.edit().putBoolean("syncDirty", false).apply()
                                         lastSyncTime = "just now"
                                         pendingAdminClaim = result.pendingAdminClaim
                                         val lastSync = syncPrefs.getLong("lastSuccessfulSync", 0L)
@@ -2250,6 +2551,14 @@ class MainActivity : ComponentActivity() {
                             if (gId != null && key != null) {
                                 coroutineScope.launch {
                                     try {
+                                        // Write a fresh snapshot so the new device can bootstrap
+                                        val eng = SyncEngine(context, gId, localDeviceId, key, lamportClock)
+                                        eng.writeSnapshot(
+                                            transactions.toList(), recurringExpenses.toList(),
+                                            incomeSources.toList(), savingsGoals.toList(),
+                                            amortizationEntries.toList(), categories.toList(),
+                                            sharedSettings, periodLedger.toList()
+                                        )
                                         generatedPairingCode = GroupManager.generatePairingCode(context, gId, key)
                                     } catch (_: Exception) {}
                                 }

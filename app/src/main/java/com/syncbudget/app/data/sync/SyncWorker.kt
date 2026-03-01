@@ -37,6 +37,10 @@ class SyncWorker(
 
     private suspend fun doSyncWork(): Result {
         val syncPrefs = applicationContext.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
+        // Only run background sync when there are unpushed local changes.
+        // Pull-side sync is handled by the foreground sync loop on app resume.
+        if (!syncPrefs.getBoolean("syncDirty", false)) return Result.success()
+
         val groupId = syncPrefs.getString("groupId", null) ?: return Result.success()
         // TODO(security): Move encryption key to EncryptedSharedPreferences
         val keyBase64 = syncPrefs.getString("encryptionKey", null) ?: return Result.success()
@@ -192,6 +196,75 @@ class SyncWorker(
             syncPrefs.edit().putBoolean("migration_restamp_all_period_ledger", true).apply()
         }
 
+        // Rescue stranded records: re-stamp any locally-owned records whose
+        // max field clock is > 0 but ≤ lastPushedClock.  These were stranded
+        // by maxDeltaClock inflation from foreign records' clocks in a previous
+        // sync, causing DeltaBuilder to permanently skip them.
+        val lpc = syncPrefs.getLong("lastPushedClock", 0L)
+        if (lpc > 0) {
+            var anyRescued = false
+            transactions = transactions.map { t ->
+                val maxClk = maxOf(t.source_clock, t.amount_clock, t.date_clock, t.type_clock,
+                    t.categoryAmounts_clock, t.isUserCategorized_clock, t.isBudgetIncome_clock,
+                    t.linkedRecurringExpenseId_clock, t.linkedAmortizationEntryId_clock,
+                    t.deviceId_clock, t.deleted_clock, t.description_clock)
+                if (t.deviceId == deviceId && maxClk in 1..lpc) {
+                    anyRescued = true
+                    val clk = lamportClock.tick()
+                    t.copy(source_clock = clk, description_clock = clk, amount_clock = clk,
+                        date_clock = clk, type_clock = clk, categoryAmounts_clock = clk,
+                        isUserCategorized_clock = clk, isBudgetIncome_clock = clk,
+                        linkedRecurringExpenseId_clock = clk, linkedAmortizationEntryId_clock = clk,
+                        deviceId_clock = clk, deleted_clock = clk)
+                } else t
+            }
+            if (anyRescued) TransactionRepository.save(applicationContext, transactions)
+            anyRescued = false
+            recurringExpenses = recurringExpenses.map { r ->
+                val maxClk = maxOf(r.source_clock, r.amount_clock, r.repeatType_clock,
+                    r.repeatInterval_clock, r.startDate_clock, r.monthDay1_clock,
+                    r.monthDay2_clock, r.deviceId_clock, r.deleted_clock, r.description_clock)
+                if (r.deviceId == deviceId && maxClk in 1..lpc) {
+                    anyRescued = true
+                    val clk = lamportClock.tick()
+                    r.copy(source_clock = clk, description_clock = clk, amount_clock = clk,
+                        repeatType_clock = clk, repeatInterval_clock = clk, startDate_clock = clk,
+                        monthDay1_clock = clk, monthDay2_clock = clk,
+                        deviceId_clock = clk, deleted_clock = clk)
+                } else r
+            }
+            if (anyRescued) RecurringExpenseRepository.save(applicationContext, recurringExpenses)
+            anyRescued = false
+            incomeSources = incomeSources.map { s ->
+                val maxClk = maxOf(s.source_clock, s.amount_clock, s.repeatType_clock,
+                    s.repeatInterval_clock, s.startDate_clock, s.monthDay1_clock,
+                    s.monthDay2_clock, s.deviceId_clock, s.deleted_clock, s.description_clock)
+                if (s.deviceId == deviceId && maxClk in 1..lpc) {
+                    anyRescued = true
+                    val clk = lamportClock.tick()
+                    s.copy(source_clock = clk, description_clock = clk, amount_clock = clk,
+                        repeatType_clock = clk, repeatInterval_clock = clk, startDate_clock = clk,
+                        monthDay1_clock = clk, monthDay2_clock = clk,
+                        deviceId_clock = clk, deleted_clock = clk)
+                } else s
+            }
+            if (anyRescued) IncomeSourceRepository.save(applicationContext, incomeSources)
+            anyRescued = false
+            amortizationEntries = amortizationEntries.map { e ->
+                val maxClk = maxOf(e.source_clock, e.amount_clock, e.totalPeriods_clock,
+                    e.startDate_clock, e.isPaused_clock, e.deviceId_clock, e.deleted_clock,
+                    e.description_clock)
+                if (e.deviceId == deviceId && maxClk in 1..lpc) {
+                    anyRescued = true
+                    val clk = lamportClock.tick()
+                    e.copy(source_clock = clk, description_clock = clk, amount_clock = clk,
+                        totalPeriods_clock = clk, startDate_clock = clk, isPaused_clock = clk,
+                        deviceId_clock = clk, deleted_clock = clk)
+                } else e
+            }
+            if (anyRescued) AmortizationRepository.save(applicationContext, amortizationEntries)
+        }
+
         // Load persisted category ID remap
         val remapJson = syncPrefs.getString("catIdRemap", null)
         val existingRemap = if (remapJson != null) {
@@ -259,6 +332,8 @@ class SyncWorker(
                 appPrefs.edit().putString("availableCash", cash.toString()).apply()
             }
 
+            // Local changes successfully pushed — clear dirty flag
+            syncPrefs.edit().putBoolean("syncDirty", false).apply()
             return Result.success()
         }
 

@@ -119,6 +119,7 @@ object GroupManager {
             .remove("isAdmin")
             .remove("lastSyncVersion")
             .remove("lastPushedClock")
+            .remove("lastSnapshotVersion")
             .apply()
         SyncWorker.cancel(context)
     }
