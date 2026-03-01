@@ -259,7 +259,6 @@ fun MainScreen(
     budgetPeriod: BudgetPeriod = BudgetPeriod.DAILY,
     syncStatus: String = "off",
     staleDays: Int = 0,
-    remoteCrdtCash: Double? = null,
     syncDevices: List<DeviceInfo> = emptyList(),
     localDeviceId: String = ""
 ) {
@@ -417,17 +416,6 @@ fun MainScreen(
                 }
             }
 
-            // Out-of-sync indicator (debug)
-            if (remoteCrdtCash != null && kotlin.math.abs(remoteCrdtCash - availableCash) > 0.01) {
-                Text(
-                    text = "Remote cash: ${formatCurrency(remoteCrdtCash, currencySymbol)} (diff: ${formatCurrency(remoteCrdtCash - availableCash, currencySymbol)})",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFFF44336),
-                    fontSize = 11.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
-                )
-            }
 
             // Stale device warning banner
             if (staleDays >= 60) {

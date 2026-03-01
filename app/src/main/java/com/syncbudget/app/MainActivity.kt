@@ -987,7 +987,6 @@ class MainActivity : ComponentActivity() {
                         budgetPeriod = budgetPeriod,
                         syncStatus = syncStatus,
                         staleDays = staleDays,
-                        remoteCrdtCash = if (isSyncConfigured) sharedSettings.availableCash else null,
                         syncDevices = syncDevices,
                         localDeviceId = localDeviceId,
                         onSupercharge = { allocations, modes ->
