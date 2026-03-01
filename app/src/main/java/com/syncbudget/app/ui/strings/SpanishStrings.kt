@@ -449,9 +449,9 @@ object SpanishStrings : AppStrings {
         solariDisplayBody = "La pieza central de la app es la pantalla tipo Solari \u2014 inspirada en los " +
             "tableros de solapas de las estaciones de tren y aeropuertos. Muestra dos datos clave:",
         availableCashTitle = "Efectivo disponible (n\u00famero principal)",
-        availableCashBody = "Es el total acumulado de dinero disponible para gastos discrecionales. " +
-            "Comienza con el monto de un per\u00edodo cuando configuras tu presupuesto por primera vez " +
-            "y se actualiza en tiempo real:",
+        availableCashBody = "Es cu\u00e1nto dinero tienes disponible para gastos discrecionales. " +
+            "Se calcula autom\u00e1ticamente a partir de tu historial de presupuesto y transacciones, " +
+            "y se mantiene sincronizado en todos tus dispositivos:",
         bullet1 = "Aumenta en cada per\u00edodo (diario, semanal o mensual) seg\u00fan tu monto de presupuesto",
         bullet2 = "Disminuye cuando registras un gasto",
         bullet3 = "Aumenta cuando registras ingresos extra (no presupuestados)",
@@ -522,9 +522,9 @@ object SpanishStrings : AppStrings {
         budgetAmortBullet = "Deducciones de Amortizaci\u00f3n \u2014 distribuyendo gastos grandes del pasado a lo largo del tiempo",
         budgetAmountNote = "Esto asegura que tu dinero para gastar ya est\u00e9 ajustado tanto para gastos grandes futuros como pasados.",
         availableCashSectionTitle = "Efectivo disponible",
-        availableCashSectionBody = "El Efectivo Disponible es el n\u00famero que se muestra en la pantalla Solari. En cada per\u00edodo, " +
-            "tu monto de presupuesto se suma al total. Cada gasto que registras se resta. " +
-            "Los ingresos extra (no contabilizados en tus fuentes de ingreso) se suman. " +
+        availableCashSectionBody = "El Efectivo Disponible es el n\u00famero que se muestra en la pantalla Solari. Se calcula " +
+            "autom\u00e1ticamente a partir de tus cr\u00e9ditos de per\u00edodo, gastos e ingresos extra. " +
+            "En Sincronizaci\u00f3n Familiar, se mantiene consistente en todos los dispositivos sin intervenci\u00f3n manual. " +
             "El resultado: un solo n\u00famero que te dice exactamente cu\u00e1nto puedes gastar.",
         gettingStartedTitle = "Primeros pasos",
         gettingStartedBody = "Sigue estos pasos para configurar tu presupuesto por primera vez:",
@@ -583,7 +583,7 @@ object SpanishStrings : AppStrings {
         featureBullet12 = "Sincronizaci\u00f3n Familiar \u2014 comparte presupuestos entre dispositivos con cifrado de extremo a extremo",
         syncIndicatorTitle = "Indicador de sincronizaci\u00f3n",
         syncIndicatorBody = "Cuando la Sincronizaci\u00f3n Familiar est\u00e1 activada, un indicador aparece en la esquina inferior izquierda de la pantalla Solari:",
-        syncArrowsBullet = "Flechas de sincronizaci\u00f3n \u2014 muestran el estado de conexi\u00f3n con Firebase (verde = conectado, amarillo = sincronizando, naranja = obsoleto, rojo = error)",
+        syncArrowsBullet = "Flechas de sincronizaci\u00f3n \u2014 muestran el estado de conexi\u00f3n con la nube (verde = conectado, amarillo = sincronizando, naranja = obsoleto, rojo = error)",
         syncDotsBullet = "Puntos de colores \u2014 uno por dispositivo familiar (hasta 4), mostrando cu\u00e1ndo sincroniz\u00f3 cada dispositivo: verde (< 5 min), amarillo (< 2 hrs), naranja (< 24 hrs), rojo (> 24 hrs), gris (nunca)",
         privacyTitle = "Privacidad y seguridad",
         privacyBody = "Tus datos financieros permanecen en tu dispositivo por defecto. SecureSync Presupuesto Diario no " +
@@ -1304,8 +1304,10 @@ object SpanishStrings : AppStrings {
         staleWarningsBody = "Si tu dispositivo no se ha sincronizado por un per\u00edodo extendido, " +
             "aparecer\u00e1n advertencias escalonadas en el panel: a los 60 d\u00edas un recordatorio suave, " +
             "a los 75 d\u00edas una cuenta regresiva, a los 85 d\u00edas una advertencia urgente, y a los 90 d\u00edas " +
-            "la sincronizaci\u00f3n se bloquea y se requiere una actualizaci\u00f3n completa. " +
-            "Sincroniza regularmente para evitar esto.",
+            "la sincronizaci\u00f3n se bloquea y se requiere una actualizaci\u00f3n completa desde la instant\u00e1nea del grupo. " +
+            "Para dispositivos moderadamente desactualizados, la puesta al d\u00eda es autom\u00e1tica \u2014 " +
+            "la app carga una instant\u00e1nea reciente y combina tus cambios locales sin necesidad " +
+            "de reproducir cada actualizaci\u00f3n perdida.",
         attributionTitle = "Atribuci\u00f3n de Transacciones",
         attributionBody = "Cuando el admin lo habilita, cada transacci\u00f3n muestra qu\u00e9 dispositivo la cre\u00f3. " +
             "Tus propias transacciones muestran \"T\u00fa\" y las de otros dispositivos muestran " +

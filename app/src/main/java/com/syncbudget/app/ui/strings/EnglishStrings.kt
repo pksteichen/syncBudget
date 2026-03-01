@@ -450,9 +450,9 @@ object EnglishStrings : AppStrings {
             "split-flap departure boards found in train stations and airports. It shows two " +
             "key pieces of information:",
         availableCashTitle = "Available Cash (Main Number)",
-        availableCashBody = "This is the running total of money available for discretionary spending. " +
-            "It starts at one period's budget amount when you first configure your budget, " +
-            "and updates in real time:",
+        availableCashBody = "This is how much money you have available for discretionary spending. " +
+            "It is automatically computed from your budget history and transactions, " +
+            "and stays perfectly in sync across all your devices:",
         bullet1 = "Increases each budget period (daily, weekly, or monthly) by your budget amount",
         bullet2 = "Decreases when you record an expense",
         bullet3 = "Increases when you record extra (non-budget) income",
@@ -523,9 +523,9 @@ object EnglishStrings : AppStrings {
         budgetAmortBullet = "Amortization deductions \u2014 spreading past large expenses over time",
         budgetAmountNote = "This ensures your spending money is already adjusted for both upcoming and past large expenses.",
         availableCashSectionTitle = "Available Cash",
-        availableCashSectionBody = "Available Cash is the number shown on the Solari display. Each budget period, your " +
-            "budget amount is added to the total. Each expense you record is subtracted. " +
-            "Extra income (income not already counted in your budget sources) is added. " +
+        availableCashSectionBody = "Available Cash is the number shown on the Solari display. It is automatically " +
+            "computed from your budget period credits, expenses, and extra income. " +
+            "In Family Sync, it stays consistent across all devices without manual intervention. " +
             "The result: a single number that tells you exactly how much you can spend.",
         gettingStartedTitle = "Getting Started",
         gettingStartedBody = "Follow these steps to set up your budget for the first time:",
@@ -584,7 +584,7 @@ object EnglishStrings : AppStrings {
         featureBullet12 = "Family Sync \u2014 share budgets across devices with end-to-end encryption",
         syncIndicatorTitle = "Sync Indicator",
         syncIndicatorBody = "When Family Sync is enabled, a sync indicator appears in the bottom-left corner of the Solari display:",
-        syncArrowsBullet = "Sync arrows \u2014 show Firebase connectivity status (green = connected, yellow = syncing, orange = stale, red = error)",
+        syncArrowsBullet = "Sync arrows \u2014 show cloud connectivity status (green = connected, yellow = syncing, orange = stale, red = error)",
         syncDotsBullet = "Colored dots \u2014 one per family member device (up to 4), showing how recently each device synced: green (< 5 min), yellow (< 2 hrs), orange (< 24 hrs), red (> 24 hrs), gray (never)",
         privacyTitle = "Privacy & Security",
         privacyBody = "Your financial data stays on your device by default. SecureSync Daily Budget does not collect analytics " +
@@ -1306,7 +1306,9 @@ object EnglishStrings : AppStrings {
             "warnings appear on the dashboard: at 60 days a gentle reminder, " +
             "at 75 days a countdown, at 85 days an urgent warning, and at 90 days " +
             "sync is blocked and a full refresh from the group snapshot is required. " +
-            "Sync regularly to avoid this.",
+            "For moderately stale devices, catch-up is automatic \u2014 the app loads " +
+            "a recent snapshot and merges your local changes without replaying " +
+            "every missed update.",
         attributionTitle = "Transaction Attribution",
         attributionBody = "When enabled by the admin, each transaction in the list shows which device " +
             "created it. Your own transactions show \"You\" and transactions from other " +
