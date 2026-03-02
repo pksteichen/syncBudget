@@ -2,6 +2,7 @@ package com.syncbudget.app.ui.screens
 
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -249,6 +250,11 @@ fun TransactionsScreen(
     var showBulkDeleteConfirm by remember { mutableStateOf(false) }
     var showBulkCategoryChange by remember { mutableStateOf(false) }
     var showBulkMerchantEdit by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = selectionMode) {
+        selectionMode = false
+        selectedIds.clear()
+    }
 
     // Expanded multi-category rows
     val expandedIds = remember { mutableStateMapOf<Int, Boolean>() }
@@ -2332,10 +2338,13 @@ private fun TransactionRow(
                 Spacer(modifier = Modifier.width(12.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = if (isLinkedRecurring || isLinkedAmortization) Modifier.clickable {
-                        val prefix = if (isExpense) "-" else ""
-                        Toast.makeText(context, "$prefix${formatCurrency(transaction.amount, currencySymbol)}", Toast.LENGTH_SHORT).show()
-                    } else Modifier
+                    modifier = if (isLinkedRecurring || isLinkedAmortization) Modifier.combinedClickable(
+                        onClick = {
+                            val prefix = if (isExpense) "-" else ""
+                            Toast.makeText(context, "$prefix${formatCurrency(transaction.amount, currencySymbol)}", Toast.LENGTH_SHORT).show()
+                        },
+                        onLongClick = onLongPress
+                    ) else Modifier
                 ) {
                     if (isLinkedRecurring) {
                         Icon(
