@@ -291,7 +291,8 @@ data class TransactionsStrings(
     val linkAnyway: String,
     val updateTransactionAmount: String,
     val linkedToRecurring: (String) -> String,
-    val linkedToAmortization: (String) -> String
+    val linkedToAmortization: (String) -> String,
+    val unmodifiedBankTransactions: String
 )
 
 data class FutureExpendituresStrings(

@@ -272,7 +272,8 @@ object EnglishStrings : AppStrings {
         linkAnyway = "Link Anyway",
         updateTransactionAmount = "Update Transaction",
         linkedToRecurring = { name -> "Recurring: $name" },
-        linkedToAmortization = { name -> "Amortization: $name" }
+        linkedToAmortization = { name -> "Amortization: $name" },
+        unmodifiedBankTransactions = "Unmodified Bank Transactions"
     )
 
     override val futureExpenditures = FutureExpendituresStrings(

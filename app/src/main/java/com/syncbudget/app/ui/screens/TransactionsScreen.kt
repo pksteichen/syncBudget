@@ -238,6 +238,7 @@ fun TransactionsScreen(
     var showDateSearchStart by remember { mutableStateOf(false) }
     var showDateSearchEnd by remember { mutableStateOf(false) }
     var dateSearchStart by remember { mutableStateOf<LocalDate?>(null) }
+    var bankFilterOnly by remember { mutableStateOf(false) }
 
     // Edit state
     var editingTransaction by remember { mutableStateOf<Transaction?>(null) }
@@ -739,6 +740,7 @@ fun TransactionsScreen(
                             text = { Text(S.transactions.dateSearch) },
                             onClick = {
                                 showSearchMenu = false
+                                bankFilterOnly = false
                                 showDateSearchStart = true
                             }
                         )
@@ -1154,7 +1156,10 @@ fun TransactionsScreen(
                 dateSearchStart = date
                 showDateSearchStart = false
                 showDateSearchEnd = true
-            }
+            },
+            bankFilterChecked = bankFilterOnly,
+            onBankFilterChanged = { bankFilterOnly = it },
+            showBankFilter = isPaidUser
         )
     }
 
@@ -1166,13 +1171,21 @@ fun TransactionsScreen(
             onDateSelected = { endDate ->
                 val start = dateSearchStart
                 if (start != null) {
-                    searchPredicate = { t -> !t.date.isBefore(start) && !t.date.isAfter(endDate) }
+                    val bankOnly = bankFilterOnly
+                    searchPredicate = if (bankOnly) {
+                        { t -> !t.date.isBefore(start) && !t.date.isAfter(endDate) && !t.isUserCategorized }
+                    } else {
+                        { t -> !t.date.isBefore(start) && !t.date.isAfter(endDate) }
+                    }
                     searchActive = true
                 viewFilter = ViewFilter.ALL
                 }
                 showDateSearchEnd = false
                 dateSearchStart = null
-            }
+            },
+            bankFilterChecked = bankFilterOnly,
+            onBankFilterChanged = { bankFilterOnly = it },
+            showBankFilter = isPaidUser
         )
     }
 
@@ -1918,8 +1931,7 @@ fun TransactionsScreen(
                     isBudgetIncome = true,
                     categoryAmounts = if (recurringIncomeCatId != null)
                         listOf(CategoryAmount(recurringIncomeCatId, importTxn.amount))
-                    else importTxn.categoryAmounts,
-                    isUserCategorized = true
+                    else importTxn.categoryAmounts
                 )
                 importApproved.add(updatedTxn)
                 currentImportBudgetIncome = null
@@ -3233,7 +3245,8 @@ fun TransactionDialog(
                                     categoryAmounts = catAmounts,
                                     amount = totalAmount,
                                     linkedRecurringExpenseId = linkedRecurringId,
-                                    linkedAmortizationEntryId = linkedAmortizationId
+                                    linkedAmortizationEntryId = linkedAmortizationId,
+                                    isUserCategorized = true
                                 )
                             } else {
                                 Transaction(
@@ -3886,7 +3899,10 @@ private fun AmountSearchDialog(
 private fun SearchDatePickerDialog(
     title: String,
     onDismiss: () -> Unit,
-    onDateSelected: (LocalDate) -> Unit
+    onDateSelected: (LocalDate) -> Unit,
+    bankFilterChecked: Boolean = false,
+    onBankFilterChanged: (Boolean) -> Unit = {},
+    showBankFilter: Boolean = false
 ) {
     val S = LocalStrings.current
     val datePickerState = rememberDatePickerState()
@@ -3913,7 +3929,27 @@ private fun SearchDatePickerDialog(
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(start = 24.dp, top = 16.dp, bottom = 8.dp)
             )
-            DatePicker(state = datePickerState)
+            if (showBankFilter) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .padding(start = 24.dp, bottom = 4.dp)
+                        .clickable { onBankFilterChanged(!bankFilterChecked) }
+                ) {
+                    Checkbox(
+                        checked = bankFilterChecked,
+                        onCheckedChange = onBankFilterChanged,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = S.transactions.unmodifiedBankTransactions,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+            DatePicker(state = datePickerState, title = null)
         }
     }
 }

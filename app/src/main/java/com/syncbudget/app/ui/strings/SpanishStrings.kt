@@ -272,7 +272,8 @@ object SpanishStrings : AppStrings {
         linkAnyway = "Vincular de todos modos",
         updateTransactionAmount = "Actualizar transaccion",
         linkedToRecurring = { name -> "Recurrente: $name" },
-        linkedToAmortization = { name -> "Amortizacion: $name" }
+        linkedToAmortization = { name -> "Amortizacion: $name" },
+        unmodifiedBankTransactions = "Transacciones bancarias sin modificar"
     )
 
     override val futureExpenditures = FutureExpendituresStrings(
