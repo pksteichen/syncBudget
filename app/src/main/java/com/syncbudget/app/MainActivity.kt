@@ -22,6 +22,7 @@ import com.syncbudget.app.data.AmortizationEntry
 import com.syncbudget.app.data.BudgetCalculator
 import com.syncbudget.app.data.BudgetPeriod
 import com.syncbudget.app.data.IncomeMode
+import com.syncbudget.app.data.SavingsSimulator
 import com.syncbudget.app.data.Category
 import com.syncbudget.app.data.CategoryAmount
 import com.syncbudget.app.data.CategoryRepository
@@ -930,6 +931,24 @@ class MainActivity : ComponentActivity() {
             }
             val existingIds = transactions.map { it.id }.toSet()
             val categoryMap = categories.associateBy { it.id }
+
+            // One-time simulation trace on startup
+            LaunchedEffect(Unit) {
+                try {
+                    val trace = SavingsSimulator.traceSimulation(
+                        incomeSources = incomeSources.toList().active,
+                        recurringExpenses = recurringExpenses.toList().active,
+                        budgetPeriod = budgetPeriod,
+                        budgetAmount = budgetAmount,
+                        availableCash = availableCash,
+                        resetDayOfWeek = resetDayOfWeek,
+                        resetDayOfMonth = resetDayOfMonth,
+                        currencySymbol = currencySymbol
+                    )
+                    val file = java.io.File("/storage/emulated/0/Download/simulation_trace.txt")
+                    file.writeText(trace)
+                } catch (_: Exception) { }
+            }
 
             // Period refresh — checks immediately on launch and every 30s
             // while the app is open so the UI updates when a period boundary
