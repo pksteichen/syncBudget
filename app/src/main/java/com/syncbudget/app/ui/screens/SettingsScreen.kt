@@ -58,6 +58,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.syncbudget.app.ui.theme.AdAwareDialog
+import com.syncbudget.app.ui.theme.PulsingScrollArrow
 import com.syncbudget.app.data.Category
 import com.syncbudget.app.data.CATEGORY_ICON_MAP
 import com.syncbudget.app.data.Transaction
@@ -182,6 +183,13 @@ fun SettingsScreen(
                 .padding(horizontal = 24.dp, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            item {
+                Text(
+                    text = "Build: ${com.syncbudget.app.BuildConfig.BUILD_TIME}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
+                )
+            }
             item {
                 OutlinedButton(
                     onClick = onNavigateToBudgetConfig,
@@ -647,6 +655,8 @@ private fun AddCategoryDialog(
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
         ) {
+            val dialogScrollState = rememberScrollState()
+            Box {
             Column(modifier = Modifier.padding(24.dp)) {
                 Text(S.settings.addCategory, style = MaterialTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(16.dp))
@@ -655,7 +665,7 @@ private fun AddCategoryDialog(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier
                         .weight(1f, fill = false)
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(dialogScrollState)
                 ) {
                     OutlinedTextField(
                         value = name,
@@ -744,6 +754,13 @@ private fun AddCategoryDialog(
                     }
                 }
             }
+            PulsingScrollArrow(
+                scrollState = dialogScrollState,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 12.dp, bottom = 18.dp)
+            )
+            }
         }
     }
 }
@@ -791,6 +808,8 @@ private fun EditCategoryDialog(
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
         ) {
+            val editScrollState = rememberScrollState()
+            Box {
             Column(modifier = Modifier.padding(24.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -819,7 +838,7 @@ private fun EditCategoryDialog(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier
                         .weight(1f, fill = false)
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(editScrollState)
                 ) {
                     OutlinedTextField(
                         value = name,
@@ -896,6 +915,13 @@ private fun EditCategoryDialog(
                         Text(S.common.save)
                     }
                 }
+            }
+            PulsingScrollArrow(
+                scrollState = editScrollState,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 12.dp, bottom = 18.dp)
+            )
             }
         }
     }

@@ -147,6 +147,7 @@ object EnglishStrings : AppStrings {
         manualBudgetOverride = "Manual Budget Override",
         budgetAmountPer = { period -> "Budget Amount per $period" },
         manualOverrideNote = { period -> "Savings Goals and Amortization page entries will reduce this amount. If you want exactly this amount added each $period, pause your Savings Goals and Amortization deductions on those pages." },
+        manualOverrideSavingsWarning = "Setting an amount higher than the safe budget amount calculated above will disable the needed savings calculation on the Recurring Expenses page.",
         incomeSourceDescription = "Add sources of consistent income that you can rely on for budgeting. If your pay varies (large check, small check), you can make more than one entry for a source.",
         addIncomeSource = "Add Income Source",
         editIncomeSource = "Edit Income Source",
@@ -357,7 +358,17 @@ object EnglishStrings : AppStrings {
         everyNWeeks = { n -> "Every $n weeks" },
         everyNMonths = { n -> "Every $n months" },
         everyTwoWeeks = "Every 2 weeks",
-        twicePerMonth = "Twice per month"
+        twicePerMonth = "Twice per month",
+        linkedTransactions = "Linked Transactions",
+        noLinkedTransactions = "No linked transactions",
+        savingsRequiredMessage = { amount, period -> "You need $amount saved to cover $period budget and these expenses." },
+        savingsPeriodDaily = "today's",
+        savingsPeriodWeekly = "this week's",
+        savingsPeriodMonthly = "this month's",
+        savingsWhyLink = "Why?",
+        savingsWhyTitle = "Why Savings Are Needed",
+        savingsWhyBody = "This number comes from a cash flow simulation that walks forward from today through all your upcoming income deposits, expense due dates, and budget spending needs.\n\nIt finds the point in the future where your cash balance would dip the lowest — for example, right before a big paycheck arrives but after rent is due — and tells you how much buffer you need to survive that dip!\n\nThis number changes daily as you move closer to income and expense dates. For example, right after payday it will be highest (many spending days ahead), and right before payday it will be lowest. Once you are caught up, you should stay caught up if you don't overspend. If your bank account is lower than this number, consider setting up a savings plan on the Savings page to catch up.",
+        savingsLowPointToast = { date -> "Cash flow low point: $date" }
     )
 
     override val sync = SyncStrings(

@@ -59,6 +59,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.syncbudget.app.ui.theme.AdAwareDialog
+import com.syncbudget.app.ui.theme.PulsingScrollArrow
 import com.syncbudget.app.data.BudgetPeriod
 import com.syncbudget.app.data.IncomeSource
 import com.syncbudget.app.data.RepeatType
@@ -318,6 +319,12 @@ fun BudgetConfigScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFFFF9800)
                     )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = S.budgetConfig.manualOverrideSavingsWarning,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFFFF9800)
+                    )
                 }
                 if (isLocked) {
                     Spacer(modifier = Modifier.height(4.dp))
@@ -553,6 +560,8 @@ private fun AddEditIncomeDialog(
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
         ) {
+            val dialogScrollState = rememberScrollState()
+            Box {
             Column(modifier = Modifier.padding(24.dp)) {
                 Text(
                     text = title,
@@ -563,7 +572,7 @@ private fun AddEditIncomeDialog(
                 Column(
                     modifier = Modifier
                         .weight(1f, fill = false)
-                        .verticalScroll(rememberScrollState()),
+                        .verticalScroll(dialogScrollState),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     OutlinedTextField(
@@ -931,6 +940,13 @@ private fun AddEditIncomeDialog(
                     }
                 }
             }
+            PulsingScrollArrow(
+                scrollState = dialogScrollState,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 12.dp, bottom = 18.dp)
+            )
+            }
         }
     }
 
@@ -1014,6 +1030,8 @@ private fun BudgetResetDialog(
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
         ) {
+            val resetScrollState = rememberScrollState()
+            Box {
             Column(modifier = Modifier.padding(24.dp)) {
                 Text(
                     when (budgetPeriod) {
@@ -1029,7 +1047,7 @@ private fun BudgetResetDialog(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier
                         .weight(1f, fill = false)
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(resetScrollState)
                 ) {
                     if (budgetPeriod == BudgetPeriod.WEEKLY) {
                         val weeklyDays = listOf(DayOfWeek.SUNDAY, DayOfWeek.MONDAY)
@@ -1130,6 +1148,13 @@ private fun BudgetResetDialog(
                         Text(S.common.save)
                     }
                 }
+            }
+            PulsingScrollArrow(
+                scrollState = resetScrollState,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 12.dp, bottom = 18.dp)
+            )
             }
         }
     }

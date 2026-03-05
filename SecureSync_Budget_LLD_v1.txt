@@ -1,0 +1,2054 @@
+================================================================================
+                     SECURESYNC BUDGET - LOW-LEVEL DESIGN DOCUMENT
+================================================================================
+
+Application:        SecureSync Budget
+Package:            com.syncbudget.app
+Platform:           Android (minSdk 26+)
+Framework:          Jetpack Compose, Material Design 3
+Language:           Kotlin
+Document Version:   1.0
+Date:               February 2026
+
+================================================================================
+1. INTRODUCTION
+================================================================================
+
+SecureSync Budget is a personal budget management Android application built
+with Jetpack Compose and Material Design 3. The application enables users to
+track income and expenses, configure recurring financial entries, amortize
+large purchases over time, set and manage savings goals, and visualize
+spending through interactive charts. A distinctive Solari-style split-flap
+display animates the user's available cash on the dashboard. The app supports
+two languages (English and Spanish), multiple currency formats, encrypted
+file save/load functionality, and CSV import from US Bank statements. All
+domain data is persisted as JSON files in the application's private storage
+directory, with user preferences stored in SharedPreferences. The architecture
+follows a single-activity Compose pattern where MainActivity serves as the
+central state coordinator, delegating UI rendering to composable screen
+functions and data persistence to singleton repository objects.
+
+This Low-Level Design document describes every class, composable function,
+data model, utility object, and persistence schema in the SecureSync Budget
+application. Each entry includes its package, purpose, constants, fields,
+methods with detailed descriptions, and relevant design notes.
+
+
+================================================================================
+2. APPLICATION CLASSES
+================================================================================
+
+
+--------------------------------------------------------------------------------
+2.1  MainActivity
+--------------------------------------------------------------------------------
+
+File:       MainActivity.kt (959 lines)
+Package:    com.syncbudget.app
+Extends:    ComponentActivity
+
+Description:
+    Central coordinator of the SecureSync Budget application. This activity
+    manages all application state as Compose mutableState variables, handles
+    screen navigation through a string-based routing system, performs budget
+    period refresh calculations on app launch, auto-provisions protected
+    categories, orchestrates the transaction matching chain, and delegates
+    persistence to repository singletons. All composable screens are rendered
+    within a single setContent block.
+
+SharedPreferences Name: "app_prefs" (Context.MODE_PRIVATE)
+
+Constants:
+    (SharedPreferences keys are used as string constants throughout)
+
+SharedPreferences Keys:
+Constant	Type	Default	Purpose
+"currencySymbol"	String	"$"	Currency symbol displayed throughout the app
+"digitCount"	Int	3	Number of whole-digit cards on the Solari flip display
+"showDecimals"	Boolean	false	Whether to show decimal places on the Solari display
+"dateFormatPattern"	String	"yyyy-MM-dd"	Date format pattern used for all date rendering
+"isPaidUser"	Boolean	false	Unlocks save/load and encrypted export features
+"matchDays"	Int	7	Day window for duplicate transaction detection
+"matchPercent"	Float	1.0f	Percentage tolerance for duplicate amount matching
+"matchDollar"	Int	1	Dollar tolerance for duplicate amount matching
+"matchChars"	Int	5	Minimum common substring length for merchant matching
+"weekStartSunday"	Boolean	true	Whether the week starts on Sunday for chart grouping
+"chartPalette"	String	"Sunset"	Color palette for spending charts (Bright/Pastel/Sunset/Earthy)
+"appLanguage"	String	"en"	Application language code ("en" or "es")
+"budgetPeriod"	String	"DAILY"	BudgetPeriod enum name (DAILY/WEEKLY/MONTHLY)
+"resetHour"	Int	0	Hour of day (0-23) for budget period reset
+"resetDayOfWeek"	Int	7	ISO day of week for weekly reset (7=Sunday)
+"resetDayOfMonth"	Int	1	Day of month for monthly budget reset
+"safeBudgetAmount"	Float	0f	Calculated safe budget amount per period
+"isManualBudgetEnabled"	Boolean	false	Whether manual budget override is active
+"manualBudgetAmount"	Float	0f	User-specified manual budget amount per period
+"availableCash"	Float	0f	Current available spending money
+"budgetStartDate"	String?	null	ISO date string when budget tracking was started
+"lastRefreshDate"	String?	null	ISO date string of the last budget period refresh
+
+State Fields:
+Field	Type	Description
+currentScreen	String	Current navigation route identifier
+dashboardShowAddIncome	Boolean	Controls visibility of quick-add income dialog on dashboard
+dashboardShowAddExpense	Boolean	Controls visibility of quick-add expense dialog on dashboard
+dashPendingManualSave	Transaction?	Transaction awaiting duplicate resolution from dashboard
+dashManualDuplicateMatch	Transaction?	Existing transaction that matched as potential duplicate
+dashShowManualDuplicateDialog	Boolean	Controls visibility of duplicate resolution dialog
+dashPendingRecurringTxn	Transaction?	Transaction pending recurring expense confirmation
+dashPendingRecurringMatch	RecurringExpense?	Matched recurring expense entry
+dashShowRecurringDialog	Boolean	Controls visibility of recurring expense confirmation dialog
+dashPendingAmortizationTxn	Transaction?	Transaction pending amortization confirmation
+dashPendingAmortizationMatch	AmortizationEntry?	Matched amortization entry
+dashShowAmortizationDialog	Boolean	Controls visibility of amortization confirmation dialog
+dashPendingBudgetIncomeTxn	Transaction?	Transaction pending budget income confirmation
+dashPendingBudgetIncomeMatch	IncomeSource?	Matched income source entry
+dashShowBudgetIncomeDialog	Boolean	Controls visibility of budget income confirmation dialog
+transactions	SnapshotStateList<Transaction>	All transaction records loaded at startup
+categories	SnapshotStateList<Category>	All category records with auto-provisioned defaults
+incomeSources	SnapshotStateList<IncomeSource>	All income source configurations
+recurringExpenses	SnapshotStateList<RecurringExpense>	All recurring expense configurations
+amortizationEntries	SnapshotStateList<AmortizationEntry>	All amortization entry configurations
+savingsGoals	SnapshotStateList<SavingsGoal>	All savings goal records
+soundPlayer	FlipSoundPlayer	Audio player for Solari flip card mechanical clack sounds
+currencySymbol	String	Active currency symbol from preferences
+digitCount	Int	Number of whole-digit flip cards
+showDecimals	Boolean	Whether decimal flip cards are displayed
+dateFormatPattern	String	Active date format pattern
+isPaidUser	Boolean	Whether paid features are unlocked
+matchDays	Int	Active duplicate detection day window
+matchPercent	Float	Active duplicate detection percent tolerance
+matchDollar	Int	Active duplicate detection dollar tolerance
+matchChars	Int	Active minimum character match length
+weekStartSunday	Boolean	Whether week starts on Sunday
+chartPalette	String	Active chart color palette name
+appLanguage	String	Active language code
+budgetPeriod	BudgetPeriod	Active budget period enum value
+resetHour	Int	Active reset hour
+resetDayOfWeek	Int	Active reset day of week (ISO)
+resetDayOfMonth	Int	Active reset day of month
+safeBudgetAmount	Double	Calculated safe budget per period
+isManualBudgetEnabled	Boolean	Whether manual budget override is on
+manualBudgetAmount	Double	Manual budget amount per period
+availableCash	Double	Current available spending money
+budgetStartDate	LocalDate?	Date when budget tracking started
+lastRefreshDate	LocalDate?	Date of last period refresh
+budgetAmount	Double	Derived: effective budget (manual or calculated minus deductions)
+percentTolerance	Float	Derived: matchPercent / 100f for matching functions
+dateFormatter	DateTimeFormatter	Derived: formatter from dateFormatPattern
+existingIds	Set<Int>	Derived: set of all transaction IDs for collision avoidance
+categoryMap	Map<Int, Category>	Derived: category lookup by ID
+
+Auto-Provisioned Categories:
+Category Name	Icon Name	Purpose
+"Other"	"CreditCard"	Default fallback category for uncategorized transactions
+"Recurring"	"Sync"	Category assigned to recurring expense matches
+"Amortization"	"Schedule"	Category assigned to amortization matches
+"Recurring Income"	"Payments"	Category assigned to budget income matches
+
+Screen Navigation Routes:
+Route	Target Screen
+"main"	MainScreen (dashboard)
+"settings"	SettingsScreen
+"transactions"	TransactionsScreen
+"future_expenditures"	FutureExpendituresScreen
+"amortization"	AmortizationScreen
+"recurring_expenses"	RecurringExpensesScreen
+"budget_config"	BudgetConfigScreen
+"dashboard_help"	DashboardHelpScreen
+"settings_help"	SettingsHelpScreen
+"transactions_help"	TransactionsHelpScreen
+"future_expenditures_help"	FutureExpendituresHelpScreen
+"amortization_help"	AmortizationHelpScreen
+"recurring_expenses_help"	RecurringExpensesHelpScreen
+"budget_config_help"	BudgetConfigHelpScreen
+
+Methods:
+
+    onCreate(savedInstanceState: Bundle?)
+        Entry point for the activity. Calls enableEdgeToEdge() for full-screen
+        rendering, then enters a setContent block where all Compose state is
+        declared, data is loaded from repositories, auto-provisioned categories
+        are ensured, the budget period refresh logic runs, and the screen
+        router dispatches to the correct composable based on currentScreen.
+
+    saveIncomeSources()
+        Delegates persistence of the current incomeSources list to
+        IncomeSourceRepository.save(). This function is called after any
+        mutation to the income sources collection to ensure disk consistency.
+
+    saveRecurringExpenses()
+        Delegates persistence of the current recurringExpenses list to
+        RecurringExpenseRepository.save(). Called after additions, edits,
+        or deletions of recurring expense entries.
+
+    saveAmortizationEntries()
+        Delegates persistence of the current amortizationEntries list to
+        AmortizationRepository.save(). Called after any mutation to the
+        amortization entries collection.
+
+    saveSavingsGoals()
+        Delegates persistence of the current savingsGoals list to
+        SavingsGoalRepository.save(). Called after additions, edits,
+        deletions, supercharge operations, or period refresh updates.
+
+    saveTransactions()
+        Delegates persistence of the current transactions list to
+        TransactionRepository.save(). Called after any mutation to the
+        transaction collection including imports.
+
+    saveCategories()
+        Delegates persistence of the current categories list to
+        CategoryRepository.save(). Called after additions, edits, or
+        deletions of category entries.
+
+    persistAvailableCash()
+        Writes the current availableCash value to SharedPreferences as a
+        float. This is called after every operation that modifies the
+        available cash balance to ensure the value survives app restarts.
+
+    recalculateBudget()
+        Invokes BudgetCalculator.calculateSafeBudgetAmount() with the current
+        income sources, recurring expenses, and budget period, then stores the
+        result in both safeBudgetAmount state and SharedPreferences. This is
+        called when income sources or recurring expenses are modified.
+
+    isBudgetAccountedExpense(txn: Transaction): Boolean
+        Returns true if the given expense transaction has category amounts
+        assigned to the "Recurring" or "Amortization" categories. These
+        transactions are already factored into the safe budget calculation and
+        should not be double-counted when adjusting availableCash.
+
+    addTransactionWithBudgetEffect(txn: Transaction)
+        Adds a transaction to the transactions list, saves to disk, and
+        adjusts availableCash accordingly. For non-budget-accounted expenses
+        that fall on or after the budget start date, the amount is subtracted
+        from availableCash; for non-budget income, the amount is added.
+
+    runMatchingChain(txn: Transaction)
+        Executes the sequential matching chain for a newly entered transaction.
+        The chain tests in order: duplicate detection, recurring expense match,
+        amortization match, and budget income match. If any match is found, the
+        corresponding confirmation dialog state is set. If no match is found,
+        the transaction is saved directly via addTransactionWithBudgetEffect().
+
+    Budget Period Refresh Logic (inline in remember block):
+        Executes once on app launch. Calculates the number of missed budget
+        periods between lastRefreshDate and today using
+        BudgetCalculator.countPeriodsCompleted(). For each missed period, adds
+        the current budgetAmount to availableCash and updates each non-paused
+        savings goal's totalSavedSoFar by its per-period deduction amount.
+        Persists all updated state to SharedPreferences and repositories.
+
+    Supercharge Handler (onSupercharge lambda):
+        Processes savings goal supercharge allocations. For each allocation,
+        caps the amount at the remaining goal balance, then applies the
+        appropriate SuperchargeMode. For target-date goals with ACHIEVE_SOONER,
+        recalculates and moves the target date earlier based on the current
+        contribution rate and the new remaining balance. For fixed-contribution
+        goals with REDUCE_CONTRIBUTIONS, lowers contributionPerPeriod
+        proportionally to maintain the same payoff timeline. For all other
+        cases, simply adds the lump sum to totalSavedSoFar. Deducts the total
+        allocated amount from availableCash.
+
+
+--------------------------------------------------------------------------------
+2.2  MainScreen
+--------------------------------------------------------------------------------
+
+File:       MainScreen.kt (1107 lines)
+Package:    com.syncbudget.app.ui.screens
+
+Description:
+    Dashboard screen composable that serves as the primary user interface.
+    Displays the Solari-style split-flap display showing available cash,
+    interactive spending charts (pie and bar), quick-add transaction dialogs,
+    a Supercharge dialog for accelerating savings goals, and a five-button
+    bottom navigation bar.
+
+Composable Functions:
+
+    MainScreen
+    SavingsSuperchargeDialog
+
+Parameters (MainScreen):
+Parameter	Type	Description
+availableCash	Double	Current available spending money to display
+transactions	List<Transaction>	All transactions for chart data
+categories	List<Category>	All categories for chart legend
+currencySymbol	String	Currency symbol for formatting
+digitCount	Int	Number of whole-digit cards on Solari display
+showDecimals	Boolean	Whether to show decimal cards
+budgetPeriod	BudgetPeriod	Current budget period setting
+dateFormatPattern	String	Date format for display
+budgetPeriodLabel	String	Localized label for the budget period
+chartPalette	String	Chart color palette name
+weekStartSunday	Boolean	Whether week starts on Sunday for chart grouping
+savingsGoals	List<SavingsGoal>	All savings goals for Supercharge feature
+soundPlayer	FlipSoundPlayer	Sound player for flip card animations
+onNavigate	(String) -> Unit	Navigation callback for screen routing
+onSettingsClick	() -> Unit	Callback to navigate to settings
+onAddIncome	() -> Unit	Callback to trigger income add dialog
+onAddExpense	() -> Unit	Callback to trigger expense add dialog
+onSupercharge	(Map<Int,Double>, Map<Int,SuperchargeMode>) -> Unit	Callback with allocation amounts and modes per goal
+
+Parameters (SavingsSuperchargeDialog):
+Parameter	Type	Description
+eligibleGoals	List<SavingsGoal>	Goals eligible for supercharge (non-paused, not complete)
+availableCash	Double	Cash available to allocate
+showDecimals	Boolean	Whether to show decimal places
+currencySymbol	String	Currency symbol for formatting
+budgetPeriod	BudgetPeriod	Current budget period for calculation display
+budgetPeriodLabel	String	Localized budget period label
+dateFormatPattern	String	Date format for payoff date display
+onDismiss	() -> Unit	Callback when dialog is dismissed
+onApply	(Map<Int,Double>, Map<Int,SuperchargeMode>) -> Unit	Callback with final allocations and modes
+
+State Fields:
+Field	Type	Description
+showSuperchargeDialog	Boolean	Controls Supercharge dialog visibility
+selectedRange	SpendingRange	Current spending chart date range selection
+showBarChart	Boolean	Whether to show bar chart instead of pie chart
+
+SpendingRange Enum Values:
+Value	Description
+TODAY	Transactions from today only
+THIS_WEEK	Transactions from the current calendar week
+ROLLING_7	Transactions from the last 7 days
+THIS_MONTH	Transactions from the current calendar month
+ROLLING_30	Transactions from the last 30 days
+THIS_YEAR	Transactions from the current calendar year
+ROLLING_365	Transactions from the last 365 days
+
+Notable Patterns:
+    - FlipDisplay component with FlipSoundPlayer for mechanical clack audio
+    - Canvas-based pie chart with trigonometric icon positioning at wedge centers
+    - Bar chart alternative view toggled via state
+    - Animated bolt icon using rememberInfiniteTransition for the Supercharge button
+    - Five-button bottom navigation bar (Transactions, Savings, Dashboard, Recurring, Amortization)
+    - Supercharge toggle per goal between REDUCE_CONTRIBUTIONS and ACHIEVE_SOONER modes
+    - Yellow warning text for target-date goals when ACHIEVE_SOONER is selected
+    - Currency-aware decimal limiting in Supercharge allocation text fields
+
+
+--------------------------------------------------------------------------------
+2.3  TransactionsScreen
+--------------------------------------------------------------------------------
+
+File:       TransactionsScreen.kt (3243 lines)
+Package:    com.syncbudget.app.ui.screens
+
+Description:
+    Comprehensive transaction management screen with list display, filtering,
+    searching, multi-select operations, transaction entry/editing dialogs,
+    CSV import pipeline with duplicate detection, and encrypted save/load.
+    This is the largest screen in the application with 19+ dialog composables.
+
+Composable Functions:
+Function	Visibility	Description
+TransactionsScreen	Public	Main transaction list and management screen
+TransactionDialog	Public	Add/edit transaction dialog with multi-category support
+TransactionRow	Private	Individual transaction row with expand/collapse
+DuplicateResolutionDialog	Public	Duplicate detection confirmation dialog
+RecurringExpenseConfirmDialog	Public	Recurring expense match confirmation dialog
+AmortizationConfirmDialog	Public	Amortization match confirmation dialog
+BudgetIncomeConfirmDialog	Public	Budget income match confirmation dialog
+TextSearchDialog	Private	Text search dialog for merchant/source filtering
+AmountSearchDialog	Private	Amount range search dialog
+SearchDatePickerDialog	Private	Date range picker for search filtering
+
+Additional Dialogs (inline):
+    - Bulk delete confirmation dialog
+    - Bulk category change dialog
+    - Bulk merchant edit dialog
+    - Save file dialog (CSV or encrypted)
+    - Import format selection dialog
+    - Parse error dialog
+    - Move value dialog (reassign amounts between categories)
+    - Sum mismatch dialog
+    - Delete confirmation dialog
+    - Category picker dialog
+    - DatePickerDialog (Material3)
+
+State Fields (40+ variables):
+Field	Type	Description
+viewFilter	ViewFilter	Current filter mode (EXPENSES/INCOME/ALL)
+searchActive	Boolean	Whether search filtering is active
+searchPredicate	(Transaction) -> Boolean	Active search filter function
+categoryFilterId	Int?	Category ID filter, null for all
+selectionMode	Boolean	Whether multi-select mode is active
+selectedIds	Set<Int>	Set of selected transaction IDs
+expandedIds	Set<Int>	Set of expanded transaction row IDs
+editingTransaction	Transaction?	Transaction currently being edited
+importStage	ImportStage	Current stage of import pipeline
+parsedTransactions	List<Transaction>	Transactions parsed during import
+importApproved	Boolean	Whether parsed imports have been approved
+
+ViewFilter Enum:
+Value	Description
+EXPENSES	Show only expense transactions
+INCOME	Show only income transactions
+ALL	Show all transactions
+
+ImportStage Enum:
+Value	Description
+FORMAT_SELECTION	User selects import format (US Bank, SecureSync CSV, Encrypted)
+PARSING	File is being parsed
+PARSE_ERROR	Parse error occurred, displaying error message
+DUPLICATE_CHECK	Running duplicate detection on parsed transactions
+COMPLETE	Import finished
+
+Import Pipeline:
+    The import pipeline is implemented as a LaunchedEffect state machine.
+    It transitions through ImportStage values: FORMAT_SELECTION allows the user
+    to choose a bank format; PARSING reads the file using the appropriate parser;
+    PARSE_ERROR displays errors; DUPLICATE_CHECK runs filterAlreadyLoadedDays()
+    to pre-filter and then processes each transaction through the matching chain;
+    COMPLETE adds surviving transactions to the main list.
+
+Notable Patterns:
+    - Multi-category transaction entry with three modes: PieChartEditor drag
+      interface, calculator-style amount entry, and percentage-based allocation
+    - combinedClickable modifier for tap (expand/collapse) and long-press
+      (enter selection mode) gestures on transaction rows
+    - Font-scale responsive layout using useExpandedLayout boolean
+    - ActivityResultContracts.OpenDocument for file import
+    - ActivityResultContracts.CreateDocument for file export
+    - Auto-matching chain during import for recurring, amortization, and income
+    - formatCurrency() utility for currency-aware amount display
+
+
+--------------------------------------------------------------------------------
+2.4  BudgetConfigScreen
+--------------------------------------------------------------------------------
+
+File:       BudgetConfigScreen.kt (1042 lines)
+Package:    com.syncbudget.app.ui.screens
+
+Description:
+    Budget configuration screen that manages income source entries, budget
+    period selection (Daily/Weekly/Monthly), reset timing settings, and
+    manual budget override. Provides dialogs for adding/editing income
+    sources with various repeat type configurations.
+
+Composable Functions:
+Function	Visibility	Description
+BudgetConfigScreen	Public	Main budget configuration screen
+AddEditIncomeDialog	Private	Dialog for creating or editing an income source entry
+BudgetResetDialog	Private	Dialog for configuring budget reset timing
+
+Constants:
+Constant	Value	Purpose
+HOUR_LABELS	Array[24]	Maps hours 0-23 to display strings ("12 AM" through "11 PM")
+DAY_OF_WEEK_ORDER	Array[7]	Ordered list of ISO day-of-week values for selection UI
+
+Dialogs:
+    - AddEditIncomeDialog: Full income source editor with name, amount, RepeatType
+      selection, interval configuration, start date picker, and month day selectors
+    - BudgetResetDialog: Budget reset hour, day-of-week (weekly), day-of-month
+      (monthly) configuration
+    - Delete confirmation: Confirms removal of an income source
+    - Reset budget confirmation: Confirms resetting available cash and start date
+    - DatePickerDialog: Material3 date picker for income source start dates
+
+Notable Patterns:
+    - ExposedDropdownMenuBox for budget period selection (Daily/Weekly/Monthly)
+    - RepeatType-specific dynamic form fields that appear/disappear based on
+      the selected repeat type
+    - Manual budget override Switch with warning text explaining that manual
+      mode disables automatic calculations
+    - Currency-aware decimal limiting on amount text fields
+
+
+--------------------------------------------------------------------------------
+2.5  SettingsScreen
+--------------------------------------------------------------------------------
+
+File:       SettingsScreen.kt (934 lines)
+Package:    com.syncbudget.app.ui.screens
+
+Description:
+    Application settings screen for configuring currency symbol, display
+    options, category management, duplicate matching tolerances, language
+    selection, chart palette, and week start day. Provides dialogs for
+    adding, editing, and deleting categories with icon selection.
+
+Composable Functions:
+Function	Visibility	Description
+SettingsScreen	Public	Main settings screen composable
+AddCategoryDialog	Private	Dialog for creating a new category with icon picker
+EditCategoryDialog	Private	Dialog for editing an existing category name and icon
+ReassignCategoryDialog	Private	Dialog for reassigning transactions before category deletion
+
+Constants:
+Constant	Value	Purpose
+DATE_FORMAT_OPTIONS	List[11]	Eleven date format pattern strings available to the user
+
+Protected Categories:
+    The following categories cannot be deleted by the user: "Other", "Recurring",
+    "Amortization", "Recurring Income". These are auto-provisioned at startup
+    and are essential for the matching chain and budget calculation logic.
+
+Notable Patterns:
+    - LazyVerticalGrid icon picker displaying CATEGORY_ICON_MAP entries (120+ icons)
+    - Matching configuration sliders/fields: days tolerance, percent tolerance,
+      dollar tolerance, and minimum character match length
+    - Language selector with two options: English ("en") and Spanish ("es")
+    - Chart palette selector with four options: Bright, Pastel, Sunset, Earthy
+    - Week start toggle between Sunday and Monday
+    - ReassignCategoryDialog requires the user to select a target category
+      before a non-protected category can be deleted
+
+
+--------------------------------------------------------------------------------
+2.6  FutureExpendituresScreen
+--------------------------------------------------------------------------------
+
+File:       FutureExpendituresScreen.kt (638 lines)
+Package:    com.syncbudget.app.ui.screens
+
+Description:
+    Savings goals management screen supporting two goal types: target-date
+    goals with a dynamic per-period contribution calculated from the remaining
+    balance and time, and fixed-contribution goals with a user-specified
+    contribution per period and no target date. Provides pause/resume controls,
+    progress visualization, and payoff date estimation.
+
+Composable Functions:
+Function	Visibility	Description
+FutureExpendituresScreen	Public	Main savings goals list and management screen
+AddEditSavingsGoalDialog	Private	Dialog for creating or editing a savings goal
+
+Goal Types:
+Type	Has Target Date	Contribution Behavior
+Target-date	Yes	Dynamic: (targetAmount - totalSavedSoFar) / remainingPeriods
+Fixed-contribution	No	Static: user-specified contributionPerPeriod, capped at remaining
+
+Features:
+    - FilterChip toggle to switch between target-date and fixed-contribution
+      goal types in the add/edit dialog
+    - Pause/resume individual goals via toggle
+    - Bulk pause/resume all goals via header action
+    - LinearProgressIndicator bars showing savings progress as a fraction
+    - Payoff date calculation displayed for fixed-contribution goals
+    - Manual override warning when isManualBudgetEnabled is true
+    - Currency-aware decimal limiting on amount input fields
+
+
+--------------------------------------------------------------------------------
+2.7  AmortizationScreen
+--------------------------------------------------------------------------------
+
+File:       AmortizationScreen.kt (497 lines)
+Package:    com.syncbudget.app.ui.screens
+
+Description:
+    Amortization entry management screen for spreading large purchases over
+    multiple budget periods. Displays each entry with elapsed/total period
+    progress, per-period deduction amounts, and completion status detection.
+
+Composable Functions:
+Function	Visibility	Description
+AmortizationScreen	Public	Main amortization list and management screen
+AddEditAmortizationDialog	Private	Dialog for creating or editing an amortization entry
+
+Methods:
+
+    calculateElapsedPeriods() (helper)
+        Calculates the number of elapsed budget periods between an amortization
+        entry's start date and today. Uses ChronoUnit corresponding to the
+        active BudgetPeriod (DAYS, WEEKS, or MONTHS) and clamps the result
+        between 0 and the entry's totalPeriods.
+
+Notable Patterns:
+    - LinearProgressIndicator bars showing elapsed/total period fraction
+    - Per-period deduction display (totalAmount / totalPeriods)
+    - Completed state detection when elapsed periods equals total periods
+    - Manual override warning when isManualBudgetEnabled is true
+
+
+--------------------------------------------------------------------------------
+2.8  RecurringExpensesScreen
+--------------------------------------------------------------------------------
+
+File:       RecurringExpensesScreen.kt (653 lines)
+Package:    com.syncbudget.app.ui.screens
+
+Description:
+    Recurring expense management screen for defining fixed expenses that repeat
+    on a schedule (daily, weekly, bi-weekly, monthly, or twice-monthly). The
+    dialog structure mirrors BudgetConfigScreen's AddEditIncomeDialog but
+    operates on RecurringExpense objects.
+
+Composable Functions:
+Function	Visibility	Description
+RecurringExpensesScreen	Public	Main recurring expenses list and management screen
+AddEditExpenseDialog	Private	Dialog for creating or editing a recurring expense
+
+Notable Patterns:
+    - Same RepeatType-specific dynamic form fields as BudgetConfigScreen
+    - ExposedDropdownMenuBox for repeat type selection
+    - Start date picker, interval fields, and month day selectors
+    - Per-period amount display with frequency annotation
+
+
+================================================================================
+3. UI COMPONENT CLASSES
+================================================================================
+
+
+--------------------------------------------------------------------------------
+3.1  FlipDisplay
+--------------------------------------------------------------------------------
+
+File:       FlipDisplay.kt (253 lines)
+Package:    com.syncbudget.app.ui.components
+
+Description:
+    Solari-style split-flap display composable that renders available cash as
+    a row of animated flip cards. Contains a sign/currency card, whole-digit
+    cards, an optional decimal point, and optional decimal-digit cards, all
+    within a rounded frame with responsive sizing via BoxWithConstraints.
+
+Top-Level Constants:
+Constant	Value	Purpose
+CURRENCY_OPTIONS	["$","EUR","GBP","JPY","INR","KRW","Fr"]	Supported currency symbols for the flip display
+CURRENCY_DECIMALS	{"$":2,"EUR":2,...,"JPY":0,...}	Maps each currency symbol to its decimal place count
+CARD_ASPECT	1.5f	Height-to-width aspect ratio for flip cards
+GAP	5.dp	Horizontal gap between adjacent flip cards
+DOT_WIDTH	10.dp	Width allocated for the decimal point element
+FRAME_H_PAD	16.dp	Horizontal padding inside the display frame
+FRAME_V_PAD	20.dp	Vertical padding inside the display frame
+MAX_CARD_WIDTH	72.dp	Maximum width for any individual flip card
+
+Top-Level Functions:
+
+    formatCurrency(amount: Double, currencySymbol: String): String
+        Formats a numeric amount with the correct number of decimal places for
+        the given currency symbol. Looks up decimal count from CURRENCY_DECIMALS
+        (defaulting to 2) and returns a string with the currency symbol prefix
+        and formatted number.
+
+    buildSignCurrencyValues(currencies: List<String>): List<String>
+        Builds the ordered list of values that the sign/currency flip card
+        cycles through. For each currency symbol, adds the positive form and
+        the negative form (prefixed with "-"). Multi-character symbols like
+        "Fr" are split across two lines with "-" on top.
+
+    pow10(n: Int): Int (private)
+        Computes 10 raised to the power n using iterative multiplication.
+        Used to split an integer amount into whole and decimal parts based
+        on the number of decimal places.
+
+Composable Functions:
+
+    FlipDisplay(amount, isNegative, currencySymbol, digitCount, decimalPlaces, soundPlayer, modifier, bottomLabel)
+        Main display composable that renders the complete Solari-style flip
+        board. Uses BoxWithConstraints to compute responsive card widths from
+        available space, clamped to MAX_CARD_WIDTH. Splits the integer amount
+        into whole and decimal digit arrays, replaces leading zeros with blank
+        (-1) values, and renders a FlipChar for the sign/currency card followed
+        by FlipDigit composables for each digit position. An optional
+        DecimalDot separates whole and decimal digits. Supports an optional
+        bottomLabel text below the card row.
+
+    DecimalDot(cardHeight, fontSize, color) (private)
+        Renders the decimal point between whole and decimal digit cards.
+        Uses a fixed-width Box aligned to BottomCenter with a bold monospace
+        period character, sized to match the surrounding card proportions.
+
+
+--------------------------------------------------------------------------------
+3.2  FlipChar
+--------------------------------------------------------------------------------
+
+File:       FlipChar.kt (294 lines)
+Package:    com.syncbudget.app.ui.components
+
+Description:
+    Animated flip card composable that transitions between arbitrary string
+    values (used for the combined sign/currency card). Steps through a
+    circular value list to reach the target, animating each step with a
+    3D rotation effect.
+
+Constants:
+Constant	Value	Purpose
+CARD_CORNER	8.dp	Corner radius for flip card rounded corners
+FLIP_DURATION_MS	250	Duration in milliseconds for each flip animation step
+
+Composable Functions:
+
+    FlipChar(targetValue, values, onFlipSound, modifier, cardWidth, cardHeight, fontSize, lineHeight)
+        Animated string flip card that cycles through a list of string values
+        to reach the target. Uses an Animatable with LinearOutSlowInEasing
+        easing and FLIP_DURATION_MS duration for each step. Fires the
+        onFlipSound callback at 45% animation progress to synchronize the
+        mechanical clack sound with the visual flip midpoint. Steps forward
+        through the values list wrapping circularly.
+
+    CharFlipCard(currentValue, nextValue, progress, cardWidth, cardHeight, fontSize, lineHeight, modifier) (private)
+        Three-layer flip card rendering composable. Layer 1 renders static
+        background halves (top shows next value, bottom reveals based on
+        progress). Layer 2 renders the animated flap with graphicsLayer
+        rotationX transformation and cameraDistance for 3D perspective. Layer 3
+        renders a 2dp center divider line. Shadow alpha increases proportionally
+        with flip progress.
+
+    CharHalf(text, isTopHalf, cardWidth, cardHeight, fontSize, lineHeight, modifier, shadowAlpha) (private)
+        Renders one vertical half of a flip card. Uses a Layout composable to
+        measure text unconstrained, then positions it as if centered in the
+        full card height, with the parent's clip revealing only the top or
+        bottom half. Applies a subtle vertical gradient overlay for depth and
+        an optional shadow overlay for animated flap darkening.
+
+
+--------------------------------------------------------------------------------
+3.3  FlipDigit
+--------------------------------------------------------------------------------
+
+File:       FlipDigit.kt (317 lines)
+Package:    com.syncbudget.app.ui.components
+
+Description:
+    Animated flip card composable for single numeric digits (0-9) with a blank
+    state (digit = -1). Uses the same 3-layer flip pattern as FlipChar but
+    specialized for integer digit values with circular stepping.
+
+Constants:
+Constant	Value	Purpose
+CARD_WIDTH	72.dp	Default card width
+CARD_HEIGHT	108.dp	Default card height (CARD_WIDTH * 1.5 aspect)
+CARD_CORNER	8.dp	Corner radius for flip card rounded corners
+DIGIT_FONT_SIZE	80.sp	Default font size for digit text
+FLIP_DURATION_MS	250	Duration in milliseconds for each flip animation step
+
+Composable Functions:
+
+    FlipDigit(targetDigit, onFlipSound, modifier, cardWidth, cardHeight, fontSize)
+        Animated digit flip card that transitions from the current digit to the
+        target digit. For transitions to/from blank (-1), performs a single
+        direct flip. For digit-to-digit transitions, steps incrementally through
+        0-9 wrapping circularly. Each step uses Animatable animation with
+        LinearOutSlowInEasing and fires onFlipSound at 45% progress.
+
+    FlipCard(currentDigit, nextDigit, progress, cardWidth, cardHeight, fontSize, modifier) (private)
+        Three-layer flip card for digits. Layer 1 shows static background halves
+        with the appropriate digit for the current animation phase. Layer 2
+        renders the animated flap with graphicsLayer rotationX and
+        cameraDistance=6f*density for 3D effect. Layer 3 is a 2dp black center
+        divider line.
+
+    DigitHalf(digit, isTopHalf, cardWidth, cardHeight, fontSize, modifier, shadowAlpha) (private)
+        Renders one half of a digit card using the Layout composable for
+        precise text positioning. Displays an empty string for digit=-1 (blank
+        card). Applies vertical gradient overlay for subtle depth effect and
+        optional dynamic shadow overlay for animated flap darkening.
+
+
+--------------------------------------------------------------------------------
+3.4  PieChartEditor
+--------------------------------------------------------------------------------
+
+File:       PieChartEditor.kt (455 lines)
+Package:    com.syncbudget.app.ui.components
+
+Description:
+    Interactive pie chart composable used for multi-category amount allocation
+    in transaction entry. Renders a Canvas-based pie chart with draggable
+    handle circles on the perimeter. Supports six color palettes (light/dark
+    variants each for Bright, Pastel, and Sunset), overlapping handle
+    resolution based on drag direction, full-pie rotation when a handle is
+    dragged past its neighbor, and pulsing animation on collapsed (zero-sweep)
+    wedges.
+
+Color Palette Constants:
+Constant	Theme	Colors
+PIE_COLORS_BRIGHT_LIGHT	Light/Bright	12 vivid colors
+PIE_COLORS_BRIGHT_DARK	Dark/Bright	12 dark vivid colors
+PIE_COLORS_PASTEL_LIGHT	Light/Pastel	12 soft pastel colors
+PIE_COLORS_PASTEL_DARK	Dark/Pastel	12 dark pastel colors
+PIE_COLORS_SUNSET_LIGHT	Light/Sunset	12 warm sunset-toned colors
+PIE_COLORS_SUNSET_DARK	Dark/Sunset	12 dark sunset-toned colors
+
+Private Helper Functions:
+
+    pieColors(chartPalette: String): List<Color>
+        Returns the appropriate 12-color palette list based on the chartPalette
+        string name and the current system dark/light theme. Defaults to the
+        Bright palette if the palette name is not recognized.
+
+    sweepBetween(from: Float, to: Float): Float
+        Calculates the clockwise sweep angle in degrees between two angles,
+        always returning a non-negative value. Uses modular arithmetic to
+        handle the 360-degree wraparound correctly.
+
+    pointToAngle(center: Offset, point: Offset): Float
+        Converts a 2D point to an angle in degrees measured from the 3-o'clock
+        position (0 degrees = right), increasing clockwise. Uses atan2 and
+        normalizes the result to the 0..360 range.
+
+    angleToPoint(center: Offset, radius: Float, angleDeg: Float): Offset
+        Converts an angle in degrees and a radius to a 2D point on the circle
+        perimeter. Uses cosine and sine with the angle converted to radians.
+
+    constrainAngle(angle: Float, prevHandle: Float, nextHandle: Float): Float
+        Constrains a drag angle to lie within the valid clockwise arc between
+        the previous and next handle positions. When the previous and next
+        handles are the same (N=2 case), no constraint is applied. Otherwise,
+        clamps to the nearest boundary handle.
+
+    pickHandleForDirection(candidates, handleAngles, n, isClockwise): Int
+        Resolves overlapping handles by selecting the one that matches the
+        user's drag direction. For clockwise drag, picks the handle whose
+        preceding wedge has zero sweep. For counter-clockwise drag, picks the
+        handle whose following wedge has zero sweep.
+
+    formatPieAmount(value: Double, decimals: Int): String
+        Formats a numeric amount with the specified number of decimal places
+        for display in the pie chart legend. Uses Kotlin string formatting.
+
+Composable Functions:
+
+    PieChartEditor(categories, totalAmount, maxDecimals, currencySymbol, categoryAmounts, onAmountsChanged, chartPalette)
+        Full interactive pie chart editor composable. Initializes handle angles
+        from existing categoryAmounts or equal distribution. Renders filled
+        arcs, division lines, and draggable handle circles on a Canvas with
+        pointerInput gesture handling. Handles awaitEachGesture for touch-down,
+        drag tracking, and handle resolution. When a handle is dragged past its
+        constrained boundary, rotates the entire pie to maintain visual
+        coherence. Reports new amount allocations via onAmountsChanged callback.
+        Renders a legend below the chart with colored circles, category names,
+        and formatted amounts.
+
+
+================================================================================
+4. SOUND CLASS
+================================================================================
+
+
+--------------------------------------------------------------------------------
+4.1  FlipSoundPlayer
+--------------------------------------------------------------------------------
+
+File:       FlipSoundPlayer.kt (131 lines)
+Package:    com.syncbudget.app.sound
+
+Description:
+    Procedural audio generator and player for the Solari flip card mechanical
+    clack sound. Synthesizes a 45ms impact sound at initialization using
+    band-limited noise at 800/1200/2400Hz with exponential decay and a
+    secondary mechanical bounce, encodes it as a 16-bit mono WAV file,
+    loads it into a SoundPool for low-latency playback.
+
+Fields:
+Field	Type	Description
+soundPool	SoundPool	Android audio pool configured with USAGE_GAME and max 6 simultaneous streams
+clackSoundId	Int	SoundPool resource ID for the loaded clack sound
+loaded	Boolean	Whether the SoundPool has finished loading the clack sound
+
+Methods:
+
+    init (constructor: FlipSoundPlayer(context: Context))
+        Configures a SoundPool with AudioAttributes set to USAGE_GAME and
+        CONTENT_TYPE_SONIFICATION, maximum 6 streams. Registers an
+        OnLoadCompleteListener that sets loaded=true on successful load.
+        Calls generateAndLoadClack() to synthesize and load the clack sound.
+
+    generateAndLoadClack(context: Context): Int (private)
+        Synthesizes a 45ms mechanical clack sound at 44100Hz sample rate.
+        Generates samples using a fast-attack exponential decay envelope
+        (decay rate 120), a secondary Gaussian bounce impulse at ~10ms
+        (amplitude 0.3), and a mixed signal of three sinusoidal components at
+        800Hz, 1200Hz, and 2400Hz with random phase offsets plus 40% random
+        noise. Encodes the samples as a 16-bit mono WAV file, writes to the
+        app's cache directory, and loads into the SoundPool.
+
+    encodeWav(samples: ShortArray, sampleRate: Int): ByteArray (private)
+        Encodes a ShortArray of audio samples into a complete WAV file byte
+        array. Writes the RIFF header, "WAVE" format identifier, "fmt "
+        sub-chunk (PCM format, mono, 16-bit), and "data" sub-chunk with
+        little-endian sample encoding.
+
+    playClack()
+        Plays the clack sound effect if the SoundPool has finished loading.
+        Uses volume 0.8 on both channels, priority 1, no loop, and normal
+        (1.0f) playback rate.
+
+    release()
+        Releases the SoundPool and all associated native audio resources.
+        Called from a DisposableEffect in MainActivity's onDispose to prevent
+        audio resource leaks.
+
+
+================================================================================
+5. DATA CLASSES AND ENUMERATIONS
+================================================================================
+
+
+--------------------------------------------------------------------------------
+5.1  BudgetPeriod (Enum)
+--------------------------------------------------------------------------------
+
+File:       BudgetPeriod.kt
+Package:    com.syncbudget.app.data
+
+Values:
+Value	Description
+DAILY	Budget resets every day
+WEEKLY	Budget resets every week
+MONTHLY	Budget resets every month
+
+
+--------------------------------------------------------------------------------
+5.2  RepeatType (Enum)
+--------------------------------------------------------------------------------
+
+File:       IncomeSource.kt
+Package:    com.syncbudget.app.data
+
+Values:
+Value	Description
+DAYS	Repeats every N days from a start date
+WEEKS	Repeats every N weeks from a start date
+BI_WEEKLY	Repeats every 14 days from a start date
+MONTHS	Repeats every N months on a specific day of month
+BI_MONTHLY	Repeats twice per month on two specified days
+
+
+--------------------------------------------------------------------------------
+5.3  TransactionType (Enum)
+--------------------------------------------------------------------------------
+
+File:       Transaction.kt
+Package:    com.syncbudget.app.data
+
+Values:
+Value	Description
+EXPENSE	A money outflow transaction
+INCOME	A money inflow transaction
+
+
+--------------------------------------------------------------------------------
+5.4  SuperchargeMode (Enum)
+--------------------------------------------------------------------------------
+
+File:       FutureExpenditure.kt
+Package:    com.syncbudget.app.data
+
+Values:
+Value	Description
+REDUCE_CONTRIBUTIONS	Lower the per-period contribution to maintain timeline
+ACHIEVE_SOONER	Keep contribution rate and move the target date earlier
+
+
+--------------------------------------------------------------------------------
+5.5  Transaction (Data Class)
+--------------------------------------------------------------------------------
+
+File:       Transaction.kt
+Package:    com.syncbudget.app.data
+
+Properties:
+Property	Type	Default	Description
+id	Int	(required)	Unique identifier, random in 0..65535
+type	TransactionType	(required)	EXPENSE or INCOME
+date	LocalDate	(required)	Date of the transaction
+source	String	(required)	Merchant or income source name
+categoryAmounts	List<CategoryAmount>	emptyList()	Per-category amount breakdown
+amount	Double	(required)	Total transaction amount
+isUserCategorized	Boolean	true	Whether the user manually set categories
+isBudgetIncome	Boolean	false	Whether this income is matched to a budget income source
+
+
+--------------------------------------------------------------------------------
+5.6  CategoryAmount (Data Class)
+--------------------------------------------------------------------------------
+
+File:       Transaction.kt
+Package:    com.syncbudget.app.data
+
+Properties:
+Property	Type	Description
+categoryId	Int	ID of the associated Category
+amount	Double	Dollar amount allocated to this category
+
+
+--------------------------------------------------------------------------------
+5.7  Category (Data Class)
+--------------------------------------------------------------------------------
+
+File:       Category.kt
+Package:    com.syncbudget.app.data
+
+Properties:
+Property	Type	Description
+id	Int	Unique identifier, random in 0..65535
+name	String	Display name of the category
+iconName	String	Key into CATEGORY_ICON_MAP for the category icon
+
+
+--------------------------------------------------------------------------------
+5.8  IncomeSource (Data Class)
+--------------------------------------------------------------------------------
+
+File:       IncomeSource.kt
+Package:    com.syncbudget.app.data
+
+Properties:
+Property	Type	Default	Description
+id	Int	(required)	Unique identifier, random in 0..65535
+source	String	(required)	Name of the income source
+amount	Double	(required)	Income amount per occurrence
+repeatType	RepeatType	MONTHS	Recurrence pattern
+repeatInterval	Int	1	Interval multiplier for DAYS/WEEKS/MONTHS types
+startDate	LocalDate?	null	Start date for DAYS/WEEKS/BI_WEEKLY types
+monthDay1	Int?	null	Day of month for MONTHS/BI_MONTHLY types
+monthDay2	Int?	null	Second day of month for BI_MONTHLY type
+
+
+--------------------------------------------------------------------------------
+5.9  RecurringExpense (Data Class)
+--------------------------------------------------------------------------------
+
+File:       RecurringExpense.kt
+Package:    com.syncbudget.app.data
+
+Properties:
+Property	Type	Default	Description
+id	Int	(required)	Unique identifier, random in 0..65535
+source	String	(required)	Name of the recurring expense
+amount	Double	(required)	Expense amount per occurrence
+repeatType	RepeatType	MONTHS	Recurrence pattern
+repeatInterval	Int	1	Interval multiplier for DAYS/WEEKS/MONTHS types
+startDate	LocalDate?	null	Start date for DAYS/WEEKS/BI_WEEKLY types
+monthDay1	Int?	null	Day of month for MONTHS/BI_MONTHLY types
+monthDay2	Int?	null	Second day of month for BI_MONTHLY type
+
+
+--------------------------------------------------------------------------------
+5.10  AmortizationEntry (Data Class)
+--------------------------------------------------------------------------------
+
+File:       AmortizationEntry.kt
+Package:    com.syncbudget.app.data
+
+Properties:
+Property	Type	Description
+id	Int	Unique identifier, random in 0..65535
+source	String	Description of the amortized purchase
+amount	Double	Total purchase amount to be spread over periods
+totalPeriods	Int	Number of budget periods over which to amortize
+startDate	LocalDate	Date when amortization begins
+
+
+--------------------------------------------------------------------------------
+5.11  SavingsGoal (Data Class)
+--------------------------------------------------------------------------------
+
+File:       FutureExpenditure.kt
+Package:    com.syncbudget.app.data
+
+Properties:
+Property	Type	Default	Description
+id	Int	(required)	Unique identifier, random in 0..65535
+name	String	(required)	Name of the savings goal
+targetAmount	Double	(required)	Total amount to save
+targetDate	LocalDate?	null	Target date for completion (null = fixed-contribution type)
+totalSavedSoFar	Double	0.0	Amount accumulated toward the goal
+contributionPerPeriod	Double	0.0	Fixed contribution amount per budget period
+isPaused	Boolean	false	Whether saving toward this goal is paused
+
+Associated Functions:
+
+    calculatePerPeriodDeduction(goal: SavingsGoal, budgetPeriod: BudgetPeriod): Double
+        Calculates the per-period deduction for a savings goal. For target-date
+        goals, divides the remaining balance by the number of budget periods
+        until the target date. For fixed-contribution goals, returns the
+        contributionPerPeriod capped at the remaining balance. Returns 0.0 if
+        the goal is fully funded.
+
+    generateSavingsGoalId(existingIds: Set<Int>): Int
+        Generates a random integer ID in 0..65535 that does not collide with
+        any ID in the existingIds set. Uses a do-while loop to retry until a
+        unique value is found.
+
+
+--------------------------------------------------------------------------------
+5.12  BankFormat (Enum)
+--------------------------------------------------------------------------------
+
+File:       CsvParser.kt
+Package:    com.syncbudget.app.data
+
+Values:
+Value	Display Name	Description
+US_BANK	"US Bank"	US Bank CSV export format
+SECURESYNC_CSV	"SecureSync CSV Save File"	SecureSync Budget CSV export format
+SECURESYNC_ENCRYPTED	"SecureSync Encrypted Save File"	ChaCha20-Poly1305 encrypted export
+
+
+--------------------------------------------------------------------------------
+5.13  CsvParseResult (Data Class)
+--------------------------------------------------------------------------------
+
+File:       CsvParser.kt
+Package:    com.syncbudget.app.data
+
+Properties:
+Property	Type	Description
+transactions	List<Transaction>	Successfully parsed transactions
+error	String?	Error message if parsing encountered issues, null on success
+
+
+--------------------------------------------------------------------------------
+5.14  ID Generation Functions
+--------------------------------------------------------------------------------
+
+File:       Transaction.kt, IncomeSource.kt, RecurringExpense.kt, AmortizationEntry.kt
+
+Functions:
+    generateTransactionId(existingIds: Set<Int>): Int
+    generateIncomeSourceId(existingIds: Set<Int>): Int
+    generateRecurringExpenseId(existingIds: Set<Int>): Int
+    generateAmortizationEntryId(existingIds: Set<Int>): Int
+
+    All four functions use the same pattern: generate a random integer in the
+    range 0..65535, check for collision against the provided existingIds set,
+    and retry until a unique value is found. This provides a compact 16-bit
+    identifier space with collision avoidance.
+
+
+================================================================================
+6. UTILITY CLASSES
+================================================================================
+
+
+--------------------------------------------------------------------------------
+6.1  BudgetCalculator (Object Singleton)
+--------------------------------------------------------------------------------
+
+File:       BudgetCalculator.kt
+Package:    com.syncbudget.app.data
+
+Description:
+    Singleton utility object that performs all budget-related calculations.
+    Normalizes income and expenses to the active budget period using
+    occurrence-based projection over a one-year window. Deducts savings goal
+    contributions and amortization per-period amounts from the safe budget.
+
+Methods:
+
+    generateOccurrences(repeatType, repeatInterval, startDate, monthDay1, monthDay2, rangeStart, rangeEnd): List<LocalDate>
+        Generates a list of all occurrence dates for a recurring entry within
+        the specified date range. Handles all five RepeatType variants: DAYS
+        advances by repeatInterval days from startDate, WEEKS by
+        repeatInterval*7 days, BI_WEEKLY by fixed 14-day intervals, MONTHS by
+        repeatInterval months landing on monthDay1, and BI_MONTHLY by generating
+        two dates per month on monthDay1 and monthDay2. Uses efficient
+        skip-ahead to avoid iterating from the start date when it falls before
+        rangeStart.
+
+    calculateSafeBudgetAmount(incomeSources, recurringExpenses, budgetPeriod): Double
+        Calculates the discretionary budget amount per period. Projects total
+        income and total recurring expenses over the next year by generating
+        occurrences for each source and multiplying by the amount. Counts the
+        number of budget periods in one year, then returns
+        (totalIncome - totalExpenses) / periodsPerYear, floored at zero.
+
+    countPeriodsCompleted(from: LocalDate, to: LocalDate, budgetPeriod: BudgetPeriod): Int
+        Counts the number of complete budget periods between two dates. Uses
+        ChronoUnit.DAYS for DAILY, ChronoUnit.WEEKS for WEEKLY, and
+        ChronoUnit.MONTHS for MONTHLY. Returns 0 if the 'to' date is not after
+        the 'from' date.
+
+    currentPeriodStart(budgetPeriod, resetDayOfWeek, resetDayOfMonth): LocalDate
+        Determines the start date of the current budget period based on the
+        budget period type and reset configuration. For DAILY, returns today.
+        For WEEKLY, finds the most recent occurrence of the configured day of
+        week. For MONTHLY, calculates the most recent occurrence of the
+        configured day of month, moving to the previous month if needed.
+
+    activeAmortizationDeductions(entries: List<AmortizationEntry>, budgetPeriod: BudgetPeriod): Double
+        Sums the per-period deduction for all amortization entries that have
+        not yet completed. Calculates elapsed periods for each entry by
+        comparing startDate to today using the appropriate ChronoUnit, clamped
+        to totalPeriods. Returns the sum of (amount / totalPeriods) for all
+        entries where elapsed < totalPeriods.
+
+    activeSavingsGoalDeductions(goals: List<SavingsGoal>, budgetPeriod: BudgetPeriod): Double
+        Sums the per-period deduction for all active (non-paused, non-complete)
+        savings goals. For target-date goals, calculates remaining periods and
+        divides the remaining balance. For fixed-contribution goals, uses the
+        contributionPerPeriod capped at the remaining balance. Skips paused
+        goals and goals with zero or negative remaining balance.
+
+
+--------------------------------------------------------------------------------
+6.2  CryptoHelper (Object Singleton)
+--------------------------------------------------------------------------------
+
+File:       CryptoHelper.kt
+Package:    com.syncbudget.app.data
+
+Description:
+    Cryptographic utility object providing password-based encryption and
+    decryption using ChaCha20-Poly1305 authenticated encryption with
+    PBKDF2WithHmacSHA256 key derivation. Used for the encrypted save/load
+    feature available to paid users.
+
+Constants:
+Constant	Value	Purpose
+SALT_LENGTH	16	Length in bytes of the random salt for key derivation
+NONCE_LENGTH	12	Length in bytes of the random nonce for ChaCha20
+KEY_LENGTH	256	Key length in bits for the derived encryption key
+ITERATIONS	100,000	Number of PBKDF2 iterations for key derivation
+
+Wire Format:
+    [16-byte salt][12-byte nonce][ciphertext + Poly1305 authentication tag]
+
+Methods:
+
+    encrypt(plaintext: ByteArray, password: CharArray): ByteArray
+        Encrypts plaintext using ChaCha20-Poly1305 with a password-derived key.
+        Generates a cryptographically random 16-byte salt and 12-byte nonce
+        using SecureRandom, derives a 256-bit key via PBKDF2WithHmacSHA256 with
+        100,000 iterations, then encrypts using the ChaCha20-Poly1305 cipher.
+        Returns the concatenation of salt + nonce + ciphertext (which includes
+        the Poly1305 authentication tag).
+
+    decrypt(data: ByteArray, password: CharArray): ByteArray
+        Decrypts data produced by the encrypt() function. Validates that the
+        input is at least SALT_LENGTH + NONCE_LENGTH + 1 bytes, throwing
+        IllegalArgumentException if too small. Splits the data into salt, nonce,
+        and ciphertext components, derives the same key using PBKDF2, and
+        decrypts using ChaCha20-Poly1305. The Poly1305 tag is verified
+        automatically during decryption.
+
+    deriveKey(password: CharArray, salt: ByteArray): ByteArray (private)
+        Derives a 256-bit encryption key from a password and salt using
+        PBKDF2WithHmacSHA256 with 100,000 iterations. Uses PBEKeySpec and
+        SecretKeyFactory from the Java Cryptography Architecture.
+
+
+--------------------------------------------------------------------------------
+6.3  CsvParser (Top-Level Functions)
+--------------------------------------------------------------------------------
+
+File:       CsvParser.kt
+Package:    com.syncbudget.app.data
+
+Description:
+    Collection of top-level functions for parsing and serializing transaction
+    data in CSV format. Supports US Bank CSV import, SecureSync Budget CSV
+    import/export, and acts as the entry point for encrypted file handling.
+
+Functions:
+
+    parseUsBank(reader: BufferedReader, existingIds: Set<Int>): CsvParseResult
+        Parses a US Bank CSV export file. Skips the header line, then processes
+        each subsequent line expecting 5 fields (date, transaction type, name,
+        memo, amount). Maps "CREDIT" transaction types to INCOME and all others
+        to EXPENSE. Takes the absolute value of the amount, cleans the merchant
+        name, and generates a collision-free ID. Returns a CsvParseResult with
+        parsed transactions and any error message.
+
+    parseCsvLine(line: String): List<String>
+        Parses a single CSV line into field strings, correctly handling
+        quoted fields that may contain commas. Tracks an inQuotes boolean state
+        to distinguish field-separating commas from literal commas within
+        double-quoted values.
+
+    cleanMerchantName(raw: String): String (private)
+        Trims whitespace from both ends of a merchant name string and collapses
+        any runs of internal whitespace to single spaces. Used during US Bank
+        import to normalize inconsistent merchant name formatting.
+
+    serializeTransactionsCsv(transactions: List<Transaction>): String
+        Serializes a list of transactions to SecureSync CSV format with header
+        line. Outputs fields: id, type, date, source (quoted with escaped
+        double-quotes), amount, categoryAmounts (semicolon-separated
+        categoryId:amount pairs, quoted), isUserCategorized. Used for both
+        plaintext CSV export and as input to encryption.
+
+    parseSyncBudgetCsv(reader: BufferedReader, existingIds: Set<Int>): CsvParseResult
+        Parses a SecureSync Budget CSV save file. Validates the header starts
+        with "id,type,date,". Processes each line expecting 7 fields including
+        categoryAmounts (semicolon-separated categoryId:amount pairs) and
+        isUserCategorized boolean. Handles ID collision by generating new IDs
+        when the original ID already exists in existingIds.
+
+
+--------------------------------------------------------------------------------
+6.4  DuplicateDetector (Top-Level Functions)
+--------------------------------------------------------------------------------
+
+File:       DuplicateDetector.kt
+Package:    com.syncbudget.app.data
+
+Description:
+    Collection of top-level functions for detecting duplicate transactions,
+    matching transactions against recurring expenses, amortization entries,
+    and budget income sources. Uses configurable tolerances for amount
+    matching and common substring detection for merchant matching.
+
+Functions:
+
+    filterAlreadyLoadedDays(fileTransactions: List<Transaction>, appTransactions: List<Transaction>): List<Transaction>
+        Pre-filters imported transactions by comparing amounts on a per-day
+        basis against existing app transactions. Groups both sets by date, then
+        for each date attempts to match file transaction amounts (rounded to
+        cents) against a mutable pool of app transaction amounts. For days with
+        5 or fewer transactions, requires 100% match to skip the day entirely.
+        For days with more than 5, requires 80% or more matches to consider the
+        day loaded (keeping only unmatched transactions). Returns the filtered
+        list of transactions that should proceed through the import pipeline.
+
+    findRecurringExpenseMatch(incoming, recurringExpenses, percentTolerance, dollarTolerance, minChars): RecurringExpense?
+        Finds the first recurring expense entry that matches an incoming
+        transaction based on amount and merchant name similarity. Returns the
+        matching RecurringExpense or null if no match is found.
+
+    findAmortizationMatch(incoming, entries, percentTolerance, dollarTolerance, minChars): AmortizationEntry?
+        Finds the first amortization entry whose per-period amount (entry.amount)
+        and merchant name match the incoming transaction within configured
+        tolerances. Returns the matching AmortizationEntry or null.
+
+    isRecurringDateCloseEnough(transactionDate: LocalDate, re: RecurringExpense): Boolean
+        Checks whether a transaction date is within 2 days of the expected
+        recurring expense date. For MONTHS type, compares against monthDay1.
+        For BI_MONTHLY, compares against both monthDay1 and monthDay2. Returns
+        true for all other repeat types (DAYS, WEEKS, BI_WEEKLY).
+
+    findBudgetIncomeMatch(incoming, incomeSources, minChars): IncomeSource?
+        Finds the first income source whose merchant name matches an incoming
+        INCOME transaction. Returns null immediately if the transaction type
+        is not INCOME. Uses merchantMatches() for common substring comparison.
+
+    findDuplicate(incoming, existing, percentTolerance, dollarTolerance, dayWindow, minChars): Transaction?
+        Finds the first existing transaction that matches the incoming
+        transaction on all three criteria: amount (within tolerance), date
+        (within dayWindow days), and merchant name (common substring). Returns
+        the matching Transaction or null.
+
+    amountMatches(a1: Double, a2: Double, percentTolerance: Float, dollarTolerance: Int): Boolean (internal)
+        Determines whether two amounts are sufficiently close to be considered
+        a match. Returns true if either the percentage difference
+        (|a1-a2|/max) is within percentTolerance OR the rounded difference is
+        within dollarTolerance. This dual-tolerance approach handles both
+        proportional and absolute matching.
+
+    dateMatches(t1: Transaction, t2: Transaction, dayWindow: Int): Boolean (private)
+        Returns true if the absolute number of days between two transaction
+        dates is within the specified dayWindow. Uses ChronoUnit.DAYS.between()
+        for precise day counting.
+
+    merchantMatches(s1: String, s2: String, minChars: Int): Boolean (internal)
+        Determines whether two merchant names share a common substring of at
+        least minChars length. Converts both strings to lowercase, then builds
+        a set of all minChars-length substrings from the first string and
+        checks if any minChars-length substring of the second string exists in
+        the set. Falls back to exact equality comparison if either string is
+        shorter than minChars.
+
+
+--------------------------------------------------------------------------------
+6.5  AutoCategorizer (Top-Level Functions)
+--------------------------------------------------------------------------------
+
+File:       AutoCategorizer.kt
+Package:    com.syncbudget.app.data
+
+Description:
+    Automatic category assignment for imported transactions based on
+    historical transaction patterns within the last 6 months.
+
+Functions:
+
+    autoCategorize(imported: Transaction, existing: List<Transaction>, categories: List<Category>): Transaction
+        Assigns a category to an imported transaction by analyzing the most
+        frequently used category for the same merchant in existing transactions
+        from the last 6 months. Finds matching existing transactions using the
+        5-character common substring method, takes the 10 most recent matches,
+        and selects the category with the highest frequency count. Falls back to
+        the "Other" category if no historical matches exist. Returns a copy of
+        the imported transaction with updated categoryAmounts and
+        isUserCategorized=false.
+
+    sharesFiveCharSubstring(a: String, b: String): Boolean (private)
+        Checks whether two lowercase strings share a common substring of at
+        least 5 characters. Uses the same substring-set approach as
+        merchantMatches() in DuplicateDetector. Falls back to exact equality
+        if either string is shorter than 5 characters.
+
+
+--------------------------------------------------------------------------------
+6.6  CategoryIcons (Top-Level Declarations)
+--------------------------------------------------------------------------------
+
+File:       CategoryIcons.kt
+Package:    com.syncbudget.app.data
+
+Description:
+    Central icon registry mapping string names to Material Icons ImageVector
+    instances, organized by functional category (Food & Drink, Transport,
+    Home & Utilities, Health & Wellness, etc.).
+
+Constants:
+Constant	Type	Size	Description
+CATEGORY_ICON_MAP	Map<String, ImageVector>	120+ entries	LinkedHashMap mapping icon name strings to Material Icons vectors
+
+Functions:
+
+    getCategoryIcon(iconName: String): ImageVector
+        Looks up an icon by name in CATEGORY_ICON_MAP and returns the
+        corresponding ImageVector. Returns Icons.Filled.Category as a
+        fallback if the requested icon name is not found in the map.
+
+
+================================================================================
+7. THEME CLASSES
+================================================================================
+
+
+--------------------------------------------------------------------------------
+7.1  Color.kt
+--------------------------------------------------------------------------------
+
+File:       Color.kt
+Package:    com.syncbudget.app.ui.theme
+
+Description:
+    Defines all color constants for the application's dark and light themes.
+
+Dark Theme Colors:
+Constant	Hex Value	Purpose
+DarkBackground	#2A3A2F	Medium green/grey page background
+DarkSurface	#1A1A1A	Dark surface for cards and containers
+DarkHeaderBackground	#1E2D23	Header bar background color
+DarkHeaderText	#E0E0E0	Header bar text color
+DarkPrimary	#E8D5A0	Warm amber primary accent
+DarkOnPrimary	#1A1A1A	Text color on primary surfaces
+DarkCardBackground	#1A1A1A	Flip card and card background
+DarkCardText	#E8D5A0	Warm amber text on cards
+DarkDisplayBackground	#383838	Solari display frame background
+DarkDisplayBorder	#4A4A4A	Solari display frame border
+
+Light Theme Colors:
+Constant	Hex Value	Purpose
+LightBackground	#BDD5CC	Medium greenish-blue page background
+LightSurface	#FFFFFF	White surface for cards and containers
+LightHeaderBackground	#2C2C2C	Dark header bar background
+LightHeaderText	#F0E8D8	Warm light header text
+LightPrimary	#2E5C80	Blue primary accent
+LightOnPrimary	#FFFFFF	White text on primary surfaces
+LightOnBackground	#1C1B1F	Dark text on background
+LightOnSurface	#1C1B1F	Dark text on surface
+LightCardBackground	#305880	Blue-toned flip card background
+LightCardText	#FFFFFF	White text on cards
+LightDisplayBackground	#D6E5DE	Light greenish Solari frame background
+LightDisplayBorder	#B8CCC2	Light greenish frame border
+
+
+--------------------------------------------------------------------------------
+7.2  Theme.kt
+--------------------------------------------------------------------------------
+
+File:       Theme.kt
+Package:    com.syncbudget.app.ui.theme
+
+Description:
+    Defines the SyncBudgetColors data class, CompositionLocal provider, Material3
+    color schemes, and the root SyncBudgetTheme composable.
+
+Data Classes:
+
+    SyncBudgetColors
+        Custom color holder for theme colors not covered by Material3's
+        ColorScheme. Provides colors for header, flip cards, Solari display,
+        and category icon tinting.
+
+Properties:
+Property	Type	Description
+headerBackground	Color	Background color for screen header bars
+headerText	Color	Text color for screen header bars
+cardBackground	Color	Background color for flip cards
+cardText	Color	Text color for flip cards
+displayBackground	Color	Background color for the Solari display frame
+displayBorder	Color	Border color for the Solari display frame
+userCategoryIconTint	Color	Tint color for user-categorized transaction icons
+
+CompositionLocal:
+    LocalSyncBudgetColors = staticCompositionLocalOf<SyncBudgetColors>
+
+Composable Functions:
+
+    SyncBudgetTheme(darkTheme, strings, content)
+        Root theme composable that wraps the entire application content.
+        Selects dark or light color scheme based on system theme preference,
+        configures custom SyncBudgetColors, and provides both LocalSyncBudgetColors
+        and LocalStrings via CompositionLocalProvider. Applies
+        SyncBudgetTypography to MaterialTheme.
+
+
+--------------------------------------------------------------------------------
+7.3  Type.kt
+--------------------------------------------------------------------------------
+
+File:       Type.kt
+Package:    com.syncbudget.app.ui.theme
+
+Description:
+    Typography configuration for the application.
+
+Constants:
+Constant	Value	Purpose
+FlipFontFamily	FontFamily.Monospace	Font family used for Solari flip card digit/character text
+
+Typography:
+    SyncBudgetTypography extends the default Typography with a custom
+    headlineLarge style: FontFamily.Default, Bold weight, 24.sp size,
+    2.sp letter spacing.
+
+
+================================================================================
+8. LOCALIZATION CLASSES
+================================================================================
+
+
+--------------------------------------------------------------------------------
+8.1  AppStrings (Interface)
+--------------------------------------------------------------------------------
+
+File:       AppStrings.kt
+Package:    com.syncbudget.app.ui.strings
+
+Description:
+    Interface defining all localizable string groups for the application.
+    Contains 15 property groups organized by screen/feature area, totaling
+    hundreds of individual string fields. Some string fields use lambda types
+    for parameterized strings (e.g., (String) -> String).
+
+String Groups:
+Group	Data Class	Approx. Fields	Scope
+common	CommonStrings	70	Shared labels, button text, repeat type names
+dashboard	DashboardStrings	28	Dashboard screen labels and Supercharge strings
+settings	SettingsStrings	36	Settings screen labels
+budgetConfig	BudgetConfigStrings	22	Budget configuration labels
+transactions	TransactionsStrings	78	Transaction screen labels, import/export strings
+futureExpenditures	FutureExpendituresStrings	33	Savings goals screen labels
+amortization	AmortizationStrings	19	Amortization screen labels
+recurringExpenses	RecurringExpensesStrings	8	Recurring expenses screen labels
+dashboardHelp	DashboardHelpStrings	varies	Dashboard help content
+settingsHelp	SettingsHelpStrings	varies	Settings help content
+transactionsHelp	TransactionsHelpStrings	varies	Transactions help content
+budgetConfigHelp	BudgetConfigHelpStrings	varies	Budget config help content
+futureExpendituresHelp	FutureExpendituresHelpStrings	varies	Savings goals help content
+amortizationHelp	AmortizationHelpStrings	varies	Amortization help content
+recurringExpensesHelp	RecurringExpensesHelpStrings	varies	Recurring expenses help content
+
+
+--------------------------------------------------------------------------------
+8.2  EnglishStrings (Object Singleton)
+--------------------------------------------------------------------------------
+
+File:       EnglishStrings.kt
+Package:    com.syncbudget.app.ui.strings
+
+Description:
+    Complete English translation implementing the AppStrings interface.
+    Provides all string values in English for every string group.
+
+
+--------------------------------------------------------------------------------
+8.3  SpanishStrings (Object Singleton)
+--------------------------------------------------------------------------------
+
+File:       SpanishStrings.kt
+Package:    com.syncbudget.app.ui.strings
+
+Description:
+    Complete Spanish translation implementing the AppStrings interface.
+    Provides all string values in Spanish for every string group.
+
+
+--------------------------------------------------------------------------------
+8.4  LocalStrings (CompositionLocal)
+--------------------------------------------------------------------------------
+
+File:       LocalStrings.kt
+Package:    com.syncbudget.app.ui.strings
+
+Declaration:
+    val LocalStrings = staticCompositionLocalOf<AppStrings> { EnglishStrings }
+
+Description:
+    CompositionLocal that provides the active AppStrings implementation to
+    all composable functions in the tree. Defaults to EnglishStrings and is
+    overridden by SyncBudgetTheme based on the user's language preference.
+
+
+================================================================================
+9. HELP SCREEN CLASSES
+================================================================================
+
+
+--------------------------------------------------------------------------------
+9.1  HelpComponents
+--------------------------------------------------------------------------------
+
+File:       HelpComponents.kt (166 lines)
+Package:    com.syncbudget.app.ui.screens
+
+Description:
+    Shared composable components used across all seven help screens to ensure
+    consistent formatting and visual style.
+
+Composable Functions:
+
+    HelpSectionTitle(text: String)
+        Renders a bold titleMedium-styled section heading with top and bottom
+        padding. Used as the primary section divider within help screens.
+
+    HelpSubSectionTitle(text: String)
+        Renders a semi-bold titleSmall-styled subsection heading with bottom
+        padding. Used for secondary groupings within a help section.
+
+    HelpBodyText(text: String, italic: Boolean = false)
+        Renders body text in bodyMedium style with 22.sp line height. Supports
+        an optional italic parameter for emphasis text.
+
+    HelpBulletText(text: String)
+        Renders a bulleted list item with a Unicode bullet character (U+2022)
+        in a 16.dp-wide leading column followed by the text content in
+        bodyMedium style with 20.sp line height.
+
+    HelpNumberedItem(number: Int, title: String, description: String)
+        Renders a numbered list item with the number in bold in a 22.dp-wide
+        leading column, followed by the title in semi-bold and description
+        after an em dash, using bodyMedium style with 20.sp line height.
+
+    HelpIconRow(icon: ImageVector, label: String, description: String, tint: Color)
+        Renders an icon-labeled row with a 20.dp icon, a semi-bold label, and
+        a description after an em dash. Used to document icon-based features.
+
+    HelpIconRow(painter: Painter, label: String, description: String, tint: Color)
+        Overloaded variant accepting a Painter instead of ImageVector for the
+        icon. Provides the same layout and styling as the ImageVector version.
+
+    HelpDividerLine()
+        Renders a HorizontalDivider with 8.dp vertical padding and 15% alpha
+        onBackground color. Used to separate major sections within help screens.
+
+
+--------------------------------------------------------------------------------
+9.2  Help Screens (7 screens)
+--------------------------------------------------------------------------------
+
+File	Lines	Composable	Description
+DashboardHelpScreen.kt	445	DashboardHelpScreen	Explains the dashboard, Solari display, charts, Supercharge feature
+TransactionsHelpScreen.kt	995	TransactionsHelpScreen	Explains transaction management, import/export, encryption, matching
+BudgetConfigHelpScreen.kt	369	BudgetConfigHelpScreen	Explains income sources, budget periods, reset timing
+SettingsHelpScreen.kt	303	SettingsHelpScreen	Explains currency, categories, matching config, language
+FutureExpendituresHelpScreen.kt	290	FutureExpendituresHelpScreen	Explains savings goals, target-date vs fixed-contribution
+RecurringExpensesHelpScreen.kt	279	RecurringExpensesHelpScreen	Explains recurring expenses, repeat types, matching
+AmortizationHelpScreen.kt	270	AmortizationHelpScreen	Explains amortization entries, period tracking
+
+Notable: TransactionsHelpScreen includes a local Canvas-based pie chart
+illustration and a password strength reference table showing estimated
+crack times for various password lengths and character sets.
+
+
+================================================================================
+10. PERSISTENCE SCHEMA
+================================================================================
+
+
+All domain data is persisted as JSON files in the application's private
+internal storage directory (Context.openFileOutput with MODE_PRIVATE).
+User preferences are stored in SharedPreferences under the name "app_prefs".
+
+
+--------------------------------------------------------------------------------
+10.1  transactions.json
+--------------------------------------------------------------------------------
+
+Repository:     TransactionRepository
+File Name:      transactions.json
+Format:         JSON Array of objects
+
+JSON Schema:
+Field	Type	Required	Description
+id	Integer	Yes	Unique transaction identifier (0-65535)
+type	String	Yes	TransactionType enum name ("EXPENSE" or "INCOME")
+date	String	Yes	ISO-8601 date string (e.g. "2026-02-20")
+source	String	Yes	Merchant or income source name
+amount	Double	Yes	Transaction amount (always positive)
+isUserCategorized	Boolean	No*	Whether user manually set categories (default true)
+isBudgetIncome	Boolean	No*	Whether matched to a budget income source (default false)
+categoryAmounts	Array	No	Array of {categoryId: Int, amount: Double} objects
+
+*Fields default to true/false respectively when absent during load.
+
+Example:
+    {
+        "id": 42301,
+        "type": "EXPENSE",
+        "date": "2026-02-15",
+        "source": "Grocery Store",
+        "amount": 45.67,
+        "isUserCategorized": true,
+        "isBudgetIncome": false,
+        "categoryAmounts": [
+            {"categoryId": 1001, "amount": 30.00},
+            {"categoryId": 1002, "amount": 15.67}
+        ]
+    }
+
+
+--------------------------------------------------------------------------------
+10.2  categories.json
+--------------------------------------------------------------------------------
+
+Repository:     CategoryRepository
+File Name:      categories.json
+Format:         JSON Array of objects
+
+JSON Schema:
+Field	Type	Required	Description
+id	Integer	Yes	Unique category identifier (0-65535)
+name	String	Yes	Category display name
+iconName	String	Yes	Key into CATEGORY_ICON_MAP
+
+Example:
+    {"id": 1001, "name": "Groceries", "iconName": "LocalGroceryStore"}
+
+
+--------------------------------------------------------------------------------
+10.3  income_sources.json
+--------------------------------------------------------------------------------
+
+Repository:     IncomeSourceRepository
+File Name:      income_sources.json
+Format:         JSON Array of objects
+
+JSON Schema:
+Field	Type	Required	Description
+id	Integer	Yes	Unique income source identifier (0-65535)
+source	String	Yes	Income source name
+amount	Double	Yes	Income amount per occurrence
+repeatType	String	Yes	RepeatType enum name
+repeatInterval	Integer	Yes	Interval multiplier
+startDate	String	No	ISO-8601 date for DAYS/WEEKS/BI_WEEKLY types
+monthDay1	Integer	No	Day of month for MONTHS/BI_MONTHLY types
+monthDay2	Integer	No	Second day of month for BI_MONTHLY type
+
+Example:
+    {
+        "id": 5012,
+        "source": "Salary",
+        "amount": 3000.00,
+        "repeatType": "BI_MONTHLY",
+        "repeatInterval": 1,
+        "monthDay1": 1,
+        "monthDay2": 15
+    }
+
+
+--------------------------------------------------------------------------------
+10.4  recurring_expenses.json
+--------------------------------------------------------------------------------
+
+Repository:     RecurringExpenseRepository
+File Name:      recurring_expenses.json
+Format:         JSON Array of objects
+
+JSON Schema:
+    Same structure as income_sources.json (id, source, amount, repeatType,
+    repeatInterval, startDate, monthDay1, monthDay2).
+
+Example:
+    {
+        "id": 7234,
+        "source": "Netflix",
+        "amount": 15.99,
+        "repeatType": "MONTHS",
+        "repeatInterval": 1,
+        "monthDay1": 5
+    }
+
+
+--------------------------------------------------------------------------------
+10.5  amortization_entries.json
+--------------------------------------------------------------------------------
+
+Repository:     AmortizationRepository
+File Name:      amortization_entries.json
+Format:         JSON Array of objects
+
+JSON Schema:
+Field	Type	Required	Description
+id	Integer	Yes	Unique amortization entry identifier (0-65535)
+source	String	Yes	Description of the amortized purchase
+amount	Double	Yes	Total purchase amount
+totalPeriods	Integer	Yes	Number of budget periods for amortization
+startDate	String	Yes	ISO-8601 date when amortization begins
+
+Example:
+    {
+        "id": 9100,
+        "source": "Laptop",
+        "amount": 1200.00,
+        "totalPeriods": 12,
+        "startDate": "2026-01-01"
+    }
+
+
+--------------------------------------------------------------------------------
+10.6  future_expenditures.json
+--------------------------------------------------------------------------------
+
+Repository:     SavingsGoalRepository
+File Name:      future_expenditures.json
+Format:         JSON Array of objects
+
+JSON Schema:
+Field	Type	Required	Description
+id	Integer	Yes	Unique savings goal identifier (0-65535)
+name	String	Yes	Goal name (legacy: "description" mapped to "name")
+targetAmount	Double	Yes	Total amount to save (legacy: "amount" mapped to "targetAmount")
+targetDate	String	No	ISO-8601 target date (null for fixed-contribution type)
+totalSavedSoFar	Double	No	Amount saved so far (default 0.0)
+contributionPerPeriod	Double	No	Fixed contribution per period (default 0.0)
+isPaused	Boolean	No	Whether the goal is paused (default false)
+
+Legacy Migration:
+    - "description" field is mapped to "name" during load
+    - "amount" field is mapped to "targetAmount" during load
+
+Example:
+    {
+        "id": 3300,
+        "name": "Vacation",
+        "targetAmount": 5000.00,
+        "targetDate": "2026-12-01",
+        "totalSavedSoFar": 1200.00,
+        "contributionPerPeriod": 0.0,
+        "isPaused": false
+    }
+
+
+--------------------------------------------------------------------------------
+10.7  SharedPreferences Schema ("app_prefs")
+--------------------------------------------------------------------------------
+
+See Section 2.1 (MainActivity) SharedPreferences Keys table for the complete
+list of 22 preference keys with types, defaults, and descriptions.
+
+
+================================================================================
+11. REPOSITORY CLASSES
+================================================================================
+
+
+All five repositories follow an identical pattern: Kotlin object singletons
+with a private FILE_NAME constant, a save() method that serializes to
+JSONArray and writes via Context.openFileOutput, and a load() method that
+reads via Context.openFileInput, parses the JSONArray, and returns a list
+of domain objects.
+
+
+--------------------------------------------------------------------------------
+11.1  TransactionRepository
+--------------------------------------------------------------------------------
+
+File:       TransactionRepository.kt
+Package:    com.syncbudget.app.data
+File Name:  transactions.json
+
+Methods:
+
+    save(context: Context, transactions: List<Transaction>)
+        Serializes the transaction list to a JSONArray and writes to
+        transactions.json in the app's private storage. Each transaction is
+        converted to a JSONObject with all scalar fields. The categoryAmounts
+        list is serialized as a nested JSONArray only when non-empty, with each
+        entry containing categoryId and amount fields.
+
+    load(context: Context): List<Transaction>
+        Reads transactions.json from private storage and deserializes it into
+        a list of Transaction objects. Returns an empty list if the file does
+        not exist or is blank. Handles optional fields (categoryAmounts,
+        isUserCategorized, isBudgetIncome) with sensible defaults when absent.
+
+
+--------------------------------------------------------------------------------
+11.2  CategoryRepository
+--------------------------------------------------------------------------------
+
+File:       CategoryRepository.kt
+Package:    com.syncbudget.app.data
+File Name:  categories.json
+
+Methods:
+
+    save(context: Context, categories: List<Category>)
+        Serializes the category list to a JSONArray and writes to
+        categories.json. Each category is stored as a JSONObject with id,
+        name, and iconName fields.
+
+    load(context: Context): List<Category>
+        Reads categories.json and deserializes it into a list of Category
+        objects. Returns an empty list if the file does not exist or is blank.
+
+
+--------------------------------------------------------------------------------
+11.3  IncomeSourceRepository
+--------------------------------------------------------------------------------
+
+File:       IncomeSourceRepository.kt
+Package:    com.syncbudget.app.data
+File Name:  income_sources.json
+
+Methods:
+
+    save(context: Context, incomeSources: List<IncomeSource>)
+        Serializes the income source list to a JSONArray and writes to
+        income_sources.json. Includes all fields; nullable fields (startDate,
+        monthDay1, monthDay2) are only written when non-null.
+
+    load(context: Context): List<IncomeSource>
+        Reads income_sources.json and deserializes it into a list of
+        IncomeSource objects. Handles nullable fields by checking
+        obj.has() before reading.
+
+
+--------------------------------------------------------------------------------
+11.4  RecurringExpenseRepository
+--------------------------------------------------------------------------------
+
+File:       RecurringExpenseRepository.kt
+Package:    com.syncbudget.app.data
+File Name:  recurring_expenses.json
+
+Methods:
+
+    save(context: Context, recurringExpenses: List<RecurringExpense>)
+        Serializes the recurring expense list to a JSONArray and writes to
+        recurring_expenses.json. Structure matches IncomeSourceRepository
+        with nullable field handling.
+
+    load(context: Context): List<RecurringExpense>
+        Reads recurring_expenses.json and deserializes it into a list of
+        RecurringExpense objects. Uses the same nullable field pattern as
+        IncomeSourceRepository.
+
+
+--------------------------------------------------------------------------------
+11.5  SavingsGoalRepository
+--------------------------------------------------------------------------------
+
+File:       FutureExpenditureRepository.kt
+Package:    com.syncbudget.app.data
+File Name:  future_expenditures.json
+
+Methods:
+
+    save(context: Context, goals: List<SavingsGoal>)
+        Serializes the savings goal list to a JSONArray and writes to
+        future_expenditures.json. The targetDate field is only written when
+        non-null.
+
+    load(context: Context): List<SavingsGoal>
+        Reads future_expenditures.json and deserializes it into a list of
+        SavingsGoal objects. Performs legacy field migration: maps
+        "description" to name and "amount" to targetAmount for backward
+        compatibility with earlier data versions. Handles all optional fields
+        with defaults (totalSavedSoFar=0.0, contributionPerPeriod=0.0,
+        isPaused=false).
+
+
+--------------------------------------------------------------------------------
+11.6  AmortizationRepository
+--------------------------------------------------------------------------------
+
+File:       AmortizationRepository.kt
+Package:    com.syncbudget.app.data
+File Name:  amortization_entries.json
+
+Methods:
+
+    save(context: Context, entries: List<AmortizationEntry>)
+        Serializes the amortization entry list to a JSONArray and writes to
+        amortization_entries.json. All fields (id, source, amount,
+        totalPeriods, startDate) are required and always written.
+
+    load(context: Context): List<AmortizationEntry>
+        Reads amortization_entries.json and deserializes it into a list of
+        AmortizationEntry objects. All fields are required; parsing failures
+        will throw exceptions.
+
+
+================================================================================
+12. ERROR HANDLING
+================================================================================
+
+
+The application employs the following error handling strategies:
+
+12.1  CSV Import Errors
+    - parseUsBank() and parseSyncBudgetCsv() catch exceptions per line and
+      accumulate error messages with line numbers in the CsvParseResult.error
+      field. The UI displays a parse error dialog when errors are present.
+    - parseSyncBudgetCsv() validates the CSV header and returns an immediate
+      error if it does not match the expected format.
+
+12.2  Encryption/Decryption Errors
+    - CryptoHelper.decrypt() throws IllegalArgumentException if the input data
+      is too small to contain salt + nonce + ciphertext. The UI catches this
+      and displays an appropriate error message.
+    - Invalid passwords result in javax.crypto.AEADBadTagException during
+      Poly1305 tag verification, caught by the import pipeline.
+
+12.3  Preference Loading Errors
+    - BudgetPeriod.valueOf() is wrapped in a try-catch that defaults to
+      BudgetPeriod.DAILY if the stored preference string is invalid.
+    - All SharedPreferences reads use explicit default values.
+
+12.4  Repository Loading Errors
+    - All repository load() methods check for file existence and blank content,
+      returning empty lists rather than throwing exceptions.
+    - SavingsGoalRepository.load() wraps targetDate parsing in a try-catch,
+      defaulting to null on parse failure.
+
+12.5  ID Collision Handling
+    - All ID generation functions use do-while loops to retry random generation
+      until a unique value is found within the 0..65535 range.
+    - parseSyncBudgetCsv() checks imported IDs against existingIds and
+      generates new IDs on collision.
+
+12.6  Budget Calculation Safety
+    - BudgetCalculator.calculateSafeBudgetAmount() returns 0.0 if
+      periodsPerYear is zero, preventing division by zero.
+    - countPeriodsCompleted() returns 0 if the end date is not after the start
+      date.
+    - activeSavingsGoalDeductions() skips goals where remaining balance is
+      zero or negative, and where remaining periods is zero.
+
+12.7  UI Input Validation
+    - Amount input fields use currency-aware decimal limiting to prevent
+      invalid numeric entries.
+    - RepeatType-specific form fields dynamically appear/disappear to prevent
+      submission of incomplete recurrence configurations.
+    - Protected categories ("Other", "Recurring", "Amortization",
+      "Recurring Income") cannot be deleted through the UI.
+
+
+================================================================================
+13. DOCUMENT REVISION HISTORY
+================================================================================
+
+Version	Date	Author	Description
+1.0	February 2026	SecureSync Budget Team	Initial LLD creation covering all application classes, data models, persistence schema, and error handling
+
+================================================================================
+                              END OF DOCUMENT
+================================================================================

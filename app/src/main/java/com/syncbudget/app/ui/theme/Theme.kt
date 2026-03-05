@@ -1,21 +1,43 @@
 package com.syncbudget.app.ui.theme
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -77,9 +99,14 @@ fun AdAwareDialog(
         onDismissRequest = onDismissRequest,
         properties = properties
     ) {
-        // Disable system dim so the ad banner stays fully visible
+        // Disable system dim so the ad banner stays fully visible,
+        // and prevent the dialog from sliding up when the keyboard opens.
         (LocalView.current.parent as? DialogWindowProvider)?.window?.let { window ->
-            SideEffect { window.setDimAmount(0f) }
+            SideEffect {
+                window.setDimAmount(0f)
+                @Suppress("DEPRECATION")
+                window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+            }
         }
 
         Box(modifier = Modifier.fillMaxSize()) {
@@ -111,9 +138,40 @@ fun AdAwareDialog(
 }
 
 /**
- * Drop-in replacement for AlertDialog that avoids dimming the ad banner.
- * Removes system dim so the ad stays bright; the AlertDialog's own Surface
- * elevation provides visual separation from the background.
+ * Pulsing down-arrow that appears when a scrollable area has more content below.
+ * Disappears when scrolled to the bottom or when content fits without scrolling.
+ */
+@Composable
+fun PulsingScrollArrow(scrollState: ScrollState, modifier: Modifier = Modifier) {
+    val canScrollDown by remember {
+        derivedStateOf { scrollState.canScrollForward }
+    }
+    if (canScrollDown) {
+        val infiniteTransition = rememberInfiniteTransition(label = "scrollArrow")
+        val offsetY by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 6f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(600),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "arrowBounce"
+        )
+        Icon(
+            imageVector = Icons.Filled.KeyboardArrowDown,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            modifier = modifier
+                .size(24.dp)
+                .offset(y = offsetY.dp)
+        )
+    }
+}
+
+/**
+ * Drop-in replacement for AlertDialog that avoids overlapping the ad banner.
+ * Uses AdAwareDialog internally so the content is positioned below the ad,
+ * scrolls when content is tall, and shows a pulsing arrow when scrollable.
  */
 @Composable
 fun AdAwareAlertDialog(
@@ -122,20 +180,49 @@ fun AdAwareAlertDialog(
     dismissButton: @Composable (() -> Unit)? = null,
     title: @Composable (() -> Unit)? = null,
     text: @Composable (() -> Unit)? = null,
+    scrollState: ScrollState? = null,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismissRequest,
-        confirmButton = {
-            // Remove system dim so the ad banner stays bright
-            (LocalView.current.parent as? DialogWindowProvider)?.window?.let { window ->
-                SideEffect { window.setDimAmount(0f) }
+    AdAwareDialog(onDismissRequest = onDismissRequest) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.92f),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            Box {
+                Column(modifier = Modifier.padding(24.dp)) {
+                    if (title != null) {
+                        title()
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+                    if (text != null) {
+                        Box(modifier = Modifier.weight(1f, fill = false)) {
+                            text()
+                        }
+                        Spacer(modifier = Modifier.height(24.dp))
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        if (dismissButton != null) {
+                            dismissButton()
+                        }
+                        confirmButton()
+                    }
+                }
+                if (scrollState != null) {
+                    PulsingScrollArrow(
+                        scrollState = scrollState,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 12.dp, bottom = 18.dp)
+                    )
+                }
             }
-            confirmButton()
-        },
-        dismissButton = dismissButton,
-        title = title,
-        text = text,
-    )
+        }
+    }
 }
 
 private val DarkColorScheme = darkColorScheme(
@@ -150,6 +237,8 @@ private val DarkColorScheme = darkColorScheme(
 private val LightColorScheme = lightColorScheme(
     primary = LightPrimary,
     onPrimary = LightOnPrimary,
+    primaryContainer = Color(0xFF4A3270),
+    onPrimaryContainer = Color(0xFFE8DEF8),
     background = LightBackground,
     surface = LightSurface,
     onBackground = LightOnBackground,

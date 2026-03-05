@@ -124,6 +124,63 @@ object BudgetCalculator {
         return dates
     }
 
+    /**
+     * Calculate how much savings the user should have on hand right now
+     * based on accrued portions of each recurring expense cycle.
+     */
+    fun calculateAccruedSavingsNeeded(
+        recurringExpenses: List<RecurringExpense>,
+        today: LocalDate = LocalDate.now()
+    ): Double {
+        var total = 0.0
+        val twoYearsAhead = today.plusYears(2)
+        for (exp in recurringExpenses) {
+            // Find next occurrence on or after today
+            val occurrences = generateOccurrences(
+                exp.repeatType, exp.repeatInterval, exp.startDate,
+                exp.monthDay1, exp.monthDay2, today, twoYearsAhead
+            )
+            val nextOcc = occurrences.firstOrNull() ?: continue
+
+            // If due today, full amount is accrued
+            if (nextOcc == today) {
+                total += exp.amount
+                continue
+            }
+
+            // Derive previous occurrence by subtracting one period from next
+            val prevOcc: LocalDate = when (exp.repeatType) {
+                RepeatType.DAYS -> nextOcc.minusDays(exp.repeatInterval.toLong())
+                RepeatType.WEEKS -> nextOcc.minusDays((exp.repeatInterval * 7).toLong())
+                RepeatType.BI_WEEKLY -> nextOcc.minusDays(14)
+                RepeatType.MONTHS -> nextOcc.minusMonths(exp.repeatInterval.toLong())
+                RepeatType.BI_MONTHLY -> {
+                    // Two days per month: find the other day in the cycle
+                    val d1 = exp.monthDay1 ?: 1
+                    val d2 = exp.monthDay2 ?: 15
+                    val nextDay = nextOcc.dayOfMonth
+                    val clampedD1 = d1.coerceAtMost(nextOcc.lengthOfMonth())
+                    if (nextDay == clampedD1) {
+                        // Previous was d2 of prior month
+                        val prevMonth = nextOcc.minusMonths(1)
+                        prevMonth.withDayOfMonth(d2.coerceAtMost(prevMonth.lengthOfMonth()))
+                    } else {
+                        // Previous was d1 of same month
+                        nextOcc.withDayOfMonth(clampedD1)
+                    }
+                }
+                RepeatType.ANNUAL -> nextOcc.minusYears(1)
+            }
+
+            val daysSincePrev = ChronoUnit.DAYS.between(prevOcc, today).toDouble()
+            val totalCycleDays = ChronoUnit.DAYS.between(prevOcc, nextOcc).toDouble()
+            if (totalCycleDays > 0) {
+                total += (daysSincePrev / totalCycleDays) * exp.amount
+            }
+        }
+        return roundCents(total)
+    }
+
     fun calculateSafeBudgetAmount(
         incomeSources: List<IncomeSource>,
         recurringExpenses: List<RecurringExpense>,

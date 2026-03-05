@@ -1767,8 +1767,21 @@ class MainActivity : ComponentActivity() {
                     )
                     "recurring_expenses" -> RecurringExpensesScreen(
                         recurringExpenses = recurringExpenses.toList().active,
+                        transactions = transactions.toList().active,
                         currencySymbol = currencySymbol,
                         dateFormatPattern = dateFormatPattern,
+                        incomeSources = incomeSources.toList().active,
+                        budgetPeriod = budgetPeriod,
+                        budgetAmount = if (isManualBudgetEnabled) manualBudgetAmount else safeBudgetAmount,
+                        availableCash = availableCash,
+                        resetDayOfWeek = resetDayOfWeek,
+                        resetDayOfMonth = resetDayOfMonth,
+                        isManualOverBudget = isManualBudgetEnabled && manualBudgetAmount > safeBudgetAmount,
+                        budgetPeriodLabel = when (budgetPeriod) {
+                            BudgetPeriod.DAILY -> strings.recurringExpenses.savingsPeriodDaily
+                            BudgetPeriod.WEEKLY -> strings.recurringExpenses.savingsPeriodWeekly
+                            BudgetPeriod.MONTHLY -> strings.recurringExpenses.savingsPeriodMonthly
+                        },
                         onAddRecurringExpense = { expense ->
                             val clock = lamportClock.tick()
                             recurringExpenses.add(expense.copy(

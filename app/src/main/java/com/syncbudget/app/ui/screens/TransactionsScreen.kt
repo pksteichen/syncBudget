@@ -95,6 +95,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import com.syncbudget.app.ui.theme.AdAwareDialog
+import com.syncbudget.app.ui.theme.PulsingScrollArrow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -1398,6 +1399,8 @@ fun TransactionsScreen(
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 6.dp
             ) {
+                val saveScrollState = rememberScrollState()
+                Box {
                 Column(modifier = Modifier.padding(24.dp)) {
                     Text(S.transactions.saveTransactions, style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(16.dp))
@@ -1406,7 +1409,7 @@ fun TransactionsScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier
                             .weight(1f, fill = false)
-                            .verticalScroll(rememberScrollState())
+                            .verticalScroll(saveScrollState)
                     ) {
                         Text(S.transactions.format, style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onBackground)
@@ -1556,6 +1559,13 @@ fun TransactionsScreen(
                         }) { Text(S.common.save) }
                     }
                 }
+                PulsingScrollArrow(
+                    scrollState = saveScrollState,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 12.dp, bottom = 18.dp)
+                )
+                }
             }
         }
     }
@@ -1654,6 +1664,8 @@ fun TransactionsScreen(
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 6.dp
             ) {
+                val loadScrollState = rememberScrollState()
+                Box {
                 Column(modifier = Modifier.padding(24.dp)) {
                     Text(S.transactions.loadTransactions, style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(16.dp))
@@ -1662,7 +1674,7 @@ fun TransactionsScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier
                             .weight(1f, fill = false)
-                            .verticalScroll(rememberScrollState())
+                            .verticalScroll(loadScrollState)
                     ) {
                         Text(S.transactions.format, style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onBackground)
@@ -1730,6 +1742,13 @@ fun TransactionsScreen(
                             enabled = canProceed
                         ) { Text(S.transactions.selectFile) }
                     }
+                }
+                PulsingScrollArrow(
+                    scrollState = loadScrollState,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 12.dp, bottom = 18.dp)
+                )
                 }
             }
         }
@@ -2662,6 +2681,7 @@ fun TransactionDialog(
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
         ) {
+            Box {
             Column(
                 modifier = Modifier
                     .padding(24.dp)
@@ -3294,17 +3314,25 @@ fun TransactionDialog(
                     }
                 }
             }
+            PulsingScrollArrow(
+                scrollState = scrollState,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 12.dp, bottom = 18.dp)
+            )
+            }
         }
     }
 
     // Category picker dialog
     if (showCategoryPicker) {
+        val catPickerScrollState = rememberScrollState()
         AdAwareAlertDialog(
             onDismissRequest = { showCategoryPicker = false },
             title = { Text(S.transactions.category) },
             text = {
                 Column(
-                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    modifier = Modifier.verticalScroll(catPickerScrollState),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     categories.forEach { cat ->
@@ -3380,7 +3408,8 @@ fun TransactionDialog(
                 TextButton(onClick = { showCategoryPicker = false }) {
                     Text(S.common.ok)
                 }
-            }
+            },
+            scrollState = catPickerScrollState
         )
     }
 

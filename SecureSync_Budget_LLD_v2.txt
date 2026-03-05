@@ -1,0 +1,1991 @@
+================================================================================
+                     SECURESYNC BUDGET - LOW-LEVEL DESIGN DOCUMENT
+================================================================================
+
+Application:        SecureSync Budget
+Package:            com.syncbudget.app
+Platform:           Android (minSdk 28+)
+Framework:          Jetpack Compose, Material Design 3
+Language:           Kotlin
+Document Version:   2.0
+Date:               March 2026
+
+================================================================================
+1. INTRODUCTION
+================================================================================
+
+SecureSync Budget is a personal budget management Android application built
+with Jetpack Compose and Material Design 3. The application enables users to
+track income and expenses, configure recurring financial entries, amortize
+large purchases over time, set and manage savings goals, and visualize
+spending through interactive charts. A distinctive Solari-style split-flap
+display animates the user's available cash on the dashboard. The app supports
+two languages (English and Spanish), multiple currency formats, encrypted
+file save/load functionality, CSV import from US Bank statements, and
+multi-device family synchronization via Firebase Firestore with per-field
+LWW-Register CRDT conflict resolution. All domain data is persisted as JSON
+files in the application's private storage directory, with user preferences
+stored in SharedPreferences. The architecture follows a single-activity
+Compose pattern where MainActivity serves as the central state coordinator,
+delegating UI rendering to composable screen functions and data persistence
+to singleton repository objects.
+
+This Low-Level Design document describes every class, composable function,
+data model, utility object, and persistence schema in the SecureSync Budget
+application. Each entry includes its package, purpose, constants, fields,
+methods with detailed descriptions, and relevant design notes.
+
+
+================================================================================
+2. APPLICATION CLASSES
+================================================================================
+
+
+--------------------------------------------------------------------------------
+2.1  MainActivity
+--------------------------------------------------------------------------------
+
+File:       MainActivity.kt (2,789 lines)
+Package:    com.syncbudget.app
+
+Extends:    ComponentActivity
+
+Description:
+    Central coordinator of the SecureSync Budget application. This activity
+    manages all application state as Compose mutableState variables, handles
+    screen navigation through a string-based routing system, performs budget
+    period refresh calculations on app launch, auto-provisions protected
+    categories, orchestrates the transaction matching chain, manages CRDT
+    sync state with Lamport timestamps, records period ledger entries, and
+    delegates persistence to repository singletons. All composable screens
+    are rendered within a single setContent block.
+
+SharedPreferences Name: "app_prefs" (Context.MODE_PRIVATE)
+
+SharedPreferences Keys:
+Key                     Type        Default     Purpose
+---------------------------------------------------------------------------
+currencySymbol          String      "$"         Currency symbol
+digitCount              Int         3           Whole-digit flip cards
+showDecimals            Boolean     false       Decimal places on display
+dateFormatPattern       String      "yyyy-MM-dd" Date format pattern
+isPaidUser              Boolean     false       Paid features toggle
+matchDays               Int         7           Duplicate date window
+matchPercent            Float       1.0f        Amount % tolerance
+matchDollar             Int         1           Dollar tolerance
+matchChars              Int         5           Min merchant substring
+weekStartSunday         Boolean     true        Week start day
+chartPalette            String      "Sunset"    Chart palette name
+appLanguage             String      "en"        Language code
+budgetPeriod            String      "DAILY"     Budget period enum
+resetHour               Int         0           Daily reset hour
+resetDayOfWeek          Int         7           Weekly reset day (ISO)
+resetDayOfMonth         Int         1           Monthly reset day
+isManualBudgetEnabled   Boolean     false       Manual override toggle
+manualBudgetAmount      String?     null        Manual override amount
+availableCash           String?     null        Current available cash
+budgetStartDate         String?     null        Budget tracking start
+lastRefreshDate         String?     null        Last period refresh
+lamportClock            Long        0L          Lamport clock value
+localDeviceId           String      ""          Device sync ID
+
+State Fields:
+Field                   Type                                Description
+---------------------------------------------------------------------------
+currentScreen           String                              Navigation route
+transactions            SnapshotStateList<Transaction>      All transactions
+categories              SnapshotStateList<Category>         All categories
+incomeSources           SnapshotStateList<IncomeSource>     All income sources
+recurringExpenses       SnapshotStateList<RecurringExpense> All recurring expenses
+amortizationEntries     SnapshotStateList<AmortizationEntry> All amortization entries
+savingsGoals            SnapshotStateList<SavingsGoal>      All savings goals
+periodLedger            SnapshotStateList<PeriodLedgerEntry> Period ledger
+sharedSettings          SharedSettings                      Sync-shared settings
+lamportClock            LamportClock                        Logical clock for CRDT
+localDeviceId           String                              This device's sync ID
+soundPlayer             FlipSoundPlayer                     Flip card audio
+currencySymbol          String                              Active currency
+budgetPeriod            BudgetPeriod                        Active period
+safeBudgetAmount        Double (derivedStateOf)             Calculated safe budget
+budgetAmount            Double (derivedStateOf)             Effective budget after deductions
+availableCash           Double                              Current spendable cash
+isManualBudgetEnabled   Boolean                             Manual override flag
+manualBudgetAmount      Double                              Manual amount
+budgetStartDate         LocalDate?                          Budget start date
+lastRefreshDate         LocalDate?                          Last refresh date
+
+Auto-Provisioned Categories:
+Category Name           Tag                     Icon Name   Purpose
+---------------------------------------------------------------------------
+Other                   __other__               CreditCard  Default fallback
+Recurring               __recurring__           Sync        Recurring matches
+Amortization            __amortization__        Schedule    Amortization matches
+Recurring Income        __recurring_income__    Payments    Budget income matches
+
+Screen Navigation Routes:
+Route                       Target Screen
+---------------------------------------------------------------------------
+"main"                      MainScreen (dashboard)
+"settings"                  SettingsScreen
+"transactions"              TransactionsScreen
+"future_expenditures"       FutureExpendituresScreen
+"amortization"              AmortizationScreen
+"recurring_expenses"        RecurringExpensesScreen
+"budget_config"             BudgetConfigScreen
+"family_sync"               FamilySyncScreen
+"dashboard_help"            DashboardHelpScreen
+"settings_help"             SettingsHelpScreen
+"transactions_help"         TransactionsHelpScreen
+"future_expenditures_help"  FutureExpendituresHelpScreen
+"amortization_help"         AmortizationHelpScreen
+"recurring_expenses_help"   RecurringExpensesHelpScreen
+"budget_config_help"        BudgetConfigHelpScreen
+"family_sync_help"          FamilySyncHelpScreen
+
+Methods:
+
+    onCreate(savedInstanceState: Bundle?)
+        Entry point. Calls enableEdgeToEdge(), enters setContent block
+        where all state is declared, data loaded, categories provisioned,
+        budget refresh runs, and screen router dispatches to composables.
+
+    saveIncomeSources()
+        Persists incomeSources to IncomeSourceRepository.
+
+    saveRecurringExpenses()
+        Persists recurringExpenses to RecurringExpenseRepository.
+
+    saveAmortizationEntries()
+        Persists amortizationEntries to AmortizationRepository.
+
+    saveSavingsGoals()
+        Persists savingsGoals to SavingsGoalRepository.
+
+    saveTransactions()
+        Persists transactions to TransactionRepository.
+
+    saveCategories()
+        Persists categories to CategoryRepository.
+
+    savePeriodLedger()
+        Persists periodLedger to PeriodLedgerRepository.
+
+    saveSharedSettings()
+        Persists sharedSettings to SharedSettingsRepository.
+
+    persistAvailableCash()
+        Writes availableCash to SharedPreferences.
+
+    recomputeCash()
+        Deterministically recomputes availableCash from budgetStartDate,
+        periodLedger, transactions, and recurringExpenses via
+        BudgetCalculator.recomputeAvailableCash(). Called after sync
+        merges and transaction mutations.
+
+    recalculateBudget()
+        Invokes BudgetCalculator.calculateSafeBudgetAmount() and stores
+        the result. Note: safeBudgetAmount and budgetAmount are now
+        derivedStateOf and auto-recalculate when inputs change.
+
+    isBudgetAccountedExpense(txn: Transaction): Boolean
+        Returns true if expense is categorized as Recurring or Amortization.
+
+    addTransactionWithBudgetEffect(txn: Transaction)
+        Adds transaction, saves, and adjusts availableCash.
+
+    runMatchingChain(txn: Transaction)
+        Sequential matching: duplicate, recurring, amortization, budget
+        income. Sets linkedRecurringExpenseId or linkedAmortizationEntryId
+        on match.
+
+    Budget Period Refresh Logic:
+        Calculates missed periods, records each in period ledger with
+        budgetAmount, updates savings goals, persists all state.
+
+    Supercharge Handler:
+        Processes savings goal supercharge allocations with CRDT stamping.
+
+    CRDT Stamping Pattern:
+        All data mutations stamp the modified record's field _clock values
+        using lamportClock.tick() and set deviceId to localDeviceId.
+
+
+--------------------------------------------------------------------------------
+2.2  MainScreen
+--------------------------------------------------------------------------------
+
+File:       MainScreen.kt (1,237 lines)
+Package:    com.syncbudget.app.ui.screens
+
+Description:
+    Dashboard screen with Solari-style split-flap display, spending charts
+    (pie and bar), quick-add transaction dialogs, Supercharge dialog, sync
+    status indicators, and five-button navigation bar.
+
+Composable Functions:
+    MainScreen, SavingsSuperchargeDialog
+
+Parameters (MainScreen):
+Parameter               Type                    Description
+---------------------------------------------------------------------------
+availableCash           Double                  Current cash to display
+transactions            List<Transaction>       All transactions for charts
+categories              List<Category>          Categories for chart legend
+currencySymbol          String                  Currency symbol
+digitCount              Int                     Flip display digit count
+showDecimals            Boolean                 Show decimal cards
+budgetPeriod            BudgetPeriod            Current period
+dateFormatPattern       String                  Date format
+budgetPeriodLabel       String                  Localized period label
+chartPalette            String                  Chart palette name
+weekStartSunday         Boolean                 Week start day
+savingsGoals            List<SavingsGoal>       Goals for Supercharge
+soundPlayer             FlipSoundPlayer         Flip sound player
+onNavigate              (String) -> Unit        Navigation callback
+onSettingsClick         () -> Unit              Settings navigation
+onAddIncome             () -> Unit              Income dialog trigger
+onAddExpense            () -> Unit              Expense dialog trigger
+onSupercharge           (Map, Map) -> Unit      Supercharge callback
+
+
+--------------------------------------------------------------------------------
+2.3  TransactionsScreen
+--------------------------------------------------------------------------------
+
+File:       TransactionsScreen.kt (4,010 lines)
+Package:    com.syncbudget.app.ui.screens
+
+Description:
+    Comprehensive transaction management with list display, filtering,
+    searching, multi-select, entry/editing dialogs, CSV import pipeline
+    with duplicate detection, encrypted save/load, and linked transaction
+    display. The largest screen in the application.
+
+Composable Functions:
+Function                        Visibility  Description
+---------------------------------------------------------------------------
+TransactionsScreen              Public      Main transaction list
+TransactionDialog               Public      Add/edit dialog
+TransactionRow                  Private     Individual row with expand
+DuplicateResolutionDialog       Public      Duplicate confirmation
+RecurringExpenseConfirmDialog    Public      Recurring match confirm
+AmortizationConfirmDialog       Public      Amortization match confirm
+BudgetIncomeConfirmDialog       Public      Budget income confirm
+TextSearchDialog                Private     Text search
+AmountSearchDialog              Private     Amount range search
+SearchDatePickerDialog          Private     Date range picker
+
+Linked Transaction Display:
+    Transactions with linkedRecurringExpenseId or linkedAmortizationEntryId
+    show the applied-to-budget amount. Tapping shows toast with full amount.
+    Long-press supported in multi-select mode with BackHandler.
+
+Additional date search filter for unmodified bank transactions.
+
+
+--------------------------------------------------------------------------------
+2.4  BudgetConfigScreen
+--------------------------------------------------------------------------------
+
+File:       BudgetConfigScreen.kt (1,161 lines)
+Package:    com.syncbudget.app.ui.screens
+
+Description:
+    Income sources management, budget period selection, reset hour/day
+    configuration, safe budget display, manual override with warnings,
+    and budget reset functionality. Includes savings calculation warning.
+
+Parameters:
+Parameter               Type                    Description
+---------------------------------------------------------------------------
+incomeSources           List<IncomeSource>      Income source list
+currencySymbol          String                  Currency symbol
+budgetPeriod            BudgetPeriod            Current period
+resetHour               Int                     Reset hour
+resetDayOfWeek          Int                     Reset day of week
+resetDayOfMonth         Int                     Reset day of month
+safeBudgetAmount        Double                  Calculated safe budget
+isManualBudgetEnabled   Boolean                 Manual override flag
+manualBudgetAmount      Double                  Manual amount
+isSyncConfigured        Boolean                 Whether sync is active
+
+Manual Override Warning:
+    When manual override is enabled, displays two warning messages:
+    1. Standard note about savings/amortization deductions
+    2. "Setting an amount higher than the safe budget amount calculated
+       above will disable the needed savings calculation on the Recurring
+       Expenses page."
+
+
+--------------------------------------------------------------------------------
+2.5  SettingsScreen
+--------------------------------------------------------------------------------
+
+File:       SettingsScreen.kt (995 lines)
+Package:    com.syncbudget.app.ui.screens
+
+Description:
+    Currency selection, category management, matching tolerances, language
+    selection, date format, chart palette, and paid features. All form
+    dialogs include PulsingScrollArrow for scroll indication.
+
+
+--------------------------------------------------------------------------------
+2.6  FutureExpendituresScreen
+--------------------------------------------------------------------------------
+
+File:       FutureExpendituresScreen.kt (637 lines)
+Package:    com.syncbudget.app.ui.screens
+
+Description:
+    Savings goals management with target-date and fixed-contribution types.
+    Form dialogs include PulsingScrollArrow.
+
+
+--------------------------------------------------------------------------------
+2.7  AmortizationScreen
+--------------------------------------------------------------------------------
+
+File:       AmortizationScreen.kt (562 lines)
+Package:    com.syncbudget.app.ui.screens
+
+Description:
+    Amortization entries with progress tracking, per-period deductions,
+    and pause/resume support. Form dialogs include PulsingScrollArrow.
+
+
+--------------------------------------------------------------------------------
+2.8  RecurringExpensesScreen
+--------------------------------------------------------------------------------
+
+File:       RecurringExpensesScreen.kt (1,148 lines)
+Package:    com.syncbudget.app.ui.screens
+
+Description:
+    Recurring expense management with 6 repeat types, savings required
+    simulation box, Why explanation dialog, and PulsingScrollArrow in
+    all dialogs.
+
+Parameters:
+Parameter               Type                    Description
+---------------------------------------------------------------------------
+recurringExpenses       List<RecurringExpense>  Expense list
+currencySymbol          String                  Currency symbol
+dateFormatPattern       String                  Date format
+transactions            List<Transaction>       All transactions
+incomeSources           List<IncomeSource>      Income sources for simulation
+budgetPeriod            BudgetPeriod            Budget period enum
+budgetAmount            Double                  Per-period total burn rate
+availableCash           Double                  Current available cash
+resetDayOfWeek          Int                     Weekly reset day
+resetDayOfMonth         Int                     Monthly reset day
+isManualOverBudget      Boolean                 Manual override > safe budget
+budgetPeriodLabel       String                  Localized period label
+onAddRecurringExpense   (RecurringExpense)->Unit Add callback
+onUpdateRecurringExpense (RecurringExpense)->Unit Update callback
+onDeleteRecurringExpense (RecurringExpense)->Unit Delete callback
+onBack                  ()->Unit                Navigation back
+onHelpClick             ()->Unit                Help navigation
+
+Savings Required Box:
+    Displayed when recurringExpenses.isNotEmpty() AND !isManualOverBudget.
+    Calls SavingsSimulator.calculateSavingsRequired() with remember() keyed
+    on all simulation inputs. Shows formatted amount with "Why?" link.
+    Tapping the message shows toast with low-point date.
+    Hidden when savingsRequired == 0.
+
+Why Dialog:
+    AdAwareAlertDialog with primaryContainer background title.
+    Scrollable body explaining cash flow simulation concept.
+    PulsingScrollArrow at bottom-start position.
+
+
+--------------------------------------------------------------------------------
+2.9  FamilySyncScreen
+--------------------------------------------------------------------------------
+
+File:       FamilySyncScreen.kt (868 lines)
+Package:    com.syncbudget.app.ui.screens
+
+Description:
+    Family sync configuration screen. Allows creating/joining/leaving/
+    dissolving family groups. Shows sync status, last sync time, and
+    provides manual sync button. Admin-only settings enforcement for
+    budget period and reset configuration.
+
+
+--------------------------------------------------------------------------------
+2.10  FamilySyncHelpScreen
+--------------------------------------------------------------------------------
+
+File:       FamilySyncHelpScreen.kt (96 lines)
+Package:    com.syncbudget.app.ui.screens
+
+Description:
+    Help documentation for Family Sync feature. Covers creating groups,
+    joining groups, admin settings, and sync behavior.
+
+
+================================================================================
+3. UI COMPONENT CLASSES
+================================================================================
+
+
+--------------------------------------------------------------------------------
+3.1  FlipDisplay
+--------------------------------------------------------------------------------
+
+File:       FlipDisplay.kt (257 lines)
+Package:    com.syncbudget.app.ui.components
+
+Description:
+    Top-level Solari-style display compositor. Arranges FlipChar and
+    FlipDigit cards into a complete currency readout with responsive sizing,
+    leading zero suppression, and optional decimal places.
+
+Constants:
+Constant            Value       Purpose
+---------------------------------------------------------------------------
+CARD_ASPECT         1.5         Height/width ratio for flip cards
+GAP                 5dp         Space between adjacent cards
+DOT_WIDTH           10dp        Width of the decimal point separator
+FRAME_H_PAD         16dp        Horizontal padding inside display frame
+FRAME_V_PAD         20dp        Vertical padding inside display frame
+MAX_CARD_WIDTH      72dp        Maximum allowed card width
+
+Currency Decimal Configuration:
+Symbol  Decimals    Symbol  Decimals
+$       2           JPY     0
+EUR     2           KRW     0
+GBP     2           Fr      2
+INR     2
+
+
+--------------------------------------------------------------------------------
+3.2  FlipChar
+--------------------------------------------------------------------------------
+
+File:       FlipChar.kt (293 lines)
+Package:    com.syncbudget.app.ui.components
+
+Description:
+    Animated flip card for string values (sign + currency). 250ms flip with
+    3D rotation, gradient overlays, and sound callback at midpoint.
+
+Constants:
+    FLIP_DURATION_MS    250     Animation duration in milliseconds
+
+
+--------------------------------------------------------------------------------
+3.3  FlipDigit
+--------------------------------------------------------------------------------
+
+File:       FlipDigit.kt (316 lines)
+Package:    com.syncbudget.app.ui.components
+
+Description:
+    Animated flip card for digits 0-9 with blank state (digit -1). Same
+    animation mechanics as FlipChar with integer-based targets and
+    monospace FlipFontFamily.
+
+
+--------------------------------------------------------------------------------
+3.4  PieChartEditor
+--------------------------------------------------------------------------------
+
+File:       PieChartEditor.kt (457 lines)
+Package:    com.syncbudget.app.ui.components
+
+Description:
+    Interactive donut-style pie chart for multi-category transaction
+    allocation. Supports drag, calculator, and percentage input modes
+    with real-time visual feedback and 6 palette variants.
+
+
+--------------------------------------------------------------------------------
+3.5  AdAwareDialog
+--------------------------------------------------------------------------------
+
+File:       Theme.kt (part of 289 lines)
+Package:    com.syncbudget.app.ui.theme
+
+Description:
+    Custom dialog wrapper using Dialog() composable that positions content
+    to avoid overlapping the banner ad. Applies SOFT_INPUT_ADJUST_NOTHING
+    to the dialog window to prevent Android from sliding the dialog upward
+    when the soft keyboard opens.
+
+Parameters:
+Parameter               Type                Description
+---------------------------------------------------------------------------
+onDismissRequest        () -> Unit          Dismiss callback
+content                 @Composable () -> Unit  Dialog content
+
+
+--------------------------------------------------------------------------------
+3.6  AdAwareAlertDialog
+--------------------------------------------------------------------------------
+
+File:       Theme.kt (part of 289 lines)
+Package:    com.syncbudget.app.ui.theme
+
+Description:
+    Drop-in replacement for Material3 AlertDialog that uses AdAwareDialog
+    internally. Provides proper Surface, Column layout with Box wrapper
+    for optional PulsingScrollArrow display.
+
+Parameters:
+Parameter               Type                        Description
+---------------------------------------------------------------------------
+onDismissRequest        () -> Unit                  Dismiss callback
+confirmButton           @Composable () -> Unit      Confirm button composable
+dismissButton           @Composable (() -> Unit)?   Optional dismiss button
+title                   @Composable (() -> Unit)?   Optional title
+text                    @Composable (() -> Unit)?   Optional body content
+scrollState             ScrollState?                Optional scroll state for arrow
+
+
+--------------------------------------------------------------------------------
+3.7  PulsingScrollArrow
+--------------------------------------------------------------------------------
+
+File:       Theme.kt (part of 289 lines)
+Package:    com.syncbudget.app.ui.theme
+
+Description:
+    Animated composable that shows a bouncing down-arrow when scrollable
+    content exists below the visible area. Disappears when the user scrolls
+    to the bottom.
+
+Parameters:
+Parameter               Type                Description
+---------------------------------------------------------------------------
+scrollState             ScrollState         Scroll state to monitor
+modifier                Modifier            Optional modifier
+
+Animation:
+    - rememberInfiniteTransition with label "scrollArrow"
+    - animateFloat: 0f to 6f, tween(600ms), RepeatMode.Reverse
+    - Visibility: derivedStateOf { scrollState.canScrollForward }
+    - Icon: Icons.Filled.KeyboardArrowDown, 24dp, 0.5f alpha
+
+Usage Pattern (all form dialogs):
+    val scrollState = rememberScrollState()
+    Box {
+        Column(Modifier.verticalScroll(scrollState)) { /* fields */ }
+        PulsingScrollArrow(
+            scrollState = scrollState,
+            modifier = Modifier.align(Alignment.BottomStart)
+                .padding(start = 12.dp, bottom = 18.dp)
+        )
+    }
+
+
+================================================================================
+4. SOUND CLASS
+================================================================================
+
+
+--------------------------------------------------------------------------------
+4.1  FlipSoundPlayer
+--------------------------------------------------------------------------------
+
+File:       FlipSoundPlayer.kt (131 lines)
+Package:    com.syncbudget.app.sound
+
+Description:
+    Procedural audio generator and player for Solari flip card animations.
+    Generates a synthetic mechanical clack at initialization and plays it
+    via SoundPool with low-latency overlap support.
+
+Constants:
+Constant                Value       Purpose
+---------------------------------------------------------------------------
+SAMPLE_RATE             44100       Audio sample rate in Hz
+DURATION_MS             45          Sound duration in milliseconds
+MAX_STREAMS             6           Maximum concurrent SoundPool streams
+VOLUME                  0.8f        Playback volume (left and right)
+
+Sound Synthesis:
+    1. Exponential decay envelope: exp(-t * 120)
+    2. Mechanical bounce at 10ms: 0.3 * exp(-(dt^2) / 0.000002)
+    3. Three sine waves (800Hz, 1200Hz, 2400Hz) + 40% white noise
+    4. Combined signal scaled to 70% of Short.MAX_VALUE
+    5. Encoded as 16-bit mono PCM RIFF WAV
+    6. Written to cache directory, loaded into SoundPool
+
+Methods:
+    play()
+        Plays the pre-generated clack sound via SoundPool. Called from
+        flip card animation midpoint callbacks.
+
+    release()
+        Releases the SoundPool and deletes the cached WAV file.
+
+
+================================================================================
+5. DATA CLASSES AND ENUMERATIONS
+================================================================================
+
+
+--------------------------------------------------------------------------------
+5.1  BudgetPeriod (Enum)
+--------------------------------------------------------------------------------
+
+File:       BudgetPeriod.kt (3 lines)
+Package:    com.syncbudget.app.data
+
+Values:
+Value       Description
+---------------------------------------------------------------------------
+DAILY       Budget resets every day
+WEEKLY      Budget resets every week
+MONTHLY     Budget resets every month
+
+
+--------------------------------------------------------------------------------
+5.2  RepeatType (Enum)
+--------------------------------------------------------------------------------
+
+File:       IncomeSource.kt
+Package:    com.syncbudget.app.data
+
+Values:
+Value       Description
+---------------------------------------------------------------------------
+DAYS        Repeats every N days from a start date
+WEEKS       Repeats every N weeks from a start date
+BI_WEEKLY   Repeats every 14 days from a start date
+MONTHS      Repeats every N months on a specific day of month
+BI_MONTHLY  Repeats twice per month on two specified days
+ANNUAL      Repeats once per year
+
+
+--------------------------------------------------------------------------------
+5.3  TransactionType (Enum)
+--------------------------------------------------------------------------------
+
+File:       Transaction.kt
+Package:    com.syncbudget.app.data
+
+Values:
+Value       Description
+---------------------------------------------------------------------------
+EXPENSE     A money outflow transaction
+INCOME      A money inflow transaction
+
+
+--------------------------------------------------------------------------------
+5.4  SuperchargeMode (Enum)
+--------------------------------------------------------------------------------
+
+File:       FutureExpenditure.kt
+Package:    com.syncbudget.app.data
+
+Values:
+Value                   Description
+---------------------------------------------------------------------------
+REDUCE_CONTRIBUTIONS    Lower per-period contribution to maintain timeline
+ACHIEVE_SOONER          Keep contribution rate and move target date earlier
+
+
+--------------------------------------------------------------------------------
+5.5  Transaction (Data Class)
+--------------------------------------------------------------------------------
+
+File:       Transaction.kt (47 lines)
+Package:    com.syncbudget.app.data
+
+Properties:
+Property                    Type                Default     Description
+---------------------------------------------------------------------------
+id                          Int                 (required)  Unique identifier
+type                        TransactionType     (required)  EXPENSE or INCOME
+date                        LocalDate           (required)  Transaction date
+source                      String              (required)  Merchant name
+description                 String              ""          Optional description
+categoryAmounts             List<CategoryAmount> emptyList() Category breakdown
+amount                      Double              (required)  Total amount
+isUserCategorized           Boolean             true        User-set categories
+isBudgetIncome              Boolean             false       Budget income match
+linkedRecurringExpenseId    Int?                null        Linked recurring ID
+linkedAmortizationEntryId   Int?                null        Linked amortization ID
+deviceId                    String              ""          Originating device
+deleted                     Boolean             false       Tombstone flag
+source_clock                Long                0L          CRDT clock for source
+description_clock           Long                0L          CRDT clock for description
+amount_clock                Long                0L          CRDT clock for amount
+date_clock                  Long                0L          CRDT clock for date
+type_clock                  Long                0L          CRDT clock for type
+categoryAmounts_clock       Long                0L          CRDT clock
+isUserCategorized_clock     Long                0L          CRDT clock
+isBudgetIncome_clock        Long                0L          CRDT clock
+linkedRecurringExpenseId_clock Long             0L          CRDT clock
+linkedAmortizationEntryId_clock Long            0L          CRDT clock
+deviceId_clock              Long                0L          CRDT clock
+
+
+--------------------------------------------------------------------------------
+5.6  CategoryAmount (Data Class)
+--------------------------------------------------------------------------------
+
+File:       Transaction.kt
+Package:    com.syncbudget.app.data
+
+Properties:
+Property        Type        Description
+---------------------------------------------------------------------------
+categoryId      Int         ID of the associated Category
+amount          Double      Dollar amount allocated to this category
+
+
+--------------------------------------------------------------------------------
+5.7  Category (Data Class)
+--------------------------------------------------------------------------------
+
+File:       Category.kt (16 lines)
+Package:    com.syncbudget.app.data
+
+Properties:
+Property        Type        Default     Description
+---------------------------------------------------------------------------
+id              Int         (required)  Unique identifier
+name            String      (required)  Display name
+iconName        String      (required)  Key into CATEGORY_ICON_MAP
+tag             String      ""          System tag for protected categories
+deviceId        String      ""          Originating device
+deleted         Boolean     false       Tombstone flag
+name_clock      Long        0L          CRDT clock for name
+iconName_clock  Long        0L          CRDT clock for iconName
+tag_clock       Long        0L          CRDT clock for tag
+deviceId_clock  Long        0L          CRDT clock
+
+
+--------------------------------------------------------------------------------
+5.8  IncomeSource (Data Class)
+--------------------------------------------------------------------------------
+
+File:       IncomeSource.kt (38 lines)
+Package:    com.syncbudget.app.data
+
+Properties:
+Property            Type            Default     Description
+---------------------------------------------------------------------------
+id                  Int             (required)  Unique identifier
+source              String          (required)  Income source name
+description         String          ""          Optional description
+amount              Double          (required)  Amount per occurrence
+repeatType          RepeatType      MONTHS      Recurrence pattern
+repeatInterval      Int             1           Interval multiplier
+startDate           LocalDate?      null        Start date
+monthDay1           Int?            null        Day of month
+monthDay2           Int?            null        Second day (BI_MONTHLY)
+deviceId            String          ""          Originating device
+deleted             Boolean         false       Tombstone flag
+[per-field _clock]  Long            0L          CRDT clocks for each field
+
+
+--------------------------------------------------------------------------------
+5.9  RecurringExpense (Data Class)
+--------------------------------------------------------------------------------
+
+File:       RecurringExpense.kt (36 lines)
+Package:    com.syncbudget.app.data
+
+Properties:
+Property            Type            Default     Description
+---------------------------------------------------------------------------
+id                  Int             (required)  Unique identifier
+source              String          (required)  Expense name
+description         String          ""          Optional description
+amount              Double          (required)  Amount per occurrence
+repeatType          RepeatType      MONTHS      Recurrence pattern
+repeatInterval      Int             1           Interval multiplier
+startDate           LocalDate?      null        Start date
+monthDay1           Int?            null        Day of month
+monthDay2           Int?            null        Second day (BI_MONTHLY)
+deviceId            String          ""          Originating device
+deleted             Boolean         false       Tombstone flag
+[per-field _clock]  Long            0L          CRDT clocks for each field
+
+
+--------------------------------------------------------------------------------
+5.10  AmortizationEntry (Data Class)
+--------------------------------------------------------------------------------
+
+File:       AmortizationEntry.kt (32 lines)
+Package:    com.syncbudget.app.data
+
+Properties:
+Property            Type            Default     Description
+---------------------------------------------------------------------------
+id                  Int             (required)  Unique identifier
+source              String          (required)  Purchase description
+description         String          ""          Optional description
+amount              Double          (required)  Total purchase amount
+totalPeriods        Int             (required)  Budget periods to spread over
+startDate           LocalDate       (required)  Amortization start date
+isPaused            Boolean         false       Whether deductions suspended
+deviceId            String          ""          Originating device
+deleted             Boolean         false       Tombstone flag
+[per-field _clock]  Long            0L          CRDT clocks for each field
+
+
+--------------------------------------------------------------------------------
+5.11  SavingsGoal (Data Class)
+--------------------------------------------------------------------------------
+
+File:       FutureExpenditure.kt (56 lines)
+Package:    com.syncbudget.app.data
+
+Properties:
+Property                Type            Default     Description
+---------------------------------------------------------------------------
+id                      Int             (required)  Unique identifier
+name                    String          (required)  Goal name
+targetAmount            Double          (required)  Amount to save
+targetDate              LocalDate?      null        Target date (null=fixed)
+totalSavedSoFar         Double          0.0         Accumulated savings
+contributionPerPeriod   Double          0.0         Fixed per-period amount
+isPaused                Boolean         false       Whether paused
+deviceId                String          ""          Originating device
+deleted                 Boolean         false       Tombstone flag
+[per-field _clock]      Long            0L          CRDT clocks for each field
+
+Associated Functions:
+    calculatePerPeriodDeduction(goal, budgetPeriod): Double
+    generateSavingsGoalId(existingIds): Int
+
+
+--------------------------------------------------------------------------------
+5.12  SharedSettings (Data Class)
+--------------------------------------------------------------------------------
+
+File:       SharedSettings.kt (38 lines)
+Package:    com.syncbudget.app.data
+
+Description:
+    Holds budget configuration settings that are shared across all devices
+    in a family sync group. Only the admin device can modify these.
+
+Properties:
+Property                Type            Default     Description
+---------------------------------------------------------------------------
+budgetPeriod            BudgetPeriod    DAILY       Budget period
+resetHour               Int             0           Reset hour
+resetDayOfWeek          Int             7           Weekly reset day
+resetDayOfMonth         Int             1           Monthly reset day
+lastChangedBy           String          ""          Device that last changed
+budgetPeriod_clock      Long            0L          CRDT clock
+resetHour_clock         Long            0L          CRDT clock
+resetDayOfWeek_clock    Long            0L          CRDT clock
+resetDayOfMonth_clock   Long            0L          CRDT clock
+
+
+--------------------------------------------------------------------------------
+5.13  PeriodLedgerEntry (Data Class)
+--------------------------------------------------------------------------------
+
+File:       PeriodLedger.kt (78 lines)
+Package:    com.syncbudget.app.data.sync
+
+Properties:
+Property            Type            Default     Description
+---------------------------------------------------------------------------
+periodStartDate     LocalDateTime   (required)  Start of the budget period
+appliedAmount       Double          (required)  Budget amount applied
+clockAtReset        Long            (required)  Lamport clock at refresh time
+corrected           Boolean         false       Whether entry was corrected
+deviceId            String          ""          Device that recorded entry
+clock               Long            0L          CRDT clock
+
+Derived Property:
+    id: Int = periodStartDate.toLocalDate().toEpochDay().toInt()
+
+
+--------------------------------------------------------------------------------
+5.14  SavingsSimulator.SimResult (Data Class)
+--------------------------------------------------------------------------------
+
+File:       SavingsSimulator.kt
+Package:    com.syncbudget.app.data
+
+Properties:
+Property            Type            Description
+---------------------------------------------------------------------------
+savingsRequired     Double          Savings buffer needed
+lowPointDate        LocalDate?      Date of minimum balance (null if not needed)
+
+
+--------------------------------------------------------------------------------
+5.15  BankFormat (Enum)
+--------------------------------------------------------------------------------
+
+File:       CsvParser.kt
+Package:    com.syncbudget.app.data
+
+Values:
+Value                   Display Name                        Description
+---------------------------------------------------------------------------
+US_BANK                 "US Bank"                           US Bank CSV format
+SECURESYNC_CSV          "SecureSync CSV Save File"          Native CSV format
+SECURESYNC_ENCRYPTED    "SecureSync Encrypted Save File"    Encrypted format
+
+
+--------------------------------------------------------------------------------
+5.16  CsvParseResult (Data Class)
+--------------------------------------------------------------------------------
+
+File:       CsvParser.kt
+Package:    com.syncbudget.app.data
+
+Properties:
+Property        Type                Description
+---------------------------------------------------------------------------
+transactions    List<Transaction>   Parsed transactions
+error           String?             Error message (null on success)
+
+
+--------------------------------------------------------------------------------
+5.17  ID Generation Functions
+--------------------------------------------------------------------------------
+
+Files:      Transaction.kt, IncomeSource.kt, RecurringExpense.kt,
+            AmortizationEntry.kt, FutureExpenditure.kt
+
+Functions:
+    generateTransactionId(existingIds: Set<Int>): Int
+    generateIncomeSourceId(existingIds: Set<Int>): Int
+    generateRecurringExpenseId(existingIds: Set<Int>): Int
+    generateAmortizationEntryId(existingIds: Set<Int>): Int
+    generateSavingsGoalId(existingIds: Set<Int>): Int
+
+All use the same pattern: random Int in 0..65535 with collision avoidance.
+
+
+================================================================================
+6. UTILITY CLASSES
+================================================================================
+
+
+--------------------------------------------------------------------------------
+6.1  BudgetCalculator (Object Singleton)
+--------------------------------------------------------------------------------
+
+File:       BudgetCalculator.kt (369 lines)
+Package:    com.syncbudget.app.data
+
+Description:
+    Singleton utility for all budget calculations. Normalizes income and
+    expenses to the active period, computes safe budget, deterministically
+    recomputes available cash from synced data, and provides occurrence
+    generation for repeat schedules.
+
+Methods:
+
+    generateOccurrences(repeatType, repeatInterval, startDate, monthDay1,
+        monthDay2, rangeStart, rangeEnd): List<LocalDate>
+        Generates all occurrence dates within [rangeStart, rangeEnd] for
+        all 6 RepeatType variants. Uses efficient skip-ahead to avoid
+        iterating from the start date when it falls before rangeStart.
+
+    calculateSafeBudgetAmount(incomeSources, recurringExpenses,
+        budgetPeriod, today): Double
+        Projects income and expenses over next year, counts periods,
+        returns (totalIncome - totalExpenses) / periodsPerYear.
+
+    countPeriodsCompleted(from, to, budgetPeriod): Int
+        Counts complete periods between two dates.
+
+    currentPeriodStart(budgetPeriod, resetDayOfWeek, resetDayOfMonth): LocalDate
+        Determines current period start date.
+
+    activeAmortizationDeductions(entries, budgetPeriod): Double
+        Sums per-period deductions for active, non-paused entries.
+
+    activeSavingsGoalDeductions(goals, budgetPeriod): Double
+        Sums per-period deductions for active, non-paused goals.
+
+    calculateAccruedSavingsNeeded(recurringExpenses, today): Double
+        Computes pro-rata accrued savings for each expense based on
+        position within its billing cycle. For each expense, finds next
+        occurrence, derives previous occurrence, and computes:
+        (daysSincePrev / totalCycleDays) * amount
+
+    recomputeAvailableCash(budgetStartDate, periodLedgerEntries,
+        activeTransactions, activeRecurringExpenses): Double
+        Deterministically recomputes cash from synced data:
+        1. Sums period ledger credits (deduped by date, highest clock)
+        2. For each transaction:
+           - EXPENSE + amortization-linked: skip
+           - EXPENSE + recurring-linked: add (budget - actual) diff
+           - EXPENSE + unlinked: subtract full amount
+           - INCOME + non-budget: add full amount
+
+    roundCents(value: Double): Double
+        Rounds to 2 decimal places using Math.round(value * 100) / 100.0
+
+
+--------------------------------------------------------------------------------
+6.2  CryptoHelper (Object Singleton)
+--------------------------------------------------------------------------------
+
+File:       CryptoHelper.kt (93 lines)
+Package:    com.syncbudget.app.data
+
+Description:
+    Cryptographic utility providing authenticated encryption via
+    ChaCha20-Poly1305. Supports both password-based (PBKDF2) and
+    direct-key modes.
+
+Constants:
+Constant        Value       Purpose
+---------------------------------------------------------------------------
+SALT_LENGTH     16          Salt bytes for PBKDF2
+NONCE_LENGTH    12          Nonce bytes for ChaCha20
+KEY_LENGTH      256         Key size in bits
+ITERATIONS      100,000     PBKDF2 iterations
+
+Methods:
+
+    encrypt(plaintext, password): ByteArray
+        Password-based encryption. Wire: [salt][nonce][ciphertext+tag]
+
+    decrypt(data, password): ByteArray
+        Password-based decryption.
+
+    encryptWithKey(plaintext, key): ByteArray
+        Direct 256-bit key encryption (no PBKDF2). Wire: [nonce][ciphertext+tag]
+        Used for sync data encryption.
+
+    decryptWithKey(data, key): ByteArray
+        Direct 256-bit key decryption.
+
+    deriveKey(password, salt): ByteArray (private)
+        PBKDF2WithHmacSHA256 key derivation.
+
+
+--------------------------------------------------------------------------------
+6.3  CsvParser (Top-Level Functions)
+--------------------------------------------------------------------------------
+
+File:       CsvParser.kt (218 lines)
+Package:    com.syncbudget.app.data
+
+Functions:
+    parseUsBank(reader, existingIds): CsvParseResult
+    parseCsvLine(line): List<String>
+    cleanMerchantName(raw): String (private)
+    serializeTransactionsCsv(transactions): String
+    parseSyncBudgetCsv(reader, existingIds): CsvParseResult
+
+
+--------------------------------------------------------------------------------
+6.4  DuplicateDetector (Top-Level Functions)
+--------------------------------------------------------------------------------
+
+File:       DuplicateDetector.kt (213 lines)
+Package:    com.syncbudget.app.data
+
+Functions:
+    filterAlreadyLoadedDays(fileTransactions, appTransactions): List<Transaction>
+    findRecurringExpenseMatch(incoming, recurringExpenses, ...): RecurringExpense?
+    findAmortizationMatch(incoming, entries, ...): AmortizationEntry?
+    isRecurringDateCloseEnough(transactionDate, re): Boolean
+    findBudgetIncomeMatch(incoming, incomeSources, minChars): IncomeSource?
+    findDuplicate(incoming, existing, ...): Transaction?
+    amountMatches(a1, a2, percentTolerance, dollarTolerance): Boolean
+    dateMatches(t1, t2, dayWindow): Boolean (private)
+    merchantMatches(s1, s2, minChars): Boolean
+
+
+--------------------------------------------------------------------------------
+6.5  AutoCategorizer (Top-Level Functions)
+--------------------------------------------------------------------------------
+
+File:       AutoCategorizer.kt (49 lines)
+Package:    com.syncbudget.app.data
+
+Functions:
+    autoCategorize(imported, existing, categories): Transaction
+    sharesFiveCharSubstring(a, b): Boolean (private)
+
+
+--------------------------------------------------------------------------------
+6.6  CategoryIcons (Top-Level Declarations)
+--------------------------------------------------------------------------------
+
+File:       CategoryIcons.kt (167 lines)
+Package:    com.syncbudget.app.data
+
+Constants:
+    CATEGORY_ICON_MAP   Map<String, ImageVector>    120+ entries
+
+Functions:
+    getCategoryIcon(iconName): ImageVector
+
+
+--------------------------------------------------------------------------------
+6.7  SavingsSimulator (Object Singleton)
+--------------------------------------------------------------------------------
+
+File:       SavingsSimulator.kt (150 lines)
+Package:    com.syncbudget.app.data
+
+Description:
+    Forward-looking cash flow simulation that determines how much savings
+    buffer the user needs. Walks forward from today through all upcoming
+    income deposits, expense due dates, and budget spending to find the
+    point where cash balance dips lowest.
+
+Inner Classes:
+    SimResult(savingsRequired: Double, lowPointDate: LocalDate?)
+    CashEvent(date: LocalDate, amount: Double, priority: Int) [private]
+
+Methods:
+
+    calculateSavingsRequired(incomeSources, recurringExpenses, budgetPeriod,
+        budgetAmount, availableCash, resetDayOfWeek, resetDayOfMonth,
+        today): SimResult
+
+        Algorithm:
+        1. Determine horizon: furthest next occurrence across all income
+           sources and expenses (2-year lookahead via generateOccurrences).
+           If horizon == today, return SimResult(max(0, availableCash), today).
+        2. Build events list:
+           a. Day-0: CashEvent(today, -availableCash, priority=1)
+           b. Income occurrences: CashEvent(date, +amount, priority=0)
+           c. Expense occurrences: CashEvent(date, -amount, priority=2)
+           d. Period boundaries (after today): CashEvent(date, -budgetAmount,
+              priority=1)
+        3. Sort by (date, priority) - income before deductions before expenses
+        4. Walk: balance=0, track minBalance and minDate
+        5. Return SimResult(roundCents(max(0, -minBalance)), minDate or null)
+
+    generatePeriodBoundaries(after, horizon, budgetPeriod, resetDayOfWeek,
+        resetDayOfMonth): List<LocalDate> [private]
+
+        Generates period-start dates strictly after 'after' up to 'horizon'.
+        DAILY: every day from after+1
+        WEEKLY: next resetDayOfWeek via TemporalAdjusters.next(), then +7
+        MONTHLY: next resetDayOfMonth, then +1 month with day clamping
+
+
+--------------------------------------------------------------------------------
+6.8  DefaultCategories
+--------------------------------------------------------------------------------
+
+File:       DefaultCategories.kt (43 lines)
+Package:    com.syncbudget.app.data
+
+Description:
+    Defines default category tags and their default names. System categories
+    are identified by tag and auto-provisioned on startup.
+
+Constants:
+    DEFAULT_CATEGORY_DEFS   List of default category definitions with tags
+
+
+--------------------------------------------------------------------------------
+6.9  FullBackupSerializer
+--------------------------------------------------------------------------------
+
+File:       FullBackupSerializer.kt (213 lines)
+Package:    com.syncbudget.app.data
+
+Description:
+    Serializes and deserializes complete app state for backup/restore
+    functionality. Handles all entity types including sync fields.
+
+
+================================================================================
+7. SYNC CLASSES
+================================================================================
+
+
+--------------------------------------------------------------------------------
+7.1  LamportClock
+--------------------------------------------------------------------------------
+
+File:       LamportClock.kt (35 lines)
+Package:    com.syncbudget.app.data.sync
+
+Description:
+    Logical clock for CRDT ordering. Monotonically increasing counter
+    persisted in SharedPreferences.
+
+Methods:
+    tick(): Long
+        Increments clock and returns new value. Used when local data is
+        modified to timestamp the change.
+
+    merge(remote: Long)
+        Sets clock to max(local, remote) + 1. Used when receiving remote
+        CRDT data to ensure local clock is ahead of all known events.
+
+
+--------------------------------------------------------------------------------
+7.2  SyncIdGenerator
+--------------------------------------------------------------------------------
+
+File:       SyncIdGenerator.kt (19 lines)
+Package:    com.syncbudget.app.data.sync
+
+Description:
+    Generates unique device identifiers for sync.
+
+Functions:
+    generateDeviceId(): String
+        Creates a unique string ID for identifying this device in the
+        sync system.
+
+
+--------------------------------------------------------------------------------
+7.3  SyncFilters
+--------------------------------------------------------------------------------
+
+File:       SyncFilters.kt (33 lines)
+Package:    com.syncbudget.app.data.sync
+
+Description:
+    Extension properties for filtering tombstoned records.
+
+Extensions:
+    List<T>.active: List<T>
+        Filters list to include only records where deleted == false.
+        Works for all data classes with a deleted field.
+
+
+--------------------------------------------------------------------------------
+7.4  CrdtMerge
+--------------------------------------------------------------------------------
+
+File:       CrdtMerge.kt (296 lines)
+Package:    com.syncbudget.app.data.sync
+
+Description:
+    Per-field Last-Writer-Wins Register merge logic for all entity types.
+    Each field is compared independently using its _clock value; the value
+    with the higher clock wins.
+
+Functions:
+    mergeTransactions(local, remote): List<Transaction>
+    mergeCategories(local, remote): List<Category>
+    mergeIncomeSources(local, remote): List<IncomeSource>
+    mergeRecurringExpenses(local, remote): List<RecurringExpense>
+    mergeAmortizationEntries(local, remote): List<AmortizationEntry>
+    mergeSavingsGoals(local, remote): List<SavingsGoal>
+    mergePeriodLedger(local, remote): List<PeriodLedgerEntry>
+    mergeSharedSettings(local, remote): SharedSettings
+
+Each merge function:
+    1. Creates a map by ID for both local and remote lists
+    2. For IDs present in both, merges per-field using clock comparison
+    3. For IDs only in remote, adds to result
+    4. Returns merged list
+
+
+--------------------------------------------------------------------------------
+7.5  PeriodLedger
+--------------------------------------------------------------------------------
+
+File:       PeriodLedger.kt (78 lines)
+Package:    com.syncbudget.app.data.sync
+
+Description:
+    Records budget amounts at each period refresh boundary. Each entry
+    captures what amount was applied and the Lamport clock at refresh time.
+    Used for deterministic cash recomputation across synced devices.
+
+Repository:
+    PeriodLedgerRepository
+        save(context, entries): Persists to period_ledger.json
+        load(context): Loads from period_ledger.json
+
+
+--------------------------------------------------------------------------------
+7.6  PeriodLedgerCorrector
+--------------------------------------------------------------------------------
+
+File:       PeriodLedgerCorrector.kt (58 lines)
+Package:    com.syncbudget.app.data.sync
+
+Description:
+    Corrects period ledger entries when discrepancies are detected,
+    such as after a sync merge reveals a different budget amount was
+    applied on another device.
+
+
+--------------------------------------------------------------------------------
+7.7  DeltaBuilder
+--------------------------------------------------------------------------------
+
+File:       DeltaBuilder.kt (190 lines)
+Package:    com.syncbudget.app.data.sync
+
+Description:
+    Builds minimal delta packages containing only records that have
+    changed since the last sync. Tracks dirty state per entity type.
+
+Methods:
+    buildDelta(allData, lastSyncClock): DeltaPackage
+        Filters all entity lists to include only records with any _clock
+        value greater than lastSyncClock.
+
+
+--------------------------------------------------------------------------------
+7.8  DeltaSerializer
+--------------------------------------------------------------------------------
+
+File:       DeltaSerializer.kt (79 lines)
+Package:    com.syncbudget.app.data.sync
+
+Description:
+    JSON serialization and deserialization of delta packages for
+    transmission via Firestore.
+
+
+--------------------------------------------------------------------------------
+7.9  FirestoreService
+--------------------------------------------------------------------------------
+
+File:       FirestoreService.kt (391 lines)
+Package:    com.syncbudget.app.data.sync
+
+Description:
+    Firebase Firestore CRUD operations for sync data. Handles pushing
+    and pulling deltas, snapshot upload/download, and group document
+    management with paginated delta fetching.
+
+Methods:
+    pushDelta(groupId, deviceId, delta): Uploads delta to Firestore
+    pullDeltas(groupId, sinceClock): Downloads remote deltas
+    pushSnapshot(groupId, snapshot): Uploads full state snapshot
+    pullSnapshot(groupId): Downloads latest snapshot
+
+
+--------------------------------------------------------------------------------
+7.10  GroupManager
+--------------------------------------------------------------------------------
+
+File:       GroupManager.kt (155 lines)
+Package:    com.syncbudget.app.data.sync
+
+Description:
+    Family group lifecycle management.
+
+Methods:
+    createGroup(deviceId): Creates Firestore group, returns pairing code
+    joinGroup(pairingCode, deviceId): Validates code, adds device
+    leaveGroup(groupId, deviceId): Removes device from group
+    dissolveGroup(groupId): Admin-only, deletes entire group
+
+
+--------------------------------------------------------------------------------
+7.11  SnapshotManager
+--------------------------------------------------------------------------------
+
+File:       SnapshotManager.kt (441 lines)
+Package:    com.syncbudget.app.data.sync
+
+Description:
+    Full-state snapshot creation and restoration. Used for initial sync
+    of new devices and catch-up when a device is too far behind the
+    delta history.
+
+Methods:
+    createSnapshot(allData): Serializes complete app state
+    restoreSnapshot(snapshot, localData): Merges snapshot with local data
+    shouldCatchUp(lastSyncClock, oldestAvailableDelta): Boolean
+
+
+--------------------------------------------------------------------------------
+7.12  SyncEngine
+--------------------------------------------------------------------------------
+
+File:       SyncEngine.kt (902 lines)
+Package:    com.syncbudget.app.data.sync
+
+Description:
+    Main sync orchestration engine. Coordinates the full sync cycle:
+    delta build, push, pull, merge, snapshot catch-up, and local persist.
+
+Methods:
+    sync(context): Executes full sync cycle
+        1. Acquire SyncFileLock
+        2. Build local delta via DeltaBuilder
+        3. Push delta to Firestore (skipped if no changes)
+        4. Pull remote deltas via FirestoreService
+        5. Merge via CrdtMerge
+        6. Check for snapshot catch-up need
+        7. Save merged data to repositories
+        8. Recompute available cash
+        9. Release lock
+
+
+--------------------------------------------------------------------------------
+7.13  SyncFileLock
+--------------------------------------------------------------------------------
+
+File:       SyncFileLock.kt (45 lines)
+Package:    com.syncbudget.app.data.sync
+
+Description:
+    File-based locking mechanism to prevent concurrent sync operations.
+    Uses a lock file in the app's files directory.
+
+Methods:
+    acquire(): Boolean - Attempts to acquire lock
+    release(): Releases lock
+
+
+--------------------------------------------------------------------------------
+7.14  SyncWorker
+--------------------------------------------------------------------------------
+
+File:       SyncWorker.kt (365 lines)
+Package:    com.syncbudget.app.data.sync
+
+Description:
+    WorkManager PeriodicWorkRequest that triggers background sync.
+    Handles sync scheduling, retry logic, and notification of sync
+    completion.
+
+Extends:    CoroutineWorker
+
+Methods:
+    doWork(): Result
+        Executes SyncEngine.sync() and returns success/retry/failure.
+
+
+================================================================================
+8. THEME CLASSES
+================================================================================
+
+
+--------------------------------------------------------------------------------
+8.1  Color.kt
+--------------------------------------------------------------------------------
+
+File:       Color.kt (29 lines)
+Package:    com.syncbudget.app.ui.theme
+
+Dark Theme Colors:
+Constant                Hex         Purpose
+---------------------------------------------------------------------------
+DarkBackground          #2A3A2F     Page background
+DarkSurface             #1A1A1A     Card/container surface
+DarkHeaderBackground    #1E2D23     Header bar background
+DarkHeaderText          #E0E0E0     Header bar text
+DarkPrimary             #E8D5A0     Warm amber primary
+DarkOnPrimary           #1A1A1A     Text on primary
+DarkCardBackground      #1A1A1A     Flip card background
+DarkCardText            #E8D5A0     Flip card text
+DarkDisplayBackground   #383838     Solari frame background
+DarkDisplayBorder       #4A4A4A     Solari frame border
+
+Light Theme Colors:
+Constant                Hex         Purpose
+---------------------------------------------------------------------------
+LightBackground         #BDD5CC     Page background
+LightSurface            #FFFFFF     Card/container surface
+LightHeaderBackground   #2C2C2C     Header bar background
+LightHeaderText         #F0E8D8     Header bar text
+LightPrimary            #2E5C80     Blue primary
+LightOnPrimary          #FFFFFF     Text on primary
+LightOnBackground       #1C1B1F     Text on background
+LightOnSurface          #1C1B1F     Text on surface
+LightCardBackground     #305880     Flip card background
+LightCardText           #FFFFFF     Flip card text
+LightDisplayBackground  #D6E5DE     Solari frame background
+LightDisplayBorder      #B8CCC2     Solari frame border
+
+
+--------------------------------------------------------------------------------
+8.2  Theme.kt
+--------------------------------------------------------------------------------
+
+File:       Theme.kt (289 lines)
+Package:    com.syncbudget.app.ui.theme
+
+Description:
+    Defines SyncBudgetColors, CompositionLocal provider, Material3 color
+    schemes, SyncBudgetTheme composable, AdAwareDialog, AdAwareAlertDialog,
+    and PulsingScrollArrow.
+
+Material3 Color Scheme Overrides:
+Slot                    Dark            Light
+---------------------------------------------------------------------------
+primaryContainer        #4A3270         #4A3270
+onPrimaryContainer      #E8DEF8         #E8DEF8
+
+Composable Functions:
+    SyncBudgetTheme(darkTheme, strings, content)
+    AdAwareDialog(onDismissRequest, content)
+    AdAwareAlertDialog(onDismissRequest, confirmButton, dismissButton,
+        title, text, scrollState)
+    PulsingScrollArrow(scrollState, modifier)
+
+
+--------------------------------------------------------------------------------
+8.3  Type.kt
+--------------------------------------------------------------------------------
+
+File:       Type.kt (18 lines)
+Package:    com.syncbudget.app.ui.theme
+
+Constants:
+    FlipFontFamily      FontFamily.Monospace
+
+Typography:
+    SyncBudgetTypography - headlineLarge: Bold, 24sp, 2sp letter spacing
+
+
+================================================================================
+9. LOCALIZATION CLASSES
+================================================================================
+
+
+--------------------------------------------------------------------------------
+9.1  AppStrings (Interface)
+--------------------------------------------------------------------------------
+
+File:       AppStrings.kt (1,093 lines)
+Package:    com.syncbudget.app.ui.strings
+
+Description:
+    Interface defining all localizable string groups. Contains 16 property
+    groups totaling 800+ string fields.
+
+String Groups:
+Group                   Data Class                      Approx Fields
+---------------------------------------------------------------------------
+common                  CommonStrings                   70
+dashboard               DashboardStrings                28
+settings                SettingsStrings                 36
+budgetConfig            BudgetConfigStrings             27
+transactions            TransactionsStrings             78
+futureExpenditures      FutureExpendituresStrings       33
+amortization            AmortizationStrings             19
+recurringExpenses       RecurringExpensesStrings         18
+sync                    SyncStrings                     40
+dashboardHelp           DashboardHelpStrings            varies
+settingsHelp            SettingsHelpStrings             varies
+transactionsHelp        TransactionsHelpStrings         varies
+budgetConfigHelp        BudgetConfigHelpStrings         varies
+futureExpendituresHelp  FutureExpendituresHelpStrings   varies
+amortizationHelp        AmortizationHelpStrings         varies
+recurringExpensesHelp   RecurringExpensesHelpStrings    varies
+
+New in v2.0:
+    SyncStrings group (~40 fields) for Family Sync screen
+    RecurringExpensesStrings expanded with:
+        savingsRequiredMessage: (String, String) -> String
+        savingsPeriodDaily, savingsPeriodWeekly, savingsPeriodMonthly: String
+        savingsWhyLink, savingsWhyTitle, savingsWhyBody: String
+        savingsLowPointToast: (String) -> String
+    BudgetConfigStrings expanded with:
+        manualOverrideSavingsWarning: String
+
+
+--------------------------------------------------------------------------------
+9.2  EnglishStrings (Object Singleton)
+--------------------------------------------------------------------------------
+
+File:       EnglishStrings.kt (1,345 lines)
+Package:    com.syncbudget.app.ui.strings
+
+Description:
+    Complete English translation implementing AppStrings interface.
+
+
+--------------------------------------------------------------------------------
+9.3  SpanishStrings (Object Singleton)
+--------------------------------------------------------------------------------
+
+File:       SpanishStrings.kt (1,343 lines)
+Package:    com.syncbudget.app.ui.strings
+
+Description:
+    Complete Spanish translation implementing AppStrings interface.
+
+
+--------------------------------------------------------------------------------
+9.4  LocalStrings (CompositionLocal)
+--------------------------------------------------------------------------------
+
+File:       LocalStrings.kt (5 lines)
+Package:    com.syncbudget.app.ui.strings
+
+Description:
+    Provides staticCompositionLocalOf<AppStrings> for string injection
+    into the Compose tree.
+
+
+================================================================================
+10. HELP SCREEN CLASSES
+================================================================================
+
+
+--------------------------------------------------------------------------------
+10.1  HelpComponents
+--------------------------------------------------------------------------------
+
+File:       HelpComponents.kt (165 lines)
+Package:    com.syncbudget.app.ui.screens
+
+Composable Functions:
+Function            Description
+---------------------------------------------------------------------------
+HelpSection         Section header with divider and title text
+HelpBullet          Bullet point with icon and text
+HelpTip             Tip callout box with background tint
+HelpKeyValue        Key-value pair display row
+HelpNumberedStep    Numbered step with description
+
+
+--------------------------------------------------------------------------------
+10.2  Help Screens (8 screens)
+--------------------------------------------------------------------------------
+
+Screen                          File                            Lines
+---------------------------------------------------------------------------
+DashboardHelpScreen             DashboardHelpScreen.kt          459
+TransactionsHelpScreen          TransactionsHelpScreen.kt       998
+BudgetConfigHelpScreen          BudgetConfigHelpScreen.kt       357
+SettingsHelpScreen              SettingsHelpScreen.kt           304
+FutureExpendituresHelpScreen    FutureExpendituresHelpScreen.kt 289
+RecurringExpensesHelpScreen     RecurringExpensesHelpScreen.kt  281
+AmortizationHelpScreen          AmortizationHelpScreen.kt       269
+FamilySyncHelpScreen            FamilySyncHelpScreen.kt         96
+
+
+================================================================================
+11. PERSISTENCE SCHEMA
+================================================================================
+
+
+--------------------------------------------------------------------------------
+11.1  transactions.json
+--------------------------------------------------------------------------------
+
+Array of JSON objects. Each object:
+Key                         Type        Description
+---------------------------------------------------------------------------
+id                          Int         Transaction ID
+type                        String      "EXPENSE" or "INCOME"
+date                        String      ISO date "yyyy-MM-dd"
+source                      String      Merchant name
+description                 String      Optional description
+amount                      Double      Transaction amount
+categoryAmounts             JSONArray   [{categoryId, amount}, ...]
+isUserCategorized           Boolean     User-set categories flag
+isBudgetIncome              Boolean     Budget income flag
+linkedRecurringExpenseId    Int/null    Linked recurring ID
+linkedAmortizationEntryId   Int/null    Linked amortization ID
+deviceId                    String      Originating device
+deleted                     Boolean     Tombstone flag
+*_clock                     Long        Per-field CRDT clocks
+
+
+--------------------------------------------------------------------------------
+11.2  categories.json
+--------------------------------------------------------------------------------
+
+Array of JSON objects:
+Key             Type        Description
+---------------------------------------------------------------------------
+id              Int         Category ID
+name            String      Display name
+iconName        String      Icon map key
+tag             String      System tag
+deviceId        String      Originating device
+deleted         Boolean     Tombstone flag
+*_clock         Long        Per-field CRDT clocks
+
+
+--------------------------------------------------------------------------------
+11.3  income_sources.json
+--------------------------------------------------------------------------------
+
+Array of JSON objects:
+Key             Type        Description
+---------------------------------------------------------------------------
+id              Int         Income source ID
+source          String      Source name
+description     String      Optional description
+amount          Double      Amount per occurrence
+repeatType      String      RepeatType enum name
+repeatInterval  Int         Interval multiplier
+startDate       String?     ISO date or null
+monthDay1       Int?        Day of month or null
+monthDay2       Int?        Second day or null
+deviceId        String      Originating device
+deleted         Boolean     Tombstone flag
+*_clock         Long        Per-field CRDT clocks
+
+
+--------------------------------------------------------------------------------
+11.4  recurring_expenses.json
+--------------------------------------------------------------------------------
+
+Same schema as income_sources.json with recurring expense fields.
+
+
+--------------------------------------------------------------------------------
+11.5  amortization_entries.json
+--------------------------------------------------------------------------------
+
+Array of JSON objects:
+Key             Type        Description
+---------------------------------------------------------------------------
+id              Int         Entry ID
+source          String      Purchase name
+description     String      Optional description
+amount          Double      Total amount
+totalPeriods    Int         Periods to spread over
+startDate       String      ISO date
+isPaused        Boolean     Whether paused
+deviceId        String      Originating device
+deleted         Boolean     Tombstone flag
+*_clock         Long        Per-field CRDT clocks
+
+
+--------------------------------------------------------------------------------
+11.6  future_expenditures.json
+--------------------------------------------------------------------------------
+
+Array of JSON objects:
+Key                     Type        Description
+---------------------------------------------------------------------------
+id                      Int         Goal ID
+name                    String      Goal name
+targetAmount            Double      Target savings amount
+targetDate              String?     ISO date or null
+totalSavedSoFar         Double      Amount saved
+contributionPerPeriod   Double      Fixed per-period amount
+isPaused                Boolean     Whether paused
+deviceId                String      Originating device
+deleted                 Boolean     Tombstone flag
+*_clock                 Long        Per-field CRDT clocks
+
+Legacy migration: "description" -> "name", "amount" -> "targetAmount"
+
+
+--------------------------------------------------------------------------------
+11.7  shared_settings.json
+--------------------------------------------------------------------------------
+
+Single JSON object:
+Key                     Type        Description
+---------------------------------------------------------------------------
+budgetPeriod            String      BudgetPeriod enum name
+resetHour               Int         Reset hour
+resetDayOfWeek          Int         Weekly reset day
+resetDayOfMonth         Int         Monthly reset day
+lastChangedBy           String      Device that last changed
+*_clock                 Long        Per-field CRDT clocks
+
+
+--------------------------------------------------------------------------------
+11.8  period_ledger.json
+--------------------------------------------------------------------------------
+
+Array of JSON objects:
+Key                 Type        Description
+---------------------------------------------------------------------------
+periodStartDate     String      ISO datetime
+appliedAmount       Double      Budget amount applied
+clockAtReset        Long        Lamport clock at refresh
+corrected           Boolean     Whether corrected
+deviceId            String      Recording device
+clock               Long        CRDT clock
+
+
+--------------------------------------------------------------------------------
+11.9  SharedPreferences Schema ("app_prefs")
+--------------------------------------------------------------------------------
+
+See Section 2.1 MainActivity SharedPreferences Keys for complete listing.
+
+
+================================================================================
+12. REPOSITORY CLASSES
+================================================================================
+
+All repositories follow the same pattern:
+    - save(context, data): Serialize to JSON, write to internal file
+    - load(context): Read file, parse JSON, return data with defaults
+    - Backward-compatible sync field loading (defaults for missing fields)
+
+
+--------------------------------------------------------------------------------
+12.1  TransactionRepository
+--------------------------------------------------------------------------------
+
+File:       TransactionRepository.kt (116 lines)
+Package:    com.syncbudget.app.data
+Filename:   transactions.json
+
+Methods:
+    save(context, transactions): Serializes all fields including sync fields,
+        linked IDs, and description to JSONArray.
+    load(context): Parses with backward-compatible defaults for all v2.0
+        fields (description, linked IDs, sync fields).
+
+
+--------------------------------------------------------------------------------
+12.2  CategoryRepository
+--------------------------------------------------------------------------------
+
+File:       CategoryRepository.kt (61 lines)
+Package:    com.syncbudget.app.data
+Filename:   categories.json
+
+
+--------------------------------------------------------------------------------
+12.3  IncomeSourceRepository
+--------------------------------------------------------------------------------
+
+File:       IncomeSourceRepository.kt (82 lines)
+Package:    com.syncbudget.app.data
+Filename:   income_sources.json
+
+
+--------------------------------------------------------------------------------
+12.4  RecurringExpenseRepository
+--------------------------------------------------------------------------------
+
+File:       RecurringExpenseRepository.kt (82 lines)
+Package:    com.syncbudget.app.data
+Filename:   recurring_expenses.json
+
+
+--------------------------------------------------------------------------------
+12.5  SavingsGoalRepository
+--------------------------------------------------------------------------------
+
+File:       FutureExpenditureRepository.kt (81 lines)
+Package:    com.syncbudget.app.data
+Filename:   future_expenditures.json
+
+Legacy field migration: "description" -> "name", "amount" -> "targetAmount"
+
+
+--------------------------------------------------------------------------------
+12.6  AmortizationRepository
+--------------------------------------------------------------------------------
+
+File:       AmortizationRepository.kt (74 lines)
+Package:    com.syncbudget.app.data
+Filename:   amortization_entries.json
+
+
+--------------------------------------------------------------------------------
+12.7  SharedSettingsRepository
+--------------------------------------------------------------------------------
+
+File:       SharedSettingsRepository.kt (173 lines)
+Package:    com.syncbudget.app.data
+Filename:   shared_settings.json
+
+Description:
+    Persistence for shared budget settings with CRDT fields. Handles
+    both single-object save/load and merge operations.
+
+
+--------------------------------------------------------------------------------
+12.8  PeriodLedgerRepository
+--------------------------------------------------------------------------------
+
+File:       PeriodLedger.kt (part of 78 lines)
+Package:    com.syncbudget.app.data.sync
+Filename:   period_ledger.json
+
+
+================================================================================
+13. ERROR HANDLING
+================================================================================
+
+
+13.1  CSV Import Errors
+---------------------------------------------------------------------------
+    - Line-level parse errors with line number and message
+    - Header validation for SecureSync CSV format
+    - Empty file detection
+    - Partial results preserved via PARSE_ERROR stage
+
+13.2  Encryption/Decryption Errors
+---------------------------------------------------------------------------
+    - Minimum data size validation
+    - Poly1305 authentication tag verification
+    - Invalid password throws authentication failure
+
+13.3  Preference Loading Errors
+---------------------------------------------------------------------------
+    - Try-catch with defaults for enum parsing (BudgetPeriod)
+    - Null-safe string-to-double conversion for cash values
+
+13.4  Repository Loading Errors
+---------------------------------------------------------------------------
+    - File existence check before read
+    - Empty/blank content returns emptyList()
+    - Missing sync fields loaded with backward-compatible defaults
+
+13.5  ID Collision Handling
+---------------------------------------------------------------------------
+    - All ID generators use do-while retry loop
+    - 16-bit ID space (0..65535) with collision avoidance
+
+13.6  Budget Calculation Safety
+---------------------------------------------------------------------------
+    - Division by zero guarded (periods count > 0)
+    - Day-of-month clamped to actual month length
+    - Budget calculations rounded to 2 decimal places
+
+13.7  UI Input Validation
+---------------------------------------------------------------------------
+    - Required field validation in all dialogs
+    - Decimal place limiting per currency
+    - Date range validation
+    - Amount sum verification for multi-category
+
+13.8  Sync Error Handling
+---------------------------------------------------------------------------
+    - SyncFileLock prevents concurrent operations
+    - Snapshot catch-up for stale devices
+    - CRDT merge is idempotent (safe to replay)
+    - Delta push skipped when no local changes
+    - Firestore operations wrapped in try-catch
+
+
+================================================================================
+14. DOCUMENT REVISION HISTORY
+================================================================================
+
+Version Date            Author                      Changes
+---------------------------------------------------------------------------
+1.0     February 2026   SecureSync Budget Team      Initial LLD creation
+                                                    covering all application
+                                                    classes, data models,
+                                                    persistence schema, and
+                                                    error handling.
+
+2.0     March 2026      SecureSync Budget Team      Major update. Added
+                                                    Family Sync system (14
+                                                    sync classes, CRDT merge,
+                                                    Firestore transport).
+                                                    Added SavingsSimulator
+                                                    for cash flow simulation.
+                                                    Added AdAwareDialog,
+                                                    PulsingScrollArrow.
+                                                    Added linked transactions.
+                                                    Added ANNUAL RepeatType.
+                                                    All data classes extended
+                                                    with sync fields. 68
+                                                    source files, 27,738
+                                                    lines.
+
+================================================================================
+                              END OF DOCUMENT
+================================================================================

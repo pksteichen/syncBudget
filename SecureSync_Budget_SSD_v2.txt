@@ -1,0 +1,2014 @@
+================================================================================
+            SECURESYNC BUDGET - SYSTEM SPECIFICATION DOCUMENT (SSD)
+================================================================================
+
+    Application:    SecureSync Budget
+    Platform:       Android (API 28+)
+    Version:        2.0
+    Date:           March 2026
+    Status:         Release
+    Classification: Internal / Technical Reference
+
+================================================================================
+                          DOCUMENT INFORMATION
+================================================================================
+
+Field                       Value
+---------------------------------------------------------------------------
+Document Title              SecureSync Budget System Specification Document
+Document Version            2.0
+Application Version         2.0
+Date                        March 2026
+Author                      SecureSync Development Team
+Status                      Release
+Application ID              com.securesync.app
+Package                     com.syncbudget.app
+Target Platform             Android 9.0+ (API 28, compileSdk 34)
+Language                    Kotlin 2.0.21
+UI Framework                Jetpack Compose with Material Design 3
+Build System                Gradle 8.9 with Kotlin DSL
+JVM Target                  Java 17
+Total Source Files           68 Kotlin files
+Total Lines of Code         27,738 lines
+
+
+================================================================================
+1. EXECUTIVE SUMMARY
+================================================================================
+
+SecureSync Budget is a personal budget management Android application built
+entirely with Jetpack Compose and Material Design 3. The application provides
+a comprehensive suite of financial tracking tools including income management,
+recurring expense tracking, amortization scheduling, savings goals with
+Supercharge acceleration, and full transaction management with bank import
+capabilities. The app features a distinctive Solari-style mechanical split-flap
+display for the main budget amount, complete with procedurally generated
+mechanical clack sound effects. SecureSync Budget supports English and Spanish
+localization through a CompositionLocal-based string injection system with
+over 800 translatable string fields organized across 16 interface groups. All
+primary data is persisted locally using JSON file-based storage. A Family Sync
+feature enables multi-device synchronization (up to 5 devices) via Firebase
+Firestore using per-field Last-Writer-Wins CRDT conflict resolution with
+Lamport timestamps. Transaction export supports ChaCha20-Poly1305
+authenticated encryption with PBKDF2 key derivation for secure data
+portability.
+
+Key Features:
+    - Solari-style mechanical split-flap animated budget display with
+      procedural audio
+    - Configurable budget periods (Daily/Weekly/Monthly) with auto-refresh
+      and missed-period catchup
+    - Family Sync: multi-device sync (up to 5) via Firebase with per-field
+      LWW-Register CRDT conflict resolution
+    - Savings Goals with Supercharge surplus allocation (Reduce Contributions
+      or Achieve Goal Sooner modes)
+    - Cash flow simulation for "Savings Required" calculation with low-point
+      date detection
+    - Amortization of large purchases across configurable budget periods
+    - Recurring expense tracking with 6 repeat types and auto-matching
+    - Full transaction CRUD with multi-category allocation via interactive
+      pie chart editor (drag, calculator, percentage modes)
+    - Linked transactions for recurring expenses and amortization entries
+    - Bank import pipeline (US Bank CSV, SecureSync CSV, encrypted) with
+      smart duplicate detection and auto-matching chain
+    - ChaCha20-Poly1305 encrypted export with password-based key derivation
+    - 7 currency symbols with correct decimal place handling
+    - English/Spanish localization via CompositionLocal injection
+    - Spending analytics with pie and bar charts, 4 color palettes,
+      7 time ranges
+    - User-defined categories with 120+ Material icon choices
+    - Auto-categorization of imported transactions based on merchant history
+    - Ad-aware dialog system that avoids overlapping banner ads
+    - Pulsing scroll arrows in all scrollable dialogs
+
+Technology Stack:
+
+Component                   Technology / Version
+---------------------------------------------------------------------------
+Language                    Kotlin 2.0.21
+UI Framework                Jetpack Compose (BOM 2024.09.03)
+Design System               Material Design 3 (material3)
+Icon Library                Material Icons Extended
+Animation                   Compose Animation
+Architecture                Single-Activity, Composable-based navigation
+Minimum SDK                 API 28 (Android 9.0 Pie)
+Compile SDK                 API 34 (Android 14)
+Target SDK                  API 34 (Android 14)
+Persistence                 JSON via Context.openFileOutput/openFileInput
+Preferences                 Android SharedPreferences
+Encryption                  ChaCha20-Poly1305 (javax.crypto)
+Key Derivation              PBKDF2WithHmacSHA256 (100,000 iterations)
+Audio                       SoundPool with procedurally generated WAV
+Cloud Sync                  Firebase Firestore (BOM 32.7.0)
+Background Work             WorkManager (work-runtime-ktx 2.9.1)
+Build System                Gradle 8.9 with Kotlin DSL
+Compose Compiler Plugin     Kotlin Compose Plugin 2.0.21
+JVM Target                  Java 17
+Activity Library            androidx.activity:activity-compose:1.9.2
+Core KTX                    androidx.core:core-ktx:1.13.1
+Lifecycle                   androidx.lifecycle:lifecycle-runtime-ktx:2.8.6
+
+
+================================================================================
+2. SYSTEM ARCHITECTURE
+================================================================================
+
+2.1 High-Level Architecture
+---------------------------------------------------------------------------
+
+The application follows a single-Activity architecture with Composable-based
+screen navigation:
+
+    1. MainActivity (ComponentActivity) serves as the sole entry point and
+       central coordinator for all application state. It loads all data from
+       JSON repositories into mutable state lists at startup and passes
+       state and callbacks to child Composable screens.
+
+    2. Navigation is string-based ("main", "settings", "transactions",
+       "budgetConfig", "futureExpenditures", "amortization",
+       "recurringExpenses", "family_sync", and their respective help
+       screens). A single mutableStateOf<String> variable in MainActivity
+       controls which screen Composable is rendered.
+
+    3. All data models are loaded into mutableStateListOf collections at
+       startup. Data is operated on in-memory and saved back to JSON files
+       after each mutation, ensuring immediate persistence without database
+       overhead.
+
+    4. The budget period refresh mechanism runs on each app open, calculating
+       missed periods since the last refresh and adding (budget x
+       missedPeriods) to the available cash balance. Each refresh is recorded
+       in the period ledger for deterministic cash recomputation.
+
+    5. Four system categories (Other, Recurring, Amortization, Recurring
+       Income) are auto-provisioned on startup if not already present,
+       defined by tag in DefaultCategories.kt.
+
+    6. The theme system uses CompositionLocalProvider to inject both custom
+       colors (SyncBudgetColors) and localized strings (AppStrings) into
+       the Compose tree.
+
+    7. All data classes carry CRDT sync fields (deviceId, deleted flag,
+       per-field Lamport clocks) for multi-device synchronization.
+       Tombstone-based deletes preserve records with deleted=true; UI
+       lists filter via the .active extension property.
+
+    8. Available cash is deterministically recomputed from synced data
+       (period ledger + transactions) via BudgetCalculator.recomputeAvailableCash(),
+       ensuring all devices converge to the same value.
+
+
+2.2 Component Architecture
+---------------------------------------------------------------------------
+
+Component                       File                        Lines   Purpose
+---------------------------------------------------------------------------
+MainActivity                    MainActivity.kt             2,789   Central coordinator, state management, navigation, budget refresh, sync integration, CRDT stamping
+MainScreen (Dashboard)          MainScreen.kt               1,237   Dashboard with flip display, spending charts, Supercharge dialog, quick-add, sync indicators
+TransactionsScreen              TransactionsScreen.kt       4,010   Full transaction management, import/export, bulk ops, linked transactions
+BudgetConfigScreen              BudgetConfigScreen.kt       1,161   Income sources, budget period, reset settings, manual override with savings warning
+SettingsScreen                  SettingsScreen.kt           995     Currency, categories, matching config, language, date format, chart palette
+FutureExpendituresScreen        FutureExpendituresScreen.kt 637     Savings goals management (target-date and fixed-contribution types)
+AmortizationScreen              AmortizationScreen.kt       562     Amortization entries with progress tracking, pause support
+RecurringExpensesScreen         RecurringExpensesScreen.kt  1,148   Recurring bills/expenses, savings required simulation box, Why dialog
+FamilySyncScreen                FamilySyncScreen.kt         868     Family sync configuration, group management, sync status
+FamilySyncHelpScreen            FamilySyncHelpScreen.kt     96      Family sync help documentation
+FlipDisplay                     FlipDisplay.kt              257     Solari-style display compositor with currency-aware formatting
+FlipChar                        FlipChar.kt                 293     Animated flip card for arbitrary string values (currency, signs)
+FlipDigit                       FlipDigit.kt                316     Animated flip card for digits 0-9 with blank state
+PieChartEditor                  PieChartEditor.kt           457     Interactive pie chart with drag handles, 3 entry modes, 6 palettes
+FlipSoundPlayer                 FlipSoundPlayer.kt          131     Procedurally generated 45ms mechanical clack sound at 44100Hz
+BudgetCalculator                BudgetCalculator.kt         369     Occurrence-based budget calculation, deterministic cash recomputation
+SavingsSimulator                SavingsSimulator.kt         150     Cash flow simulation for savings required calculation
+DuplicateDetector               DuplicateDetector.kt        213     Smart matching with configurable amount, date, and merchant tolerances
+CsvParser                       CsvParser.kt                218     US Bank CSV, SecureSync CSV, and encrypted format parsing/serialization
+CryptoHelper                    CryptoHelper.kt             93      ChaCha20-Poly1305 encrypt/decrypt (password and direct-key modes)
+AutoCategorizer                 AutoCategorizer.kt          49      Merchant-based auto-categorization from 6-month transaction history
+CategoryIcons                   CategoryIcons.kt            167     CATEGORY_ICON_MAP with 120+ Material icon entries
+DefaultCategories               DefaultCategories.kt        43      System category tag definitions
+FullBackupSerializer            FullBackupSerializer.kt     213     Full app backup serialization/deserialization
+SharedSettings                  SharedSettings.kt           38      Shared settings data class for sync
+SharedSettingsRepository        SharedSettingsRepository.kt 173     Persistence for shared settings with CRDT fields
+LamportClock                    LamportClock.kt             35      Lamport logical clock for CRDT ordering
+SyncIdGenerator                 SyncIdGenerator.kt          19      Device-unique ID generation
+SyncFilters                     SyncFilters.kt              33      .active extension filters (tombstone-aware)
+CrdtMerge                       CrdtMerge.kt                296     Per-field LWW-Register CRDT merge logic for all entity types
+PeriodLedger                    PeriodLedger.kt             78      Period ledger entry recording and persistence
+PeriodLedgerCorrector           PeriodLedgerCorrector.kt    58      Period ledger correction logic
+DeltaBuilder                    DeltaBuilder.kt             190     Builds minimal sync delta packages
+DeltaSerializer                 DeltaSerializer.kt          79      JSON serialization of sync deltas
+FirestoreService                FirestoreService.kt         391     Firebase Firestore cloud operations
+GroupManager                    GroupManager.kt             155     Family group create/join/leave/dissolve
+SnapshotManager                 SnapshotManager.kt          441     Full-state snapshot upload/download for sync
+SyncEngine                      SyncEngine.kt               902     Main sync orchestration engine
+SyncFileLock                    SyncFileLock.kt             45      File-based lock for sync operations
+SyncWorker                      SyncWorker.kt               365     WorkManager periodic background sync
+AppStrings                      AppStrings.kt               1,093   Interface definitions for 16 string groups (~800+ fields)
+EnglishStrings                  EnglishStrings.kt           1,345   Complete English string implementation
+SpanishStrings                  SpanishStrings.kt           1,343   Complete Spanish string implementation
+LocalStrings                    LocalStrings.kt             5       CompositionLocal provider for string injection
+Theme                           Theme.kt                    289     SyncBudgetColors, dark/light schemes, AdAwareDialog, PulsingScrollArrow
+Color                           Color.kt                    29      Dark and light theme color definitions
+Type                            Type.kt                     18      Monospace flip font family, custom typography
+HelpComponents                  HelpComponents.kt           165     Shared help UI building blocks (sections, bullets, tips)
+DashboardHelpScreen             DashboardHelpScreen.kt      459     Dashboard feature help documentation
+TransactionsHelpScreen          TransactionsHelpScreen.kt   998     Transaction management help documentation
+BudgetConfigHelpScreen          BudgetConfigHelpScreen.kt   357     Budget configuration help documentation
+SettingsHelpScreen              SettingsHelpScreen.kt       304     Settings help documentation
+FutureExpendituresHelpScreen    FutureExpendituresHelpScreen.kt 289 Savings goals help documentation
+RecurringExpensesHelpScreen     RecurringExpensesHelpScreen.kt  281 Recurring expenses help documentation
+AmortizationHelpScreen          AmortizationHelpScreen.kt   269     Amortization help documentation
+Transaction                     Transaction.kt              47      Transaction data class with sync fields, linked IDs
+TransactionRepository           TransactionRepository.kt    116     JSON persistence for transactions with sync fields
+Category                        Category.kt                 16      Category data class with sync fields
+CategoryRepository              CategoryRepository.kt       61      JSON persistence for categories with sync fields
+IncomeSource                    IncomeSource.kt             38      IncomeSource data class with sync fields, RepeatType enum
+IncomeSourceRepository          IncomeSourceRepository.kt   82      JSON persistence for income sources with sync fields
+RecurringExpense                RecurringExpense.kt         36      RecurringExpense data class with sync fields
+RecurringExpenseRepository      RecurringExpenseRepository.kt 82    JSON persistence for recurring expenses with sync fields
+AmortizationEntry               AmortizationEntry.kt        32      AmortizationEntry data class with isPaused, sync fields
+AmortizationRepository          AmortizationRepository.kt   74      JSON persistence for amortization entries with sync fields
+FutureExpenditure               FutureExpenditure.kt        56      SavingsGoal data class with sync fields
+FutureExpenditureRepository     FutureExpenditureRepository.kt 81   JSON persistence for savings goals with sync fields
+BudgetPeriod                    BudgetPeriod.kt             3       BudgetPeriod enum (DAILY, WEEKLY, MONTHLY)
+---------------------------------------------------------------------------
+TOTAL                           68 files                    27,738
+
+
+2.3 Page / Screen Layout
+---------------------------------------------------------------------------
+
+    MainScreen (Dashboard)
+      |
+      +-- SettingsScreen
+      |     |
+      |     +-- BudgetConfigScreen
+      |     |     |
+      |     |     +-- BudgetConfigHelpScreen
+      |     |
+      |     +-- SettingsHelpScreen
+      |
+      +-- TransactionsScreen
+      |     |
+      |     +-- TransactionsHelpScreen
+      |
+      +-- FutureExpendituresScreen (Savings Goals)
+      |     |
+      |     +-- FutureExpendituresHelpScreen
+      |
+      +-- AmortizationScreen
+      |     |
+      |     +-- AmortizationHelpScreen
+      |
+      +-- RecurringExpensesScreen
+      |     |
+      |     +-- RecurringExpensesHelpScreen
+      |
+      +-- FamilySyncScreen
+      |     |
+      |     +-- FamilySyncHelpScreen
+      |
+      +-- DashboardHelpScreen
+
+Navigation strings:
+    "main"                      MainScreen (Dashboard)
+    "settings"                  SettingsScreen
+    "budgetConfig"              BudgetConfigScreen
+    "transactions"              TransactionsScreen
+    "futureExpenditures"        FutureExpendituresScreen
+    "amortization"              AmortizationScreen
+    "recurringExpenses"         RecurringExpensesScreen
+    "family_sync"               FamilySyncScreen
+    "dashboardHelp"             DashboardHelpScreen
+    "settingsHelp"              SettingsHelpScreen
+    "budgetConfigHelp"          BudgetConfigHelpScreen
+    "transactionsHelp"          TransactionsHelpScreen
+    "futureExpendituresHelp"    FutureExpendituresHelpScreen
+    "amortizationHelp"          AmortizationHelpScreen
+    "recurringExpensesHelp"     RecurringExpensesHelpScreen
+    "family_sync_help"          FamilySyncHelpScreen
+
+
+================================================================================
+3. SOLARI FLIP DISPLAY SYSTEM
+================================================================================
+
+3.1 Overview
+---------------------------------------------------------------------------
+
+The centerpiece of the SecureSync Budget dashboard is a Solari-style mechanical
+split-flap display that animates the current budget amount. This system
+comprises three Composable components and a procedural audio engine that work
+together to produce a faithful digital recreation of the iconic departure-board
+aesthetic.
+
+3.2 FlipDisplay Composable (FlipDisplay.kt - 257 lines)
+---------------------------------------------------------------------------
+
+FlipDisplay is the top-level compositor that arranges individual flip cards
+into a complete budget readout. It handles:
+
+    - Currency-aware formatting with correct decimal places per currency
+    - Responsive card sizing using BoxWithConstraints to fit available width
+    - Leading zero suppression (blank cards for leading zeros)
+    - Sign/currency combination card that displays currency symbol alone for
+      positive values and "-" + symbol for negative values
+    - Decimal point rendering as bare text between whole and decimal cards
+    - Optional bottom label text
+    - Proportional font scaling based on computed card dimensions
+
+Display layout: [Sign+Currency] [Digit] ... [Digit] [.] [Digit] [Digit]
+
+Constants:
+    CARD_ASPECT             1.5 (height/width ratio)
+    GAP                     5dp between cards
+    DOT_WIDTH               10dp for decimal point
+    FRAME_H_PAD             16dp horizontal frame padding
+    FRAME_V_PAD             20dp vertical frame padding
+    MAX_CARD_WIDTH          72dp maximum card width
+
+Currency options and decimal configuration:
+
+Symbol      Name                Decimal Places
+---------------------------------------------------------------------------
+$           US Dollar           2
+EUR         Euro                2
+GBP         British Pound       2
+JPY         Japanese Yen        0
+INR         Indian Rupee        2
+KRW         South Korean Won    0
+Fr          Swiss Franc         2
+
+3.3 FlipChar Composable (FlipChar.kt - 293 lines)
+---------------------------------------------------------------------------
+
+FlipChar renders an animated flip card for arbitrary string values. It is
+used for the combined sign + currency card. The flip animation consists of:
+
+    - A 250ms flip duration (FLIP_DURATION_MS)
+    - 3D rotation around the horizontal center axis using graphicsLayer
+    - Four visual layers: static top half, static bottom half, flipping
+      top-away panel, and flipping bottom-reveal panel
+    - Gradient overlays for depth simulation
+    - LinearOutSlowInEasing interpolation for natural deceleration
+    - Sound callback at animation midpoint
+
+Multi-character currency symbols (e.g., "Fr") are split across two lines
+within the card: sign on top, symbol on bottom.
+
+3.4 FlipDigit Composable (FlipDigit.kt - 316 lines)
+---------------------------------------------------------------------------
+
+FlipDigit renders an animated flip card for single digits 0-9 with support
+for a blank state (digit value -1). The animation mechanics are identical
+to FlipChar but optimized for the digit use case:
+
+    - Integer-based target values instead of string-based
+    - Blank card rendering when targetDigit is -1
+    - Same 250ms flip with 3D rotation and gradient overlays
+    - Monospace FlipFontFamily for consistent digit widths
+
+3.5 FlipSoundPlayer (FlipSoundPlayer.kt - 131 lines)
+---------------------------------------------------------------------------
+
+FlipSoundPlayer generates and plays a synthetic mechanical clack sound that
+accompanies each flip card animation. The sound is procedurally generated
+at initialization rather than loaded from a bundled asset.
+
+Audio parameters:
+    Sample Rate             44,100 Hz
+    Duration                45 ms
+    Bit Depth               16-bit signed PCM
+    Channels                Mono
+    Max Concurrent Streams  6 (SoundPool)
+    Playback Volume         0.8 (left and right)
+
+Sound synthesis algorithm:
+    1. Fast-attack exponential decay envelope: exp(-t * 120)
+    2. Secondary mechanical bounce at t=10ms: 0.3 * exp(-(dt^2) / 0.000002)
+    3. Band-limited noise combining three sine waves at 800Hz, 1200Hz, and
+       2400Hz with random phase offsets, plus 40% white noise component
+    4. Combined envelope applied to signal, scaled to 70% of Short.MAX_VALUE
+
+The generated audio is encoded as a RIFF WAV file, written to the app cache
+directory, and loaded into a SoundPool for low-latency playback.
+
+
+================================================================================
+4. BUDGET PERIOD AND CALCULATION SYSTEM
+================================================================================
+
+4.1 Budget Period Configuration
+---------------------------------------------------------------------------
+
+The budget system supports three configurable periods:
+
+Period      Description                 Reset Timing
+---------------------------------------------------------------------------
+DAILY       Budget resets each day      Configurable reset hour (0-23)
+WEEKLY      Budget resets each week     Configurable day of week (1=Mon..7=Sun)
+MONTHLY     Budget resets each month    Configurable day of month (1-31)
+
+The budget period is stored as a BudgetPeriod enum (DAILY, WEEKLY, MONTHLY)
+in SharedPreferences under the key "budgetPeriod".
+
+4.2 BudgetCalculator (BudgetCalculator.kt - 369 lines)
+---------------------------------------------------------------------------
+
+BudgetCalculator is a singleton object that normalizes all income sources
+and recurring expenses to the configured budget period using an
+occurrence-based projection system.
+
+Primary functions:
+
+Function                        Purpose
+---------------------------------------------------------------------------
+generateOccurrences()           Generates all occurrence dates for a repeat
+                                schedule within a given date range. Supports
+                                all 6 RepeatType values with efficient
+                                fast-forward for start dates before range.
+
+calculateSafeBudgetAmount()     Projects total income and total expenses over
+                                a 1-year window, counts periods in that window,
+                                and computes per-period discretionary budget:
+                                safeBudget = (totalIncome - totalExpenses) /
+                                periodsPerYear
+
+countPeriodsCompleted()         Counts budget periods between two dates using
+                                ChronoUnit (DAYS, WEEKS, MONTHS).
+
+currentPeriodStart()            Determines the start date of the current budget
+                                period based on reset day configuration using
+                                TemporalAdjusters.
+
+activeAmortizationDeductions()  Sums per-period deductions for all active
+                                (not yet completed, not paused) amortization
+                                entries: deduction = entry.amount / totalPeriods
+
+activeSavingsGoalDeductions()   Sums per-period deductions for all active,
+                                unpaused savings goals. Target-date goals use
+                                dynamic calculation; fixed-contribution goals
+                                use stored per-period amount capped at remaining.
+
+calculateAccruedSavingsNeeded() Computes pro-rata accrued savings needed for
+                                all recurring expenses based on cycle position.
+
+recomputeAvailableCash()        Deterministically recomputes available cash from
+                                period ledger entries and transaction history.
+                                Ensures all synced devices converge to the same
+                                cash balance.
+
+roundCents()                    Rounds a Double to 2 decimal places.
+
+Safe Budget Formula:
+    safeBudget = (totalIncome - totalExpenses) / periodsPerYear
+
+Effective Budget Amount:
+    budgetAmount = max(0, baseBudget - amortDeductions - savingsDeductions)
+    where baseBudget = manualBudgetAmount (if override) or safeBudgetAmount
+
+4.3 Budget Period Refresh
+---------------------------------------------------------------------------
+
+On each app open, MainActivity performs a budget period refresh:
+
+    1. Read lastRefreshDate from SharedPreferences
+    2. Compute currentPeriodStart using BudgetCalculator
+    3. If lastRefreshDate is before currentPeriodStart:
+       a. Count missedPeriods = countPeriodsCompleted(lastRefreshDate, now)
+       b. Record each period in the period ledger with the budget amount
+       c. Add (budgetAmount * missedPeriods) to availableCash
+       d. Update each non-paused savings goal's totalSavedSoFar
+       e. Update lastRefreshDate to today
+       f. Save updated state to SharedPreferences and repositories
+    4. If budgetStartDate is null, set it to today (first-run initialization)
+
+4.4 Manual Budget Override
+---------------------------------------------------------------------------
+
+Users may optionally bypass the calculated safe budget with a manual override:
+
+    - isManualBudgetEnabled (Boolean) - toggles override mode
+    - manualBudgetAmount (Float) - user-specified per-period amount
+
+When enabled, the manual amount replaces the calculated safe budget for all
+period refresh calculations. A warning is displayed on the Budget Config
+screen. If the manual amount exceeds the safe budget amount, the savings
+required calculation on the Recurring Expenses page is disabled, with an
+additional warning message explaining this.
+
+4.5 Deterministic Cash Recomputation
+---------------------------------------------------------------------------
+
+Available cash is deterministically recomputed from synced CRDT data via
+BudgetCalculator.recomputeAvailableCash(). This function:
+
+    1. Sums period ledger credits (deduped by date, highest clock)
+    2. Applies transaction effects:
+       - EXPENSE + amortization-linked: skip (fully budget-accounted)
+       - EXPENSE + recurring-linked: add diff (budgetAmount - actualAmount)
+       - EXPENSE + unlinked: subtract full amount
+       - INCOME + non-budget: add full amount
+    3. Ensures all devices with the same synced data compute identical results
+
+
+================================================================================
+5. SAVINGS GOALS AND SUPERCHARGE SYSTEM
+================================================================================
+
+5.1 Savings Goal Data Model
+---------------------------------------------------------------------------
+
+Property                Type            Description
+---------------------------------------------------------------------------
+id                      Int             Unique identifier (0-65535 random)
+name                    String          Goal name/description
+targetAmount            Double          Total amount to save
+targetDate              LocalDate?      Optional deadline (null = fixed-contribution)
+totalSavedSoFar         Double          Running total of saved amount (default 0.0)
+contributionPerPeriod   Double          Fixed per-period amount (used when targetDate is null)
+isPaused                Boolean         Whether deductions are suspended (default false)
+deviceId                String          Originating device for sync
+deleted                 Boolean         Tombstone flag for sync deletes
+
+5.2 Two Goal Types
+---------------------------------------------------------------------------
+
+Type                    Behavior
+---------------------------------------------------------------------------
+Target-Date             Has a non-null targetDate. Per-period deduction is
+                        dynamically calculated as:
+                        remaining / periodsUntilTargetDate
+                        Deduction increases as deadline approaches if
+                        contributions are behind schedule.
+
+Fixed-Contribution      Has a null targetDate. Uses the stored
+                        contributionPerPeriod value, capped at the
+                        remaining amount needed.
+
+5.3 Supercharge Dialog
+---------------------------------------------------------------------------
+
+The Supercharge feature allows users to allocate surplus cash from the
+current budget period to accelerate their savings goals. It is accessed
+from a button on the MainScreen dashboard.
+
+Supercharge workflow:
+    1. Display remaining cash available for the current period
+    2. For each active (unpaused, not-yet-complete) savings goal:
+       a. Show a toggle button to include/exclude from allocation
+       b. Show a mode selector with two options:
+          - REDUCE_CONTRIBUTIONS: Apply extra payment and recalculate
+            lower per-period contributions for the remaining periods
+          - ACHIEVE_SOONER: Apply extra payment and show the new
+            earlier payoff/completion date
+    3. Preview section shows per-goal impact before confirming
+    4. On confirm: update totalSavedSoFar, deduct from availableCash,
+       recalculate budget, and save all changes
+
+SuperchargeMode enum values:
+    REDUCE_CONTRIBUTIONS    Lower future per-period deductions
+    ACHIEVE_SOONER          Reach the goal earlier
+
+5.4 Persistence
+---------------------------------------------------------------------------
+
+Savings goals are stored in "future_expenditures.json" (legacy filename
+from the original FutureExpenditure naming). The SavingsGoalRepository
+supports legacy field migration:
+
+    - "description" -> "name"
+    - "amount" -> "targetAmount"
+
+This ensures backward compatibility with data created in earlier versions.
+All sync fields are loaded with backward-compatible defaults.
+
+
+================================================================================
+6. AMORTIZATION SYSTEM
+================================================================================
+
+6.1 AmortizationEntry Data Model
+---------------------------------------------------------------------------
+
+Property                Type            Description
+---------------------------------------------------------------------------
+id                      Int             Unique identifier (0-65535 random)
+source                  String          Merchant/purchase name
+description             String          Optional description
+amount                  Double          Total purchase amount
+totalPeriods            Int             Number of budget periods to spread over
+startDate               LocalDate       Date amortization begins
+isPaused                Boolean         Whether deductions are suspended (default false)
+deviceId                String          Originating device for sync
+deleted                 Boolean         Tombstone flag for sync deletes
+
+6.2 Amortization Logic
+---------------------------------------------------------------------------
+
+Amortization allows users to spread the budget impact of a large purchase
+across multiple budget periods. The per-period deduction is:
+
+    deduction = amount / totalPeriods
+
+An entry is considered active when:
+    elapsed = periodsCompleted(startDate, today)
+    active  = (elapsed < totalPeriods) AND NOT isPaused
+
+The elapsed period count is clamped to [0, totalPeriods].
+
+Progress display shows "X of Y [periods] complete" with a visual progress
+bar and the per-period deduction amount.
+
+6.3 Auto-Matching on Import
+---------------------------------------------------------------------------
+
+When transactions are imported, the DuplicateDetector attempts to match
+incoming transactions against existing amortization entries using:
+    - Amount matching (percentage OR dollar tolerance)
+    - Merchant name matching (common substring of configurable minimum length)
+
+If a match is found, the user is prompted with a confirmation dialog:
+    - "Yes, Amortization" - categorize and link to amortization entry
+    - "No, Regular Expense" - treat as a normal expense
+
+Linked transactions store the linkedAmortizationEntryId for reference.
+
+
+================================================================================
+7. RECURRING EXPENSES SYSTEM
+================================================================================
+
+7.1 RecurringExpense Data Model
+---------------------------------------------------------------------------
+
+Property                Type            Description
+---------------------------------------------------------------------------
+id                      Int             Unique identifier (0-65535 random)
+source                  String          Expense name/merchant
+description             String          Optional description
+amount                  Double          Per-occurrence amount
+repeatType              RepeatType      Schedule type (default MONTHS)
+repeatInterval          Int             Interval multiplier (default 1)
+startDate               LocalDate?      Start date (for DAYS, WEEKS, BI_WEEKLY)
+monthDay1               Int?            Day of month (for MONTHS, BI_MONTHLY)
+monthDay2               Int?            Second day of month (for BI_MONTHLY)
+deviceId                String          Originating device for sync
+deleted                 Boolean         Tombstone flag for sync deletes
+
+7.2 Repeat Types
+---------------------------------------------------------------------------
+
+RepeatType          Configuration Required          Example
+---------------------------------------------------------------------------
+DAYS                startDate + repeatInterval      Every 3 days from Jan 1
+WEEKS               startDate + repeatInterval      Every 2 weeks from Jan 1
+BI_WEEKLY           startDate (interval=14 days)    Every other week from Jan 1
+MONTHS              monthDay1 + repeatInterval      15th of every month
+BI_MONTHLY          monthDay1 + monthDay2           1st and 15th of every month
+ANNUAL              monthDay1 + startDate           Once per year
+
+7.3 Budget Impact
+---------------------------------------------------------------------------
+
+Recurring expenses are projected over a 1-year window by
+BudgetCalculator.generateOccurrences() and their total is subtracted from
+total income before dividing by period count to produce the safe budget.
+
+7.4 Savings Required Simulation
+---------------------------------------------------------------------------
+
+The Recurring Expenses screen displays a "Savings Required" info box that
+shows how much total savings the user should have on hand based on a
+forward-looking cash flow simulation. See Section 7.6 for details.
+
+7.5 Timing Safety
+---------------------------------------------------------------------------
+
+For MONTHS and BI_MONTHLY repeat types, the DuplicateDetector applies a
++/- 2 day tolerance when matching imported transactions to recurring
+expenses (isRecurringDateCloseEnough). This accounts for weekends, holidays,
+and minor posting date variations.
+
+7.6 Savings Required Cash Flow Simulation
+---------------------------------------------------------------------------
+
+SavingsSimulator.kt (150 lines) performs a forward-looking cash flow
+simulation to determine the savings buffer a user needs.
+
+Algorithm:
+    1. Determine horizon: the furthest next occurrence across all income
+       sources and recurring expenses (up to 2 years lookahead)
+    2. Generate all events in the simulation window:
+       - Income occurrences: +amount on each income date (priority 0)
+       - Budget period deductions: -safeBudgetAmount on each period
+         boundary after today (priority 1). Uses safeBudgetAmount (or
+         manualBudgetAmount if override active) as total per-period cash
+         drain regardless of savings/amortization deductions.
+       - Expense occurrences: -amount on each expense date (priority 2)
+       - Day-0 event: -availableCash for today's spending needs (priority 1)
+    3. Sort events by (date, priority) so income arrives before deductions
+       before expenses on the same day
+    4. Walk the timeline: start with balance = 0, apply each event, track
+       the minimum balance reached and the date it occurred
+    5. savingsRequired = max(0, -minimumBalance)
+
+Returns SimResult(savingsRequired, lowPointDate).
+
+The simulation correctly handles:
+    - Multiple income sources on different schedules (mid-cycle replenishment)
+    - Negative availableCash (user has already overspent)
+    - Same-day income and expense events (favorable ordering)
+    - Annual expenses creating long horizons
+
+UI behavior:
+    - Info box appears only when recurringExpenses is not empty AND
+      savingsRequired > 0 AND manual override does not exceed safe budget
+    - Tapping the savings message shows a toast with the low-point date
+    - "Why?" link opens an explanation dialog with scrollable text
+    - Budget Config screen shows warning when manual override may disable
+      the savings calculation
+
+7.7 Auto-Matching on Import
+---------------------------------------------------------------------------
+
+Incoming transactions are matched against recurring expenses using:
+    - Amount matching (percentage OR dollar tolerance)
+    - Merchant name matching (common substring)
+
+Matched transactions store the linkedRecurringExpenseId for reference and
+are tagged with the "Recurring" system category.
+
+
+================================================================================
+8. TRANSACTION MANAGEMENT SYSTEM
+================================================================================
+
+8.1 Transaction Data Model
+---------------------------------------------------------------------------
+
+Property                Type                    Description
+---------------------------------------------------------------------------
+id                      Int                     Unique identifier (0-65535 random)
+type                    TransactionType         EXPENSE or INCOME
+date                    LocalDate               Transaction date
+source                  String                  Merchant/source name
+description             String                  Optional description (default "")
+categoryAmounts         List<CategoryAmount>    Category allocations (default empty)
+amount                  Double                  Total transaction amount
+isUserCategorized       Boolean                 True if user assigned categories (default true)
+isBudgetIncome          Boolean                 True if matched as budget income (default false)
+linkedRecurringExpenseId Int?                   ID of linked recurring expense (default null)
+linkedAmortizationEntryId Int?                  ID of linked amortization entry (default null)
+deviceId                String                  Originating device for sync
+deleted                 Boolean                 Tombstone flag for sync deletes
+
+CategoryAmount:
+    categoryId          Int                     Category identifier
+    amount              Double                  Amount allocated to this category
+
+TransactionType enum:
+    EXPENSE             Money going out
+    INCOME              Money coming in
+
+8.2 Multi-Category Transactions
+---------------------------------------------------------------------------
+
+Transactions support allocation across multiple categories through the
+PieChartEditor component. The sum of all categoryAmount values must equal
+the transaction's total amount.
+
+Three entry modes are supported:
+
+Mode            Description
+---------------------------------------------------------------------------
+Pie Chart       Interactive pie chart with draggable handles. Users drag
+(Drag)          dividers between category slices to adjust allocation.
+                Minimum 2 categories required.
+
+Calculator      Dollar amount input fields for each category. Users enter
+                exact amounts. Remaining balance auto-fills the last category.
+
+Percentage      Percentage input fields for each category. Users enter
+                percentages that must sum to 100%. Amounts are computed
+                from percentages.
+
+8.3 Transaction Operations
+---------------------------------------------------------------------------
+
+Operation               Description
+---------------------------------------------------------------------------
+Add Income              Create new INCOME transaction from dashboard or
+                        transactions screen
+Add Expense             Create new EXPENSE transaction from dashboard or
+                        transactions screen
+Edit                    Tap a transaction to open edit dialog with all fields
+Delete                  Long-press to select, then bulk delete
+Bulk Category Change    Select multiple transactions, reassign category
+Bulk Merchant Edit      Select multiple transactions, rename merchant
+Select All              Toggle selection of all visible transactions
+Search by Date          Filter transactions within a date range
+Search by Text          Filter by merchant name substring
+Search by Amount        Filter by minimum/maximum amount range
+Filter by Category      Tap a category icon to show only that category
+Filter by Type          Toggle between All, Expenses only, Income only
+
+8.4 Linked Transactions
+---------------------------------------------------------------------------
+
+Transactions matched against recurring expenses or amortization entries
+carry a linkedRecurringExpenseId or linkedAmortizationEntryId. These linked
+transactions:
+
+    - Show the applied-to-budget amount (what was budgeted) instead of the
+      actual transaction amount in the list view
+    - Tapping the amount shows a toast with the full original amount
+    - Long-press on amounts is supported in multi-select mode
+    - Are excluded from double-counting in deterministic cash recomputation
+
+8.5 Dashboard Quick-Add
+---------------------------------------------------------------------------
+
+The MainScreen dashboard provides quick-add buttons for income and expense
+transactions. These dialogs:
+
+    1. Open a transaction creation dialog on the dashboard itself
+    2. Run the full auto-matching chain against the new transaction:
+       - Duplicate detection against existing transactions
+       - Recurring expense matching
+       - Amortization matching
+       - Budget income matching
+    3. Apply appropriate categorization, flags, and linked IDs
+    4. Return to the dashboard (not the transactions screen)
+
+
+================================================================================
+9. IMPORT / EXPORT PIPELINE
+================================================================================
+
+9.1 Export Formats
+---------------------------------------------------------------------------
+
+Format                  Description
+---------------------------------------------------------------------------
+SecureSync CSV          Plaintext CSV with header:
+                        id,type,date,source,amount,categoryAmounts,
+                        isUserCategorized
+                        CategoryAmounts serialized as "catId:amount;..."
+
+SecureSync Encrypted    Same CSV content encrypted with ChaCha20-Poly1305.
+                        Password required (minimum length enforced).
+                        Wire format: [16-byte salt][12-byte nonce]
+                        [ciphertext + Poly1305 tag]
+
+9.2 Import Formats
+---------------------------------------------------------------------------
+
+Format                  Description
+---------------------------------------------------------------------------
+US Bank CSV             Standard US Bank download format. Columns:
+                        Date, Transaction, Name, Memo, Amount.
+                        CREDIT type -> INCOME, others -> EXPENSE.
+                        Amounts converted to absolute values.
+                        Merchant names cleaned (whitespace normalized).
+
+SecureSync CSV          Native format with full field preservation
+                        including categoryAmounts and isUserCategorized.
+                        Header validation: must start with "id,type,date,".
+
+SecureSync Encrypted    Decrypted with user-provided password, then
+                        parsed as SecureSync CSV.
+
+9.3 Import Pipeline State Machine (TransactionsScreen)
+---------------------------------------------------------------------------
+
+The import pipeline is implemented as a LaunchedEffect-driven state machine
+with the following stages:
+
+Stage                   Description
+---------------------------------------------------------------------------
+FORMAT_SELECTION        User selects import format (US Bank, CSV, Encrypted)
+PARSING                 File is read and parsed; password dialog for encrypted
+PARSE_ERROR             Parse error display with option to keep partial results
+DUPLICATE_CHECK         Per-transaction auto-matching chain
+COMPLETE                Import summary with counts
+
+9.4 Auto-Matching Chain
+---------------------------------------------------------------------------
+
+For each imported transaction, the following matching chain executes in order:
+
+Step    Matcher                     Action on Match
+---------------------------------------------------------------------------
+1       filterAlreadyLoadedDays     Pre-filter: skip days already in app.
+                                    <= 5 txns/day: require 100% amount match.
+                                    > 5 txns/day: require >= 80% match,
+                                    keep only unmatched transactions.
+
+2       findDuplicate               Compare against existing transactions using
+                                    amount tolerance + date window + merchant
+                                    substring. Shows DuplicateResolutionDialog
+                                    with options: Ignore, Keep New, Keep
+                                    Existing, Ignore All.
+
+3       findRecurringExpenseMatch   Match against recurring expenses by amount
+                                    and merchant. If matched AND date is close
+                                    enough (isRecurringDateCloseEnough), prompt:
+                                    "Yes Recurring" / "No, Regular Expense".
+                                    Sets linkedRecurringExpenseId.
+
+4       findAmortizationMatch       Match against amortization entries by amount
+                                    and merchant. Prompt: "Yes Amortization" /
+                                    "No, Regular Expense". Sets
+                                    linkedAmortizationEntryId.
+
+5       findBudgetIncomeMatch       Match INCOME transactions against income
+                                    sources by merchant. Prompt: "Yes Budget
+                                    Income" / "No, Extra Income". Flags
+                                    isBudgetIncome = true.
+
+6       autoCategorize              For unmatched transactions, auto-assign
+                                    category based on merchant history (most
+                                    frequent category from same merchant within
+                                    6 months, up to 10 recent matches). Falls
+                                    back to "Other" category.
+
+7       Direct Save                 Transaction saved with assigned categories.
+
+9.5 Matching Configuration
+---------------------------------------------------------------------------
+
+All matching tolerances are user-configurable via SettingsScreen:
+
+Parameter               SharedPreferences Key   Default     Description
+---------------------------------------------------------------------------
+Date Window             matchDays               7           Days +/- for duplicate date matching
+Percent Tolerance       matchPercent            1.0%        Amount % tolerance for matching
+Dollar Tolerance        matchDollar             1           Absolute dollar tolerance for matching
+Min Chars               matchChars              5           Minimum common substring length for merchant matching
+
+9.6 Amount Matching Algorithm (amountMatches)
+---------------------------------------------------------------------------
+
+Two amounts match if EITHER condition is true:
+    - Percentage match: |a1 - a2| / max(|a1|, |a2|) <= percentTolerance
+    - Dollar match: |round(a1) - round(a2)| <= dollarTolerance
+
+9.7 Merchant Matching Algorithm (merchantMatches)
+---------------------------------------------------------------------------
+
+Two merchant names match if:
+    - Both are shorter than minChars: exact lowercase equality required
+    - Otherwise: any common substring of length >= minChars exists
+      (computed via sliding window with HashSet lookup)
+
+
+================================================================================
+10. ENCRYPTION SYSTEM
+================================================================================
+
+10.1 CryptoHelper (CryptoHelper.kt - 93 lines)
+---------------------------------------------------------------------------
+
+CryptoHelper is a singleton object providing authenticated encryption for
+transaction export files and sync data.
+
+Algorithm:      ChaCha20-Poly1305 (AEAD)
+Key Derivation: PBKDF2WithHmacSHA256 (for password-based encryption)
+
+10.2 Cryptographic Parameters
+---------------------------------------------------------------------------
+
+Parameter               Value
+---------------------------------------------------------------------------
+Salt Length              16 bytes
+Nonce Length             12 bytes
+Key Length               256 bits
+PBKDF2 Iterations       100,000
+Cipher Suite             ChaCha20-Poly1305
+Key Derivation Function  PBKDF2WithHmacSHA256
+
+10.3 Wire Format
+---------------------------------------------------------------------------
+
+    Byte Offset     Length          Content
+    ---------------------------------------------------------
+    0               16 bytes       Random salt (password mode) or nonce start
+    16              12 bytes       Random nonce
+    28              variable       Ciphertext + Poly1305 authentication tag
+
+Total overhead: 28 bytes + 16-byte Poly1305 tag = 44 bytes beyond plaintext.
+
+10.4 Encryption Modes
+---------------------------------------------------------------------------
+
+Password-Based (encrypt/decrypt):
+    Used for export files. Derives key from user password via PBKDF2.
+
+Direct-Key (encryptWithKey/decryptWithKey):
+    Used for sync data encryption. Accepts a raw 256-bit key directly,
+    bypassing PBKDF2 derivation. Wire format: [12-byte nonce][ciphertext].
+
+
+================================================================================
+11. AUTO-CATEGORIZATION SYSTEM
+================================================================================
+
+11.1 AutoCategorizer (AutoCategorizer.kt - 49 lines)
+---------------------------------------------------------------------------
+
+The autoCategorize function automatically assigns categories to imported
+transactions based on historical merchant data.
+
+Algorithm:
+    1. Look back 6 months from the transaction date
+    2. Find existing transactions from the same merchant (using 5-character
+       common substring matching)
+    3. Take the 10 most recent matches (sorted by date descending)
+    4. Group their categoryAmounts by categoryId
+    5. Select the most frequently used categoryId
+    6. If no match found, fall back to the "Other" system category
+    7. Return transaction with single CategoryAmount for full amount
+    8. Mark isUserCategorized = false
+
+
+================================================================================
+12. CATEGORY MANAGEMENT SYSTEM
+================================================================================
+
+12.1 Category Data Model
+---------------------------------------------------------------------------
+
+Property                Type            Description
+---------------------------------------------------------------------------
+id                      Int             Unique identifier
+name                    String          Category display name
+iconName                String          Key into CATEGORY_ICON_MAP
+tag                     String          System tag for protected categories
+deviceId                String          Originating device for sync
+deleted                 Boolean         Tombstone flag for sync deletes
+
+12.2 System Categories
+---------------------------------------------------------------------------
+
+Four protected system categories are auto-provisioned on startup. They are
+defined by tag in DefaultCategories.kt:
+
+Category Name           Tag                     Deletable
+---------------------------------------------------------------------------
+Other                   __other__               No
+Recurring               __recurring__           No
+Amortization            __amortization__        No
+Recurring Income        __recurring_income__    No
+
+12.3 Category Icons
+---------------------------------------------------------------------------
+
+The CATEGORY_ICON_MAP (CategoryIcons.kt - 167 lines) provides 120+ Material
+icon options organized into thematic groups:
+
+Group                       Example Icons
+---------------------------------------------------------------------------
+Food & Drink (18)           Restaurant, Fastfood, LocalCafe, LocalBar,
+                            BakeryDining, LocalPizza, LunchDining,
+                            LocalGroceryStore, ShoppingCart, Icecream,
+                            SetMeal, RamenDining, DinnerDining, LocalDining,
+                            Liquor, SportsBar, Cake, TakeoutDining
+
+Transport (11)              DirectionsCar, LocalGasStation, DirectionsBus,
+                            Train, Flight, DirectionsBike, LocalTaxi,
+                            TwoWheeler, LocalShipping, LocalParking, Sailing
+
+Home & Utilities (15)       Home, Apartment, Build, ElectricalServices,
+                            Water, Wifi, Phone, CleaningServices, Cottage,
+                            Roofing, Plumbing, Chair, Bed, Shower, Bathtub,
+                            Light, AcUnit, Thermostat
+
+Health & Wellness (8)       LocalHospital, MedicalServices, Medication,
+                            FitnessCenter, Spa, Favorite, SelfImprovement,
+                            LocalPharmacy
+
+Education & Work (7)        School, MenuBook, Work, Computer, Laptop,
+                            Smartphone, Headphones
+
+Entertainment (15)          SportsEsports, Movie, MusicNote, Tv,
+                            SportsBasketball, SportsSoccer, TheaterComedy,
+                            Casino, Pool, GolfCourse, Hiking, Snowboarding,
+                            Nightlife, Celebration, Balloon
+
+Photography & Art (3)       CameraAlt, Brush, Palette
+
+Shopping & Personal (9)     ShoppingBag, Checkroom, Watch, CardGiftcard,
+                            Diamond, Storefront, Store, LocalMall, LocalOffer
+
+Pets & Nature (7)           Pets, Park, Forest, LocalFlorist, Grass,
+                            WbSunny, Cloud
+
+Finance (10)                AccountBalance, Savings, CreditCard, AttachMoney,
+                            Receipt, Payments, LocalAtm, RequestQuote,
+                            Sync, Schedule
+
+Travel & Lodging (3)        Hotel, BeachAccess, Luggage
+
+Security & Communication (4) Security, Lock, Email, Chat
+
+Construction & Services (1) Construction
+
+Miscellaneous (12)          ChildCare, Elderly, VolunteerActivism, Handyman,
+                            LocalLaundryService, Star, Flag, Bookmark,
+                            LocalLibrary, EmojiEvents, Category, MoreHoriz
+
+12.4 Category Deletion with Reassignment
+---------------------------------------------------------------------------
+
+When a user-defined category is deleted:
+    1. If no transactions reference the category: delete immediately
+    2. If transactions reference the category: show reassignment dialog
+       a. Display count of affected transactions
+       b. User selects a target category from remaining categories
+       c. All affected transactions have their categoryAmounts updated
+          to point to the new category
+       d. Original category is deleted after reassignment
+
+Note: In sync mode, deletion uses tombstones (deleted=true) rather than
+removal from the list.
+
+
+================================================================================
+13. SPENDING CHARTS SYSTEM
+================================================================================
+
+13.1 Chart Types
+---------------------------------------------------------------------------
+
+The MainScreen dashboard provides two chart visualization types:
+
+Type                Description
+---------------------------------------------------------------------------
+Pie Chart           Proportional category breakdown as a donut/pie chart
+Bar Chart           Category amounts as horizontal or vertical bars
+
+Users toggle between chart types using an icon button in the chart header.
+
+13.2 Time Ranges
+---------------------------------------------------------------------------
+
+Seven spending analysis ranges are available:
+
+Range               Description
+---------------------------------------------------------------------------
+7 days              Last 7 days of transactions
+30 days             Last 30 days
+90 days             Last 90 days
+All                 All transactions
+Current Period      Current budget period only
+Year to Date        January 1 to today
+Custom              User-selected date range
+
+13.3 Color Palettes
+---------------------------------------------------------------------------
+
+Four color palettes are available, each with dark and light theme variants:
+
+Palette             Description
+---------------------------------------------------------------------------
+Bright              Vivid, saturated colors
+Pastel              Soft, muted colors
+Sunset              Warm amber/orange tones (default)
+Earthy              Natural brown/green tones
+
+The active palette is stored in SharedPreferences under "chartPalette"
+(default: "Sunset").
+
+
+================================================================================
+14. LOCALIZATION SYSTEM
+================================================================================
+
+14.1 Architecture
+---------------------------------------------------------------------------
+
+Localization uses Jetpack Compose's CompositionLocal mechanism for string
+injection, bypassing Android's standard XML resource system entirely. This
+allows runtime language switching without Activity recreation.
+
+Components:
+
+File                    Lines   Role
+---------------------------------------------------------------------------
+AppStrings.kt           1,093   Interface defining 16 string group interfaces
+                                with ~800+ total string fields
+EnglishStrings.kt       1,345   Complete English implementation
+SpanishStrings.kt       1,343   Complete Spanish implementation
+LocalStrings.kt         5       CompositionLocal<AppStrings> provider
+
+14.2 String Groups
+---------------------------------------------------------------------------
+
+Group Interface                 Screen/Feature              Field Count (approx)
+---------------------------------------------------------------------------
+CommonStrings                   Shared UI elements          ~70
+DashboardStrings                MainScreen dashboard        ~30
+SettingsStrings                 Settings screen             ~35
+BudgetConfigStrings             Budget configuration        ~27
+TransactionsStrings             Transaction management      ~70
+FutureExpendituresStrings       Savings goals               ~35
+AmortizationStrings             Amortization screen         ~20
+RecurringExpensesStrings        Recurring expenses          ~18
+SyncStrings                     Family sync screen          ~40
+DashboardHelpStrings            Dashboard help              ~100
+SettingsHelpStrings             Settings help               ~80
+TransactionsHelpStrings         Transactions help           ~130
+BudgetConfigHelpStrings         Budget config help          ~95
+FutureExpendituresHelpStrings   Savings goals help          ~70
+AmortizationHelpStrings         Amortization help           ~50
+RecurringExpensesHelpStrings    Recurring expenses help     ~60
+
+14.3 Dynamic String Support
+---------------------------------------------------------------------------
+
+Many string fields are lambda functions that accept parameters for dynamic
+content insertion:
+
+    val budgetLabel: (String, String) -> String
+    val superchargeRemaining: (String) -> String
+    val selectedCount: (Int) -> String
+    val safeBudgetAmountLabel: (String, String, String) -> String
+    val savingsRequiredMessage: (String, String) -> String
+    val savingsLowPointToast: (String) -> String
+
+This allows natural language formatting that varies by locale (e.g.,
+parameter ordering differences between English and Spanish).
+
+14.4 Language Switching
+---------------------------------------------------------------------------
+
+The active language is stored in SharedPreferences under "appLanguage"
+(default: "en"). On change:
+    1. SharedPreferences updated
+    2. AppStrings reference switched (EnglishStrings or SpanishStrings)
+    3. CompositionLocalProvider re-provides new strings
+    4. All Composables recompose with new string values
+
+No Activity restart is required.
+
+
+================================================================================
+15. THEME SYSTEM
+================================================================================
+
+15.1 SyncBudgetColors Data Class
+---------------------------------------------------------------------------
+
+Property                    Dark Theme Value            Light Theme Value
+---------------------------------------------------------------------------
+headerBackground            #1A1A1A (dark charcoal)     #305880 (blue)
+headerText                  #E8D5A0 (warm amber)        #FFFFFF (white)
+cardBackground              #1A1A1A (dark charcoal)     #305880 (blue)
+cardText                    #E8D5A0 (warm amber)        #FFFFFF (white)
+displayBackground           #383838 (dark grey)         #D6E5DE (light green)
+displayBorder               #4A4A4A (medium grey)       #B8CCC2 (sage)
+userCategoryIconTint        #305880 (blue)              #305880 (blue)
+
+15.2 Material 3 Color Schemes
+---------------------------------------------------------------------------
+
+Slot                    Dark                    Light
+---------------------------------------------------------------------------
+primary                 #E8D5A0 (amber)         #2E5C80 (navy blue)
+onPrimary               #1A1A1A (charcoal)      #FFFFFF (white)
+primaryContainer        #4A3270 (purple)        #4A3270 (purple)
+onPrimaryContainer      #E8DEF8 (lavender)      #E8DEF8 (lavender)
+background              #2A3A2F (green/grey)    #BDD5CC (greenish-blue)
+surface                 #1A1A1A (charcoal)      #FFFFFF (white)
+onBackground            #E8D5A0 (amber)         #1C1B1F (near black)
+onSurface               #E8D5A0 (amber)         #1C1B1F (near black)
+
+15.3 Typography
+---------------------------------------------------------------------------
+
+The app uses two font configurations:
+
+Font                    Usage
+---------------------------------------------------------------------------
+FlipFontFamily          FontFamily.Monospace - used for flip display digits
+                        and decimal points for consistent character widths
+headlineLarge           FontFamily.Default, Bold, 24sp, 2sp letter spacing -
+                        used for screen titles and headers
+
+15.4 Ad-Aware Dialog System
+---------------------------------------------------------------------------
+
+Two custom dialog composables in Theme.kt handle dialog positioning:
+
+AdAwareDialog:
+    - Uses Dialog() with custom positioning to avoid overlapping banner ads
+    - Applies SOFT_INPUT_ADJUST_NOTHING to the dialog window to prevent
+      Android from sliding the dialog upward when the keyboard opens
+    - Used as the foundation for AdAwareAlertDialog
+
+AdAwareAlertDialog:
+    - Drop-in replacement for Material3 AlertDialog
+    - Uses AdAwareDialog internally with proper Surface and Column layout
+    - Accepts optional scrollState parameter for PulsingScrollArrow display
+    - Used by all dialogs across the application
+
+15.5 PulsingScrollArrow
+---------------------------------------------------------------------------
+
+PulsingScrollArrow is an animated composable that indicates scrollable
+content exists below the visible area.
+
+    - Uses rememberInfiniteTransition with tween(600ms) RepeatMode.Reverse
+    - Animates vertical offset between 0f and 6f dp (bounce effect)
+    - Shows only when ScrollState.canScrollForward is true
+    - Disappears when user scrolls to the bottom
+    - Icon: KeyboardArrowDown with 0.5f alpha onSurface tint
+    - Positioned at BottomStart with padding(start=12dp, bottom=18dp)
+    - Added to all form dialogs across the application
+
+
+================================================================================
+16. FAMILY SYNC SYSTEM
+================================================================================
+
+16.1 Overview
+---------------------------------------------------------------------------
+
+Family Sync enables multi-device budget synchronization for households of
+up to 5 devices. Sync uses Firebase Firestore as the transport layer and
+per-field Last-Writer-Wins (LWW) Register CRDTs with Lamport timestamps
+for conflict-free merging.
+
+16.2 CRDT Architecture
+---------------------------------------------------------------------------
+
+Every mutable field on every data class has a corresponding _clock field
+(Long, Lamport timestamp). When two devices modify the same record:
+
+    - Each field is compared independently
+    - The value with the higher clock wins (Last Writer Wins)
+    - If clocks are equal, a deterministic tiebreaker (deviceId) is used
+    - Deletes use tombstones (deleted=true) instead of removal
+
+This ensures eventual consistency without coordination.
+
+16.3 Sync Components
+---------------------------------------------------------------------------
+
+Component                   File                    Lines   Purpose
+---------------------------------------------------------------------------
+LamportClock                LamportClock.kt         35      Logical clock: tick() and merge()
+SyncIdGenerator             SyncIdGenerator.kt      19      Device-unique ID generation
+SyncFilters                 SyncFilters.kt          33      .active extension (filters tombstones)
+CrdtMerge                   CrdtMerge.kt            296     Per-field LWW merge for all types
+PeriodLedger                PeriodLedger.kt         78      Budget amount recording at refresh
+PeriodLedgerCorrector       PeriodLedgerCorrector.kt 58     Ledger entry correction
+DeltaBuilder                DeltaBuilder.kt         190     Minimal change delta construction
+DeltaSerializer             DeltaSerializer.kt      79      JSON delta serialization
+FirestoreService            FirestoreService.kt     391     Firestore CRUD operations
+GroupManager                GroupManager.kt         155     Group create/join/leave/dissolve
+SnapshotManager             SnapshotManager.kt      441     Full-state snapshot management
+SyncEngine                  SyncEngine.kt           902     Main sync orchestration
+SyncFileLock                SyncFileLock.kt         45      File-based lock for sync ops
+SyncWorker                  SyncWorker.kt           365     WorkManager background sync
+
+16.4 Sync Flow
+---------------------------------------------------------------------------
+
+    1. SyncWorker triggers periodically via WorkManager
+    2. SyncFileLock acquired to prevent concurrent syncs
+    3. DeltaBuilder creates a delta package of locally changed records
+    4. If no local changes, delta push is skipped
+    5. Delta pushed to Firestore via FirestoreService
+    6. Remote deltas pulled (paginated) and merged via CrdtMerge
+    7. If device is too stale, SnapshotManager performs snapshot catch-up
+    8. All merged data saved to local repositories
+    9. Available cash recomputed deterministically
+
+16.5 Group Management
+---------------------------------------------------------------------------
+
+    - Create Group: generates pairing code, creates Firestore group document
+    - Join Group: validates pairing code, adds device to group
+    - Leave Group: removes device from group
+    - Dissolve Group: admin-only, removes entire group
+
+16.6 Deterministic Cash
+---------------------------------------------------------------------------
+
+Available cash is not synced directly. Instead, it is deterministically
+recomputed from synced data:
+
+    availableCash = sum(periodLedgerCredits) + sum(transactionEffects)
+
+This ensures all devices with the same CRDT-merged data arrive at the
+same cash value, eliminating sync drift.
+
+16.7 Shared Settings
+---------------------------------------------------------------------------
+
+Budget period, reset hour, reset day of week, and reset day of month are
+shared across the family group via SharedSettings. Only the admin device
+can modify these settings; other devices see them as locked/read-only.
+
+
+================================================================================
+17. DATA MODELS
+================================================================================
+
+17.1 Transaction
+---------------------------------------------------------------------------
+
+Property                Type                    Default         Nullable
+---------------------------------------------------------------------------
+id                      Int                     (required)      No
+type                    TransactionType         (required)      No
+date                    LocalDate               (required)      No
+source                  String                  (required)      No
+description             String                  ""              No
+categoryAmounts         List<CategoryAmount>    emptyList()     No
+amount                  Double                  (required)      No
+isUserCategorized       Boolean                 true            No
+isBudgetIncome          Boolean                 false           No
+linkedRecurringExpenseId Int?                   null            Yes
+linkedAmortizationEntryId Int?                  null            Yes
+deviceId                String                  ""              No
+deleted                 Boolean                 false           No
+[per-field _clock]      Long                    0L              No
+
+17.2 CategoryAmount
+---------------------------------------------------------------------------
+
+Property                Type                    Default         Nullable
+---------------------------------------------------------------------------
+categoryId              Int                     (required)      No
+amount                  Double                  (required)      No
+
+17.3 Category
+---------------------------------------------------------------------------
+
+Property                Type                    Default         Nullable
+---------------------------------------------------------------------------
+id                      Int                     (required)      No
+name                    String                  (required)      No
+iconName                String                  (required)      No
+tag                     String                  ""              No
+deviceId                String                  ""              No
+deleted                 Boolean                 false           No
+[per-field _clock]      Long                    0L              No
+
+17.4 IncomeSource
+---------------------------------------------------------------------------
+
+Property                Type                    Default         Nullable
+---------------------------------------------------------------------------
+id                      Int                     (required)      No
+source                  String                  (required)      No
+description             String                  ""              No
+amount                  Double                  (required)      No
+repeatType              RepeatType              MONTHS          No
+repeatInterval          Int                     1               No
+startDate               LocalDate?              null            Yes
+monthDay1               Int?                    null            Yes
+monthDay2               Int?                    null            Yes
+deviceId                String                  ""              No
+deleted                 Boolean                 false           No
+[per-field _clock]      Long                    0L              No
+
+17.5 RecurringExpense
+---------------------------------------------------------------------------
+
+Property                Type                    Default         Nullable
+---------------------------------------------------------------------------
+id                      Int                     (required)      No
+source                  String                  (required)      No
+description             String                  ""              No
+amount                  Double                  (required)      No
+repeatType              RepeatType              MONTHS          No
+repeatInterval          Int                     1               No
+startDate               LocalDate?              null            Yes
+monthDay1               Int?                    null            Yes
+monthDay2               Int?                    null            Yes
+deviceId                String                  ""              No
+deleted                 Boolean                 false           No
+[per-field _clock]      Long                    0L              No
+
+17.6 AmortizationEntry
+---------------------------------------------------------------------------
+
+Property                Type                    Default         Nullable
+---------------------------------------------------------------------------
+id                      Int                     (required)      No
+source                  String                  (required)      No
+description             String                  ""              No
+amount                  Double                  (required)      No
+totalPeriods            Int                     (required)      No
+startDate               LocalDate               (required)      No
+isPaused                Boolean                 false           No
+deviceId                String                  ""              No
+deleted                 Boolean                 false           No
+[per-field _clock]      Long                    0L              No
+
+17.7 SavingsGoal
+---------------------------------------------------------------------------
+
+Property                Type                    Default         Nullable
+---------------------------------------------------------------------------
+id                      Int                     (required)      No
+name                    String                  (required)      No
+targetAmount            Double                  (required)      No
+targetDate              LocalDate?              null            Yes
+totalSavedSoFar         Double                  0.0             No
+contributionPerPeriod   Double                  0.0             No
+isPaused                Boolean                 false           No
+deviceId                String                  ""              No
+deleted                 Boolean                 false           No
+[per-field _clock]      Long                    0L              No
+
+17.8 SharedSettings
+---------------------------------------------------------------------------
+
+Property                Type                    Default         Nullable
+---------------------------------------------------------------------------
+budgetPeriod            BudgetPeriod            DAILY           No
+resetHour               Int                     0               No
+resetDayOfWeek          Int                     7               No
+resetDayOfMonth         Int                     1               No
+lastChangedBy           String                  ""              No
+[per-field _clock]      Long                    0L              No
+
+17.9 PeriodLedgerEntry
+---------------------------------------------------------------------------
+
+Property                Type                    Default         Nullable
+---------------------------------------------------------------------------
+periodStartDate         LocalDateTime           (required)      No
+appliedAmount           Double                  (required)      No
+clockAtReset            Long                    (required)      No
+corrected               Boolean                 false           No
+deviceId                String                  ""              No
+clock                   Long                    0L              No
+
+17.10 SavingsSimulator.SimResult
+---------------------------------------------------------------------------
+
+Property                Type                    Default         Nullable
+---------------------------------------------------------------------------
+savingsRequired         Double                  (required)      No
+lowPointDate            LocalDate?              (required)      Yes
+
+17.11 Enumerations
+---------------------------------------------------------------------------
+
+Enum                    Values
+---------------------------------------------------------------------------
+TransactionType         EXPENSE, INCOME
+BudgetPeriod            DAILY, WEEKLY, MONTHLY
+RepeatType              DAYS, WEEKS, BI_WEEKLY, MONTHS, BI_MONTHLY, ANNUAL
+SuperchargeMode         REDUCE_CONTRIBUTIONS, ACHIEVE_SOONER
+BankFormat              US_BANK, SECURESYNC_CSV, SECURESYNC_ENCRYPTED
+ImportStage             FORMAT_SELECTION, PARSING, PARSE_ERROR,
+                        DUPLICATE_CHECK, COMPLETE
+
+
+================================================================================
+18. PERSISTENCE STRATEGY
+================================================================================
+
+18.1 JSON File Storage
+---------------------------------------------------------------------------
+
+All primary data models are persisted as JSON arrays using Android's internal
+file storage (Context.openFileOutput / Context.openFileInput with
+MODE_PRIVATE).
+
+File Name                       Repository Object           Data Model
+---------------------------------------------------------------------------
+transactions.json               TransactionRepository       Transaction
+categories.json                 CategoryRepository          Category
+income_sources.json             IncomeSourceRepository      IncomeSource
+recurring_expenses.json         RecurringExpenseRepository  RecurringExpense
+amortization_entries.json       AmortizationRepository      AmortizationEntry
+future_expenditures.json        SavingsGoalRepository       SavingsGoal
+shared_settings.json            SharedSettingsRepository    SharedSettings
+period_ledger.json              PeriodLedgerRepository      PeriodLedgerEntry
+
+Each repository follows an identical pattern:
+    - save(context, list): Serialize list to JSONArray, write to file
+    - load(context): Read file, parse JSONArray, return list
+    - File existence check before load (returns emptyList if missing)
+    - Blank content check (returns emptyList if empty)
+    - Backward-compatible defaults for sync fields added in v2.0
+
+18.2 SharedPreferences Storage
+---------------------------------------------------------------------------
+
+Display and runtime state is stored in Android SharedPreferences:
+
+Key                     Type        Default         Description
+---------------------------------------------------------------------------
+currencySymbol          String      "$"             Active currency symbol
+digitCount              Int         3               Number of whole-number digit cards
+showDecimals            Boolean     false           Whether to show decimal places on flip display
+dateFormatPattern       String      "yyyy-MM-dd"    Date format for display throughout app
+isPaidUser              Boolean     false           Unlocks save/load features
+matchDays               Int         7               Date window for duplicate matching
+matchPercent            Float       1.0             Percent tolerance for amount matching
+matchDollar             Int         1               Dollar tolerance for amount matching
+matchChars              Int         5               Min common substring length for merchant matching
+weekStartSunday         Boolean     true            Week starts on Sunday (vs Monday)
+chartPalette            String      "Sunset"        Active chart color palette
+appLanguage             String      "en"            Active language code (en/es)
+budgetPeriod            String      "DAILY"         Active budget period
+resetHour               Int         0               Hour of day for daily budget reset
+resetDayOfWeek          Int         7               Day of week for weekly reset
+resetDayOfMonth         Int         1               Day of month for monthly reset
+isManualBudgetEnabled   Boolean     false           Manual budget override toggle
+manualBudgetAmount      String?     null            Manual budget override amount
+availableCash           String?     null            Current available cash balance
+budgetStartDate         String?     null            Date budget tracking began
+lastRefreshDate         String?     null            Last budget period refresh date
+lamportClock            Long        0               Current Lamport clock value
+localDeviceId           String      ""              This device's sync ID
+
+18.3 Persistence Timing
+---------------------------------------------------------------------------
+
+All data mutations trigger immediate persistence. The pattern throughout
+MainActivity is:
+
+    1. Modify in-memory mutableStateListOf collection
+    2. Stamp CRDT clock fields on modified record
+    3. Call repository.save(context, list) immediately
+    4. Recalculate budget if relevant (income, expenses, goals, amortization)
+    5. Recompute available cash if relevant
+    6. Update SharedPreferences if relevant
+
+
+================================================================================
+19. HELP SYSTEM
+================================================================================
+
+19.1 Architecture
+---------------------------------------------------------------------------
+
+Each major screen has a dedicated help screen accessible via a help icon
+in the top app bar. Help screens are pure Composable functions that use
+shared building block components from HelpComponents.kt.
+
+19.2 Help Screen Inventory
+---------------------------------------------------------------------------
+
+Help Screen                     Lines   Topics Covered
+---------------------------------------------------------------------------
+DashboardHelpScreen             459     Welcome, Solari display, available cash,
+                                        budget label, header bar, navigation bar,
+                                        spending charts, chart palettes, quick-add
+                                        buttons, Supercharge, how budget works,
+                                        safe budget calculation, deterministic cash,
+                                        getting started guide, budgeting habits,
+                                        key features, privacy notice
+
+TransactionsHelpScreen          998     Overview, header actions, action bar,
+                                        search modes (date/text/amount), transaction
+                                        list format, icon colors, multi-category
+                                        display, tap/long-press editing, bulk
+                                        selection, linked transactions, add/edit
+                                        dialog, pie chart mode, auto-fill,
+                                        duplicate detection, saving (CSV/encrypted),
+                                        encryption details, loading formats,
+                                        auto-categorization, tips
+
+BudgetConfigHelpScreen          357     Overview, budget period options, reset
+                                        settings, safe budget explanation, how
+                                        calculated, recalculate vs reset, manual
+                                        override, savings warning, income sources,
+                                        repeat types, budget income matching, tips
+
+SettingsHelpScreen              304     Overview, header, configure budget button,
+                                        currency options, decimals, date format,
+                                        week start, chart palette, matching config,
+                                        paid user features, categories, tips
+
+FutureExpendituresHelpScreen    289     What are savings goals, example, two types,
+                                        target-date vs fixed-contribution, header
+                                        actions, adding goals, deduction formulas,
+                                        progress display, actions, statuses, tips
+
+RecurringExpensesHelpScreen     281     What are recurring expenses, why track them,
+                                        header, adding expenses, repeat types (6),
+                                        expense list format, actions, budget effect,
+                                        savings required, timing safety,
+                                        auto-matching, tips
+
+AmortizationHelpScreen          269     What is amortization, example, vs savings
+                                        goals, header, adding entries, deduction
+                                        formula, entry list format, actions, pause
+                                        support, auto-matching, tips
+
+FamilySyncHelpScreen            96      Family sync overview, creating groups,
+                                        joining groups, admin settings, sync behavior
+
+19.3 Shared Help Components (HelpComponents.kt - 165 lines)
+---------------------------------------------------------------------------
+
+HelpComponents.kt provides reusable Composable building blocks:
+    - Section headers with consistent styling
+    - Bullet point lists with icons
+    - Tip/note callout boxes
+    - Key-value description rows
+    - Numbered step lists
+
+
+================================================================================
+20. PIECHARTEDITITOR COMPONENT
+================================================================================
+
+20.1 PieChartEditor (PieChartEditor.kt - 457 lines)
+---------------------------------------------------------------------------
+
+PieChartEditor is an interactive Composable for allocating a transaction
+amount across multiple categories. It supports three input modes and
+provides real-time visual feedback.
+
+20.2 Visual Design
+---------------------------------------------------------------------------
+
+The component renders a donut-style pie chart with:
+    - Category-colored arc segments proportional to allocation
+    - Draggable handle circles at segment boundaries
+    - Pulsing animation on the active drag handle
+    - Category legend with color swatches and amounts
+    - Central total display
+
+20.3 Drag Interaction
+---------------------------------------------------------------------------
+
+Users resize category allocations by dragging divider handles:
+    1. Touch event detected via pointerInput modifier
+    2. Angle calculated from touch position relative to chart center
+       using atan2
+    3. Handle positions updated, with minimum slice angle enforced
+    4. Category amounts recalculated proportionally
+    5. Amounts snapped to currency-appropriate precision
+
+20.4 Color Palettes
+---------------------------------------------------------------------------
+
+Six color palettes are available for the pie chart, selected from the
+chart palette setting:
+
+    Palette Name        Variant     Colors
+    ---------------------------------------------------------
+    Bright              Dark        Vivid saturated hues
+    Bright              Light       Vivid saturated hues
+    Pastel              Dark        Soft muted hues
+    Pastel              Light       Soft muted hues
+    Sunset              Dark        Warm amber/orange tones
+    Sunset              Light       Warm amber/orange tones
+    Earthy              Dark        Natural brown/green tones
+    Earthy              Light       Natural brown/green tones
+
+
+================================================================================
+21. ERROR HANDLING
+================================================================================
+
+21.1 File I/O Error Handling
+---------------------------------------------------------------------------
+
+All repository load operations:
+    - Check file existence before attempting to read
+    - Return emptyList() if file does not exist or is blank
+    - JSON parsing errors propagate as exceptions to the caller
+    - Sync fields loaded with backward-compatible defaults
+
+All repository save operations:
+    - Use Context.openFileOutput with MODE_PRIVATE
+    - Use Kotlin's .use {} block for automatic stream closure
+
+21.2 Import Error Handling
+---------------------------------------------------------------------------
+
+The CsvParser returns CsvParseResult with a nullable error field:
+    - Line-level parse errors include line number and exception message
+    - Header validation for SecureSync CSV format
+    - Empty file detection
+    - Partial results preserved (transactions parsed before error)
+
+21.3 Encryption Error Handling
+---------------------------------------------------------------------------
+
+CryptoHelper validates:
+    - Minimum data size (SALT_LENGTH + NONCE_LENGTH + 1)
+    - Poly1305 authentication tag (throws on tampered data)
+    - Invalid password results in authentication failure exception
+
+21.4 Data Validation
+---------------------------------------------------------------------------
+
+    - Transaction IDs generated with collision avoidance (retry loop)
+    - Amount tolerance checks use both percentage and absolute thresholds
+    - Date boundary coercion (day of month clamped to month length)
+    - Category deletion requires reassignment if transactions reference it
+    - Savings goal contributions capped at remaining amount
+    - Amortization periods clamped to [0, totalPeriods]
+    - Budget period start dates handle month-length variations
+    - Budget calculations rounded to 2 decimal places
+
+21.5 Sync Error Handling
+---------------------------------------------------------------------------
+
+    - SyncFileLock prevents concurrent sync operations
+    - Snapshot catch-up for devices too far behind delta history
+    - CRDT merge is idempotent (safe to replay)
+    - Delta push skipped when no local changes exist
+    - Firestore operations wrapped in try-catch with retry logic
+
+
+================================================================================
+22. ANDROID MANIFEST CONFIGURATION
+================================================================================
+
+Manifest:       AndroidManifest.xml
+
+Configuration                   Value
+---------------------------------------------------------------------------
+Package                         com.syncbudget.app
+allowBackup                     true
+supportsRtl                     true
+Theme                           Theme.Material.NoActionBar
+Activity                        .MainActivity
+screenOrientation               portrait
+exported                        true
+Intent Filter Action            android.intent.action.MAIN
+Intent Filter Category          android.intent.category.LAUNCHER
+
+Permissions:
+    INTERNET                    Required for Firebase Firestore sync
+
+Services:
+    SyncWorker                  WorkManager periodic background sync
+
+
+================================================================================
+23. CODE STATISTICS
+================================================================================
+
+23.1 Lines of Code by Layer
+---------------------------------------------------------------------------
+
+Layer                           Files       Lines       Percentage
+---------------------------------------------------------------------------
+Screen Composables              10          13,402      48.3%
+Help Screens                    8           3,133       11.3%
+Localization Strings            4           3,786       13.6%
+UI Components                   4           1,323       4.8%
+Data Layer (models + repos)     20          1,337       4.8%
+Data Layer (logic)              7           1,242       4.5%
+Sync Engine                     14          2,787       10.0%
+Theme                           3           336         1.2%
+Sound                           1           131         0.5%
+Entry Point                     1           2,789       (counted in screens)
+---------------------------------------------------------------------------
+TOTAL                           68*         27,738      100.0%
+
+* MainActivity counted under Entry Point but included in Screen Composables
+  total for percentage calculation.
+
+23.2 Top 10 Files by Size
+---------------------------------------------------------------------------
+
+Rank    File                            Lines
+---------------------------------------------------------------------------
+1       TransactionsScreen.kt           4,010
+2       MainActivity.kt                 2,789
+3       EnglishStrings.kt               1,345
+4       SpanishStrings.kt               1,343
+5       MainScreen.kt                   1,237
+6       BudgetConfigScreen.kt           1,161
+7       RecurringExpensesScreen.kt      1,148
+8       AppStrings.kt                   1,093
+9       TransactionsHelpScreen.kt       998
+10      SettingsScreen.kt               995
+
+23.3 File Count by Directory
+---------------------------------------------------------------------------
+
+Directory                                       Files
+---------------------------------------------------------------------------
+com.syncbudget.app (root)                       1
+com.syncbudget.app.data                         20
+com.syncbudget.app.data.sync                    14
+com.syncbudget.app.sound                        1
+com.syncbudget.app.ui.components                4
+com.syncbudget.app.ui.screens                   17
+com.syncbudget.app.ui.strings                   4
+com.syncbudget.app.ui.theme                     3
+---------------------------------------------------------------------------
+TOTAL                                           68 files
+
+
+================================================================================
+24. BUILD CONFIGURATION
+================================================================================
+
+24.1 Root build.gradle.kts
+---------------------------------------------------------------------------
+
+Plugin                              Version
+---------------------------------------------------------------------------
+com.android.application             8.7.3
+org.jetbrains.kotlin.android        2.0.21
+org.jetbrains.kotlin.plugin.compose 2.0.21
+com.google.gms.google-services      4.4.2
+
+24.2 App build.gradle.kts
+---------------------------------------------------------------------------
+
+Setting                         Value
+---------------------------------------------------------------------------
+namespace                       com.syncbudget.app
+compileSdk                      34
+applicationId                   com.securesync.app
+minSdk                          28
+targetSdk                       34
+versionCode                     1
+versionName                     1.0
+sourceCompatibility             Java 17
+targetCompatibility             Java 17
+jvmTarget                       17
+compose enabled                 true
+buildConfig enabled             true
+minifyEnabled (release)         false
+
+24.3 Dependencies
+---------------------------------------------------------------------------
+
+Dependency                                          Version
+---------------------------------------------------------------------------
+androidx.compose:compose-bom                        2024.09.03
+androidx.core:core-ktx                              1.13.1
+androidx.lifecycle:lifecycle-runtime-ktx             2.8.6
+androidx.activity:activity-compose                  1.9.2
+androidx.compose.ui:ui                              (BOM managed)
+androidx.compose.ui:ui-graphics                     (BOM managed)
+androidx.compose.material3:material3                (BOM managed)
+androidx.compose.material:material-icons-extended    (BOM managed)
+androidx.compose.animation:animation                (BOM managed)
+androidx.compose.ui:ui-tooling (debug only)         (BOM managed)
+com.google.firebase:firebase-bom                    32.7.0
+com.google.firebase:firebase-firestore              (BOM managed)
+androidx.work:work-runtime-ktx                      2.9.1
+junit:junit (test only)                             4.13.2
+org.json:json (test only)                           20231013
+
+24.4 Gradle Properties
+---------------------------------------------------------------------------
+
+Property                        Value
+---------------------------------------------------------------------------
+org.gradle.jvmargs              -Xmx2048m -Dfile.encoding=UTF-8
+android.useAndroidX             true
+kotlin.code.style               official
+android.nonTransitiveRClass     true
+
+
+================================================================================
+25. DOCUMENT REVISION HISTORY
+================================================================================
+
+Version     Date                Author                      Changes
+---------------------------------------------------------------------------
+1.0         February 2026       SecureSync Development      Initial release.
+                                Team                        Complete system
+                                                            specification
+                                                            covering all 47
+                                                            source files,
+                                                            architecture,
+                                                            features, data
+                                                            models, persistence,
+                                                            encryption, and
+                                                            build configuration.
+
+2.0         March 2026          SecureSync Development      Major update.
+                                Team                        Added Family Sync
+                                                            (CRDT-based multi-
+                                                            device sync via
+                                                            Firebase). Added
+                                                            cash flow simulation
+                                                            for savings required.
+                                                            Added linked
+                                                            transactions. Added
+                                                            ad-aware dialog
+                                                            system with pulsing
+                                                            scroll arrows.
+                                                            Added ANNUAL repeat
+                                                            type. 68 source
+                                                            files, 27,738 lines.
+
+
+================================================================================
+                              END OF DOCUMENT
+================================================================================

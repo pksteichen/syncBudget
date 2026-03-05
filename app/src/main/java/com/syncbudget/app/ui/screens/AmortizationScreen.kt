@@ -57,6 +57,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.unit.dp
 import com.syncbudget.app.ui.theme.AdAwareDialog
+import com.syncbudget.app.ui.theme.PulsingScrollArrow
 import com.syncbudget.app.data.AmortizationEntry
 import com.syncbudget.app.data.BudgetPeriod
 import com.syncbudget.app.data.generateAmortizationEntryId
@@ -420,6 +421,8 @@ private fun AddEditAmortizationDialog(
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
         ) {
+            val dialogScrollState = rememberScrollState()
+            Box {
             Column(modifier = Modifier.padding(24.dp)) {
                 Text(title, style = MaterialTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(16.dp))
@@ -428,7 +431,7 @@ private fun AddEditAmortizationDialog(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier
                         .weight(1f, fill = false)
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(dialogScrollState)
                 ) {
                     OutlinedTextField(
                         value = source,
@@ -524,6 +527,13 @@ private fun AddEditAmortizationDialog(
                         Text(S.common.save)
                     }
                 }
+            }
+            PulsingScrollArrow(
+                scrollState = dialogScrollState,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 12.dp, bottom = 18.dp)
+            )
             }
         }
     }

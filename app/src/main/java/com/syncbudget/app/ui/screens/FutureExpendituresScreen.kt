@@ -56,6 +56,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
 import com.syncbudget.app.ui.theme.AdAwareDialog
+import com.syncbudget.app.ui.theme.PulsingScrollArrow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.syncbudget.app.data.BudgetPeriod
@@ -443,6 +444,8 @@ private fun AddEditSavingsGoalDialog(
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
         ) {
+            val dialogScrollState = rememberScrollState()
+            Box {
             Column(modifier = Modifier.padding(24.dp)) {
                 Text(title, style = MaterialTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(16.dp))
@@ -451,7 +454,7 @@ private fun AddEditSavingsGoalDialog(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier
                         .weight(1f, fill = false)
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(dialogScrollState)
                 ) {
                     OutlinedTextField(
                         value = name,
@@ -599,6 +602,13 @@ private fun AddEditSavingsGoalDialog(
                         Text(S.common.save)
                     }
                 }
+            }
+            PulsingScrollArrow(
+                scrollState = dialogScrollState,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 12.dp, bottom = 18.dp)
+            )
             }
         }
     }

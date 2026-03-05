@@ -10,6 +10,8 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -789,33 +791,53 @@ private fun SpendingPieChart(
                     )
                 }
 
-                // Stack small-wedge icons along the left margin, centered vertically
+                // Stack small-wedge icons along the left margin, each in its own colored box
                 if (smallWedges.isNotEmpty()) {
-                    val totalStackHeight = smallWedges.size * iconSize.value +
-                        (smallWedges.size - 1) * 4f // 4dp spacing
-                    val startY = (maxHeight.value - totalStackHeight) / 2f
+                    val boxPadding = 4.dp
+                    val boxSpacing = 4.dp
+                    val boxSize = iconSize + boxPadding * 2
+                    val maxPerColumn = ((maxHeight.value) / (boxSize.value + boxSpacing.value)).toInt().coerceAtLeast(1)
+                    val columns = smallWedges.chunked(maxPerColumn)
 
-                    smallWedges.forEachIndexed { index, w ->
-                        Icon(
-                            imageVector = getCategoryIcon(w.iconName),
-                            contentDescription = w.categoryName,
-                            tint = w.color,
-                            modifier = Modifier
-                                .offset(
-                                    x = -maxWidth / 2 + iconSize / 2 + 4.dp,
-                                    y = (startY + index * (iconSize.value + 4f) - maxHeight.value / 2f + iconSize.value / 2f).dp
-                                )
-                                .size(iconSize)
-                                .clickable {
-                                    Toast
-                                        .makeText(
-                                            context,
-                                            "${w.categoryName}: ${formatCurrency(w.amount, currencySymbol)}",
-                                            Toast.LENGTH_SHORT
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .offset(x = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(boxSpacing)
+                    ) {
+                        columns.forEach { column ->
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(boxSpacing),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                column.forEach { w ->
+                                    Box(
+                                        modifier = Modifier
+                                            .size(boxSize)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(w.color)
+                                            .border(1.dp, LocalSyncBudgetColors.current.displayBorder, RoundedCornerShape(8.dp))
+                                            .clickable {
+                                                Toast
+                                                    .makeText(
+                                                        context,
+                                                        "${w.categoryName}: ${formatCurrency(w.amount, currencySymbol)}",
+                                                        Toast.LENGTH_SHORT
+                                                    )
+                                                    .show()
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = getCategoryIcon(w.iconName),
+                                            contentDescription = w.categoryName,
+                                            tint = contrastColor(w.color),
+                                            modifier = Modifier.size(iconSize)
                                         )
-                                        .show()
+                                    }
                                 }
-                        )
+                            }
+                        }
                     }
                 }
             }

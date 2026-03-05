@@ -1,7 +1,9 @@
 package com.syncbudget.app.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,13 +60,18 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.syncbudget.app.ui.theme.AdAwareDialog
 import com.syncbudget.app.data.BudgetCalculator
+import com.syncbudget.app.data.BudgetPeriod
+import com.syncbudget.app.data.IncomeSource
 import com.syncbudget.app.data.RecurringExpense
+import com.syncbudget.app.data.SavingsSimulator
+import com.syncbudget.app.data.Transaction
 import com.syncbudget.app.data.RepeatType
 import com.syncbudget.app.data.generateRecurringExpenseId
 import com.syncbudget.app.ui.components.formatCurrency
 import com.syncbudget.app.ui.components.CURRENCY_DECIMALS
 import com.syncbudget.app.ui.strings.LocalStrings
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
+import com.syncbudget.app.ui.theme.PulsingScrollArrow
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.ui.platform.LocalContext
@@ -85,6 +92,15 @@ fun RecurringExpensesScreen(
     onAddRecurringExpense: (RecurringExpense) -> Unit,
     onUpdateRecurringExpense: (RecurringExpense) -> Unit,
     onDeleteRecurringExpense: (RecurringExpense) -> Unit,
+    transactions: List<Transaction> = emptyList(),
+    incomeSources: List<IncomeSource> = emptyList(),
+    budgetPeriod: BudgetPeriod = BudgetPeriod.DAILY,
+    budgetAmount: Double = 0.0,
+    availableCash: Double = 0.0,
+    resetDayOfWeek: Int = 7,
+    resetDayOfMonth: Int = 1,
+    isManualOverBudget: Boolean = false,
+    budgetPeriodLabel: String = "",
     onBack: () -> Unit,
     onHelpClick: () -> Unit = {}
 ) {
@@ -95,6 +111,8 @@ fun RecurringExpensesScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var editingExpense by remember { mutableStateOf<RecurringExpense?>(null) }
     var deletingExpense by remember { mutableStateOf<RecurringExpense?>(null) }
+    var linkedTransactionsExpense by remember { mutableStateOf<RecurringExpense?>(null) }
+    var showSavingsWhyDialog by remember { mutableStateOf(false) }
     val appPrefs = remember { context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE) }
     var sortByAlpha by remember { mutableStateOf(appPrefs.getBoolean("recurringExpenseSortAlpha", false)) }
 
@@ -146,6 +164,70 @@ fun RecurringExpensesScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                 )
+                if (recurringExpenses.isNotEmpty() && !isManualOverBudget) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    val simResult = remember(
+                        recurringExpenses, incomeSources, budgetPeriod,
+                        budgetAmount, availableCash, resetDayOfWeek, resetDayOfMonth
+                    ) {
+                        SavingsSimulator.calculateSavingsRequired(
+                            incomeSources = incomeSources,
+                            recurringExpenses = recurringExpenses,
+                            budgetPeriod = budgetPeriod,
+                            budgetAmount = budgetAmount,
+                            availableCash = availableCash,
+                            resetDayOfWeek = resetDayOfWeek,
+                            resetDayOfMonth = resetDayOfMonth
+                        )
+                    }
+                    if (simResult.savingsRequired > 0.0) {
+                    val formattedAmount = formatCurrency(simResult.savingsRequired, currencySymbol)
+                    val periodText = budgetPeriodLabel
+                    val lowPointDateStr = simResult.lowPointDate?.format(
+                        DateTimeFormatter.ofPattern(dateFormatPattern)
+                    ) ?: ""
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(
+                                width = 1.dp,
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                shape = RoundedCornerShape(10.dp)
+                            )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = S.recurringExpenses.savingsRequiredMessage(formattedAmount, periodText),
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable {
+                                        if (lowPointDateStr.isNotEmpty()) {
+                                            Toast.makeText(
+                                                context,
+                                                S.recurringExpenses.savingsLowPointToast(lowPointDateStr),
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                        }
+                                    }
+                            )
+                            Text(
+                                text = S.recurringExpenses.savingsWhyLink,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                color = Color(0xFF4CAF50),
+                                modifier = Modifier
+                                    .padding(start = 8.dp)
+                                    .clickable { showSavingsWhyDialog = true }
+                            )
+                        }
+                    }
+                    } // end if savingsRequired > 0
+                }
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedButton(
                     onClick = { showAddDialog = true },
@@ -250,7 +332,17 @@ fun RecurringExpensesScreen(
                     val next = nextDate(expense)
                     ExpenseRow(expense, next, null, currencySymbol, dateFormatter, S,
                         onEdit = { editingExpense = expense },
-                        onDelete = { deletingExpense = expense })
+                        onDelete = { deletingExpense = expense },
+                        onLongPress = {
+                            val linked = transactions.filter { it.linkedRecurringExpenseId == expense.id }
+                                .sortedByDescending { it.date }
+                                .take(10)
+                            if (linked.isEmpty()) {
+                                Toast.makeText(context, S.recurringExpenses.noLinkedTransactions, Toast.LENGTH_SHORT).show()
+                            } else {
+                                linkedTransactionsExpense = expense
+                            }
+                        })
                 }
             }
 
@@ -301,7 +393,17 @@ fun RecurringExpensesScreen(
                     val next = nextDate(expense)
                     ExpenseRow(expense, next, null, currencySymbol, dateFormatter, S,
                         onEdit = { editingExpense = expense },
-                        onDelete = { deletingExpense = expense })
+                        onDelete = { deletingExpense = expense },
+                        onLongPress = {
+                            val linked = transactions.filter { it.linkedRecurringExpenseId == expense.id }
+                                .sortedByDescending { it.date }
+                                .take(10)
+                            if (linked.isEmpty()) {
+                                Toast.makeText(context, S.recurringExpenses.noLinkedTransactions, Toast.LENGTH_SHORT).show()
+                            } else {
+                                linkedTransactionsExpense = expense
+                            }
+                        })
                 }
             }
 
@@ -352,7 +454,17 @@ fun RecurringExpensesScreen(
                     val next = nextDate(expense)
                     ExpenseRow(expense, next, periodLabel(expense), currencySymbol, dateFormatter, S,
                         onEdit = { editingExpense = expense },
-                        onDelete = { deletingExpense = expense })
+                        onDelete = { deletingExpense = expense },
+                        onLongPress = {
+                            val linked = transactions.filter { it.linkedRecurringExpenseId == expense.id }
+                                .sortedByDescending { it.date }
+                                .take(10)
+                            if (linked.isEmpty()) {
+                                Toast.makeText(context, S.recurringExpenses.noLinkedTransactions, Toast.LENGTH_SHORT).show()
+                            } else {
+                                linkedTransactionsExpense = expense
+                            }
+                        })
                 }
             }
         }
@@ -403,8 +515,88 @@ fun RecurringExpensesScreen(
             }
         )
     }
+
+    linkedTransactionsExpense?.let { expense ->
+        val linked = remember(expense, transactions) {
+            transactions.filter { it.linkedRecurringExpenseId == expense.id }
+                .sortedByDescending { it.date }
+                .take(10)
+        }
+        AdAwareAlertDialog(
+            onDismissRequest = { linkedTransactionsExpense = null },
+            title = { Text(expense.source) },
+            text = {
+                Column {
+                    Text(
+                        S.recurringExpenses.linkedTransactions,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    linked.forEach { tx ->
+                        val txDate = tx.date.format(dateFormatter)
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(tx.source, style = MaterialTheme.typography.bodyMedium)
+                                Text(txDate, style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                            }
+                            Text(
+                                formatCurrency(tx.amount, currencySymbol),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { linkedTransactionsExpense = null }) {
+                    Text(S.common.close)
+                }
+            }
+        )
+    }
+
+    if (showSavingsWhyDialog) {
+        val whyScrollState = rememberScrollState()
+        AdAwareAlertDialog(
+            onDismissRequest = { showSavingsWhyDialog = false },
+            title = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        S.recurringExpenses.savingsWhyTitle,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            },
+            text = {
+                Column(modifier = Modifier.verticalScroll(whyScrollState)) {
+                    Text(S.recurringExpenses.savingsWhyBody)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showSavingsWhyDialog = false }) {
+                    Text(S.common.ok)
+                }
+            },
+            scrollState = whyScrollState
+        )
+    }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ExpenseRow(
     expense: RecurringExpense,
@@ -414,12 +606,13 @@ private fun ExpenseRow(
     dateFormatter: DateTimeFormatter,
     S: com.syncbudget.app.ui.strings.AppStrings,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onLongPress: () -> Unit = {}
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onEdit() }
+            .combinedClickable(onClick = onEdit, onLongClick = onLongPress)
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -545,6 +738,8 @@ private fun AddEditExpenseDialog(
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
         ) {
+            val dialogScrollState = rememberScrollState()
+            Box {
             Column(modifier = Modifier.padding(24.dp)) {
                 Text(
                     text = title,
@@ -555,7 +750,7 @@ private fun AddEditExpenseDialog(
                 Column(
                     modifier = Modifier
                         .weight(1f, fill = false)
-                        .verticalScroll(rememberScrollState()),
+                        .verticalScroll(dialogScrollState),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     OutlinedTextField(
@@ -906,6 +1101,13 @@ private fun AddEditExpenseDialog(
                         Text(S.common.save)
                     }
                 }
+            }
+            PulsingScrollArrow(
+                scrollState = dialogScrollState,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 12.dp, bottom = 18.dp)
+            )
             }
         }
     }

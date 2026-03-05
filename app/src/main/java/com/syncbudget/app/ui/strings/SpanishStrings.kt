@@ -147,6 +147,7 @@ object SpanishStrings : AppStrings {
         manualBudgetOverride = "Presupuesto manual",
         budgetAmountPer = { period -> "Monto por $period" },
         manualOverrideNote = { period -> "Las Metas de Ahorro y Amortizaciones reducir\u00e1n este monto. Si deseas exactamente esta cantidad cada $period, pausa tus deducciones en esas p\u00e1ginas." },
+        manualOverrideSavingsWarning = "Establecer un monto superior al presupuesto seguro calculado arriba desactivar\u00e1 el c\u00e1lculo de ahorros necesarios en la p\u00e1gina de Gastos Recurrentes.",
         incomeSourceDescription = "Agrega fuentes de ingreso estables con las que puedas contar para tu presupuesto. Si tu pago var\u00eda (cheque grande, cheque peque\u00f1o), puedes crear m\u00e1s de una entrada por fuente.",
         addIncomeSource = "Agregar fuente de ingreso",
         editIncomeSource = "Editar fuente de ingreso",
@@ -357,7 +358,17 @@ object SpanishStrings : AppStrings {
         everyNWeeks = { n -> "Cada $n semanas" },
         everyNMonths = { n -> "Cada $n meses" },
         everyTwoWeeks = "Cada 2 semanas",
-        twicePerMonth = "Dos veces al mes"
+        twicePerMonth = "Dos veces al mes",
+        linkedTransactions = "Transacciones vinculadas",
+        noLinkedTransactions = "No hay transacciones vinculadas",
+        savingsRequiredMessage = { amount, period -> "Necesitas $amount ahorrado para cubrir el presupuesto $period y estos gastos." },
+        savingsPeriodDaily = "de hoy",
+        savingsPeriodWeekly = "de esta semana",
+        savingsPeriodMonthly = "de este mes",
+        savingsWhyLink = "¿Por qué?",
+        savingsWhyTitle = "¿Por qué se necesitan ahorros?",
+        savingsWhyBody = "Este número proviene de una simulación de flujo de efectivo que avanza desde hoy a través de todos tus próximos depósitos de ingresos, fechas de vencimiento de gastos y necesidades de gasto del presupuesto.\n\nEncuentra el punto en el futuro donde tu saldo de efectivo bajaría más — por ejemplo, justo antes de un gran día de pago pero después de que se vence el alquiler — y te dice cuánto colchón necesitas para sobrevivir esa caída.\n\nEste número cambia diariamente a medida que te acercas a las fechas de ingresos y gastos. Por ejemplo, justo después del día de pago será el más alto (muchos días de gasto por delante), y justo antes del día de pago será el más bajo. Una vez que estés al día, deberías mantenerte al día si no gastas de más. Si tu cuenta bancaria es menor que este número, considera configurar un plan de ahorro en la página de Ahorros para ponerte al día.",
+        savingsLowPointToast = { date -> "Punto m\u00e1s bajo del flujo: $date" }
     )
 
     override val sync = SyncStrings(

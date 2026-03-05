@@ -166,6 +166,7 @@ data class BudgetConfigStrings(
     val manualBudgetOverride: String,
     val budgetAmountPer: (String) -> String,
     val manualOverrideNote: (String) -> String,
+    val manualOverrideSavingsWarning: String,
     val incomeSourceDescription: String,
     val addIncomeSource: String,
     val editIncomeSource: String,
@@ -376,7 +377,17 @@ data class RecurringExpensesStrings(
     val everyNWeeks: (Int) -> String,
     val everyNMonths: (Int) -> String,
     val everyTwoWeeks: String,
-    val twicePerMonth: String
+    val twicePerMonth: String,
+    val linkedTransactions: String,
+    val noLinkedTransactions: String,
+    val savingsRequiredMessage: (String, String) -> String,
+    val savingsPeriodDaily: String,
+    val savingsPeriodWeekly: String,
+    val savingsPeriodMonthly: String,
+    val savingsWhyLink: String,
+    val savingsWhyTitle: String,
+    val savingsWhyBody: String,
+    val savingsLowPointToast: (String) -> String
 )
 
 data class SyncStrings(
