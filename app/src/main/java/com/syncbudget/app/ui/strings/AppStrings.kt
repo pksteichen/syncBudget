@@ -167,6 +167,7 @@ data class BudgetConfigStrings(
     val budgetAmountPer: (String) -> String,
     val manualOverrideNote: (String) -> String,
     val manualOverrideSavingsWarning: String,
+    val manualOverrideSeeHelp: String,
     val incomeSourceDescription: String,
     val addIncomeSource: String,
     val editIncomeSource: String,
@@ -181,7 +182,11 @@ data class BudgetConfigStrings(
     val dayOfWeekLabel: String,
     val dayOfMonthReset: String,
     val requiredPaycheckExample: String,
-    val exampleIncomeAmount: String
+    val exampleIncomeAmount: String,
+    val incomeModeLabel: String,
+    val incomeModeFixed: String,
+    val incomeModeActual: String,
+    val incomeModeActualAdjust: String
 )
 
 data class TransactionsStrings(
@@ -287,12 +292,14 @@ data class TransactionsStrings(
     val fullBackupGroupDissolved: String,
     val linkToRecurring: String,
     val linkToAmortization: String,
+    val linkToIncome: String,
     val linkMismatchTitle: String,
     val linkMismatchBody: (String, String) -> String,
     val linkAnyway: String,
     val updateTransactionAmount: String,
     val linkedToRecurring: (String) -> String,
     val linkedToAmortization: (String) -> String,
+    val linkedToIncome: (String) -> String,
     val unmodifiedBankTransactions: String
 )
 
@@ -840,6 +847,7 @@ data class BudgetConfigHelpStrings(
     val manualBullet1: String,
     val manualBullet2: String,
     val manualBullet3: String,
+    val manualBullet4: String,
     val warningTitle: String,
     val warningBody: String,
     val incomeSourcesTitle: String,
@@ -875,6 +883,16 @@ data class BudgetConfigHelpStrings(
     val budgetIncomeBullet: String,
     val extraIncomeBullet: String,
     val budgetIncomeNote: String,
+    val incomeModeTitle: String,
+    val incomeModeBody: String,
+    val fixedModeTitle: String,
+    val fixedModeBody: String,
+    val actualModeTitle: String,
+    val actualModeBody: String,
+    val actualAdjustModeTitle: String,
+    val actualAdjustModeBody: String,
+    val manualOverrideDetailsTitle: String,
+    val manualOverrideDetailsBody: String,
     val tipsTitle: String,
     val tip1: String,
     val tip2: String,

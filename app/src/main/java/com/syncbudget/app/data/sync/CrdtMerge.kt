@@ -45,6 +45,7 @@ object CrdtMerge {
             isBudgetIncome = if (shouldAcceptRemote(local.isBudgetIncome_clock, remote.isBudgetIncome_clock, localDeviceId, remoteDeviceId)) remote.isBudgetIncome else local.isBudgetIncome,
             linkedRecurringExpenseId = if (shouldAcceptRemote(local.linkedRecurringExpenseId_clock, remote.linkedRecurringExpenseId_clock, localDeviceId, remoteDeviceId)) remote.linkedRecurringExpenseId else local.linkedRecurringExpenseId,
             linkedAmortizationEntryId = if (shouldAcceptRemote(local.linkedAmortizationEntryId_clock, remote.linkedAmortizationEntryId_clock, localDeviceId, remoteDeviceId)) remote.linkedAmortizationEntryId else local.linkedAmortizationEntryId,
+            linkedIncomeSourceId = if (shouldAcceptRemote(local.linkedIncomeSourceId_clock, remote.linkedIncomeSourceId_clock, localDeviceId, remoteDeviceId)) remote.linkedIncomeSourceId else local.linkedIncomeSourceId,
             deviceId = if (shouldAcceptRemote(local.deviceId_clock, remote.deviceId_clock, localDeviceId, remoteDeviceId)) remote.deviceId else local.deviceId,
             deleted = mergedDeleted,
             source_clock = maxOf(local.source_clock, remote.source_clock),
@@ -57,6 +58,7 @@ object CrdtMerge {
             isBudgetIncome_clock = maxOf(local.isBudgetIncome_clock, remote.isBudgetIncome_clock),
             linkedRecurringExpenseId_clock = maxOf(local.linkedRecurringExpenseId_clock, remote.linkedRecurringExpenseId_clock),
             linkedAmortizationEntryId_clock = maxOf(local.linkedAmortizationEntryId_clock, remote.linkedAmortizationEntryId_clock),
+            linkedIncomeSourceId_clock = maxOf(local.linkedIncomeSourceId_clock, remote.linkedIncomeSourceId_clock),
             deleted_clock = mergedDeletedClock,
             deviceId_clock = maxOf(local.deviceId_clock, remote.deviceId_clock)
         )
@@ -243,7 +245,8 @@ object CrdtMerge {
             local.resetHour_clock, local.familyTimezone_clock,
             local.matchDays_clock, local.matchPercent_clock,
             local.matchDollar_clock, local.matchChars_clock,
-            local.showAttribution_clock, local.availableCash_clock)
+            local.showAttribution_clock, local.availableCash_clock,
+            local.incomeMode_clock)
         val remoteMaxClock = maxOf(remote.currency_clock, remote.budgetPeriod_clock,
             remote.budgetStartDate_clock, remote.isManualBudgetEnabled_clock,
             remote.manualBudgetAmount_clock, remote.weekStartSunday_clock,
@@ -251,7 +254,8 @@ object CrdtMerge {
             remote.resetHour_clock, remote.familyTimezone_clock,
             remote.matchDays_clock, remote.matchPercent_clock,
             remote.matchDollar_clock, remote.matchChars_clock,
-            remote.showAttribution_clock, remote.availableCash_clock)
+            remote.showAttribution_clock, remote.availableCash_clock,
+            remote.incomeMode_clock)
         val mergedLastChangedBy = when {
             remoteMaxClock > localMaxClock -> remote.lastChangedBy
             localMaxClock > remoteMaxClock -> local.lastChangedBy
@@ -274,6 +278,7 @@ object CrdtMerge {
             matchChars = if (shouldAcceptRemote(local.matchChars_clock, remote.matchChars_clock, localDeviceId, remoteDeviceId)) remote.matchChars else local.matchChars,
             showAttribution = if (shouldAcceptRemote(local.showAttribution_clock, remote.showAttribution_clock, localDeviceId, remoteDeviceId)) remote.showAttribution else local.showAttribution,
             availableCash = if (shouldAcceptRemote(local.availableCash_clock, remote.availableCash_clock, localDeviceId, remoteDeviceId)) remote.availableCash else local.availableCash,
+            incomeMode = if (shouldAcceptRemote(local.incomeMode_clock, remote.incomeMode_clock, localDeviceId, remoteDeviceId)) remote.incomeMode else local.incomeMode,
             lastChangedBy = mergedLastChangedBy,
             currency_clock = maxOf(local.currency_clock, remote.currency_clock),
             budgetPeriod_clock = maxOf(local.budgetPeriod_clock, remote.budgetPeriod_clock),
@@ -290,7 +295,8 @@ object CrdtMerge {
             matchDollar_clock = maxOf(local.matchDollar_clock, remote.matchDollar_clock),
             matchChars_clock = maxOf(local.matchChars_clock, remote.matchChars_clock),
             showAttribution_clock = maxOf(local.showAttribution_clock, remote.showAttribution_clock),
-            availableCash_clock = maxOf(local.availableCash_clock, remote.availableCash_clock)
+            availableCash_clock = maxOf(local.availableCash_clock, remote.availableCash_clock),
+            incomeMode_clock = maxOf(local.incomeMode_clock, remote.incomeMode_clock)
         )
     }
 }

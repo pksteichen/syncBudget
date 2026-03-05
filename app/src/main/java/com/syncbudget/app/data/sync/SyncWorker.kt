@@ -207,7 +207,8 @@ class SyncWorker(
                 val maxClk = maxOf(t.source_clock, t.amount_clock, t.date_clock, t.type_clock,
                     t.categoryAmounts_clock, t.isUserCategorized_clock, t.isBudgetIncome_clock,
                     t.linkedRecurringExpenseId_clock, t.linkedAmortizationEntryId_clock,
-                    t.deviceId_clock, t.deleted_clock, t.description_clock)
+                    t.linkedIncomeSourceId_clock, t.deviceId_clock, t.deleted_clock,
+                    t.description_clock)
                 if (t.deviceId == deviceId && maxClk in 1..lpc) {
                     anyRescued = true
                     val clk = lamportClock.tick()
@@ -215,7 +216,7 @@ class SyncWorker(
                         date_clock = clk, type_clock = clk, categoryAmounts_clock = clk,
                         isUserCategorized_clock = clk, isBudgetIncome_clock = clk,
                         linkedRecurringExpenseId_clock = clk, linkedAmortizationEntryId_clock = clk,
-                        deviceId_clock = clk, deleted_clock = clk)
+                        linkedIncomeSourceId_clock = clk, deviceId_clock = clk, deleted_clock = clk)
                 } else t
             }
             if (anyRescued) TransactionRepository.save(applicationContext, transactions)

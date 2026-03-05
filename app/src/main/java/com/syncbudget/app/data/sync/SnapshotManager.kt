@@ -55,6 +55,7 @@ object SnapshotManager {
             obj.put("isBudgetIncome", t.isBudgetIncome)
             obj.put("linkedRecurringExpenseId", t.linkedRecurringExpenseId ?: JSONObject.NULL)
             obj.put("linkedAmortizationEntryId", t.linkedAmortizationEntryId ?: JSONObject.NULL)
+            obj.put("linkedIncomeSourceId", t.linkedIncomeSourceId ?: JSONObject.NULL)
             if (t.categoryAmounts.isNotEmpty()) {
                 val catArray = JSONArray()
                 for (ca in t.categoryAmounts) {
@@ -77,6 +78,7 @@ object SnapshotManager {
             obj.put("isBudgetIncome_clock", t.isBudgetIncome_clock)
             obj.put("linkedRecurringExpenseId_clock", t.linkedRecurringExpenseId_clock)
             obj.put("linkedAmortizationEntryId_clock", t.linkedAmortizationEntryId_clock)
+            obj.put("linkedIncomeSourceId_clock", t.linkedIncomeSourceId_clock)
             obj.put("deleted_clock", t.deleted_clock)
             obj.put("deviceId_clock", t.deviceId_clock)
             txnArray.put(obj)
@@ -253,6 +255,7 @@ object SnapshotManager {
                     isBudgetIncome = if (obj.has("isBudgetIncome")) obj.getBoolean("isBudgetIncome") else false,
                     linkedRecurringExpenseId = if (obj.has("linkedRecurringExpenseId") && !obj.isNull("linkedRecurringExpenseId")) obj.getInt("linkedRecurringExpenseId") else null,
                     linkedAmortizationEntryId = if (obj.has("linkedAmortizationEntryId") && !obj.isNull("linkedAmortizationEntryId")) obj.getInt("linkedAmortizationEntryId") else null,
+                    linkedIncomeSourceId = if (obj.has("linkedIncomeSourceId") && !obj.isNull("linkedIncomeSourceId")) obj.getInt("linkedIncomeSourceId") else null,
                     deviceId = obj.optString("deviceId", ""),
                     deleted = obj.optBoolean("deleted", false),
                     source_clock = obj.optLong("source_clock", 0L),
@@ -265,6 +268,7 @@ object SnapshotManager {
                     isBudgetIncome_clock = obj.optLong("isBudgetIncome_clock", 0L),
                     linkedRecurringExpenseId_clock = obj.optLong("linkedRecurringExpenseId_clock", 0L),
                     linkedAmortizationEntryId_clock = obj.optLong("linkedAmortizationEntryId_clock", 0L),
+                    linkedIncomeSourceId_clock = obj.optLong("linkedIncomeSourceId_clock", 0L),
                     deleted_clock = obj.optLong("deleted_clock", 0L),
                     deviceId_clock = obj.optLong("deviceId_clock", 0L)
                 )

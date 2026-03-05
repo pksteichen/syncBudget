@@ -336,7 +336,9 @@ object BudgetCalculator {
         budgetStartDate: LocalDate,
         periodLedgerEntries: List<PeriodLedgerEntry>,
         activeTransactions: List<Transaction>,
-        activeRecurringExpenses: List<RecurringExpense>
+        activeRecurringExpenses: List<RecurringExpense>,
+        incomeMode: IncomeMode = IncomeMode.FIXED,
+        activeIncomeSources: List<IncomeSource> = emptyList()
     ): Double {
         // Sum period credits from synced ledger (dedup by date — keep highest clock)
         var cash = 0.0
@@ -360,8 +362,19 @@ object BudgetCalculator {
                 } else {
                     cash -= txn.amount
                 }
-            } else if (txn.type == TransactionType.INCOME && !txn.isBudgetIncome) {
-                cash += txn.amount
+            } else if (txn.type == TransactionType.INCOME) {
+                if (txn.linkedIncomeSourceId != null) {
+                    if (incomeMode == IncomeMode.ACTUAL) {
+                        // ACTUAL: apply delta (actual - expected)
+                        val src = activeIncomeSources.find { it.id == txn.linkedIncomeSourceId }
+                        if (src != null) cash += (txn.amount - src.amount)
+                        else cash += txn.amount
+                    }
+                    // FIXED mode: linked income → no cash effect
+                    // ACTUAL_ADJUST mode: source is updated to match, so delta is zero
+                } else if (!txn.isBudgetIncome) {
+                    cash += txn.amount
+                }
             }
         }
         return roundCents(cash)

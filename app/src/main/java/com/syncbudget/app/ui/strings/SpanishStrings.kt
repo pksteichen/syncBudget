@@ -148,6 +148,7 @@ object SpanishStrings : AppStrings {
         budgetAmountPer = { period -> "Monto por $period" },
         manualOverrideNote = { period -> "Las Metas de Ahorro y Amortizaciones reducir\u00e1n este monto. Si deseas exactamente esta cantidad cada $period, pausa tus deducciones en esas p\u00e1ginas." },
         manualOverrideSavingsWarning = "Establecer un monto superior al presupuesto seguro calculado arriba desactivar\u00e1 el c\u00e1lculo de ahorros necesarios en la p\u00e1gina de Gastos Recurrentes.",
+        manualOverrideSeeHelp = "Ver ayuda (?) para detalles.",
         incomeSourceDescription = "Agrega fuentes de ingreso estables con las que puedas contar para tu presupuesto. Si tu pago var\u00eda (cheque grande, cheque peque\u00f1o), puedes crear m\u00e1s de una entrada por fuente.",
         addIncomeSource = "Agregar fuente de ingreso",
         editIncomeSource = "Editar fuente de ingreso",
@@ -162,7 +163,11 @@ object SpanishStrings : AppStrings {
         dayOfWeekLabel = "D\u00eda de la semana",
         dayOfMonthReset = "D\u00eda del mes (1-28)",
         requiredPaycheckExample = "Obligatorio, ej. N\u00f3mina",
-        exampleIncomeAmount = "ej. 2500.00"
+        exampleIncomeAmount = "ej. 2500.00",
+        incomeModeLabel = "Modo de Ingreso",
+        incomeModeFixed = "Usar Ingreso Fijo",
+        incomeModeActual = "Usar Ingreso Real",
+        incomeModeActualAdjust = "Usar Ingreso Real\ny Ajustar Presupuesto"
     )
 
     override val transactions = TransactionsStrings(
@@ -268,12 +273,14 @@ object SpanishStrings : AppStrings {
         fullBackupGroupDissolved = "Respaldo restaurado. Grupo familiar disuelto.",
         linkToRecurring = "Vincular a",
         linkToAmortization = "Vincular a",
+        linkToIncome = "Vincular a",
         linkMismatchTitle = "Montos diferentes",
         linkMismatchBody = { txnAmt, entryAmt -> "La transaccion ($txnAmt) difiere de la entrada ($entryAmt)." },
         linkAnyway = "Vincular de todos modos",
         updateTransactionAmount = "Actualizar transaccion",
         linkedToRecurring = { name -> "Recurrente: $name" },
         linkedToAmortization = { name -> "Amortizacion: $name" },
+        linkedToIncome = { name -> "Ingreso: $name" },
         unmodifiedBankTransactions = "Transacciones bancarias sin modificar"
     )
 
@@ -966,6 +973,7 @@ object SpanishStrings : AppStrings {
         manualBullet1 = "Aparece un campo de texto donde ingresas el monto deseado por per\u00edodo",
         manualBullet2 = "El c\u00e1lculo del presupuesto seguro se ignora",
         manualBullet3 = "Las deducciones de Metas de Ahorro y Amortizaci\u00f3n a\u00fan se aplican a tu monto manual",
+        manualBullet4 = "Establecer un monto superior al presupuesto seguro calculado desactivar\u00e1 el c\u00e1lculo de ahorros necesarios en la p\u00e1gina de Gastos Recurrentes",
         warningTitle = "Nota",
         warningBody = "Las deducciones de Metas de Ahorro y Amortizaci\u00f3n a\u00fan se restan de tu monto " +
             "manual. Si deseas exactamente el monto ingresado cada per\u00edodo, " +
@@ -1020,10 +1028,32 @@ object SpanishStrings : AppStrings {
         budgetIncomeBody = "Cuando agregas una transacci\u00f3n de ingreso en la pantalla de Transacciones, la app " +
             "verifica si coincide con alguna de tus fuentes de ingreso configuradas (por nombre " +
             "y fecha esperada). Si encuentra coincidencia, se te pregunta si es:",
-        budgetIncomeBullet = "Ingreso presupuestado \u2014 ya contabilizado en tu presupuesto (NO aumenta el efectivo disponible)",
+        budgetIncomeBullet = "Ingreso presupuestado \u2014 ya contabilizado en tu presupuesto",
         extraIncomeBullet = "Ingreso extra \u2014 ingreso inesperado o adicional (S\u00cd aumenta el efectivo disponible)",
         budgetIncomeNote = "Esto evita que tu n\u00f3mina se cuente dos veces \u2014 una en el c\u00e1lculo del presupuesto " +
             "y otra como entrada manual de ingreso.",
+        incomeModeTitle = "Modo de Ingreso",
+        incomeModeBody = "El bot\u00f3n de modo de ingreso controla c\u00f3mo las transacciones de ingreso vinculadas afectan tu efectivo disponible. " +
+            "Toca el bot\u00f3n para alternar entre los tres modos:",
+        fixedModeTitle = "Usar Ingreso Fijo",
+        fixedModeBody = "Las transacciones de ingreso vinculadas a una entrada de Ingreso Recurrente no afectan el efectivo disponible. " +
+            "Tu presupuesto asume que recibes el monto configurado, y las transacciones vinculadas simplemente confirman que lleg\u00f3. " +
+            "Este es el modo predeterminado y m\u00e1s simple.",
+        actualModeTitle = "Usar Ingreso Real",
+        actualModeBody = "Cuando una transacci\u00f3n de ingreso vinculada difiere del monto esperado, la diferencia se aplica al " +
+            "efectivo disponible. Si esperabas recibir \$1,000 pero recibiste \$1,050, los \$50 extra se agregan. " +
+            "Si solo recibiste \$950, se restan \$50. La entrada de Ingreso Recurrente no cambia \u2014 " +
+            "tu presupuesto sigue planificando con el monto configurado.",
+        actualAdjustModeTitle = "Usar Ingreso Real y Ajustar Presupuesto",
+        actualAdjustModeBody = "Funciona como Ingreso Real, pero tambi\u00e9n actualiza el monto de la entrada de Ingreso Recurrente para que coincida " +
+            "con la transacci\u00f3n real. Esto hace que el presupuesto seguro se recalcule con base en tu pago real. " +
+            "Este modo no est\u00e1 disponible cuando el Presupuesto Manual est\u00e1 activado, ya que el presupuesto seguro " +
+            "no se usa en ese caso.",
+        manualOverrideDetailsTitle = "Presupuesto Manual \u2014 Detalles",
+        manualOverrideDetailsBody = "Las deducciones de Metas de Ahorro y Amortizaciones se siguen restando de tu presupuesto manual. " +
+            "Si deseas exactamente el monto ingresado cada per\u00edodo, pausa esas deducciones en sus respectivas p\u00e1ginas.\n\n" +
+            "Establecer un monto superior al presupuesto seguro calculado desactivar\u00e1 el c\u00e1lculo de ahorros necesarios " +
+            "en la p\u00e1gina de Gastos Recurrentes.",
         tipsTitle = "Consejos",
         tip1 = "Configura todas las fuentes de ingreso y gastos recurrentes antes de tocar Iniciar/Restablecer para obtener el mejor resultado.",
         tip2 = "El presupuesto seguro se recalcula autom\u00e1ticamente cuando cambias ingresos o gastos.",

@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import com.syncbudget.app.data.AmortizationEntry
 import com.syncbudget.app.data.BudgetCalculator
 import com.syncbudget.app.data.BudgetPeriod
+import com.syncbudget.app.data.IncomeMode
 import com.syncbudget.app.data.Category
 import com.syncbudget.app.data.CategoryAmount
 import com.syncbudget.app.data.CategoryRepository
@@ -179,6 +180,9 @@ class MainActivity : ComponentActivity() {
             var manualBudgetAmount by remember { mutableDoubleStateOf(
                 prefs.getString("manualBudgetAmount", null)?.toDoubleOrNull() ?: 0.0
             ) }
+            var incomeMode by remember { mutableStateOf(
+                try { IncomeMode.valueOf(prefs.getString("incomeMode", null) ?: "FIXED") } catch (_: Exception) { IncomeMode.FIXED }
+            ) }
             var availableCash by remember { mutableDoubleStateOf(
                 prefs.getString("availableCash", null)?.toDoubleOrNull() ?: 0.0
             ) }
@@ -333,7 +337,8 @@ class MainActivity : ComponentActivity() {
                 if (budgetStartDate == null) return
                 availableCash = BudgetCalculator.recomputeAvailableCash(
                     budgetStartDate!!, periodLedger.toList(),
-                    transactions.toList().active, recurringExpenses.toList().active
+                    transactions.toList().active, recurringExpenses.toList().active,
+                    incomeMode, incomeSources.toList().active
                 )
                 persistAvailableCash()
             }
@@ -520,7 +525,8 @@ class MainActivity : ComponentActivity() {
                                 val mx = maxOf(t.source_clock, t.amount_clock, t.date_clock, t.type_clock,
                                     t.categoryAmounts_clock, t.isUserCategorized_clock, t.isBudgetIncome_clock,
                                     t.linkedRecurringExpenseId_clock, t.linkedAmortizationEntryId_clock,
-                                    t.deviceId_clock, t.deleted_clock, t.description_clock)
+                                    t.linkedIncomeSourceId_clock, t.deviceId_clock, t.deleted_clock,
+                                    t.description_clock)
                                 if (t.deviceId == localDeviceId && mx in 1..lpc) {
                                     anyRescued = true
                                     val clk = lamportClock.tick()
@@ -528,8 +534,8 @@ class MainActivity : ComponentActivity() {
                                         amount_clock = clk, date_clock = clk, type_clock = clk,
                                         categoryAmounts_clock = clk, isUserCategorized_clock = clk,
                                         isBudgetIncome_clock = clk, linkedRecurringExpenseId_clock = clk,
-                                        linkedAmortizationEntryId_clock = clk, deviceId_clock = clk,
-                                        deleted_clock = clk)
+                                        linkedAmortizationEntryId_clock = clk, linkedIncomeSourceId_clock = clk,
+                                        deviceId_clock = clk, deleted_clock = clk)
                                 }
                             }
                             if (anyRescued) saveTransactions()
@@ -747,6 +753,7 @@ class MainActivity : ComponentActivity() {
                                 resetDayOfMonth = merged.resetDayOfMonth
                                 isManualBudgetEnabled = merged.isManualBudgetEnabled
                                 manualBudgetAmount = merged.manualBudgetAmount
+                                incomeMode = try { IncomeMode.valueOf(merged.incomeMode) } catch (_: Exception) { IncomeMode.FIXED }
                                 weekStartSunday = merged.weekStartSunday
                                 matchDays = merged.matchDays
                                 matchPercent = merged.matchPercent
@@ -775,6 +782,7 @@ class MainActivity : ComponentActivity() {
                                     .putString("matchPercent", merged.matchPercent.toString())
                                     .putInt("matchDollar", merged.matchDollar)
                                     .putInt("matchChars", merged.matchChars)
+                                    .putString("incomeMode", merged.incomeMode)
                                 if (budgetStartChanged) {
                                     prefsEditor
                                         .putString("budgetStartDate", budgetStartDate.toString())
@@ -869,6 +877,7 @@ class MainActivity : ComponentActivity() {
                     isBudgetIncome_clock = clock,
                     linkedRecurringExpenseId_clock = clock,
                     linkedAmortizationEntryId_clock = clock,
+                    linkedIncomeSourceId_clock = clock,
                     deviceId_clock = clock
                 )
                 transactions.add(stamped)
@@ -878,7 +887,7 @@ class MainActivity : ComponentActivity() {
 
             // Matching chain for dashboard-added transactions
             fun runMatchingChain(txn: Transaction) {
-                val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null
+                val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null
                 val activeTransactions = transactions.toList().active
                 val activeRecurring = recurringExpenses.toList().active
                 val activeAmort = amortizationEntries.toList().active
@@ -1483,7 +1492,8 @@ class MainActivity : ComponentActivity() {
                                     isUserCategorized_clock = if (updated.isUserCategorized != prev.isUserCategorized) clock else prev.isUserCategorized_clock,
                                     isBudgetIncome_clock = if (updated.isBudgetIncome != prev.isBudgetIncome) clock else prev.isBudgetIncome_clock,
                                     linkedRecurringExpenseId_clock = if (updated.linkedRecurringExpenseId != prev.linkedRecurringExpenseId) clock else prev.linkedRecurringExpenseId_clock,
-                                    linkedAmortizationEntryId_clock = if (updated.linkedAmortizationEntryId != prev.linkedAmortizationEntryId) clock else prev.linkedAmortizationEntryId_clock
+                                    linkedAmortizationEntryId_clock = if (updated.linkedAmortizationEntryId != prev.linkedAmortizationEntryId) clock else prev.linkedAmortizationEntryId_clock,
+                                    linkedIncomeSourceId_clock = if (updated.linkedIncomeSourceId != prev.linkedIncomeSourceId) clock else prev.linkedIncomeSourceId_clock
                                 )
                                 saveTransactions()
                             }
@@ -1664,6 +1674,18 @@ class MainActivity : ComponentActivity() {
                         isSyncConfigured = isSyncConfigured,
                         isSyncAdmin = isSyncAdmin,
                         budgetPeriod = budgetPeriod,
+                        incomeMode = incomeMode,
+                        onAdjustIncomeAmount = { srcId, newAmount ->
+                            val idx = incomeSources.indexOfFirst { it.id == srcId }
+                            if (idx >= 0 && incomeSources[idx].amount != newAmount) {
+                                val clock = lamportClock.tick()
+                                incomeSources[idx] = incomeSources[idx].copy(
+                                    amount = newAmount,
+                                    amount_clock = clock
+                                )
+                                saveIncomeSources()
+                            }
+                        },
                         onBack = { currentScreen = "main" },
                         onHelpClick = { currentScreen = "transactions_help" }
                     )
@@ -1931,6 +1953,15 @@ class MainActivity : ComponentActivity() {
                         onManualBudgetToggle = { enabled ->
                             isManualBudgetEnabled = enabled
                             prefs.edit().putBoolean("isManualBudgetEnabled", enabled).apply()
+                            // Auto-switch from ACTUAL_ADJUST to ACTUAL when manual override is enabled
+                            if (enabled && incomeMode == IncomeMode.ACTUAL_ADJUST) {
+                                incomeMode = IncomeMode.ACTUAL
+                                prefs.edit().putString("incomeMode", "ACTUAL").apply()
+                                if (isSyncConfigured) {
+                                    val clock2 = lamportClock.tick()
+                                    sharedSettings = sharedSettings.copy(incomeMode = "ACTUAL", incomeMode_clock = clock2, lastChangedBy = localDeviceId)
+                                }
+                            }
                             if (isSyncConfigured) {
                                 val clock = lamportClock.tick()
                                 sharedSettings = sharedSettings.copy(isManualBudgetEnabled = enabled, isManualBudgetEnabled_clock = clock, lastChangedBy = localDeviceId)
@@ -1987,6 +2018,18 @@ class MainActivity : ComponentActivity() {
                         },
                         isSyncConfigured = isSyncConfigured,
                         isAdmin = isSyncAdmin,
+                        incomeMode = incomeMode.name,
+                        onIncomeModeChange = { modeName ->
+                            val mode = try { IncomeMode.valueOf(modeName) } catch (_: Exception) { IncomeMode.FIXED }
+                            incomeMode = mode
+                            prefs.edit().putString("incomeMode", modeName).apply()
+                            if (isSyncConfigured) {
+                                val clock = lamportClock.tick()
+                                sharedSettings = sharedSettings.copy(incomeMode = modeName, incomeMode_clock = clock, lastChangedBy = localDeviceId)
+                                SharedSettingsRepository.save(context, sharedSettings)
+                            }
+                            recomputeCash()
+                        },
                         onBack = { currentScreen = "settings" },
                         onHelpClick = { currentScreen = "budget_config_help" }
                     )
@@ -2515,6 +2558,7 @@ class MainActivity : ComponentActivity() {
                                                 .putString("matchPercent", merged.matchPercent.toString())
                                                 .putInt("matchDollar", merged.matchDollar)
                                                 .putInt("matchChars", merged.matchChars)
+                                                .putString("incomeMode", merged.incomeMode)
                                             if (budgetStartChanged) {
                                                 prefsEditor
                                                     .putString("budgetStartDate", budgetStartDate.toString())
@@ -2762,11 +2806,26 @@ class MainActivity : ComponentActivity() {
                             val baseTxn = dashPendingBudgetIncomeTxn!!
                             val txn = baseTxn.copy(
                                 isBudgetIncome = true,
+                                linkedIncomeSourceId = dashPendingBudgetIncomeMatch!!.id,
                                 categoryAmounts = if (recurringIncomeCatId != null)
                                     listOf(CategoryAmount(recurringIncomeCatId, baseTxn.amount))
                                 else baseTxn.categoryAmounts,
                                 isUserCategorized = true
                             )
+                            // ACTUAL_ADJUST: update the income source BEFORE adding txn
+                            // so recomputeCash sees matching amounts (delta = 0)
+                            if (incomeMode == IncomeMode.ACTUAL_ADJUST) {
+                                val srcId = dashPendingBudgetIncomeMatch!!.id
+                                val idx = incomeSources.indexOfFirst { it.id == srcId }
+                                if (idx >= 0 && incomeSources[idx].amount != baseTxn.amount) {
+                                    val clock = lamportClock.tick()
+                                    incomeSources[idx] = incomeSources[idx].copy(
+                                        amount = baseTxn.amount,
+                                        amount_clock = clock
+                                    )
+                                    saveIncomeSources()
+                                }
+                            }
                             addTransactionWithBudgetEffect(txn)
                             dashPendingBudgetIncomeTxn = null
                             dashPendingBudgetIncomeMatch = null

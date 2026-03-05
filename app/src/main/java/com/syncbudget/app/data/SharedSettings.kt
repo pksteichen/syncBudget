@@ -17,6 +17,7 @@ data class SharedSettings(
     val matchChars: Int = 5,
     val showAttribution: Boolean = false,
     val availableCash: Double = 0.0,
+    val incomeMode: String = "FIXED",
     val lastChangedBy: String = "",
     // Per-field clocks
     val currency_clock: Long = 0L,
@@ -34,5 +35,6 @@ data class SharedSettings(
     val matchDollar_clock: Long = 0L,
     val matchChars_clock: Long = 0L,
     val showAttribution_clock: Long = 0L,
-    val availableCash_clock: Long = 0L
+    val availableCash_clock: Long = 0L,
+    val incomeMode_clock: Long = 0L
 )

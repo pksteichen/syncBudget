@@ -222,6 +222,7 @@ fun BudgetConfigHelpScreen(onBack: () -> Unit) {
             HelpBulletText(S.budgetConfigHelp.manualBullet1)
             HelpBulletText(S.budgetConfigHelp.manualBullet2)
             HelpBulletText(S.budgetConfigHelp.manualBullet3)
+            HelpBulletText(S.budgetConfigHelp.manualBullet4)
             Spacer(modifier = Modifier.height(8.dp))
 
             Box(
@@ -342,7 +343,23 @@ fun BudgetConfigHelpScreen(onBack: () -> Unit) {
 
             HelpDividerLine()
 
-            // ─── SECTION 10: TIPS ───
+            // ─── SECTION 10: INCOME MODE ───
+            HelpSectionTitle(S.budgetConfigHelp.incomeModeTitle)
+            HelpBodyText(S.budgetConfigHelp.incomeModeBody)
+            Spacer(modifier = Modifier.height(8.dp))
+            HelpSubSectionTitle(S.budgetConfigHelp.fixedModeTitle)
+            HelpBodyText(S.budgetConfigHelp.fixedModeBody)
+            Spacer(modifier = Modifier.height(8.dp))
+            HelpSubSectionTitle(S.budgetConfigHelp.actualModeTitle)
+            HelpBodyText(S.budgetConfigHelp.actualModeBody)
+            Spacer(modifier = Modifier.height(8.dp))
+            HelpSubSectionTitle(S.budgetConfigHelp.actualAdjustModeTitle)
+            HelpBodyText(S.budgetConfigHelp.actualAdjustModeBody)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDividerLine()
+
+            // ─── SECTION 11: TIPS ───
             HelpSectionTitle(S.budgetConfigHelp.tipsTitle)
             HelpBulletText(S.budgetConfigHelp.tip1)
             HelpBulletText(S.budgetConfigHelp.tip2)

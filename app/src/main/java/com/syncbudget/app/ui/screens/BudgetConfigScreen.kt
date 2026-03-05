@@ -1,5 +1,7 @@
 package com.syncbudget.app.ui.screens
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -118,6 +120,8 @@ fun BudgetConfigScreen(
     dateFormatPattern: String = "yyyy-MM-dd",
     isSyncConfigured: Boolean = false,
     isAdmin: Boolean = true,
+    incomeMode: String = "FIXED",
+    onIncomeModeChange: (String) -> Unit = {},
     onBack: () -> Unit,
     onHelpClick: () -> Unit = {}
 ) {
@@ -315,15 +319,9 @@ fun BudgetConfigScreen(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = S.budgetConfig.manualOverrideNote(periodLabel),
+                        text = S.budgetConfig.manualOverrideSeeHelp,
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFFFF9800)
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = S.budgetConfig.manualOverrideSavingsWarning,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFFFF9800)
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                     )
                 }
                 if (isLocked) {
@@ -344,17 +342,81 @@ fun BudgetConfigScreen(
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                 )
                 Spacer(modifier = Modifier.height(12.dp))
-                OutlinedButton(
-                    onClick = { showAddDialog = true },
+                Text(
+                    text = S.budgetConfig.incomeModeLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isLocked) MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+                           else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                val modes = listOf("FIXED", "ACTUAL", "ACTUAL_ADJUST")
+                val modeLabels = mapOf(
+                    "FIXED" to S.budgetConfig.incomeModeFixed,
+                    "ACTUAL" to S.budgetConfig.incomeModeActual,
+                    "ACTUAL_ADJUST" to S.budgetConfig.incomeModeActualAdjust
+                )
+                val currentLabel = modeLabels[incomeMode] ?: modeLabels["FIXED"]!!
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = !isLocked
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.Add,
-                        contentDescription = null,
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                    Text(S.budgetConfig.addIncomeSource)
+                    // Income mode toggle (cycles on tap)
+                    Surface(
+                        onClick = {
+                            if (!isLocked) {
+                                val idx = modes.indexOf(incomeMode)
+                                var nextIdx = (idx + 1) % modes.size
+                                // Skip ACTUAL_ADJUST if manual override is on
+                                if (modes[nextIdx] == "ACTUAL_ADJUST" && isManualBudgetEnabled) {
+                                    nextIdx = (nextIdx + 1) % modes.size
+                                }
+                                onIncomeModeChange(modes[nextIdx])
+                            }
+                        },
+                        enabled = !isLocked,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = currentLabel,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (isLocked) MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+                                   else MaterialTheme.colorScheme.primary,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp)
+                        )
+                    }
+                    // Add income source button
+                    Surface(
+                        onClick = { if (!isLocked) showAddDialog = true },
+                        enabled = !isLocked,
+                        color = Color.Transparent,
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Add,
+                                contentDescription = null,
+                                modifier = Modifier.padding(end = 4.dp),
+                                tint = if (isLocked) MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+                                       else MaterialTheme.colorScheme.onBackground
+                            )
+                            Text(
+                                text = S.budgetConfig.addIncomeSource,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (isLocked) MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+                                       else MaterialTheme.colorScheme.onBackground
+                            )
+                        }
+                    }
                 }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             }

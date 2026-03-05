@@ -42,6 +42,7 @@ object DeltaBuilder {
         if (txn.isBudgetIncome_clock > lastPushedClock) fields["isBudgetIncome"] = FieldDelta(txn.isBudgetIncome, txn.isBudgetIncome_clock)
         if (txn.linkedRecurringExpenseId_clock > lastPushedClock) fields["linkedRecurringExpenseId"] = FieldDelta(txn.linkedRecurringExpenseId, txn.linkedRecurringExpenseId_clock)
         if (txn.linkedAmortizationEntryId_clock > lastPushedClock) fields["linkedAmortizationEntryId"] = FieldDelta(txn.linkedAmortizationEntryId, txn.linkedAmortizationEntryId_clock)
+        if (txn.linkedIncomeSourceId_clock > lastPushedClock) fields["linkedIncomeSourceId"] = FieldDelta(txn.linkedIncomeSourceId, txn.linkedIncomeSourceId_clock)
         if (txn.deleted_clock > lastPushedClock) fields["deleted"] = FieldDelta(txn.deleted, txn.deleted_clock)
         if (txn.deviceId_clock > lastPushedClock) fields["deviceId"] = FieldDelta(txn.deviceId, txn.deviceId_clock)
         if (fields.isEmpty()) return null
@@ -55,6 +56,7 @@ object DeltaBuilder {
         ensureField(fields, "deviceId", txn.deviceId, txn.deviceId_clock)
         ensureField(fields, "linkedRecurringExpenseId", txn.linkedRecurringExpenseId, txn.linkedRecurringExpenseId_clock)
         ensureField(fields, "linkedAmortizationEntryId", txn.linkedAmortizationEntryId, txn.linkedAmortizationEntryId_clock)
+        ensureField(fields, "linkedIncomeSourceId", txn.linkedIncomeSourceId, txn.linkedIncomeSourceId_clock)
         ensureField(fields, "isBudgetIncome", txn.isBudgetIncome, txn.isBudgetIncome_clock)
         if ("categoryAmounts" !in fields && txn.categoryAmounts_clock > 0L) {
             val catJson = JSONArray()
@@ -184,6 +186,7 @@ object DeltaBuilder {
         if (settings.matchChars_clock > lastPushedClock) fields["matchChars"] = FieldDelta(settings.matchChars, settings.matchChars_clock)
         if (settings.showAttribution_clock > lastPushedClock) fields["showAttribution"] = FieldDelta(settings.showAttribution, settings.showAttribution_clock)
         if (settings.availableCash_clock > lastPushedClock) fields["availableCash"] = FieldDelta(settings.availableCash, settings.availableCash_clock)
+        if (settings.incomeMode_clock > lastPushedClock) fields["incomeMode"] = FieldDelta(settings.incomeMode, settings.incomeMode_clock)
         if (fields.isEmpty()) return null
         return RecordDelta("shared_settings", "upsert", 0, settings.lastChangedBy, fields)
     }

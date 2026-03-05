@@ -651,6 +651,7 @@ class SyncEngine(
                 "matchChars" -> s = s.copy(matchChars = (fd.value as? Number)?.toInt() ?: s.matchChars, matchChars_clock = fd.clock)
                 "showAttribution" -> s = s.copy(showAttribution = fd.value as? Boolean ?: s.showAttribution, showAttribution_clock = fd.clock)
                 "availableCash" -> s = s.copy(availableCash = (fd.value as? Number)?.toDouble() ?: s.availableCash, availableCash_clock = fd.clock)
+                "incomeMode" -> s = s.copy(incomeMode = fd.value as? String ?: s.incomeMode, incomeMode_clock = fd.clock)
             }
         }
         return s
@@ -754,6 +755,7 @@ class SyncEngine(
             isBudgetIncome = f["isBudgetIncome"]?.value as? Boolean ?: false,
             linkedRecurringExpenseId = (f["linkedRecurringExpenseId"]?.value as? Number)?.toInt(),
             linkedAmortizationEntryId = (f["linkedAmortizationEntryId"]?.value as? Number)?.toInt(),
+            linkedIncomeSourceId = (f["linkedIncomeSourceId"]?.value as? Number)?.toInt(),
             deviceId = f["deviceId"]?.value as? String ?: change.deviceId,
             deleted = f["deleted"]?.value as? Boolean ?: false,
             source_clock = f["source"]?.clock ?: 0L,
@@ -766,6 +768,7 @@ class SyncEngine(
             isBudgetIncome_clock = f["isBudgetIncome"]?.clock ?: 0L,
             linkedRecurringExpenseId_clock = f["linkedRecurringExpenseId"]?.clock ?: 0L,
             linkedAmortizationEntryId_clock = f["linkedAmortizationEntryId"]?.clock ?: 0L,
+            linkedIncomeSourceId_clock = f["linkedIncomeSourceId"]?.clock ?: 0L,
             deleted_clock = f["deleted"]?.clock ?: 0L,
             deviceId_clock = f["deviceId"]?.clock ?: 0L
         )

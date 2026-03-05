@@ -148,6 +148,7 @@ object EnglishStrings : AppStrings {
         budgetAmountPer = { period -> "Budget Amount per $period" },
         manualOverrideNote = { period -> "Savings Goals and Amortization page entries will reduce this amount. If you want exactly this amount added each $period, pause your Savings Goals and Amortization deductions on those pages." },
         manualOverrideSavingsWarning = "Setting an amount higher than the safe budget amount calculated above will disable the needed savings calculation on the Recurring Expenses page.",
+        manualOverrideSeeHelp = "See help (?) for details.",
         incomeSourceDescription = "Add sources of consistent income that you can rely on for budgeting. If your pay varies (large check, small check), you can make more than one entry for a source.",
         addIncomeSource = "Add Income Source",
         editIncomeSource = "Edit Income Source",
@@ -162,7 +163,11 @@ object EnglishStrings : AppStrings {
         dayOfWeekLabel = "Day of Week",
         dayOfMonthReset = "Day of Month (1-28)",
         requiredPaycheckExample = "Required, e.g. Paycheck",
-        exampleIncomeAmount = "e.g. 2500.00"
+        exampleIncomeAmount = "e.g. 2500.00",
+        incomeModeLabel = "Income Mode",
+        incomeModeFixed = "Use Fixed Income",
+        incomeModeActual = "Use Actual Income",
+        incomeModeActualAdjust = "Use Actual Income\n& Adjust Budget"
     )
 
     override val transactions = TransactionsStrings(
@@ -268,12 +273,14 @@ object EnglishStrings : AppStrings {
         fullBackupGroupDissolved = "Backup restored. Family group dissolved.",
         linkToRecurring = "Link to",
         linkToAmortization = "Link to",
+        linkToIncome = "Link to",
         linkMismatchTitle = "Amount Mismatch",
         linkMismatchBody = { txnAmt, entryAmt -> "Transaction ($txnAmt) differs from entry ($entryAmt)." },
         linkAnyway = "Link Anyway",
         updateTransactionAmount = "Update Transaction",
         linkedToRecurring = { name -> "Recurring: $name" },
         linkedToAmortization = { name -> "Amortization: $name" },
+        linkedToIncome = { name -> "Income: $name" },
         unmodifiedBankTransactions = "Unmodified Bank Transactions"
     )
 
@@ -967,6 +974,7 @@ object EnglishStrings : AppStrings {
         manualBullet1 = "A text field appears where you enter your desired amount per period",
         manualBullet2 = "The safe budget calculation is ignored",
         manualBullet3 = "Savings Goal and Amortization deductions still apply to your manual amount",
+        manualBullet4 = "Setting an amount higher than the calculated safe budget will disable the needed savings calculation on the Recurring Expenses page",
         warningTitle = "Note",
         warningBody = "Savings Goals and Amortization deductions are still subtracted from " +
             "your manual budget amount. If you want exactly your entered amount each period, " +
@@ -1021,10 +1029,32 @@ object EnglishStrings : AppStrings {
         budgetIncomeBody = "When you add an income transaction in the Transactions screen, the app " +
             "checks whether it matches one of your configured income sources (by name " +
             "and expected date). If a match is found, you're asked whether this is:",
-        budgetIncomeBullet = "Budget income \u2014 already accounted for in your budget (does NOT increase available cash)",
+        budgetIncomeBullet = "Budget income \u2014 already accounted for in your budget",
         extraIncomeBullet = "Extra income \u2014 unexpected or additional income (DOES increase available cash)",
         budgetIncomeNote = "This prevents your paycheck from being double-counted \u2014 once in the budget " +
             "calculation and again as a manual income entry.",
+        incomeModeTitle = "Income Mode",
+        incomeModeBody = "The income mode toggle controls how linked income transactions affect your available cash. " +
+            "Tap the button to cycle through the three modes:",
+        fixedModeTitle = "Use Fixed Income",
+        fixedModeBody = "Income transactions linked to a Recurring Income entry have no effect on available cash. " +
+            "Your budget assumes you receive the configured amount, and linked transactions simply confirm it arrived. " +
+            "This is the default and simplest mode.",
+        actualModeTitle = "Use Actual Income",
+        actualModeBody = "When a linked income transaction differs from the expected amount, the difference is applied to " +
+            "available cash. If you were expected to receive \$1,000 but got \$1,050, the extra \$50 is added. " +
+            "If you only got \$950, \$50 is subtracted. The Recurring Income entry itself stays unchanged \u2014 " +
+            "your budget still plans around the configured amount.",
+        actualAdjustModeTitle = "Use Actual Income & Adjust Budget",
+        actualAdjustModeBody = "Works like Actual Income, but also updates the Recurring Income entry's amount to match the " +
+            "actual transaction. This causes the safe budget amount to recalculate based on your real pay. " +
+            "This mode is unavailable when Manual Budget Override is enabled, since the safe budget amount " +
+            "is not used in that case.",
+        manualOverrideDetailsTitle = "Manual Budget Override \u2014 Details",
+        manualOverrideDetailsBody = "Savings Goals and Amortization deductions are still subtracted from your manual budget amount. " +
+            "If you want exactly your entered amount each period, pause those deductions on their respective pages.\n\n" +
+            "Setting an amount higher than the calculated safe budget will disable the needed savings calculation " +
+            "on the Recurring Expenses page.",
         tipsTitle = "Tips",
         tip1 = "Set up all income sources and recurring expenses before tapping Start/Reset Budget for the best result.",
         tip2 = "The safe budget recalculates automatically whenever you change income or expenses.",
