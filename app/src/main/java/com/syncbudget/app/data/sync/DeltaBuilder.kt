@@ -43,6 +43,9 @@ object DeltaBuilder {
         if (txn.linkedRecurringExpenseId_clock > lastPushedClock) fields["linkedRecurringExpenseId"] = FieldDelta(txn.linkedRecurringExpenseId, txn.linkedRecurringExpenseId_clock)
         if (txn.linkedAmortizationEntryId_clock > lastPushedClock) fields["linkedAmortizationEntryId"] = FieldDelta(txn.linkedAmortizationEntryId, txn.linkedAmortizationEntryId_clock)
         if (txn.linkedIncomeSourceId_clock > lastPushedClock) fields["linkedIncomeSourceId"] = FieldDelta(txn.linkedIncomeSourceId, txn.linkedIncomeSourceId_clock)
+        if (txn.amortizationAppliedAmount_clock > lastPushedClock) fields["amortizationAppliedAmount"] = FieldDelta(txn.amortizationAppliedAmount, txn.amortizationAppliedAmount_clock)
+        if (txn.linkedRecurringExpenseAmount_clock > lastPushedClock) fields["linkedRecurringExpenseAmount"] = FieldDelta(txn.linkedRecurringExpenseAmount, txn.linkedRecurringExpenseAmount_clock)
+        if (txn.linkedIncomeSourceAmount_clock > lastPushedClock) fields["linkedIncomeSourceAmount"] = FieldDelta(txn.linkedIncomeSourceAmount, txn.linkedIncomeSourceAmount_clock)
         if (txn.deleted_clock > lastPushedClock) fields["deleted"] = FieldDelta(txn.deleted, txn.deleted_clock)
         if (txn.deviceId_clock > lastPushedClock) fields["deviceId"] = FieldDelta(txn.deviceId, txn.deviceId_clock)
         if (fields.isEmpty()) return null
@@ -57,6 +60,9 @@ object DeltaBuilder {
         ensureField(fields, "linkedRecurringExpenseId", txn.linkedRecurringExpenseId, txn.linkedRecurringExpenseId_clock)
         ensureField(fields, "linkedAmortizationEntryId", txn.linkedAmortizationEntryId, txn.linkedAmortizationEntryId_clock)
         ensureField(fields, "linkedIncomeSourceId", txn.linkedIncomeSourceId, txn.linkedIncomeSourceId_clock)
+        ensureField(fields, "amortizationAppliedAmount", txn.amortizationAppliedAmount, txn.amortizationAppliedAmount_clock)
+        ensureField(fields, "linkedRecurringExpenseAmount", txn.linkedRecurringExpenseAmount, txn.linkedRecurringExpenseAmount_clock)
+        ensureField(fields, "linkedIncomeSourceAmount", txn.linkedIncomeSourceAmount, txn.linkedIncomeSourceAmount_clock)
         ensureField(fields, "isBudgetIncome", txn.isBudgetIncome, txn.isBudgetIncome_clock)
         if ("categoryAmounts" !in fields && txn.categoryAmounts_clock > 0L) {
             val catJson = JSONArray()
@@ -147,12 +153,14 @@ object DeltaBuilder {
         if (cat.name_clock > lastPushedClock) fields["name"] = FieldDelta(cat.name, cat.name_clock)
         if (cat.iconName_clock > lastPushedClock) fields["iconName"] = FieldDelta(cat.iconName, cat.iconName_clock)
         if (cat.tag_clock > lastPushedClock) fields["tag"] = FieldDelta(cat.tag, cat.tag_clock)
+        if (cat.charted_clock > lastPushedClock) fields["charted"] = FieldDelta(cat.charted, cat.charted_clock)
         if (cat.deleted_clock > lastPushedClock) fields["deleted"] = FieldDelta(cat.deleted, cat.deleted_clock)
         if (cat.deviceId_clock > lastPushedClock) fields["deviceId"] = FieldDelta(cat.deviceId, cat.deviceId_clock)
         if (fields.isEmpty()) return null
         ensureField(fields, "name", cat.name, cat.name_clock)
         ensureField(fields, "iconName", cat.iconName, cat.iconName_clock)
         ensureField(fields, "tag", cat.tag, cat.tag_clock)
+        ensureField(fields, "charted", cat.charted, cat.charted_clock)
         ensureField(fields, "deviceId", cat.deviceId, cat.deviceId_clock)
         return RecordDelta("category", "upsert", cat.id, cat.deviceId, fields)
     }

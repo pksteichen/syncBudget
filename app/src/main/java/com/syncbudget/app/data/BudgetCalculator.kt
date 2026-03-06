@@ -354,24 +354,45 @@ object BudgetCalculator {
             if (txn.date.isBefore(budgetStartDate)) continue
             if (txn.type == TransactionType.EXPENSE) {
                 if (txn.linkedAmortizationEntryId != null) continue // fully budget-accounted
+                if (txn.amortizationAppliedAmount > 0.0) {
+                    // Was linked to a deleted amortization — only deduct the unamortized remainder
+                    cash -= roundCents(txn.amount - txn.amortizationAppliedAmount).coerceAtLeast(0.0)
+                    continue
+                }
                 if (txn.linkedRecurringExpenseId != null) {
-                    // Recurring-linked: only the diff matters (budgeted - actual)
-                    val re = activeRecurringExpenses.find { it.id == txn.linkedRecurringExpenseId }
-                    if (re != null) cash += (re.amount - txn.amount)
-                    else cash -= txn.amount // fallback if RE not synced yet
+                    // Recurring-linked: use remembered amount for delta
+                    if (txn.linkedRecurringExpenseAmount > 0.0) {
+                        cash += (txn.linkedRecurringExpenseAmount - txn.amount)
+                    } else {
+                        // Legacy: no remembered amount, fall back to live lookup
+                        val re = activeRecurringExpenses.find { it.id == txn.linkedRecurringExpenseId }
+                        if (re != null) cash += (re.amount - txn.amount)
+                        else cash -= txn.amount
+                    }
+                } else if (txn.linkedRecurringExpenseAmount > 0.0) {
+                    // Formerly linked to deleted RE — use remembered amount for delta
+                    cash += (txn.linkedRecurringExpenseAmount - txn.amount)
                 } else {
                     cash -= txn.amount
                 }
             } else if (txn.type == TransactionType.INCOME) {
                 if (txn.linkedIncomeSourceId != null) {
                     if (incomeMode == IncomeMode.ACTUAL) {
-                        // ACTUAL: apply delta (actual - expected)
-                        val src = activeIncomeSources.find { it.id == txn.linkedIncomeSourceId }
-                        if (src != null) cash += (txn.amount - src.amount)
-                        else cash += txn.amount
+                        // ACTUAL: use remembered amount for delta
+                        if (txn.linkedIncomeSourceAmount > 0.0) {
+                            cash += (txn.amount - txn.linkedIncomeSourceAmount)
+                        } else {
+                            // Legacy: no remembered amount, fall back to live lookup
+                            val src = activeIncomeSources.find { it.id == txn.linkedIncomeSourceId }
+                            if (src != null) cash += (txn.amount - src.amount)
+                            else cash += txn.amount
+                        }
                     }
                     // FIXED mode: linked income → no cash effect
                     // ACTUAL_ADJUST mode: source is updated to match, so delta is zero
+                } else if (txn.linkedIncomeSourceAmount > 0.0) {
+                    // Formerly linked to deleted income source — use remembered delta
+                    cash += (txn.amount - txn.linkedIncomeSourceAmount)
                 } else if (!txn.isBudgetIncome) {
                     cash += txn.amount
                 }

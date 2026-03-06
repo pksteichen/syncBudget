@@ -146,6 +146,10 @@ class MainActivity : ComponentActivity() {
             var dashPendingBudgetIncomeMatch by remember { mutableStateOf<IncomeSource?>(null) }
             var dashShowBudgetIncomeDialog by remember { mutableStateOf(false) }
 
+            // Pending amount-change confirmations (apply to past transactions?)
+            var pendingREAmountUpdate by remember { mutableStateOf<Pair<RecurringExpense, Double>?>(null) } // (updated, oldAmount)
+            var pendingISAmountUpdate by remember { mutableStateOf<Pair<IncomeSource, Double>?>(null) } // (updated, oldAmount)
+
             val context = this@MainActivity
             val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
             var currencySymbol by remember { mutableStateOf(prefs.getString("currencySymbol", "$") ?: "$") }
@@ -386,6 +390,32 @@ class MainActivity : ComponentActivity() {
                     }
                     syncPrefs.edit().putBoolean("migration_restamp_all_period_ledger_ui", true).apply()
                 }
+                // Backfill remembered amounts on existing linked transactions
+                if (!syncPrefs.getBoolean("migration_backfill_linked_amounts", false)) {
+                    var anyChanged = false
+                    val reMap = recurringExpenses.associateBy { it.id }
+                    val isMap = incomeSources.associateBy { it.id }
+                    transactions.forEachIndexed { i, txn ->
+                        var updated = txn
+                        if (txn.linkedRecurringExpenseId != null && txn.linkedRecurringExpenseAmount == 0.0) {
+                            val re = reMap[txn.linkedRecurringExpenseId]
+                            if (re != null) {
+                                updated = updated.copy(linkedRecurringExpenseAmount = re.amount)
+                                anyChanged = true
+                            }
+                        }
+                        if (txn.linkedIncomeSourceId != null && txn.linkedIncomeSourceAmount == 0.0) {
+                            val src = isMap[txn.linkedIncomeSourceId]
+                            if (src != null) {
+                                updated = updated.copy(linkedIncomeSourceAmount = src.amount)
+                                anyChanged = true
+                            }
+                        }
+                        if (updated !== txn) transactions[i] = updated
+                    }
+                    if (anyChanged) saveTransactions()
+                    syncPrefs.edit().putBoolean("migration_backfill_linked_amounts", true).apply()
+                }
                 recomputeCash()
             }
 
@@ -400,8 +430,9 @@ class MainActivity : ComponentActivity() {
             // Positive = saved money, negative = overspent. Null = not a recurring-linked expense.
             fun recurringLinkCashEffect(txn: Transaction): Double? {
                 if (txn.type != TransactionType.EXPENSE || txn.linkedRecurringExpenseId == null) return null
-                val re = recurringExpenses.find { it.id == txn.linkedRecurringExpenseId } ?: return null
-                return re.amount - txn.amount
+                val rememberedAmount = if (txn.linkedRecurringExpenseAmount > 0.0) txn.linkedRecurringExpenseAmount
+                    else recurringExpenses.find { it.id == txn.linkedRecurringExpenseId }?.amount ?: return null
+                return rememberedAmount - txn.amount
             }
 
             // Trigger immediate sync when app returns to foreground
@@ -527,7 +558,8 @@ class MainActivity : ComponentActivity() {
                                     t.categoryAmounts_clock, t.isUserCategorized_clock, t.isBudgetIncome_clock,
                                     t.linkedRecurringExpenseId_clock, t.linkedAmortizationEntryId_clock,
                                     t.linkedIncomeSourceId_clock, t.deviceId_clock, t.deleted_clock,
-                                    t.description_clock)
+                                    t.description_clock, t.amortizationAppliedAmount_clock,
+                                    t.linkedRecurringExpenseAmount_clock, t.linkedIncomeSourceAmount_clock)
                                 if (t.deviceId == localDeviceId && mx in 1..lpc) {
                                     anyRescued = true
                                     val clk = lamportClock.tick()
@@ -536,6 +568,8 @@ class MainActivity : ComponentActivity() {
                                         categoryAmounts_clock = clk, isUserCategorized_clock = clk,
                                         isBudgetIncome_clock = clk, linkedRecurringExpenseId_clock = clk,
                                         linkedAmortizationEntryId_clock = clk, linkedIncomeSourceId_clock = clk,
+                                        amortizationAppliedAmount_clock = clk, linkedRecurringExpenseAmount_clock = clk,
+                                        linkedIncomeSourceAmount_clock = clk,
                                         deviceId_clock = clk, deleted_clock = clk)
                                 }
                             }
@@ -669,6 +703,10 @@ class MainActivity : ComponentActivity() {
                                             isUserCategorized_clock = clk, isBudgetIncome_clock = clk,
                                             linkedRecurringExpenseId_clock = clk,
                                             linkedAmortizationEntryId_clock = clk,
+                                            linkedIncomeSourceId_clock = clk,
+                                            amortizationAppliedAmount_clock = clk,
+                                            linkedRecurringExpenseAmount_clock = clk,
+                                            linkedIncomeSourceAmount_clock = clk,
                                             deviceId_clock = clk, deleted_clock = clk
                                         )
                                     }
@@ -879,6 +917,9 @@ class MainActivity : ComponentActivity() {
                     linkedRecurringExpenseId_clock = clock,
                     linkedAmortizationEntryId_clock = clock,
                     linkedIncomeSourceId_clock = clock,
+                    amortizationAppliedAmount_clock = clock,
+                    linkedRecurringExpenseAmount_clock = clock,
+                    linkedIncomeSourceAmount_clock = clock,
                     deviceId_clock = clock
                 )
                 transactions.add(stamped)
@@ -1439,6 +1480,17 @@ class MainActivity : ComponentActivity() {
                                 saveCategories()
                             }
                         },
+                        onToggleCharted = { cat ->
+                            val idx = categories.indexOfFirst { it.id == cat.id }
+                            if (idx >= 0) {
+                                val clock = lamportClock.tick()
+                                categories[idx] = categories[idx].copy(
+                                    charted = !categories[idx].charted,
+                                    charted_clock = clock
+                                )
+                                saveCategories()
+                            }
+                        },
                         onReassignCategory = { fromId, toId ->
                             val clock = lamportClock.tick()
                             transactions.forEachIndexed { index, txn ->
@@ -1512,7 +1564,14 @@ class MainActivity : ComponentActivity() {
                                     isBudgetIncome_clock = if (updated.isBudgetIncome != prev.isBudgetIncome) clock else prev.isBudgetIncome_clock,
                                     linkedRecurringExpenseId_clock = if (updated.linkedRecurringExpenseId != prev.linkedRecurringExpenseId) clock else prev.linkedRecurringExpenseId_clock,
                                     linkedAmortizationEntryId_clock = if (updated.linkedAmortizationEntryId != prev.linkedAmortizationEntryId) clock else prev.linkedAmortizationEntryId_clock,
-                                    linkedIncomeSourceId_clock = if (updated.linkedIncomeSourceId != prev.linkedIncomeSourceId) clock else prev.linkedIncomeSourceId_clock
+                                    linkedIncomeSourceId_clock = if (updated.linkedIncomeSourceId != prev.linkedIncomeSourceId) clock else prev.linkedIncomeSourceId_clock,
+                                    // If user manually unlinks, clear remembered amounts (linked-in-error → full amount applies)
+                                    amortizationAppliedAmount = if (prev.linkedAmortizationEntryId != null && updated.linkedAmortizationEntryId == null) 0.0 else prev.amortizationAppliedAmount,
+                                    amortizationAppliedAmount_clock = if (prev.linkedAmortizationEntryId != null && updated.linkedAmortizationEntryId == null) clock else prev.amortizationAppliedAmount_clock,
+                                    linkedRecurringExpenseAmount = if (prev.linkedRecurringExpenseId != null && updated.linkedRecurringExpenseId == null) 0.0 else prev.linkedRecurringExpenseAmount,
+                                    linkedRecurringExpenseAmount_clock = if (prev.linkedRecurringExpenseId != null && updated.linkedRecurringExpenseId == null) clock else prev.linkedRecurringExpenseAmount_clock,
+                                    linkedIncomeSourceAmount = if (prev.linkedIncomeSourceId != null && updated.linkedIncomeSourceId == null) 0.0 else prev.linkedIncomeSourceAmount,
+                                    linkedIncomeSourceAmount_clock = if (prev.linkedIncomeSourceId != null && updated.linkedIncomeSourceId == null) clock else prev.linkedIncomeSourceAmount_clock
                                 )
                                 saveTransactions()
                             }
@@ -1611,6 +1670,10 @@ class MainActivity : ComponentActivity() {
                                         isBudgetIncome_clock = 0L,
                                         linkedRecurringExpenseId_clock = 0L,
                                         linkedAmortizationEntryId_clock = 0L,
+                                        linkedIncomeSourceId_clock = 0L,
+                                        amortizationAppliedAmount_clock = 0L,
+                                        linkedRecurringExpenseAmount_clock = 0L,
+                                        linkedIncomeSourceAmount_clock = 0L,
                                         deleted_clock = 0L,
                                         deviceId_clock = 0L)
                                 }
@@ -1799,8 +1862,32 @@ class MainActivity : ComponentActivity() {
                         onDeleteEntry = { entry ->
                             val idx = amortizationEntries.indexOfFirst { it.id == entry.id }
                             if (idx >= 0) {
-                                amortizationEntries[idx] = amortizationEntries[idx].copy(deleted = true, deleted_clock = lamportClock.tick())
+                                val clock = lamportClock.tick()
+                                // Calculate how much has already been amortized
+                                val today = java.time.LocalDate.now()
+                                val elapsed = when (budgetPeriod) {
+                                    BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(entry.startDate, today).toInt()
+                                    BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(entry.startDate, today).toInt()
+                                    BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(entry.startDate, today).toInt()
+                                }.coerceIn(0, entry.totalPeriods)
+                                val perPeriod = BudgetCalculator.roundCents(entry.amount / entry.totalPeriods.toDouble())
+                                val appliedAmount = BudgetCalculator.roundCents(perPeriod * elapsed)
+
+                                amortizationEntries[idx] = amortizationEntries[idx].copy(deleted = true, deleted_clock = clock)
                                 saveAmortizationEntries()
+                                // Unlink transactions and record the already-applied portion
+                                transactions.forEachIndexed { i, txn ->
+                                    if (txn.linkedAmortizationEntryId == entry.id) {
+                                        transactions[i] = txn.copy(
+                                            linkedAmortizationEntryId = null,
+                                            linkedAmortizationEntryId_clock = clock,
+                                            amortizationAppliedAmount = appliedAmount,
+                                            amortizationAppliedAmount_clock = clock
+                                        )
+                                    }
+                                }
+                                saveTransactions()
+                                recomputeCash()
                             }
                         },
                         onBack = { currentScreen = "main" },
@@ -1843,6 +1930,10 @@ class MainActivity : ComponentActivity() {
                             val idx = recurringExpenses.indexOfFirst { it.id == updated.id }
                             if (idx >= 0) {
                                 val old = recurringExpenses[idx]
+                                val amountChanged = updated.amount != old.amount
+                                val hasLinkedTxns = amountChanged && transactions.any {
+                                    it.linkedRecurringExpenseId == updated.id && !it.deleted
+                                }
                                 val clock = lamportClock.tick()
                                 recurringExpenses[idx] = updated.copy(
                                     deviceId = old.deviceId,
@@ -1851,7 +1942,7 @@ class MainActivity : ComponentActivity() {
                                     deleted_clock = old.deleted_clock,
                                     source_clock = if (updated.source != old.source) clock else old.source_clock,
                                     description_clock = if (updated.description != old.description) clock else old.description_clock,
-                                    amount_clock = if (updated.amount != old.amount) clock else old.amount_clock,
+                                    amount_clock = if (amountChanged) clock else old.amount_clock,
                                     repeatType_clock = if (updated.repeatType != old.repeatType) clock else old.repeatType_clock,
                                     repeatInterval_clock = if (updated.repeatInterval != old.repeatInterval) clock else old.repeatInterval_clock,
                                     startDate_clock = if (updated.startDate != old.startDate) clock else old.startDate_clock,
@@ -1859,13 +1950,28 @@ class MainActivity : ComponentActivity() {
                                     monthDay2_clock = if (updated.monthDay2 != old.monthDay2) clock else old.monthDay2_clock
                                 )
                                 saveRecurringExpenses()
+                                if (hasLinkedTxns) {
+                                    pendingREAmountUpdate = Pair(updated, old.amount)
+                                }
                             }
                         },
                         onDeleteRecurringExpense = { expense ->
                             val idx = recurringExpenses.indexOfFirst { it.id == expense.id }
                             if (idx >= 0) {
-                                recurringExpenses[idx] = recurringExpenses[idx].copy(deleted = true, deleted_clock = lamportClock.tick())
+                                val clock = lamportClock.tick()
+                                recurringExpenses[idx] = recurringExpenses[idx].copy(deleted = true, deleted_clock = clock)
                                 saveRecurringExpenses()
+                                // Unlink any transactions linked to this expense
+                                transactions.forEachIndexed { i, txn ->
+                                    if (txn.linkedRecurringExpenseId == expense.id) {
+                                        transactions[i] = txn.copy(
+                                            linkedRecurringExpenseId = null,
+                                            linkedRecurringExpenseId_clock = clock
+                                        )
+                                    }
+                                }
+                                saveTransactions()
+                                recomputeCash()
                             }
                         },
                         onBack = { currentScreen = "main" },
@@ -1895,6 +2001,10 @@ class MainActivity : ComponentActivity() {
                             val idx = incomeSources.indexOfFirst { it.id == updated.id }
                             if (idx >= 0) {
                                 val old = incomeSources[idx]
+                                val amountChanged = updated.amount != old.amount
+                                val hasLinkedTxns = amountChanged && transactions.any {
+                                    it.linkedIncomeSourceId == updated.id && !it.deleted
+                                }
                                 val clock = lamportClock.tick()
                                 incomeSources[idx] = updated.copy(
                                     deviceId = old.deviceId,
@@ -1903,7 +2013,7 @@ class MainActivity : ComponentActivity() {
                                     deleted_clock = old.deleted_clock,
                                     source_clock = if (updated.source != old.source) clock else old.source_clock,
                                     description_clock = if (updated.description != old.description) clock else old.description_clock,
-                                    amount_clock = if (updated.amount != old.amount) clock else old.amount_clock,
+                                    amount_clock = if (amountChanged) clock else old.amount_clock,
                                     repeatType_clock = if (updated.repeatType != old.repeatType) clock else old.repeatType_clock,
                                     repeatInterval_clock = if (updated.repeatInterval != old.repeatInterval) clock else old.repeatInterval_clock,
                                     startDate_clock = if (updated.startDate != old.startDate) clock else old.startDate_clock,
@@ -1911,13 +2021,28 @@ class MainActivity : ComponentActivity() {
                                     monthDay2_clock = if (updated.monthDay2 != old.monthDay2) clock else old.monthDay2_clock
                                 )
                                 saveIncomeSources()
+                                if (hasLinkedTxns) {
+                                    pendingISAmountUpdate = Pair(updated, old.amount)
+                                }
                             }
                         },
                         onDeleteIncomeSource = { src ->
                             val idx = incomeSources.indexOfFirst { it.id == src.id }
                             if (idx >= 0) {
-                                incomeSources[idx] = incomeSources[idx].copy(deleted = true, deleted_clock = lamportClock.tick())
+                                val clock = lamportClock.tick()
+                                incomeSources[idx] = incomeSources[idx].copy(deleted = true, deleted_clock = clock)
                                 saveIncomeSources()
+                                // Unlink any transactions linked to this income source
+                                transactions.forEachIndexed { i, txn ->
+                                    if (txn.linkedIncomeSourceId == src.id) {
+                                        transactions[i] = txn.copy(
+                                            linkedIncomeSourceId = null,
+                                            linkedIncomeSourceId_clock = clock
+                                        )
+                                    }
+                                }
+                                saveTransactions()
+                                recomputeCash()
                             }
                         },
                         budgetPeriod = budgetPeriod,
@@ -2184,6 +2309,10 @@ class MainActivity : ComponentActivity() {
                                                 isBudgetIncome_clock = stampClock,
                                                 linkedRecurringExpenseId_clock = stampClock,
                                                 linkedAmortizationEntryId_clock = stampClock,
+                                                linkedIncomeSourceId_clock = stampClock,
+                                                amortizationAppliedAmount_clock = stampClock,
+                                                linkedRecurringExpenseAmount_clock = stampClock,
+                                                linkedIncomeSourceAmount_clock = stampClock,
                                                 deviceId_clock = stampClock
                                             )
                                         }
@@ -2308,6 +2437,10 @@ class MainActivity : ComponentActivity() {
                                                     isBudgetIncome_clock = stampClock,
                                                     linkedRecurringExpenseId_clock = stampClock,
                                                     linkedAmortizationEntryId_clock = stampClock,
+                                                    linkedIncomeSourceId_clock = stampClock,
+                                                    amortizationAppliedAmount_clock = stampClock,
+                                                    linkedRecurringExpenseAmount_clock = stampClock,
+                                                    linkedIncomeSourceAmount_clock = stampClock,
                                                     deviceId_clock = stampClock
                                                 )
                                             }
@@ -2479,6 +2612,10 @@ class MainActivity : ComponentActivity() {
                                                         isUserCategorized_clock = clk, isBudgetIncome_clock = clk,
                                                         linkedRecurringExpenseId_clock = clk,
                                                         linkedAmortizationEntryId_clock = clk,
+                                                        linkedIncomeSourceId_clock = clk,
+                                                        amortizationAppliedAmount_clock = clk,
+                                                        linkedRecurringExpenseAmount_clock = clk,
+                                                        linkedIncomeSourceAmount_clock = clk,
                                                         deviceId_clock = clk, deleted_clock = clk)
                                                 }
                                             }
@@ -2774,7 +2911,10 @@ class MainActivity : ComponentActivity() {
                         showDateAdvisory = !dateCloseEnough,
                         onConfirmRecurring = {
                             val txn = dashPendingRecurringTxn!!
-                            val updatedTxn = txn.copy(linkedRecurringExpenseId = dashPendingRecurringMatch!!.id)
+                            val updatedTxn = txn.copy(
+                                linkedRecurringExpenseId = dashPendingRecurringMatch!!.id,
+                                linkedRecurringExpenseAmount = dashPendingRecurringMatch!!.amount
+                            )
                             addTransactionWithBudgetEffect(updatedTxn)
                             dashPendingRecurringTxn = null
                             dashPendingRecurringMatch = null
@@ -2826,6 +2966,7 @@ class MainActivity : ComponentActivity() {
                             val txn = baseTxn.copy(
                                 isBudgetIncome = true,
                                 linkedIncomeSourceId = dashPendingBudgetIncomeMatch!!.id,
+                                linkedIncomeSourceAmount = dashPendingBudgetIncomeMatch!!.amount,
                                 categoryAmounts = if (recurringIncomeCatId != null)
                                     listOf(CategoryAmount(recurringIncomeCatId, baseTxn.amount))
                                 else baseTxn.categoryAmounts,
@@ -2855,6 +2996,74 @@ class MainActivity : ComponentActivity() {
                             dashPendingBudgetIncomeTxn = null
                             dashPendingBudgetIncomeMatch = null
                             dashShowBudgetIncomeDialog = false
+                        }
+                    )
+                }
+
+                // Confirmation dialog: apply recurring expense amount change to past transactions?
+                pendingREAmountUpdate?.let { (updated, oldAmount) ->
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = {
+                            pendingREAmountUpdate = null
+                            recomputeCash()
+                        },
+                        title = { androidx.compose.material3.Text(strings.common.applyToPastTitle) },
+                        text = { androidx.compose.material3.Text(strings.common.applyToPastBody) },
+                        confirmButton = {
+                            androidx.compose.material3.TextButton(onClick = {
+                                val clock = lamportClock.tick()
+                                transactions.forEachIndexed { i, txn ->
+                                    if (txn.linkedRecurringExpenseId == updated.id && !txn.deleted) {
+                                        transactions[i] = txn.copy(
+                                            linkedRecurringExpenseAmount = updated.amount,
+                                            linkedRecurringExpenseAmount_clock = clock
+                                        )
+                                    }
+                                }
+                                saveTransactions()
+                                pendingREAmountUpdate = null
+                                recomputeCash()
+                            }) { androidx.compose.material3.Text(strings.common.applyToPastConfirm) }
+                        },
+                        dismissButton = {
+                            androidx.compose.material3.TextButton(onClick = {
+                                pendingREAmountUpdate = null
+                                recomputeCash()
+                            }) { androidx.compose.material3.Text(strings.common.applyToPastDeny) }
+                        }
+                    )
+                }
+
+                // Confirmation dialog: apply income source amount change to past transactions?
+                pendingISAmountUpdate?.let { (updated, oldAmount) ->
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = {
+                            pendingISAmountUpdate = null
+                            recomputeCash()
+                        },
+                        title = { androidx.compose.material3.Text(strings.common.applyToPastTitle) },
+                        text = { androidx.compose.material3.Text(strings.common.applyToPastBody) },
+                        confirmButton = {
+                            androidx.compose.material3.TextButton(onClick = {
+                                val clock = lamportClock.tick()
+                                transactions.forEachIndexed { i, txn ->
+                                    if (txn.linkedIncomeSourceId == updated.id && !txn.deleted) {
+                                        transactions[i] = txn.copy(
+                                            linkedIncomeSourceAmount = updated.amount,
+                                            linkedIncomeSourceAmount_clock = clock
+                                        )
+                                    }
+                                }
+                                saveTransactions()
+                                pendingISAmountUpdate = null
+                                recomputeCash()
+                            }) { androidx.compose.material3.Text(strings.common.applyToPastConfirm) }
+                        },
+                        dismissButton = {
+                            androidx.compose.material3.TextButton(onClick = {
+                                pendingISAmountUpdate = null
+                                recomputeCash()
+                            }) { androidx.compose.material3.Text(strings.common.applyToPastDeny) }
                         }
                     )
                 }

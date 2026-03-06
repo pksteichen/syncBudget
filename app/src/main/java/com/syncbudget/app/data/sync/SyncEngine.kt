@@ -756,6 +756,9 @@ class SyncEngine(
             linkedRecurringExpenseId = (f["linkedRecurringExpenseId"]?.value as? Number)?.toInt(),
             linkedAmortizationEntryId = (f["linkedAmortizationEntryId"]?.value as? Number)?.toInt(),
             linkedIncomeSourceId = (f["linkedIncomeSourceId"]?.value as? Number)?.toInt(),
+            amortizationAppliedAmount = (f["amortizationAppliedAmount"]?.value as? Number)?.toDouble() ?: 0.0,
+            linkedRecurringExpenseAmount = (f["linkedRecurringExpenseAmount"]?.value as? Number)?.toDouble() ?: 0.0,
+            linkedIncomeSourceAmount = (f["linkedIncomeSourceAmount"]?.value as? Number)?.toDouble() ?: 0.0,
             deviceId = f["deviceId"]?.value as? String ?: change.deviceId,
             deleted = f["deleted"]?.value as? Boolean ?: false,
             source_clock = f["source"]?.clock ?: 0L,
@@ -769,6 +772,9 @@ class SyncEngine(
             linkedRecurringExpenseId_clock = f["linkedRecurringExpenseId"]?.clock ?: 0L,
             linkedAmortizationEntryId_clock = f["linkedAmortizationEntryId"]?.clock ?: 0L,
             linkedIncomeSourceId_clock = f["linkedIncomeSourceId"]?.clock ?: 0L,
+            amortizationAppliedAmount_clock = f["amortizationAppliedAmount"]?.clock ?: 0L,
+            linkedRecurringExpenseAmount_clock = f["linkedRecurringExpenseAmount"]?.clock ?: 0L,
+            linkedIncomeSourceAmount_clock = f["linkedIncomeSourceAmount"]?.clock ?: 0L,
             deleted_clock = f["deleted"]?.clock ?: 0L,
             deviceId_clock = f["deviceId"]?.clock ?: 0L
         )
@@ -893,11 +899,13 @@ class SyncEngine(
             name = f["name"]?.value as? String ?: "",
             iconName = f["iconName"]?.value as? String ?: "label",
             tag = f["tag"]?.value as? String ?: "",
+            charted = f["charted"]?.value as? Boolean ?: true,
             deviceId = f["deviceId"]?.value as? String ?: change.deviceId,
             deleted = f["deleted"]?.value as? Boolean ?: false,
             name_clock = f["name"]?.clock ?: 0L,
             iconName_clock = f["iconName"]?.clock ?: 0L,
             tag_clock = f["tag"]?.clock ?: 0L,
+            charted_clock = f["charted"]?.clock ?: 0L,
             deleted_clock = f["deleted"]?.clock ?: 0L,
             deviceId_clock = f["deviceId"]?.clock ?: 0L
         )

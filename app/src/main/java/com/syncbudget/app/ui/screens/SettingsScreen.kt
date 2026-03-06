@@ -113,6 +113,7 @@ fun SettingsScreen(
     onAddCategory: (Category) -> Unit,
     onUpdateCategory: (Category) -> Unit = {},
     onDeleteCategory: (Category) -> Unit,
+    onToggleCharted: (Category) -> Unit = {},
     onReassignCategory: (fromId: Int, toId: Int) -> Unit = { _, _ -> },
     chartPalette: String = "Bright",
     onChartPaletteChange: (String) -> Unit = {},
@@ -547,11 +548,22 @@ fun SettingsScreen(
             // Categories section
             item {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                Text(
-                    text = S.settings.categories,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = S.settings.categories,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = S.settings.charted,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                    )
+                }
             }
 
             items(categories) { category ->
@@ -564,7 +576,7 @@ fun SettingsScreen(
                             if (!isProtected) Modifier.clickable { editingCategory = category }
                             else Modifier
                         )
-                        .padding(vertical = 8.dp),
+                        .padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
@@ -579,6 +591,14 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.weight(1f)
+                    )
+                    Checkbox(
+                        checked = category.charted,
+                        onCheckedChange = { onToggleCharted(category) },
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = MaterialTheme.colorScheme.primary,
+                            uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                        )
                     )
                 }
             }

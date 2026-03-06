@@ -48,6 +48,12 @@ object TransactionRepository {
             obj.put("linkedRecurringExpenseId_clock", t.linkedRecurringExpenseId_clock)
             obj.put("linkedAmortizationEntryId_clock", t.linkedAmortizationEntryId_clock)
             obj.put("linkedIncomeSourceId_clock", t.linkedIncomeSourceId_clock)
+            obj.put("amortizationAppliedAmount", t.amortizationAppliedAmount)
+            obj.put("amortizationAppliedAmount_clock", t.amortizationAppliedAmount_clock)
+            obj.put("linkedRecurringExpenseAmount", t.linkedRecurringExpenseAmount)
+            obj.put("linkedRecurringExpenseAmount_clock", t.linkedRecurringExpenseAmount_clock)
+            obj.put("linkedIncomeSourceAmount", t.linkedIncomeSourceAmount)
+            obj.put("linkedIncomeSourceAmount_clock", t.linkedIncomeSourceAmount_clock)
             obj.put("deleted_clock", t.deleted_clock)
             obj.put("deviceId_clock", t.deviceId_clock)
             jsonArray.put(obj)
@@ -98,6 +104,9 @@ object TransactionRepository {
                     linkedRecurringExpenseId = linkedRecurringExpenseId,
                     linkedAmortizationEntryId = linkedAmortizationEntryId,
                     linkedIncomeSourceId = linkedIncomeSourceId,
+                    amortizationAppliedAmount = obj.optDouble("amortizationAppliedAmount", 0.0),
+                    linkedRecurringExpenseAmount = obj.optDouble("linkedRecurringExpenseAmount", 0.0),
+                    linkedIncomeSourceAmount = obj.optDouble("linkedIncomeSourceAmount", 0.0),
                     deviceId = obj.optString("deviceId", ""),
                     deleted = obj.optBoolean("deleted", false),
                     source_clock = obj.optLong("source_clock", 0L),
@@ -111,6 +120,9 @@ object TransactionRepository {
                     linkedRecurringExpenseId_clock = obj.optLong("linkedRecurringExpenseId_clock", 0L),
                     linkedAmortizationEntryId_clock = obj.optLong("linkedAmortizationEntryId_clock", 0L),
                     linkedIncomeSourceId_clock = obj.optLong("linkedIncomeSourceId_clock", 0L),
+                    amortizationAppliedAmount_clock = obj.optLong("amortizationAppliedAmount_clock", 0L),
+                    linkedRecurringExpenseAmount_clock = obj.optLong("linkedRecurringExpenseAmount_clock", 0L),
+                    linkedIncomeSourceAmount_clock = obj.optLong("linkedIncomeSourceAmount_clock", 0L),
                     deleted_clock = obj.optLong("deleted_clock", 0L),
                     deviceId_clock = obj.optLong("deviceId_clock", 0L)
                 )

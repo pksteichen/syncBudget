@@ -598,7 +598,9 @@ private fun SpendingPieChart(
 ) {
     val context = LocalContext.current
     val S = LocalStrings.current
+    val chartedCategories = remember(categories) { categories.filter { it.charted } }
     val categoryMap = remember(categories) { categories.associateBy { it.id } }
+    val chartedCatIds = remember(chartedCategories) { chartedCategories.map { it.id }.toSet() }
     val otherCatId = remember(categories) { categories.find { it.tag == "other" }?.id ?: -1 }
 
     val today = LocalDate.now()
@@ -618,15 +620,19 @@ private fun SpendingPieChart(
             !it.date.isAfter(today)
     }
 
-    // Aggregate spending by category
+    // Aggregate spending by category (only charted categories)
     val spending = mutableMapOf<Int, Double>()
     for (txn in filteredExpenses) {
         if (txn.categoryAmounts.isEmpty()) {
-            spending[otherCatId] = (spending[otherCatId] ?: 0.0) + txn.amount
+            if (otherCatId in chartedCatIds) {
+                spending[otherCatId] = (spending[otherCatId] ?: 0.0) + txn.amount
+            }
         } else {
             for (ca in txn.categoryAmounts) {
                 val catId = if (categoryMap.containsKey(ca.categoryId)) ca.categoryId else otherCatId
-                spending[catId] = (spending[catId] ?: 0.0) + ca.amount
+                if (catId in chartedCatIds) {
+                    spending[catId] = (spending[catId] ?: 0.0) + ca.amount
+                }
             }
         }
     }
@@ -644,24 +650,51 @@ private fun SpendingPieChart(
         else -> if (isDark) PIE_COLORS_DARK else PIE_COLORS_LIGHT
     }
 
-    // Build wedge data
-    val wedges = mutableListOf<PieWedge>()
-    var currentAngle = -90f
-    sortedEntries.forEachIndexed { index, (catId, amount) ->
-        val sweep = if (totalSpending > 0) (amount / totalSpending * 360f).toFloat() else 0f
-        val cat = categoryMap[catId]
-        wedges.add(
-            PieWedge(
-                categoryId = catId,
-                categoryName = cat?.name ?: "Other",
-                iconName = cat?.iconName ?: "Category",
-                amount = amount,
-                color = chartColors[index % chartColors.size],
-                startAngle = currentAngle,
-                sweepAngle = sweep
+    // Build wedge data with rotation so small wedges center at 9:00 (180°)
+    val wedges = run {
+        // First pass: compute sweeps and identify small wedges
+        val sweeps = sortedEntries.map { (_, amount) ->
+            if (totalSpending > 0) (amount / totalSpending * 360f).toFloat() else 0f
+        }
+        val smallThreshold = 0.04
+        val smallIndices = sortedEntries.mapIndexedNotNull { i, (_, amount) ->
+            if (totalSpending > 0 && amount / totalSpending < smallThreshold) i else null
+        }
+
+        // Calculate rotation offset so small wedges are centered at 9:00 (180°)
+        // Default start is -90° (12 o'clock)
+        val startAngle = if (smallIndices.isNotEmpty()) {
+            // Small wedges are the last entries (sorted by descending amount)
+            // They are contiguous at the end. Find their combined sweep.
+            val smallTotalSweep = smallIndices.sumOf { sweeps[it].toDouble() }.toFloat()
+            // We want the center of the small group at 180°.
+            // The small wedges start after all large wedges.
+            val largeTotal = sweeps.filterIndexed { i, _ -> i !in smallIndices }.sum()
+            // Start angle = 180° - smallTotalSweep/2 - largeTotal
+            180f - smallTotalSweep / 2f - largeTotal
+        } else {
+            -90f // no small wedges, default 12 o'clock start
+        }
+
+        val result = mutableListOf<PieWedge>()
+        var angle = startAngle
+        sortedEntries.forEachIndexed { index, (catId, amount) ->
+            val sweep = sweeps[index]
+            val cat = categoryMap[catId]
+            result.add(
+                PieWedge(
+                    categoryId = catId,
+                    categoryName = cat?.name ?: "Other",
+                    iconName = cat?.iconName ?: "Category",
+                    amount = amount,
+                    color = chartColors[index % chartColors.size],
+                    startAngle = angle,
+                    sweepAngle = sweep
+                )
             )
-        )
-        currentAngle += sweep
+            angle += sweep
+        }
+        result
     }
 
     Box(modifier = modifier) {
@@ -797,7 +830,7 @@ private fun SpendingPieChart(
                     val boxSpacing = 4.dp
                     val boxSize = iconSize + boxPadding * 2
                     val maxPerColumn = ((maxHeight.value) / (boxSize.value + boxSpacing.value)).toInt().coerceAtLeast(1)
-                    val columns = smallWedges.chunked(maxPerColumn)
+                    val columns = smallWedges.reversed().chunked(maxPerColumn)
 
                     Row(
                         modifier = Modifier

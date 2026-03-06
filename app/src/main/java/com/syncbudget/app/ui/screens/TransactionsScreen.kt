@@ -95,7 +95,14 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.ColumnScope
 import com.syncbudget.app.ui.theme.AdAwareDialog
+import com.syncbudget.app.ui.theme.DarkHeaderBackground
+import com.syncbudget.app.ui.theme.DarkHeaderText
+import com.syncbudget.app.ui.theme.LightHeaderBackground
+import com.syncbudget.app.ui.theme.LightHeaderText
 import com.syncbudget.app.ui.theme.PulsingScrollArrow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -902,13 +909,15 @@ fun TransactionsScreen(
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                 items(filteredTransactions, key = { it.id }) { transaction ->
                     val isLinkedRecurring = transaction.linkedRecurringExpenseId != null
-                    val linkedRecurringAmount = if (isLinkedRecurring)
-                        recurringExpenses.find { it.id == transaction.linkedRecurringExpenseId }?.amount
-                    else null
+                    val linkedRecurringAmount = if (isLinkedRecurring) {
+                        if (transaction.linkedRecurringExpenseAmount > 0.0) transaction.linkedRecurringExpenseAmount
+                        else recurringExpenses.find { it.id == transaction.linkedRecurringExpenseId }?.amount
+                    } else null
                     val isLinkedIncome = transaction.linkedIncomeSourceId != null
-                    val linkedIncomeAmount = if (isLinkedIncome)
-                        incomeSources.find { it.id == transaction.linkedIncomeSourceId }?.amount
-                    else null
+                    val linkedIncomeAmount = if (isLinkedIncome) {
+                        if (transaction.linkedIncomeSourceAmount > 0.0) transaction.linkedIncomeSourceAmount
+                        else incomeSources.find { it.id == transaction.linkedIncomeSourceId }?.amount
+                    } else null
                     val isLinkedAmortization = transaction.linkedAmortizationEntryId != null
                     val amortEntry = if (isLinkedAmortization)
                         amortizationEntries.find { it.id == transaction.linkedAmortizationEntryId }
@@ -1895,7 +1904,10 @@ fun TransactionsScreen(
             dateFormatter = dateFormatter,
             showDateAdvisory = !dateCloseEnough,
             onConfirmRecurring = {
-                val updatedTxn = importTxn.copy(linkedRecurringExpenseId = recurringMatch.id)
+                val updatedTxn = importTxn.copy(
+                    linkedRecurringExpenseId = recurringMatch.id,
+                    linkedRecurringExpenseAmount = recurringMatch.amount
+                )
                 importApproved.add(updatedTxn)
                 currentImportRecurring = null
                 importIndex++
@@ -1919,7 +1931,10 @@ fun TransactionsScreen(
             showDateAdvisory = !dateCloseEnough,
             onConfirmRecurring = {
                 val txn = pendingRecurringTxn!!
-                val updatedTxn = txn.copy(linkedRecurringExpenseId = pendingRecurringMatch!!.id)
+                val updatedTxn = txn.copy(
+                    linkedRecurringExpenseId = pendingRecurringMatch!!.id,
+                    linkedRecurringExpenseAmount = pendingRecurringMatch!!.amount
+                )
                 if (pendingRecurringIsEdit) onUpdateTransaction(updatedTxn)
                 else addAndScroll(updatedTxn)
                 pendingRecurringTxn = null
@@ -1974,6 +1989,7 @@ fun TransactionsScreen(
                 val updatedTxn = importTxn.copy(
                     isBudgetIncome = true,
                     linkedIncomeSourceId = incomeMatch.id,
+                    linkedIncomeSourceAmount = incomeMatch.amount,
                     categoryAmounts = if (recurringIncomeCatId != null)
                         listOf(CategoryAmount(recurringIncomeCatId, importTxn.amount))
                     else importTxn.categoryAmounts
@@ -2033,6 +2049,7 @@ fun TransactionsScreen(
                 val txn = baseTxn.copy(
                     isBudgetIncome = true,
                     linkedIncomeSourceId = pendingBudgetIncomeMatch!!.id,
+                    linkedIncomeSourceAmount = pendingBudgetIncomeMatch!!.amount,
                     categoryAmounts = if (recurringIncomeCatId != null)
                         listOf(CategoryAmount(recurringIncomeCatId, baseTxn.amount))
                     else baseTxn.categoryAmounts,
@@ -2061,6 +2078,107 @@ fun TransactionsScreen(
 }
 
 @Composable
+fun MatchDialogCard(
+    title: String,
+    onDismiss: () -> Unit,
+    buttons: @Composable () -> Unit,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val headerColor = if (isSystemInDarkTheme()) DarkHeaderBackground else LightHeaderBackground
+    val headerTextColor = if (isSystemInDarkTheme()) DarkHeaderText else LightHeaderText
+    val footerColor = MaterialTheme.colorScheme.surfaceVariant
+
+    AdAwareDialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.92f),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            Column {
+                // Header
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            headerColor,
+                            RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                        )
+                        .padding(horizontal = 20.dp, vertical = 14.dp)
+                ) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = headerTextColor
+                    )
+                }
+
+                // Body
+                Column(
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+                    content = content
+                )
+
+                // Footer
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            footerColor,
+                            RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)
+                        )
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    buttons()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(bottom = 4.dp)
+    )
+}
+
+@Composable
+private fun TransactionCard(
+    source: String,
+    amount: String,
+    date: String,
+    extra: String? = null,
+    extraColor: Color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(source, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Text(amount, fontWeight = FontWeight.SemiBold)
+            }
+            Text(date, style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
+            if (extra != null) {
+                Text(extra, style = MaterialTheme.typography.bodySmall, color = extraColor)
+            }
+        }
+    }
+}
+
+@Composable
 fun BudgetIncomeConfirmDialog(
     transaction: Transaction,
     incomeSource: IncomeSource,
@@ -2070,33 +2188,35 @@ fun BudgetIncomeConfirmDialog(
     onNotBudgetIncome: () -> Unit
 ) {
     val S = LocalStrings.current
-    AdAwareAlertDialog(
-        onDismissRequest = onNotBudgetIncome,
-        title = { Text(S.transactions.budgetIncomeMatchTitle(transaction.source)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("${transaction.source} \u2014 ${formatCurrency(transaction.amount, currencySymbol)}", fontWeight = FontWeight.SemiBold)
-                Text(transaction.date.format(dateFormatter))
-                Spacer(modifier = Modifier.height(4.dp))
-                Text("${incomeSource.source} \u2014 ${formatCurrency(incomeSource.amount, currencySymbol)}", fontWeight = FontWeight.SemiBold)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    S.transactions.budgetIncomeMatchBody(transaction.source, incomeSource.source),
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onConfirmBudgetIncome) {
-                Text(S.transactions.yesBudgetIncome)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onNotBudgetIncome) {
-                Text(S.transactions.noExtraIncome)
+    MatchDialogCard(
+        title = S.transactions.budgetIncomeMatchTitle(transaction.source),
+        onDismiss = onNotBudgetIncome,
+        buttons = {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = onNotBudgetIncome) { Text(S.transactions.noExtraIncome) }
+                TextButton(onClick = onConfirmBudgetIncome) { Text(S.transactions.yesBudgetIncome) }
             }
         }
-    )
+    ) {
+        SectionLabel(S.transactions.transactionLabel)
+        TransactionCard(
+            source = transaction.source,
+            amount = formatCurrency(transaction.amount, currencySymbol),
+            date = transaction.date.format(dateFormatter)
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        SectionLabel(S.transactions.incomeSourceLabel)
+        TransactionCard(
+            source = incomeSource.source,
+            amount = formatCurrency(incomeSource.amount, currencySymbol),
+            date = ""
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            S.transactions.budgetIncomeMatchBody(transaction.source, incomeSource.source),
+            style = MaterialTheme.typography.bodyMedium
+        )
+    }
 }
 
 @Composable
@@ -2109,33 +2229,35 @@ fun AmortizationConfirmDialog(
     onNotAmortized: () -> Unit
 ) {
     val S = LocalStrings.current
-    AdAwareAlertDialog(
-        onDismissRequest = onNotAmortized,
-        title = { Text(S.transactions.amortizationMatchTitle(transaction.source)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("${transaction.source} \u2014 ${formatCurrency(transaction.amount, currencySymbol)}", fontWeight = FontWeight.SemiBold)
-                Text(transaction.date.format(dateFormatter))
-                Spacer(modifier = Modifier.height(4.dp))
-                Text("${amortizationEntry.source} \u2014 ${formatCurrency(amortizationEntry.amount, currencySymbol)}", fontWeight = FontWeight.SemiBold)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    S.transactions.amortizationMatchBody(transaction.source, amortizationEntry.source),
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onConfirmAmortization) {
-                Text(S.transactions.yesAmortization)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onNotAmortized) {
-                Text(S.transactions.noRegularAmort)
+    MatchDialogCard(
+        title = S.transactions.amortizationMatchTitle(transaction.source),
+        onDismiss = onNotAmortized,
+        buttons = {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = onNotAmortized) { Text(S.transactions.noRegularAmort) }
+                TextButton(onClick = onConfirmAmortization) { Text(S.transactions.yesAmortization) }
             }
         }
-    )
+    ) {
+        SectionLabel(S.transactions.transactionLabel)
+        TransactionCard(
+            source = transaction.source,
+            amount = formatCurrency(transaction.amount, currencySymbol),
+            date = transaction.date.format(dateFormatter)
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        SectionLabel(S.transactions.amortizationEntryLabel)
+        TransactionCard(
+            source = amortizationEntry.source,
+            amount = formatCurrency(amortizationEntry.amount, currencySymbol),
+            date = ""
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            S.transactions.amortizationMatchBody(transaction.source, amortizationEntry.source),
+            style = MaterialTheme.typography.bodyMedium
+        )
+    }
 }
 
 @Composable
@@ -2149,41 +2271,43 @@ fun RecurringExpenseConfirmDialog(
     onNotRecurring: () -> Unit
 ) {
     val S = LocalStrings.current
-    AdAwareAlertDialog(
-        onDismissRequest = onNotRecurring,
-        title = { Text(S.transactions.recurringMatchTitle(transaction.source)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("${transaction.source} \u2014 ${formatCurrency(transaction.amount, currencySymbol)}", fontWeight = FontWeight.SemiBold)
-                Text(transaction.date.format(dateFormatter))
-                Spacer(modifier = Modifier.height(4.dp))
-                Text("${recurringExpense.source} \u2014 ${formatCurrency(recurringExpense.amount, currencySymbol)}", fontWeight = FontWeight.SemiBold)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    S.transactions.recurringMatchBody(transaction.source, recurringExpense.source),
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                if (showDateAdvisory) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        S.transactions.dateAdvisory,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFFFF9800)
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onConfirmRecurring) {
-                Text(S.transactions.yesRecurring)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onNotRecurring) {
-                Text(S.transactions.noRegularExpense)
+    MatchDialogCard(
+        title = S.transactions.recurringMatchTitle(transaction.source),
+        onDismiss = onNotRecurring,
+        buttons = {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = onNotRecurring) { Text(S.transactions.noRegularExpense) }
+                TextButton(onClick = onConfirmRecurring) { Text(S.transactions.yesRecurring) }
             }
         }
-    )
+    ) {
+        SectionLabel(S.transactions.transactionLabel)
+        TransactionCard(
+            source = transaction.source,
+            amount = formatCurrency(transaction.amount, currencySymbol),
+            date = transaction.date.format(dateFormatter)
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        SectionLabel(S.transactions.recurringExpenseLabel)
+        TransactionCard(
+            source = recurringExpense.source,
+            amount = formatCurrency(recurringExpense.amount, currencySymbol),
+            date = ""
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            S.transactions.recurringMatchBody(transaction.source, recurringExpense.source),
+            style = MaterialTheme.typography.bodyMedium
+        )
+        if (showDateAdvisory) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                S.transactions.dateAdvisory,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFFFF9800)
+            )
+        }
+    }
 }
 
 @Composable
@@ -2200,58 +2324,54 @@ fun DuplicateResolutionDialog(
     onIgnoreAll: () -> Unit
 ) {
     val S = LocalStrings.current
-    AdAwareAlertDialog(
-        onDismissRequest = onKeepExisting,
-        title = { Text(S.transactions.duplicateDetected) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(S.transactions.duplicateExisting, fontWeight = FontWeight.SemiBold)
-                Text(
-                    "${existingTransaction.date.format(dateFormatter)}  ${existingTransaction.source}  ${formatCurrency(existingTransaction.amount, currencySymbol)}",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                if (existingTransaction.categoryAmounts.isNotEmpty()) {
-                    val catNames = existingTransaction.categoryAmounts.mapNotNull { ca ->
-                        categoryMap[ca.categoryId]?.name
-                    }.joinToString(", ")
-                    Text(catNames, style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(S.transactions.duplicateNew, fontWeight = FontWeight.SemiBold)
-                Text(
-                    "${newTransaction.date.format(dateFormatter)}  ${newTransaction.source}  ${formatCurrency(newTransaction.amount, currencySymbol)}",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                if (newTransaction.categoryAmounts.isNotEmpty()) {
-                    val catNames = newTransaction.categoryAmounts.mapNotNull { ca ->
-                        categoryMap[ca.categoryId]?.name
-                    }.joinToString(", ")
-                    Text(catNames, style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
-                }
-                Spacer(modifier = Modifier.height(8.dp))
+    MatchDialogCard(
+        title = S.transactions.duplicateDetected,
+        onDismiss = onKeepExisting,
+        buttons = {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    TextButton(onClick = onIgnore) { Text(S.transactions.ignore) }
+                    TextButton(onClick = onKeepExisting) { Text(S.transactions.keepExisting) }
                     TextButton(onClick = onKeepNew) { Text(S.transactions.keepNew) }
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    TextButton(onClick = onKeepExisting) { Text(S.transactions.keepExisting) }
+                    TextButton(onClick = onIgnore) { Text(S.transactions.ignore) }
                     if (showIgnoreAll) {
                         TextButton(onClick = onIgnoreAll) { Text(S.transactions.ignoreAll) }
                     }
                 }
             }
-        },
-        confirmButton = {},
-        dismissButton = {}
-    )
+        }
+    ) {
+        SectionLabel(S.transactions.duplicateExisting)
+        TransactionCard(
+            source = existingTransaction.source,
+            amount = formatCurrency(existingTransaction.amount, currencySymbol),
+            date = existingTransaction.date.format(dateFormatter),
+            extra = if (existingTransaction.categoryAmounts.isNotEmpty()) {
+                existingTransaction.categoryAmounts.mapNotNull { ca ->
+                    categoryMap[ca.categoryId]?.name
+                }.joinToString(", ")
+            } else null
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        SectionLabel(S.transactions.duplicateNew)
+        TransactionCard(
+            source = newTransaction.source,
+            amount = formatCurrency(newTransaction.amount, currencySymbol),
+            date = newTransaction.date.format(dateFormatter),
+            extra = if (newTransaction.categoryAmounts.isNotEmpty()) {
+                newTransaction.categoryAmounts.mapNotNull { ca ->
+                    categoryMap[ca.categoryId]?.name
+                }.joinToString(", ")
+            } else null
+        )
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -3388,6 +3508,14 @@ fun TransactionDialog(
 
                             val id = editTransaction?.id
                                 ?: generateTransactionId(existingIds)
+                            // Look up remembered amounts for newly linked entries
+                            val reAmount = linkedRecurringId?.let { reId ->
+                                recurringExpenses.find { it.id == reId }?.amount ?: 0.0
+                            } ?: 0.0
+                            val isAmount = linkedIncomeId?.let { isId ->
+                                incomeSources.find { it.id == isId }?.amount ?: 0.0
+                            } ?: 0.0
+
                             val txn = if (editTransaction != null) {
                                 // Preserve fields not editable in this dialog
                                 editTransaction.copy(
@@ -3400,6 +3528,8 @@ fun TransactionDialog(
                                     linkedRecurringExpenseId = linkedRecurringId,
                                     linkedAmortizationEntryId = linkedAmortizationId,
                                     linkedIncomeSourceId = linkedIncomeId,
+                                    linkedRecurringExpenseAmount = if (linkedRecurringId != null) reAmount else editTransaction.linkedRecurringExpenseAmount,
+                                    linkedIncomeSourceAmount = if (linkedIncomeId != null) isAmount else editTransaction.linkedIncomeSourceAmount,
                                     isUserCategorized = true
                                 )
                             } else {
@@ -3413,7 +3543,9 @@ fun TransactionDialog(
                                     amount = totalAmount,
                                     linkedRecurringExpenseId = linkedRecurringId,
                                     linkedAmortizationEntryId = linkedAmortizationId,
-                                    linkedIncomeSourceId = linkedIncomeId
+                                    linkedIncomeSourceId = linkedIncomeId,
+                                    linkedRecurringExpenseAmount = reAmount,
+                                    linkedIncomeSourceAmount = isAmount
                                 )
                             }
                             onSave(txn)

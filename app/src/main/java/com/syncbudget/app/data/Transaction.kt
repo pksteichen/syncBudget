@@ -22,6 +22,9 @@ data class Transaction(
     val linkedRecurringExpenseId: Int? = null,
     val linkedAmortizationEntryId: Int? = null,
     val linkedIncomeSourceId: Int? = null,
+    val amortizationAppliedAmount: Double = 0.0,
+    val linkedRecurringExpenseAmount: Double = 0.0,
+    val linkedIncomeSourceAmount: Double = 0.0,
     // Sync fields
     val deviceId: String = "",
     val deleted: Boolean = false,
@@ -36,6 +39,9 @@ data class Transaction(
     val linkedRecurringExpenseId_clock: Long = 0L,
     val linkedAmortizationEntryId_clock: Long = 0L,
     val linkedIncomeSourceId_clock: Long = 0L,
+    val amortizationAppliedAmount_clock: Long = 0L,
+    val linkedRecurringExpenseAmount_clock: Long = 0L,
+    val linkedIncomeSourceAmount_clock: Long = 0L,
     val deleted_clock: Long = 0L,
     val deviceId_clock: Long = 0L
 )

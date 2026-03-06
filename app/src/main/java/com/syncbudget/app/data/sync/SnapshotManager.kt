@@ -56,6 +56,9 @@ object SnapshotManager {
             obj.put("linkedRecurringExpenseId", t.linkedRecurringExpenseId ?: JSONObject.NULL)
             obj.put("linkedAmortizationEntryId", t.linkedAmortizationEntryId ?: JSONObject.NULL)
             obj.put("linkedIncomeSourceId", t.linkedIncomeSourceId ?: JSONObject.NULL)
+            obj.put("amortizationAppliedAmount", t.amortizationAppliedAmount)
+            obj.put("linkedRecurringExpenseAmount", t.linkedRecurringExpenseAmount)
+            obj.put("linkedIncomeSourceAmount", t.linkedIncomeSourceAmount)
             if (t.categoryAmounts.isNotEmpty()) {
                 val catArray = JSONArray()
                 for (ca in t.categoryAmounts) {
@@ -79,6 +82,9 @@ object SnapshotManager {
             obj.put("linkedRecurringExpenseId_clock", t.linkedRecurringExpenseId_clock)
             obj.put("linkedAmortizationEntryId_clock", t.linkedAmortizationEntryId_clock)
             obj.put("linkedIncomeSourceId_clock", t.linkedIncomeSourceId_clock)
+            obj.put("amortizationAppliedAmount_clock", t.amortizationAppliedAmount_clock)
+            obj.put("linkedRecurringExpenseAmount_clock", t.linkedRecurringExpenseAmount_clock)
+            obj.put("linkedIncomeSourceAmount_clock", t.linkedIncomeSourceAmount_clock)
             obj.put("deleted_clock", t.deleted_clock)
             obj.put("deviceId_clock", t.deviceId_clock)
             txnArray.put(obj)
@@ -201,11 +207,13 @@ object SnapshotManager {
             obj.put("name", c.name)
             obj.put("iconName", c.iconName)
             obj.put("tag", c.tag)
+            obj.put("charted", c.charted)
             obj.put("deviceId", c.deviceId)
             obj.put("deleted", c.deleted)
             obj.put("name_clock", c.name_clock)
             obj.put("iconName_clock", c.iconName_clock)
             obj.put("tag_clock", c.tag_clock)
+            obj.put("charted_clock", c.charted_clock)
             obj.put("deleted_clock", c.deleted_clock)
             obj.put("deviceId_clock", c.deviceId_clock)
             catArray.put(obj)
@@ -256,6 +264,9 @@ object SnapshotManager {
                     linkedRecurringExpenseId = if (obj.has("linkedRecurringExpenseId") && !obj.isNull("linkedRecurringExpenseId")) obj.getInt("linkedRecurringExpenseId") else null,
                     linkedAmortizationEntryId = if (obj.has("linkedAmortizationEntryId") && !obj.isNull("linkedAmortizationEntryId")) obj.getInt("linkedAmortizationEntryId") else null,
                     linkedIncomeSourceId = if (obj.has("linkedIncomeSourceId") && !obj.isNull("linkedIncomeSourceId")) obj.getInt("linkedIncomeSourceId") else null,
+                    amortizationAppliedAmount = obj.optDouble("amortizationAppliedAmount", 0.0),
+                    linkedRecurringExpenseAmount = obj.optDouble("linkedRecurringExpenseAmount", 0.0),
+                    linkedIncomeSourceAmount = obj.optDouble("linkedIncomeSourceAmount", 0.0),
                     deviceId = obj.optString("deviceId", ""),
                     deleted = obj.optBoolean("deleted", false),
                     source_clock = obj.optLong("source_clock", 0L),
@@ -269,6 +280,9 @@ object SnapshotManager {
                     linkedRecurringExpenseId_clock = obj.optLong("linkedRecurringExpenseId_clock", 0L),
                     linkedAmortizationEntryId_clock = obj.optLong("linkedAmortizationEntryId_clock", 0L),
                     linkedIncomeSourceId_clock = obj.optLong("linkedIncomeSourceId_clock", 0L),
+                    amortizationAppliedAmount_clock = obj.optLong("amortizationAppliedAmount_clock", 0L),
+                    linkedRecurringExpenseAmount_clock = obj.optLong("linkedRecurringExpenseAmount_clock", 0L),
+                    linkedIncomeSourceAmount_clock = obj.optLong("linkedIncomeSourceAmount_clock", 0L),
                     deleted_clock = obj.optLong("deleted_clock", 0L),
                     deviceId_clock = obj.optLong("deviceId_clock", 0L)
                 )
@@ -401,11 +415,13 @@ object SnapshotManager {
                     name = obj.getString("name"),
                     iconName = obj.optString("iconName", "label"),
                     tag = obj.optString("tag", ""),
+                    charted = obj.optBoolean("charted", true),
                     deviceId = obj.optString("deviceId", ""),
                     deleted = obj.optBoolean("deleted", false),
                     name_clock = obj.optLong("name_clock", 0L),
                     iconName_clock = obj.optLong("iconName_clock", 0L),
                     tag_clock = obj.optLong("tag_clock", 0L),
+                    charted_clock = obj.optLong("charted_clock", 0L),
                     deleted_clock = obj.optLong("deleted_clock", 0L),
                     deviceId_clock = obj.optLong("deviceId_clock", 0L)
                 )

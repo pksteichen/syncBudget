@@ -46,6 +46,9 @@ object CrdtMerge {
             linkedRecurringExpenseId = if (shouldAcceptRemote(local.linkedRecurringExpenseId_clock, remote.linkedRecurringExpenseId_clock, localDeviceId, remoteDeviceId)) remote.linkedRecurringExpenseId else local.linkedRecurringExpenseId,
             linkedAmortizationEntryId = if (shouldAcceptRemote(local.linkedAmortizationEntryId_clock, remote.linkedAmortizationEntryId_clock, localDeviceId, remoteDeviceId)) remote.linkedAmortizationEntryId else local.linkedAmortizationEntryId,
             linkedIncomeSourceId = if (shouldAcceptRemote(local.linkedIncomeSourceId_clock, remote.linkedIncomeSourceId_clock, localDeviceId, remoteDeviceId)) remote.linkedIncomeSourceId else local.linkedIncomeSourceId,
+            amortizationAppliedAmount = if (shouldAcceptRemote(local.amortizationAppliedAmount_clock, remote.amortizationAppliedAmount_clock, localDeviceId, remoteDeviceId)) remote.amortizationAppliedAmount else local.amortizationAppliedAmount,
+            linkedRecurringExpenseAmount = if (shouldAcceptRemote(local.linkedRecurringExpenseAmount_clock, remote.linkedRecurringExpenseAmount_clock, localDeviceId, remoteDeviceId)) remote.linkedRecurringExpenseAmount else local.linkedRecurringExpenseAmount,
+            linkedIncomeSourceAmount = if (shouldAcceptRemote(local.linkedIncomeSourceAmount_clock, remote.linkedIncomeSourceAmount_clock, localDeviceId, remoteDeviceId)) remote.linkedIncomeSourceAmount else local.linkedIncomeSourceAmount,
             deviceId = if (shouldAcceptRemote(local.deviceId_clock, remote.deviceId_clock, localDeviceId, remoteDeviceId)) remote.deviceId else local.deviceId,
             deleted = mergedDeleted,
             source_clock = maxOf(local.source_clock, remote.source_clock),
@@ -59,6 +62,9 @@ object CrdtMerge {
             linkedRecurringExpenseId_clock = maxOf(local.linkedRecurringExpenseId_clock, remote.linkedRecurringExpenseId_clock),
             linkedAmortizationEntryId_clock = maxOf(local.linkedAmortizationEntryId_clock, remote.linkedAmortizationEntryId_clock),
             linkedIncomeSourceId_clock = maxOf(local.linkedIncomeSourceId_clock, remote.linkedIncomeSourceId_clock),
+            amortizationAppliedAmount_clock = maxOf(local.amortizationAppliedAmount_clock, remote.amortizationAppliedAmount_clock),
+            linkedRecurringExpenseAmount_clock = maxOf(local.linkedRecurringExpenseAmount_clock, remote.linkedRecurringExpenseAmount_clock),
+            linkedIncomeSourceAmount_clock = maxOf(local.linkedIncomeSourceAmount_clock, remote.linkedIncomeSourceAmount_clock),
             deleted_clock = mergedDeletedClock,
             deviceId_clock = maxOf(local.deviceId_clock, remote.deviceId_clock)
         )
@@ -211,11 +217,13 @@ object CrdtMerge {
             name = if (shouldAcceptRemote(local.name_clock, remote.name_clock, localDeviceId, remoteDeviceId)) remote.name else local.name,
             iconName = if (shouldAcceptRemote(local.iconName_clock, remote.iconName_clock, localDeviceId, remoteDeviceId)) remote.iconName else local.iconName,
             tag = if (shouldAcceptRemote(local.tag_clock, remote.tag_clock, localDeviceId, remoteDeviceId)) remote.tag else local.tag,
+            charted = if (shouldAcceptRemote(local.charted_clock, remote.charted_clock, localDeviceId, remoteDeviceId)) remote.charted else local.charted,
             deviceId = if (shouldAcceptRemote(local.deviceId_clock, remote.deviceId_clock, localDeviceId, remoteDeviceId)) remote.deviceId else local.deviceId,
             deleted = mergedDeleted,
             name_clock = maxOf(local.name_clock, remote.name_clock),
             iconName_clock = maxOf(local.iconName_clock, remote.iconName_clock),
             tag_clock = maxOf(local.tag_clock, remote.tag_clock),
+            charted_clock = maxOf(local.charted_clock, remote.charted_clock),
             deleted_clock = mergedDeletedClock,
             deviceId_clock = maxOf(local.deviceId_clock, remote.deviceId_clock)
         )
