@@ -23,6 +23,11 @@ import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Sync
 import com.syncbudget.app.ui.theme.AdAwareAlertDialog
+import com.syncbudget.app.ui.theme.DialogStyle
+import com.syncbudget.app.ui.theme.DialogPrimaryButton
+import com.syncbudget.app.ui.theme.DialogSecondaryButton
+import com.syncbudget.app.ui.theme.DialogDangerButton
+import com.syncbudget.app.ui.theme.DialogWarningButton
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -584,7 +589,7 @@ fun FamilySyncScreen(
                     )
                 },
                 confirmButton = {
-                    TextButton(
+                    DialogPrimaryButton(
                         onClick = {
                             onCreateGroup(createNicknameInput.trim())
                             showCreateDialog = false
@@ -596,7 +601,7 @@ fun FamilySyncScreen(
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = {
+                    DialogSecondaryButton(onClick = {
                         showCreateDialog = false
                         createNicknameInput = ""
                     }) {
@@ -641,7 +646,7 @@ fun FamilySyncScreen(
                     }
                 },
                 confirmButton = {
-                    TextButton(
+                    DialogPrimaryButton(
                         onClick = {
                             showJoinDialog = false
                             showJoinWarning = true
@@ -652,7 +657,7 @@ fun FamilySyncScreen(
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = {
+                    DialogSecondaryButton(onClick = {
                         showJoinDialog = false
                         joinCodeInput = ""
                         joinNicknameInput = ""
@@ -691,7 +696,7 @@ fun FamilySyncScreen(
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = {
+                    DialogPrimaryButton(onClick = {
                         clipboardManager.setText(AnnotatedString(generatedPairingCode))
                         Toast.makeText(context, S.sync.pairingCodeCopied, Toast.LENGTH_SHORT).show()
                     }) {
@@ -699,7 +704,7 @@ fun FamilySyncScreen(
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = onDismissPairingCode) {
+                    DialogSecondaryButton(onClick = onDismissPairingCode) {
                         Text(S.common.close)
                     }
                 }
@@ -710,18 +715,19 @@ fun FamilySyncScreen(
         if (showLeaveConfirm) {
             AdAwareAlertDialog(
                 onDismissRequest = { showLeaveConfirm = false },
+                style = DialogStyle.DANGER,
                 title = { Text(S.sync.leaveGroup) },
                 text = { Text(S.sync.confirmLeave) },
                 confirmButton = {
-                    TextButton(onClick = {
+                    DialogDangerButton(onClick = {
                         onLeaveGroup()
                         showLeaveConfirm = false
                     }) {
-                        Text(S.common.ok, color = Color(0xFFF44336))
+                        Text(S.common.ok)
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showLeaveConfirm = false }) {
+                    DialogSecondaryButton(onClick = { showLeaveConfirm = false }) {
                         Text(S.common.cancel)
                     }
                 }
@@ -732,18 +738,19 @@ fun FamilySyncScreen(
         if (showDissolveConfirm) {
             AdAwareAlertDialog(
                 onDismissRequest = { showDissolveConfirm = false },
+                style = DialogStyle.DANGER,
                 title = { Text(S.sync.dissolveGroup) },
                 text = { Text(S.sync.confirmDissolve) },
                 confirmButton = {
-                    TextButton(onClick = {
+                    DialogDangerButton(onClick = {
                         onDissolveGroup()
                         showDissolveConfirm = false
                     }) {
-                        Text(S.common.ok, color = Color(0xFFF44336))
+                        Text(S.common.ok)
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showDissolveConfirm = false }) {
+                    DialogSecondaryButton(onClick = { showDissolveConfirm = false }) {
                         Text(S.common.cancel)
                     }
                 }
@@ -758,20 +765,21 @@ fun FamilySyncScreen(
                     joinCodeInput = ""
                     joinNicknameInput = ""
                 },
+                style = DialogStyle.WARNING,
                 title = { Text(S.sync.joinWarningTitle) },
                 text = { Text(S.sync.joinWarningBody) },
                 confirmButton = {
-                    TextButton(onClick = {
+                    DialogWarningButton(onClick = {
                         onJoinGroup(joinCodeInput, joinNicknameInput.trim())
                         showJoinWarning = false
                         joinCodeInput = ""
                         joinNicknameInput = ""
                     }) {
-                        Text(S.common.ok, color = Color(0xFFF44336))
+                        Text(S.common.ok)
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = {
+                    DialogSecondaryButton(onClick = {
                         showJoinWarning = false
                         joinCodeInput = ""
                         joinNicknameInput = ""
@@ -802,7 +810,7 @@ fun FamilySyncScreen(
                     )
                 },
                 confirmButton = {
-                    TextButton(
+                    DialogPrimaryButton(
                         onClick = {
                             val target = renameTargetDevice!!
                             onRenameDevice(target.deviceId, renameInput.trim())
@@ -816,7 +824,7 @@ fun FamilySyncScreen(
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = {
+                    DialogSecondaryButton(onClick = {
                         showRenameDialog = false
                         renameTargetDevice = null
                         renameInput = ""
@@ -858,7 +866,7 @@ fun FamilySyncScreen(
                 },
                 confirmButton = {},
                 dismissButton = {
-                    TextButton(onClick = { showTimezoneDialog = false }) {
+                    DialogSecondaryButton(onClick = { showTimezoneDialog = false }) {
                         Text(S.common.cancel)
                     }
                 }

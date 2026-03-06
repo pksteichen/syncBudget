@@ -16,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -55,7 +56,6 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -77,6 +77,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
 import androidx.compose.ui.unit.sp
 import com.syncbudget.app.ui.theme.AdAwareDialog
+import com.syncbudget.app.ui.theme.DialogStyle
+import com.syncbudget.app.ui.theme.DialogPrimaryButton
+import com.syncbudget.app.ui.theme.DialogSecondaryButton
+import com.syncbudget.app.ui.theme.DialogDangerButton
+import com.syncbudget.app.ui.theme.DialogWarningButton
+import com.syncbudget.app.ui.theme.DialogHeader
+import com.syncbudget.app.ui.theme.DialogFooter
+import com.syncbudget.app.ui.theme.dialogHeaderColor
+import com.syncbudget.app.ui.theme.dialogHeaderTextColor
 import com.syncbudget.app.data.BudgetPeriod
 import com.syncbudget.app.data.Category
 import com.syncbudget.app.data.SavingsGoal
@@ -940,29 +949,38 @@ private fun SavingsSuperchargeDialog(
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
         ) {
-            Column(modifier = Modifier.padding(24.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth()
+            val headerBg = dialogHeaderColor()
+            val headerTxt = dialogHeaderTextColor()
+            Column {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(headerBg, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                        .padding(horizontal = 20.dp, vertical = 14.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.Bolt,
-                        contentDescription = null,
-                        tint = Color(0xFFFFEB3B),
-                        modifier = Modifier.size(28.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(S.dashboard.superchargeTitle, style = MaterialTheme.typography.titleMedium)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Bolt,
+                            contentDescription = null,
+                            tint = Color(0xFFFFEB3B),
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(S.dashboard.superchargeTitle, style = MaterialTheme.typography.titleMedium, color = headerTxt)
+                    }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
 
                 LazyColumn(
-                    modifier = Modifier.weight(1f, fill = false)
+                    modifier = Modifier.weight(1f, fill = false),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp)
                 ) {
                     item {
                         Text(
@@ -1239,29 +1257,30 @@ private fun SavingsSuperchargeDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = onDismiss) { Text(S.common.cancel) }
-                    TextButton(
-                        onClick = {
-                            val allocations = mutableMapOf<Int, Double>()
-                            for ((id, text) in amounts) {
-                                val value = text.toDoubleOrNull()
-                                if (value != null && value > 0.0) {
-                                    allocations[id] = value
-                                }
-                            }
-                            if (allocations.isNotEmpty()) {
-                                onApply(allocations, modes.toMap())
-                            }
-                        },
-                        enabled = hasAnyAmount && !isOverBudget && !anyExceedsRemaining
+                DialogFooter {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
                     ) {
-                        Text(S.common.ok)
+                        DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel) }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        DialogPrimaryButton(
+                            onClick = {
+                                val allocations = mutableMapOf<Int, Double>()
+                                for ((id, text) in amounts) {
+                                    val value = text.toDoubleOrNull()
+                                    if (value != null && value > 0.0) {
+                                        allocations[id] = value
+                                    }
+                                }
+                                if (allocations.isNotEmpty()) {
+                                    onApply(allocations, modes.toMap())
+                                }
+                            },
+                            enabled = hasAnyAmount && !isOverBudget && !anyExceedsRemaining
+                        ) {
+                            Text(S.common.ok)
+                        }
                     }
                 }
             }

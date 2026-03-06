@@ -28,6 +28,13 @@ import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import com.syncbudget.app.ui.theme.AdAwareAlertDialog
+import com.syncbudget.app.ui.theme.DialogStyle
+import com.syncbudget.app.ui.theme.DialogPrimaryButton
+import com.syncbudget.app.ui.theme.DialogSecondaryButton
+import com.syncbudget.app.ui.theme.DialogDangerButton
+import com.syncbudget.app.ui.theme.DialogWarningButton
+import com.syncbudget.app.ui.theme.DialogHeader
+import com.syncbudget.app.ui.theme.DialogFooter
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
@@ -45,7 +52,6 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -671,21 +677,21 @@ private fun AddCategoryDialog(
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
         ) {
             val dialogScrollState = rememberScrollState()
             Box {
-            Column(modifier = Modifier.padding(24.dp)) {
-                Text(S.settings.addCategory, style = MaterialTheme.typography.titleMedium)
-                Spacer(modifier = Modifier.height(16.dp))
+            Column {
+                DialogHeader(S.settings.addCategory)
 
                 Column(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier
                         .weight(1f, fill = false)
                         .verticalScroll(dialogScrollState)
+                        .padding(horizontal = 20.dp, vertical = 16.dp)
                 ) {
                     OutlinedTextField(
                         value = name,
@@ -750,27 +756,27 @@ private fun AddCategoryDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = onDismiss) { Text(S.common.cancel) }
-                    TextButton(
-                        onClick = {
-                            if (name.isNotBlank() && selectedIcon != null) {
-                                var id: Int
-                                do {
-                                    id = (0..65535).random()
-                                } while (id in existingIds)
-                                onSave(Category(id, name.trim(), selectedIcon!!))
-                            } else {
-                                showValidation = true
-                            }
-                        }
+                DialogFooter {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
                     ) {
-                        Text(S.common.save)
+                        DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel) }
+                        DialogPrimaryButton(
+                            onClick = {
+                                if (name.isNotBlank() && selectedIcon != null) {
+                                    var id: Int
+                                    do {
+                                        id = (0..65535).random()
+                                    } while (id in existingIds)
+                                    onSave(Category(id, name.trim(), selectedIcon!!))
+                                } else {
+                                    showValidation = true
+                                }
+                            }
+                        ) {
+                            Text(S.common.save)
+                        }
                     }
                 }
             }
@@ -778,7 +784,7 @@ private fun AddCategoryDialog(
                 scrollState = dialogScrollState,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(start = 12.dp, bottom = 18.dp)
+                    .padding(start = 12.dp, bottom = 50.dp)
             )
             }
         }
@@ -824,42 +830,42 @@ private fun EditCategoryDialog(
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
         ) {
             val editScrollState = rememberScrollState()
             Box {
-            Column(modifier = Modifier.padding(24.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(S.settings.editCategory, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                    if (category.tag !in setOf("other", "recurring_income")) {
-                        IconButton(onClick = {
-                            if (txnCount > 0) {
-                                showReassignDialog = true
-                            } else {
-                                onDelete()
-                            }
-                        }) {
-                            Icon(
-                                imageVector = Icons.Filled.Delete,
-                                contentDescription = S.common.delete,
-                                tint = Color(0xFFF44336)
-                            )
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(16.dp))
+            Column {
+                DialogHeader(S.settings.editCategory)
 
                 Column(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier
                         .weight(1f, fill = false)
                         .verticalScroll(editScrollState)
+                        .padding(horizontal = 20.dp, vertical = 16.dp)
                 ) {
+                    if (category.tag !in setOf("other", "recurring_income")) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            IconButton(onClick = {
+                                if (txnCount > 0) {
+                                    showReassignDialog = true
+                                } else {
+                                    onDelete()
+                                }
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Delete,
+                                    contentDescription = S.common.delete,
+                                    tint = Color(0xFFF44336)
+                                )
+                            }
+                        }
+                    }
                     OutlinedTextField(
                         value = name,
                         onValueChange = { name = it },
@@ -918,21 +924,21 @@ private fun EditCategoryDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = onDismiss) { Text(S.common.cancel) }
-                    TextButton(
-                        onClick = {
-                            if (name.isNotBlank()) {
-                                onSave(category.copy(name = name.trim(), iconName = selectedIcon))
-                            }
-                        }
+                DialogFooter {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
                     ) {
-                        Text(S.common.save)
+                        DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel) }
+                        DialogPrimaryButton(
+                            onClick = {
+                                if (name.isNotBlank()) {
+                                    onSave(category.copy(name = name.trim(), iconName = selectedIcon))
+                                }
+                            }
+                        ) {
+                            Text(S.common.save)
+                        }
                     }
                 }
             }
@@ -940,7 +946,7 @@ private fun EditCategoryDialog(
                 scrollState = editScrollState,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(start = 12.dp, bottom = 18.dp)
+                    .padding(start = 12.dp, bottom = 50.dp)
             )
             }
         }
@@ -1000,8 +1006,9 @@ private fun ReassignCategoryDialog(
                 }
             }
         },
+        style = DialogStyle.WARNING,
         confirmButton = {
-            TextButton(
+            DialogWarningButton(
                 onClick = { selectedTargetId?.let { onReassign(it) } },
                 enabled = selectedTargetId != null
             ) {
@@ -1009,7 +1016,7 @@ private fun ReassignCategoryDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(S.common.cancel) }
+            DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel) }
         }
     )
 }

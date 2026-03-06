@@ -27,6 +27,13 @@ import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import com.syncbudget.app.ui.theme.AdAwareAlertDialog
+import com.syncbudget.app.ui.theme.DialogStyle
+import com.syncbudget.app.ui.theme.DialogPrimaryButton
+import com.syncbudget.app.ui.theme.DialogSecondaryButton
+import com.syncbudget.app.ui.theme.DialogDangerButton
+import com.syncbudget.app.ui.theme.DialogWarningButton
+import com.syncbudget.app.ui.theme.DialogHeader
+import com.syncbudget.app.ui.theme.DialogFooter
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DatePicker
@@ -45,7 +52,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
@@ -496,16 +503,15 @@ fun BudgetConfigScreen(
             onDismissRequest = { deletingSource = null },
             title = { Text(S.budgetConfig.deleteSourceConfirmTitle(source.source)) },
             text = { Text(S.budgetConfig.deleteSourceConfirmBody) },
+            style = DialogStyle.DANGER,
             confirmButton = {
-                TextButton(onClick = {
-                    onDeleteIncomeSource(source)
-                    deletingSource = null
-                }) {
-                    Text(S.common.delete, color = Color(0xFFF44336))
-                }
+                DialogDangerButton(onClick = {
+                        onDeleteIncomeSource(source)
+                        deletingSource = null
+                    }) { Text(S.common.delete) }
             },
             dismissButton = {
-                TextButton(onClick = { deletingSource = null }) { Text(S.common.cancel) }
+                DialogSecondaryButton(onClick = { deletingSource = null }) { Text(S.common.cancel) }
             }
         )
     }
@@ -533,16 +539,15 @@ fun BudgetConfigScreen(
             text = {
                 Text(S.budgetConfig.resetBudgetConfirmBody)
             },
+            style = DialogStyle.WARNING,
             confirmButton = {
-                TextButton(onClick = {
-                    onResetBudget()
-                    showResetBudgetConfirm = false
-                }) {
-                    Text(S.common.reset, color = Color(0xFFF44336))
-                }
+                DialogWarningButton(onClick = {
+                        onResetBudget()
+                        showResetBudgetConfirm = false
+                    }) { Text(S.common.reset) }
             },
             dismissButton = {
-                TextButton(onClick = { showResetBudgetConfirm = false }) { Text(S.common.cancel) }
+                DialogSecondaryButton(onClick = { showResetBudgetConfirm = false }) { Text(S.common.cancel) }
             }
         )
     }
@@ -618,23 +623,20 @@ private fun AddEditIncomeDialog(
             modifier = Modifier
                 .fillMaxWidth(0.92f)
                 .imePadding(),
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
         ) {
             val dialogScrollState = rememberScrollState()
             Box {
-            Column(modifier = Modifier.padding(24.dp)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Spacer(modifier = Modifier.height(16.dp))
+            Column {
+                DialogHeader(title)
 
                 Column(
                     modifier = Modifier
                         .weight(1f, fill = false)
-                        .verticalScroll(dialogScrollState),
+                        .verticalScroll(dialogScrollState)
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     OutlinedTextField(
@@ -914,14 +916,14 @@ private fun AddEditIncomeDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
+                DialogFooter {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onDismiss) { Text(S.common.cancel) }
-                    TextButton(
+                    DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel) }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    DialogPrimaryButton(
                         onClick = {
                             if (isValid) {
                                 val result = when (repeatType) {
@@ -997,16 +999,15 @@ private fun AddEditIncomeDialog(
                                 showValidation = true
                             }
                         }
-                    ) {
-                        Text(S.common.save)
-                    }
+                    ) { Text(S.common.save) }
+                }
                 }
             }
             PulsingScrollArrow(
                 scrollState = dialogScrollState,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(start = 12.dp, bottom = 18.dp)
+                    .padding(start = 12.dp, bottom = 50.dp)
             )
             }
         }
@@ -1021,25 +1022,21 @@ private fun AddEditIncomeDialog(
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
-                TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let { millis ->
-                        val selected = Instant.ofEpochMilli(millis).atZone(ZoneId.of("UTC")).toLocalDate()
-                        val monthInterval = intervalText.toIntOrNull() ?: 1
-                        if (repeatType == RepeatType.MONTHS && monthInterval != 12 && selected.dayOfMonth > 28) {
-                            Toast.makeText(context, S.common.dateDayTooHigh, Toast.LENGTH_SHORT).show()
-                        } else {
-                            startDate = selected
-                            showDatePicker = false
+                DialogPrimaryButton(onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            val selected = Instant.ofEpochMilli(millis).atZone(ZoneId.of("UTC")).toLocalDate()
+                            val monthInterval = intervalText.toIntOrNull() ?: 1
+                            if (repeatType == RepeatType.MONTHS && monthInterval != 12 && selected.dayOfMonth > 28) {
+                                Toast.makeText(context, S.common.dateDayTooHigh, Toast.LENGTH_SHORT).show()
+                            } else {
+                                startDate = selected
+                                showDatePicker = false
+                            }
                         }
-                    }
-                }) {
-                    Text(S.common.ok)
-                }
+                    }) { Text(S.common.ok) }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) {
-                    Text(S.common.cancel)
-                }
+                DialogSecondaryButton(onClick = { showDatePicker = false }) { Text(S.common.cancel) }
             }
         ) {
             DatePicker(state = datePickerState)
@@ -1083,33 +1080,32 @@ private fun BudgetResetDialog(
     val selectedDayOfWeekName = DayOfWeek.of(selectedDayOfWeek)
         .getDisplayName(TextStyle.FULL, Locale.getDefault())
 
+    val resetDialogTitle = when (budgetPeriod) {
+        BudgetPeriod.WEEKLY -> S.budgetConfig.resetDayTitle
+        BudgetPeriod.MONTHLY -> S.budgetConfig.resetDateTitle
+        else -> S.budgetConfig.resetSettingsTitle
+    }
+
     AdAwareDialog(
         onDismissRequest = onDismiss,
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
         ) {
             val resetScrollState = rememberScrollState()
             Box {
-            Column(modifier = Modifier.padding(24.dp)) {
-                Text(
-                    when (budgetPeriod) {
-                        BudgetPeriod.WEEKLY -> S.budgetConfig.resetDayTitle
-                        BudgetPeriod.MONTHLY -> S.budgetConfig.resetDateTitle
-                        else -> S.budgetConfig.resetSettingsTitle
-                    },
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Spacer(modifier = Modifier.height(16.dp))
+            Column {
+                DialogHeader(resetDialogTitle)
 
                 Column(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier
                         .weight(1f, fill = false)
                         .verticalScroll(resetScrollState)
+                        .padding(horizontal = 20.dp, vertical = 16.dp)
                 ) {
                     if (budgetPeriod == BudgetPeriod.WEEKLY) {
                         val weeklyDays = listOf(DayOfWeek.SUNDAY, DayOfWeek.MONDAY)
@@ -1191,14 +1187,14 @@ private fun BudgetResetDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
+                DialogFooter {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onDismiss) { Text(S.common.cancel) }
-                    TextButton(
+                    DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel) }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    DialogPrimaryButton(
                         onClick = {
                             if (isValid) {
                                 val saveHour = if (budgetPeriod == BudgetPeriod.DAILY) selectedHour else 0
@@ -1206,16 +1202,15 @@ private fun BudgetResetDialog(
                             }
                         },
                         enabled = isValid
-                    ) {
-                        Text(S.common.save)
-                    }
+                    ) { Text(S.common.save) }
+                }
                 }
             }
             PulsingScrollArrow(
                 scrollState = resetScrollState,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(start = 12.dp, bottom = 18.dp)
+                    .padding(start = 12.dp, bottom = 50.dp)
             )
             }
         }

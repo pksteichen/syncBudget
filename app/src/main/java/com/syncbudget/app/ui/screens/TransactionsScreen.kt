@@ -72,7 +72,6 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
@@ -99,10 +98,17 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.ColumnScope
 import com.syncbudget.app.ui.theme.AdAwareDialog
-import com.syncbudget.app.ui.theme.DarkHeaderBackground
-import com.syncbudget.app.ui.theme.DarkHeaderText
-import com.syncbudget.app.ui.theme.LightHeaderBackground
-import com.syncbudget.app.ui.theme.LightHeaderText
+import com.syncbudget.app.ui.theme.DialogStyle
+import com.syncbudget.app.ui.theme.DialogPrimaryButton
+import com.syncbudget.app.ui.theme.DialogSecondaryButton
+import com.syncbudget.app.ui.theme.DialogDangerButton
+import com.syncbudget.app.ui.theme.DialogWarningButton
+import com.syncbudget.app.ui.theme.DialogHeader
+import com.syncbudget.app.ui.theme.DialogFooter
+import com.syncbudget.app.ui.theme.dialogHeaderColor
+import com.syncbudget.app.ui.theme.dialogHeaderTextColor
+import com.syncbudget.app.ui.theme.dialogFooterColor
+import com.syncbudget.app.ui.theme.dialogSectionLabelColor
 import com.syncbudget.app.ui.theme.PulsingScrollArrow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -1230,6 +1236,7 @@ fun TransactionsScreen(
         val isAllWithoutSearch = allSelected && !searchActive && categoryFilterId == null
         AdAwareAlertDialog(
             onDismissRequest = { showBulkDeleteConfirm = false },
+            style = DialogStyle.DANGER,
             title = {
                 Text(
                     if (isAllWithoutSearch) "WARNING" else "${S.common.delete}?"
@@ -1244,18 +1251,18 @@ fun TransactionsScreen(
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
+                DialogDangerButton(onClick = {
                     val idsToDelete = selectedIds.filter { it.value }.keys
                     onDeleteTransactions(idsToDelete)
                     selectedIds.clear()
                     selectionMode = false
                     showBulkDeleteConfirm = false
                 }) {
-                    Text(S.common.delete, color = Color(0xFFF44336))
+                    Text(S.common.delete)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showBulkDeleteConfirm = false }) {
+                DialogSecondaryButton(onClick = { showBulkDeleteConfirm = false }) {
                     Text(S.common.cancel)
                 }
             }
@@ -1311,9 +1318,9 @@ fun TransactionsScreen(
                 }
             },
             confirmButton = {
-                TextButton(
+                DialogPrimaryButton(
                     onClick = {
-                        val catId = bulkSelectedCatId ?: return@TextButton
+                        val catId = bulkSelectedCatId ?: return@DialogPrimaryButton
                         val idsToChange = selectedIds.filter { it.value }.keys
                         transactions.filter { it.id in idsToChange }.forEach { txn ->
                             onUpdateTransaction(
@@ -1333,7 +1340,7 @@ fun TransactionsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showBulkCategoryChange = false }) {
+                DialogSecondaryButton(onClick = { showBulkCategoryChange = false }) {
                     Text(S.common.cancel)
                 }
             }
@@ -1349,56 +1356,59 @@ fun TransactionsScreen(
         ) {
             Surface(
                 modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
-                shape = RoundedCornerShape(28.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 6.dp
             ) {
-                Column(modifier = Modifier.padding(24.dp)) {
-                    Text(S.transactions.editMerchant, style = MaterialTheme.typography.titleMedium)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = S.transactions.selectedCount(count),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = newMerchant,
-                        onValueChange = { newMerchant = it },
-                        label = { Text(S.transactions.newMerchantName) },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = MaterialTheme.colorScheme.onBackground,
-                            unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
-                            focusedLabelColor = MaterialTheme.colorScheme.primary,
-                            unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        TextButton(onClick = { showBulkMerchantEdit = false }) {
-                            Text(S.common.cancel)
-                        }
-                        TextButton(
-                            onClick = {
-                                if (newMerchant.isNotBlank()) {
-                                    val idsToChange = selectedIds.filter { it.value }.keys
-                                    transactions.filter { it.id in idsToChange }.forEach { txn ->
-                                        onUpdateTransaction(txn.copy(source = newMerchant.trim()))
-                                    }
-                                    selectedIds.clear()
-                                    selectionMode = false
-                                    showBulkMerchantEdit = false
-                                }
-                            },
-                            enabled = newMerchant.isNotBlank()
+                Column {
+                    DialogHeader(S.transactions.editMerchant)
+                    Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+                        Text(
+                            text = S.transactions.selectedCount(count),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = newMerchant,
+                            onValueChange = { newMerchant = it },
+                            label = { Text(S.transactions.newMerchantName) },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                                unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+                                focusedLabelColor = MaterialTheme.colorScheme.primary,
+                                unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    DialogFooter {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
                         ) {
-                            Text(S.common.save)
+                            DialogSecondaryButton(onClick = { showBulkMerchantEdit = false }) {
+                                Text(S.common.cancel)
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            DialogPrimaryButton(
+                                onClick = {
+                                    if (newMerchant.isNotBlank()) {
+                                        val idsToChange = selectedIds.filter { it.value }.keys
+                                        transactions.filter { it.id in idsToChange }.forEach { txn ->
+                                            onUpdateTransaction(txn.copy(source = newMerchant.trim()))
+                                        }
+                                        selectedIds.clear()
+                                        selectionMode = false
+                                        showBulkMerchantEdit = false
+                                    }
+                                },
+                                enabled = newMerchant.isNotBlank()
+                            ) {
+                                Text(S.common.save)
+                            }
                         }
                     }
                 }
@@ -1418,21 +1428,21 @@ fun TransactionsScreen(
         ) {
             Surface(
                 modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
-                shape = RoundedCornerShape(28.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 6.dp
             ) {
                 val saveScrollState = rememberScrollState()
                 Box {
-                Column(modifier = Modifier.padding(24.dp)) {
-                    Text(S.transactions.saveTransactions, style = MaterialTheme.typography.titleMedium)
-                    Spacer(modifier = Modifier.height(16.dp))
+                Column {
+                    DialogHeader(S.transactions.saveTransactions)
 
                     Column(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier
                             .weight(1f, fill = false)
                             .verticalScroll(saveScrollState)
+                            .padding(horizontal = 20.dp, vertical = 16.dp)
                     ) {
                         Text(S.transactions.format, style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onBackground)
@@ -1528,65 +1538,66 @@ fun TransactionsScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        TextButton(onClick = {
-                            showSaveDialog = false
-                            savePassword = ""
-                            savePasswordConfirm = ""
-                            saveError = null
-                        }) { Text(S.common.cancel) }
-                        TextButton(onClick = {
-                            when {
-                                includeAllData && selectedSaveFormat == SaveFormat.CSV -> {
-                                    showSaveDialog = false
-                                    jsonSaveLauncher.launch("syncbudget_backup.json")
-                                }
-                                includeAllData && selectedSaveFormat == SaveFormat.ENCRYPTED -> {
-                                    when {
-                                        savePassword.length < 8 -> {
-                                            saveError = S.transactions.passwordMinLength
+                    DialogFooter {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            DialogSecondaryButton(onClick = {
+                                showSaveDialog = false
+                                savePassword = ""
+                                savePasswordConfirm = ""
+                                saveError = null
+                            }) { Text(S.common.cancel) }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            DialogPrimaryButton(onClick = {
+                                when {
+                                    includeAllData && selectedSaveFormat == SaveFormat.CSV -> {
+                                        showSaveDialog = false
+                                        jsonSaveLauncher.launch("syncbudget_backup.json")
+                                    }
+                                    includeAllData && selectedSaveFormat == SaveFormat.ENCRYPTED -> {
+                                        when {
+                                            savePassword.length < 8 -> {
+                                                saveError = S.transactions.passwordMinLength
+                                            }
+                                            savePassword != savePasswordConfirm -> {
+                                                saveError = S.transactions.passwordsMustMatch
+                                            }
+                                            else -> {
+                                                showSaveDialog = false
+                                                encryptedSaveLauncher.launch("syncbudget_backup.enc")
+                                            }
                                         }
-                                        savePassword != savePasswordConfirm -> {
-                                            saveError = S.transactions.passwordsMustMatch
-                                        }
-                                        else -> {
-                                            showSaveDialog = false
-                                            encryptedSaveLauncher.launch("syncbudget_backup.enc")
+                                    }
+                                    selectedSaveFormat == SaveFormat.CSV -> {
+                                        showSaveDialog = false
+                                        csvSaveLauncher.launch("syncbudget_transactions.csv")
+                                    }
+                                    selectedSaveFormat == SaveFormat.ENCRYPTED -> {
+                                        when {
+                                            savePassword.length < 8 -> {
+                                                saveError = S.transactions.passwordMinLength
+                                            }
+                                            savePassword != savePasswordConfirm -> {
+                                                saveError = S.transactions.passwordsMustMatch
+                                            }
+                                            else -> {
+                                                showSaveDialog = false
+                                                encryptedSaveLauncher.launch("syncbudget_transactions.enc")
+                                            }
                                         }
                                     }
                                 }
-                                selectedSaveFormat == SaveFormat.CSV -> {
-                                    showSaveDialog = false
-                                    csvSaveLauncher.launch("syncbudget_transactions.csv")
-                                }
-                                selectedSaveFormat == SaveFormat.ENCRYPTED -> {
-                                    when {
-                                        savePassword.length < 8 -> {
-                                            saveError = S.transactions.passwordMinLength
-                                        }
-                                        savePassword != savePasswordConfirm -> {
-                                            saveError = S.transactions.passwordsMustMatch
-                                        }
-                                        else -> {
-                                            showSaveDialog = false
-                                            encryptedSaveLauncher.launch("syncbudget_transactions.enc")
-                                        }
-                                    }
-                                }
-                            }
-                        }) { Text(S.common.save) }
+                            }) { Text(S.common.save) }
+                        }
                     }
                 }
                 PulsingScrollArrow(
                     scrollState = saveScrollState,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .padding(start = 12.dp, bottom = 18.dp)
+                        .padding(start = 12.dp, bottom = 50.dp)
                 )
                 }
             }
@@ -1600,6 +1611,7 @@ fun TransactionsScreen(
                 showFullBackupDialog = false
                 pendingFullBackupContent = null
             },
+            style = DialogStyle.WARNING,
             title = { Text(S.transactions.fullBackupDetected) },
             text = {
                 Column {
@@ -1624,7 +1636,7 @@ fun TransactionsScreen(
             confirmButton = {
                 if (isSyncConfigured && !isSyncAdmin) {
                     Column {
-                        TextButton(onClick = {}, enabled = false) {
+                        DialogWarningButton(onClick = {}, enabled = false) {
                             Text(S.transactions.loadAllDataOverwrite)
                         }
                         Text(
@@ -1635,7 +1647,7 @@ fun TransactionsScreen(
                         )
                     }
                 } else {
-                    TextButton(onClick = {
+                    DialogWarningButton(onClick = {
                         onLoadFullBackup(pendingFullBackupContent!!)
                         scrollToTopTrigger++
                         showFullBackupDialog = false
@@ -1645,7 +1657,7 @@ fun TransactionsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = {
+                DialogSecondaryButton(onClick = {
                     val existingIdSet = transactions.map { it.id }.toSet()
                     val result = FullBackupSerializer.extractTransactions(
                         pendingFullBackupContent!!, existingIdSet
@@ -1683,21 +1695,21 @@ fun TransactionsScreen(
         ) {
             Surface(
                 modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
-                shape = RoundedCornerShape(28.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 6.dp
             ) {
                 val loadScrollState = rememberScrollState()
                 Box {
-                Column(modifier = Modifier.padding(24.dp)) {
-                    Text(S.transactions.loadTransactions, style = MaterialTheme.typography.titleMedium)
-                    Spacer(modifier = Modifier.height(16.dp))
+                Column {
+                    DialogHeader(S.transactions.loadTransactions)
 
                     Column(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier
                             .weight(1f, fill = false)
                             .verticalScroll(loadScrollState)
+                            .padding(horizontal = 20.dp, vertical = 16.dp)
                     ) {
                         Text(S.transactions.format, style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onBackground)
@@ -1743,34 +1755,35 @@ fun TransactionsScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        TextButton(onClick = {
-                            showImportFormatDialog = false
-                            encryptedLoadPassword = ""
-                        }) { Text(S.common.cancel) }
-                        val canProceed = when (selectedBankFormat) {
-                            BankFormat.SECURESYNC_ENCRYPTED -> encryptedLoadPassword.length >= 8
-                            else -> true
-                        }
-                        TextButton(
-                            onClick = {
+                    DialogFooter {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            DialogSecondaryButton(onClick = {
                                 showImportFormatDialog = false
-                                filePickerLauncher.launch(arrayOf("text/*", "*/*"))
-                            },
-                            enabled = canProceed
-                        ) { Text(S.transactions.selectFile) }
+                                encryptedLoadPassword = ""
+                            }) { Text(S.common.cancel) }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            val canProceed = when (selectedBankFormat) {
+                                BankFormat.SECURESYNC_ENCRYPTED -> encryptedLoadPassword.length >= 8
+                                else -> true
+                            }
+                            DialogPrimaryButton(
+                                onClick = {
+                                    showImportFormatDialog = false
+                                    filePickerLauncher.launch(arrayOf("text/*", "*/*"))
+                                },
+                                enabled = canProceed
+                            ) { Text(S.transactions.selectFile) }
+                        }
                     }
                 }
                 PulsingScrollArrow(
                     scrollState = loadScrollState,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .padding(start = 12.dp, bottom = 18.dp)
+                        .padding(start = 12.dp, bottom = 50.dp)
                 )
                 }
             }
@@ -1794,9 +1807,10 @@ fun TransactionsScreen(
                     }
                 }
             },
+            style = DialogStyle.WARNING,
             confirmButton = {
                 if (parsedTransactions.isNotEmpty()) {
-                    TextButton(onClick = {
+                    DialogPrimaryButton(onClick = {
                         val categorized = parsedTransactions.map { txn ->
                             autoCategorize(txn, transactions, categories)
                         }
@@ -1815,7 +1829,7 @@ fun TransactionsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = {
+                DialogSecondaryButton(onClick = {
                     parsedTransactions.clear()
                     importError = null
                     importStage = null
@@ -2084,9 +2098,9 @@ fun MatchDialogCard(
     buttons: @Composable () -> Unit,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val headerColor = if (isSystemInDarkTheme()) DarkHeaderBackground else LightHeaderBackground
-    val headerTextColor = if (isSystemInDarkTheme()) DarkHeaderText else LightHeaderText
-    val footerColor = MaterialTheme.colorScheme.surfaceVariant
+    val headerColor = dialogHeaderColor()
+    val headerTextColor = dialogHeaderTextColor()
+    val footerColor = dialogFooterColor()
 
     AdAwareDialog(onDismissRequest = onDismiss) {
         Surface(
@@ -2142,7 +2156,7 @@ private fun SectionLabel(text: String) {
     Text(
         text,
         style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.primary,
+        color = dialogSectionLabelColor(),
         modifier = Modifier.padding(bottom = 4.dp)
     )
 }
@@ -2193,8 +2207,9 @@ fun BudgetIncomeConfirmDialog(
         onDismiss = onNotBudgetIncome,
         buttons = {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onNotBudgetIncome) { Text(S.transactions.noExtraIncome) }
-                TextButton(onClick = onConfirmBudgetIncome) { Text(S.transactions.yesBudgetIncome) }
+                DialogSecondaryButton(onClick = onNotBudgetIncome) { Text(S.transactions.noExtraIncome) }
+                Spacer(modifier = Modifier.width(8.dp))
+                DialogPrimaryButton(onClick = onConfirmBudgetIncome) { Text(S.transactions.yesBudgetIncome) }
             }
         }
     ) {
@@ -2234,8 +2249,9 @@ fun AmortizationConfirmDialog(
         onDismiss = onNotAmortized,
         buttons = {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onNotAmortized) { Text(S.transactions.noRegularAmort) }
-                TextButton(onClick = onConfirmAmortization) { Text(S.transactions.yesAmortization) }
+                DialogSecondaryButton(onClick = onNotAmortized) { Text(S.transactions.noRegularAmort) }
+                Spacer(modifier = Modifier.width(8.dp))
+                DialogPrimaryButton(onClick = onConfirmAmortization) { Text(S.transactions.yesAmortization) }
             }
         }
     ) {
@@ -2276,8 +2292,9 @@ fun RecurringExpenseConfirmDialog(
         onDismiss = onNotRecurring,
         buttons = {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onNotRecurring) { Text(S.transactions.noRegularExpense) }
-                TextButton(onClick = onConfirmRecurring) { Text(S.transactions.yesRecurring) }
+                DialogSecondaryButton(onClick = onNotRecurring) { Text(S.transactions.noRegularExpense) }
+                Spacer(modifier = Modifier.width(8.dp))
+                DialogPrimaryButton(onClick = onConfirmRecurring) { Text(S.transactions.yesRecurring) }
             }
         }
     ) {
@@ -2328,21 +2345,21 @@ fun DuplicateResolutionDialog(
         title = S.transactions.duplicateDetected,
         onDismiss = onKeepExisting,
         buttons = {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
+                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)
                 ) {
-                    TextButton(onClick = onKeepExisting) { Text(S.transactions.keepExisting) }
-                    TextButton(onClick = onKeepNew) { Text(S.transactions.keepNew) }
+                    DialogSecondaryButton(onClick = onKeepExisting) { Text(S.transactions.keepExisting) }
+                    DialogSecondaryButton(onClick = onKeepNew) { Text(S.transactions.keepNew) }
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
+                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)
                 ) {
-                    TextButton(onClick = onIgnore) { Text(S.transactions.ignore) }
+                    DialogSecondaryButton(onClick = onIgnore) { Text(S.transactions.ignore) }
                     if (showIgnoreAll) {
-                        TextButton(onClick = onIgnoreAll) { Text(S.transactions.ignoreAll) }
+                        DialogPrimaryButton(onClick = onIgnoreAll) { Text(S.transactions.ignoreAll) }
                     }
                 }
             }
@@ -2874,44 +2891,27 @@ fun TransactionDialog(
                 .fillMaxWidth(0.92f)
                 .fillMaxHeight(0.9f)
                 .imePadding(),
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
         ) {
             Box {
             Column(
                 modifier = Modifier
-                    .padding(24.dp)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
                     ) { focusManager.clearFocus() }
             ) {
                 // Title bar
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.weight(1f)
-                    )
-                    if (isEdit && onDelete != null) {
-                        IconButton(onClick = { showDeleteConfirm = true }) {
-                            Icon(
-                                imageVector = Icons.Filled.Delete,
-                                contentDescription = S.common.delete,
-                                tint = Color(0xFFF44336)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
+                DialogHeader(title = title)
 
                 // Scrollable content
                 Column(
                     modifier = Modifier
                         .weight(1f, fill = false)
-                        .verticalScroll(scrollState),
+                        .verticalScroll(scrollState)
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     // Auto-dismiss pie chart when < 2 categories
@@ -3449,54 +3449,63 @@ fun TransactionDialog(
 
                 } // End scrollable content Column
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Button row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = onDismiss) { Text(S.common.cancel) }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    TextButton(
-                        onClick = {
-                            if (source.isBlank() || selectedCats.isEmpty()) { showValidation = true; return@TextButton }
-                            val type = if (isExpense) TransactionType.EXPENSE else TransactionType.INCOME
-                            val catAmounts: List<CategoryAmount>
-                            val totalAmount: Double
-
-                            if (selectedCats.size == 1) {
-                                val amt = singleAmountText.toDoubleOrNull()
-                                if (amt == null || amt <= 0) { showValidation = true; return@TextButton }
-                                totalAmount = amt
-                                catAmounts = listOf(CategoryAmount(selectedCats[0].id, amt))
-                            } else {
-                                if (usePercentage) {
-                                    val total = totalAmountText.toDoubleOrNull() ?: return@TextButton
-                                    if (total <= 0) return@TextButton
-                                    catAmounts = selectedCats.mapNotNull { cat ->
-                                        val pct = (categoryAmountTexts[cat.id] ?: "").toIntOrNull()
-                                        if (pct != null && pct > 0) CategoryAmount(cat.id, total * pct / 100.0)
-                                        else null
-                                    }
-                                    if (catAmounts.isEmpty()) return@TextButton
-                                    totalAmount = total
-                                } else {
-                                    val total = totalAmountText.toDoubleOrNull()
-                                    catAmounts = selectedCats.mapNotNull { cat ->
-                                        val amt = (categoryAmountTexts[cat.id] ?: "").toDoubleOrNull()
-                                        if (amt != null && amt > 0) CategoryAmount(cat.id, amt) else null
-                                    }
-                                    if (catAmounts.isEmpty()) return@TextButton
-                                    val catSum = catAmounts.sumOf { it.amount }
-                                    if (total != null && abs(catSum - total) > 0.005) {
-                                        showSumMismatchDialog = true
-                                        adjustTargetId = null
-                                        return@TextButton
-                                    }
-                                    totalAmount = total ?: catSum
-                                }
+                DialogFooter {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (isEdit && onDelete != null) {
+                            IconButton(onClick = { showDeleteConfirm = true }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Delete,
+                                    contentDescription = S.common.delete,
+                                    tint = Color(0xFFF44336)
+                                )
                             }
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                        DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel) }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        DialogPrimaryButton(
+                            onClick = {
+                                if (source.isBlank() || selectedCats.isEmpty()) { showValidation = true; return@DialogPrimaryButton }
+                                val type = if (isExpense) TransactionType.EXPENSE else TransactionType.INCOME
+                                val catAmounts: List<CategoryAmount>
+                                val totalAmount: Double
+
+                                if (selectedCats.size == 1) {
+                                    val amt = singleAmountText.toDoubleOrNull()
+                                    if (amt == null || amt <= 0) { showValidation = true; return@DialogPrimaryButton }
+                                    totalAmount = amt
+                                    catAmounts = listOf(CategoryAmount(selectedCats[0].id, amt))
+                                } else {
+                                    if (usePercentage) {
+                                        val total = totalAmountText.toDoubleOrNull() ?: return@DialogPrimaryButton
+                                        if (total <= 0) return@DialogPrimaryButton
+                                        catAmounts = selectedCats.mapNotNull { cat ->
+                                            val pct = (categoryAmountTexts[cat.id] ?: "").toIntOrNull()
+                                            if (pct != null && pct > 0) CategoryAmount(cat.id, total * pct / 100.0)
+                                            else null
+                                        }
+                                        if (catAmounts.isEmpty()) return@DialogPrimaryButton
+                                        totalAmount = total
+                                    } else {
+                                        val total = totalAmountText.toDoubleOrNull()
+                                        catAmounts = selectedCats.mapNotNull { cat ->
+                                            val amt = (categoryAmountTexts[cat.id] ?: "").toDoubleOrNull()
+                                            if (amt != null && amt > 0) CategoryAmount(cat.id, amt) else null
+                                        }
+                                        if (catAmounts.isEmpty()) return@DialogPrimaryButton
+                                        val catSum = catAmounts.sumOf { it.amount }
+                                        if (total != null && abs(catSum - total) > 0.005) {
+                                            showSumMismatchDialog = true
+                                            adjustTargetId = null
+                                            return@DialogPrimaryButton
+                                        }
+                                        totalAmount = total ?: catSum
+                                    }
+                                }
 
                             // Deselect zero-value categories (e.g. from pie chart)
                             if (showPieChart) {
@@ -3553,13 +3562,14 @@ fun TransactionDialog(
                     ) {
                         Text(S.common.save)
                     }
+                    }
                 }
             }
             PulsingScrollArrow(
                 scrollState = scrollState,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(start = 12.dp, bottom = 18.dp)
+                    .padding(start = 12.dp, bottom = 50.dp)
             )
             }
         }
@@ -3646,7 +3656,7 @@ fun TransactionDialog(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showCategoryPicker = false }) {
+                DialogPrimaryButton(onClick = { showCategoryPicker = false }) {
                     Text(S.common.ok)
                 }
             },
@@ -3664,7 +3674,7 @@ fun TransactionDialog(
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
-                TextButton(onClick = {
+                DialogPrimaryButton(onClick = {
                     datePickerState.selectedDateMillis?.let { millis ->
                         selectedDate = Instant.ofEpochMilli(millis)
                             .atZone(ZoneId.of("UTC"))
@@ -3674,7 +3684,7 @@ fun TransactionDialog(
                 }) { Text(S.common.ok) }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text(S.common.cancel) }
+                DialogSecondaryButton(onClick = { showDatePicker = false }) { Text(S.common.cancel) }
             }
         ) {
             DatePicker(state = datePickerState)
@@ -3684,16 +3694,17 @@ fun TransactionDialog(
     if (showDeleteConfirm && onDelete != null) {
         AdAwareAlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
+            style = DialogStyle.DANGER,
             title = { Text("${S.common.delete}?") },
             text = { Text("") },
             confirmButton = {
-                TextButton(onClick = {
+                DialogDangerButton(onClick = {
                     showDeleteConfirm = false
                     onDelete()
-                }) { Text(S.common.delete, color = Color(0xFFF44336)) }
+                }) { Text(S.common.delete) }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) { Text(S.common.cancel) }
+                DialogSecondaryButton(onClick = { showDeleteConfirm = false }) { Text(S.common.cancel) }
             }
         )
     }
@@ -3753,9 +3764,9 @@ fun TransactionDialog(
                 }
             },
             confirmButton = {
-                TextButton(
+                DialogPrimaryButton(
                     onClick = {
-                        val targetId = moveTargetCatId ?: return@TextButton
+                        val targetId = moveTargetCatId ?: return@DialogPrimaryButton
                         val isTargetSelected = selectedCategoryIds[targetId] == true
                         if (isTargetSelected) {
                             // Sum with existing value
@@ -3794,7 +3805,7 @@ fun TransactionDialog(
                 }
             },
             dismissButton = {
-                TextButton(onClick = {
+                DialogSecondaryButton(onClick = {
                     showMoveValueDialog = false
                     pendingDeselect = null
                     moveTargetCatId = null
@@ -3874,15 +3885,15 @@ fun TransactionDialog(
                 }
             },
             confirmButton = {
-                TextButton(
+                DialogPrimaryButton(
                     onClick = {
-                        val targetId = adjustTargetId ?: return@TextButton
+                        val targetId = adjustTargetId ?: return@DialogPrimaryButton
                         if (targetId == "total") {
                             totalAmountText = formatAmount(mismatchCatSum, maxDecimals)
                             showSumMismatchDialog = false
                             adjustTargetId = null
                         } else {
-                            val catId = targetId.toIntOrNull() ?: return@TextButton
+                            val catId = targetId.toIntOrNull() ?: return@DialogPrimaryButton
                             val otherSum = selectedCats.filter { it.id != catId }.sumOf {
                                 (categoryAmountTexts[it.id] ?: "").toDoubleOrNull() ?: 0.0
                             }
@@ -3902,7 +3913,7 @@ fun TransactionDialog(
                 }
             },
             dismissButton = {
-                TextButton(onClick = {
+                DialogSecondaryButton(onClick = {
                     showSumMismatchDialog = false
                     adjustTargetId = null
                 }) {
@@ -3951,7 +3962,7 @@ fun TransactionDialog(
             },
             confirmButton = {},
             dismissButton = {
-                TextButton(onClick = { showLinkRecurringPicker = false }) {
+                DialogSecondaryButton(onClick = { showLinkRecurringPicker = false }) {
                     Text(S.common.cancel)
                 }
             }
@@ -3997,7 +4008,7 @@ fun TransactionDialog(
             },
             confirmButton = {},
             dismissButton = {
-                TextButton(onClick = { showLinkAmortizationPicker = false }) {
+                DialogSecondaryButton(onClick = { showLinkAmortizationPicker = false }) {
                     Text(S.common.cancel)
                 }
             }
@@ -4040,7 +4051,7 @@ fun TransactionDialog(
             },
             confirmButton = {},
             dismissButton = {
-                TextButton(onClick = { showLinkIncomePicker = false }) {
+                DialogSecondaryButton(onClick = { showLinkIncomePicker = false }) {
                     Text(S.common.cancel)
                 }
             }
@@ -4067,9 +4078,10 @@ fun TransactionDialog(
                     formatCurrency(entryAmount, currencySymbol)
                 ))
             },
+            style = DialogStyle.WARNING,
             confirmButton = {
-                Column {
-                    TextButton(onClick = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    DialogWarningButton(onClick = {
                         when (val e = pendingLinkEntry) {
                             is RecurringExpense -> {
                                 linkedRecurringId = e.id
@@ -4085,7 +4097,7 @@ fun TransactionDialog(
                     }) {
                         Text(S.transactions.linkAnyway)
                     }
-                    TextButton(onClick = {
+                    DialogPrimaryButton(onClick = {
                         when (val e = pendingLinkEntry) {
                             is RecurringExpense -> {
                                 linkedRecurringId = e.id
@@ -4106,7 +4118,7 @@ fun TransactionDialog(
                 }
             },
             dismissButton = {
-                TextButton(onClick = {
+                DialogSecondaryButton(onClick = {
                     showLinkMismatchDialog = false
                     pendingLinkEntry = null
                 }) {
@@ -4130,37 +4142,40 @@ private fun TextSearchDialog(
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
         ) {
-            Column(modifier = Modifier.padding(24.dp)) {
-                Text(S.transactions.textSearch, style = MaterialTheme.typography.titleMedium)
-                Spacer(modifier = Modifier.height(16.dp))
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    label = { Text(S.transactions.searchText) },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = MaterialTheme.colorScheme.onBackground,
-                        unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
-                        focusedLabelColor = MaterialTheme.colorScheme.primary,
-                        unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = onDismiss) { Text(S.common.cancel) }
-                    TextButton(onClick = {
-                        if (query.isNotBlank()) onSearch(query.trim())
-                    }) { Text(S.transactions.search) }
+            Column {
+                DialogHeader(title = S.transactions.textSearch)
+                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        label = { Text(S.transactions.searchText) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+                            focusedLabelColor = MaterialTheme.colorScheme.primary,
+                            unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                DialogFooter {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel) }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        DialogPrimaryButton(onClick = {
+                            if (query.isNotBlank()) onSearch(query.trim())
+                        }) { Text(S.transactions.search) }
+                    }
                 }
             }
         }
@@ -4189,14 +4204,16 @@ private fun AmountSearchDialog(
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
         ) {
-            Column(modifier = Modifier.padding(24.dp)) {
-                Text(S.transactions.amountSearch, style = MaterialTheme.typography.titleMedium)
-                Spacer(modifier = Modifier.height(16.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column {
+                DialogHeader(title = S.transactions.amountSearch)
+                Column(
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     OutlinedTextField(
                         value = minText,
                         onValueChange = { minText = it },
@@ -4216,17 +4233,19 @@ private fun AmountSearchDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = onDismiss) { Text(S.common.cancel) }
-                    TextButton(onClick = {
-                        val min = minText.toDoubleOrNull() ?: 0.0
-                        val max = maxText.toDoubleOrNull() ?: Double.MAX_VALUE
-                        onSearch(min, max)
-                    }) { Text(S.transactions.search) }
+                DialogFooter {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel) }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        DialogPrimaryButton(onClick = {
+                            val min = minText.toDoubleOrNull() ?: 0.0
+                            val max = maxText.toDoubleOrNull() ?: Double.MAX_VALUE
+                            onSearch(min, max)
+                        }) { Text(S.transactions.search) }
+                    }
                 }
             }
         }
@@ -4249,7 +4268,7 @@ private fun SearchDatePickerDialog(
     DatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = {
+            DialogPrimaryButton(onClick = {
                 datePickerState.selectedDateMillis?.let { millis ->
                     val date = Instant.ofEpochMilli(millis)
                         .atZone(ZoneId.of("UTC"))
@@ -4259,7 +4278,7 @@ private fun SearchDatePickerDialog(
             }) { Text(S.common.ok) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(S.common.cancel) }
+            DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel) }
         }
     ) {
         Column {

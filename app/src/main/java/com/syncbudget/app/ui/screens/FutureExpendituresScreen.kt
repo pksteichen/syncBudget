@@ -28,6 +28,12 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import com.syncbudget.app.ui.theme.AdAwareAlertDialog
+import com.syncbudget.app.ui.theme.DialogStyle
+import com.syncbudget.app.ui.theme.DialogPrimaryButton
+import com.syncbudget.app.ui.theme.DialogSecondaryButton
+import com.syncbudget.app.ui.theme.DialogDangerButton
+import com.syncbudget.app.ui.theme.DialogHeader
+import com.syncbudget.app.ui.theme.DialogFooter
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -43,7 +49,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
@@ -374,16 +380,15 @@ fun FutureExpendituresScreen(
             onDismissRequest = { deletingGoal = null },
             title = { Text(S.futureExpenditures.deleteSavingsGoal) },
             text = { Text(S.futureExpenditures.deleteGoalConfirm(goal.name)) },
+            style = DialogStyle.DANGER,
             confirmButton = {
-                TextButton(onClick = {
-                    onDeleteGoal(goal)
-                    deletingGoal = null
-                }) {
-                    Text(S.common.delete, color = Color(0xFFF44336))
-                }
+                DialogDangerButton(onClick = {
+                        onDeleteGoal(goal)
+                        deletingGoal = null
+                    }) { Text(S.common.delete) }
             },
             dismissButton = {
-                TextButton(onClick = { deletingGoal = null }) { Text(S.common.cancel) }
+                DialogSecondaryButton(onClick = { deletingGoal = null }) { Text(S.common.cancel) }
             }
         )
     }
@@ -440,21 +445,21 @@ private fun AddEditSavingsGoalDialog(
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
         ) {
             val dialogScrollState = rememberScrollState()
             Box {
-            Column(modifier = Modifier.padding(24.dp)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                Spacer(modifier = Modifier.height(16.dp))
+            Column {
+                DialogHeader(title)
 
                 Column(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier
                         .weight(1f, fill = false)
                         .verticalScroll(dialogScrollState)
+                        .padding(horizontal = 20.dp, vertical = 16.dp)
                 ) {
                     OutlinedTextField(
                         value = name,
@@ -575,15 +580,14 @@ private fun AddEditSavingsGoalDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
+                DialogFooter {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onDismiss) { Text(S.common.cancel) }
-                    TextButton(
-                        onClick = {
+                    DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel) }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    DialogPrimaryButton(onClick = {
                             val isTypeValid = if (isTargetDateType) isTargetDateValid else isContributionValid
                             val isValid = isNameValid && isTargetAmountValid && isStartingSavedValid && isTypeValid
                             if (isValid) {
@@ -597,17 +601,15 @@ private fun AddEditSavingsGoalDialog(
                             } else {
                                 showValidation = true
                             }
-                        }
-                    ) {
-                        Text(S.common.save)
-                    }
+                        }) { Text(S.common.save) }
+                }
                 }
             }
             PulsingScrollArrow(
                 scrollState = dialogScrollState,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(start = 12.dp, bottom = 18.dp)
+                    .padding(start = 12.dp, bottom = 50.dp)
             )
             }
         }
@@ -620,15 +622,15 @@ private fun AddEditSavingsGoalDialog(
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
-                TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let { millis ->
-                        targetDate = Instant.ofEpochMilli(millis).atZone(ZoneId.of("UTC")).toLocalDate()
-                    }
-                    showDatePicker = false
-                }) { Text(S.common.ok) }
+                DialogPrimaryButton(onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            targetDate = Instant.ofEpochMilli(millis).atZone(ZoneId.of("UTC")).toLocalDate()
+                        }
+                        showDatePicker = false
+                    }) { Text(S.common.ok) }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text(S.common.cancel) }
+                DialogSecondaryButton(onClick = { showDatePicker = false }) { Text(S.common.cancel) }
             }
         ) {
             DatePicker(state = datePickerState)
