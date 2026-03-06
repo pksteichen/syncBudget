@@ -58,7 +58,7 @@ import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
+import com.syncbudget.app.ui.theme.AdAwareDatePickerDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -3671,7 +3671,8 @@ fun TransactionDialog(
                 .toInstant()
                 .toEpochMilli()
         )
-        DatePickerDialog(
+        AdAwareDatePickerDialog(
+            title = "Select Date",
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
                 DialogPrimaryButton(onClick = {
@@ -3696,7 +3697,7 @@ fun TransactionDialog(
             onDismissRequest = { showDeleteConfirm = false },
             style = DialogStyle.DANGER,
             title = { Text("${S.common.delete}?") },
-            text = { Text("") },
+            text = null,
             confirmButton = {
                 DialogDangerButton(onClick = {
                     showDeleteConfirm = false
@@ -4265,7 +4266,8 @@ private fun SearchDatePickerDialog(
     val S = LocalStrings.current
     val datePickerState = rememberDatePickerState()
 
-    DatePickerDialog(
+    AdAwareDatePickerDialog(
+        title = title,
         onDismissRequest = onDismiss,
         confirmButton = {
             DialogPrimaryButton(onClick = {
@@ -4282,11 +4284,6 @@ private fun SearchDatePickerDialog(
         }
     ) {
         Column {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(start = 24.dp, top = 16.dp, bottom = 8.dp)
-            )
             if (showBankFilter) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,

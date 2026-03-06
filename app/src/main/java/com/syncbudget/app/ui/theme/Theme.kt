@@ -231,10 +231,49 @@ fun DialogFooter(content: @Composable () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(footerBg, RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp))
+            .background(footerBg)
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
         content()
+    }
+}
+
+/**
+ * Themed date picker dialog with green header/footer.
+ * Replaces Material3 DatePickerDialog for consistent styling.
+ */
+@Composable
+fun AdAwareDatePickerDialog(
+    title: String,
+    onDismissRequest: () -> Unit,
+    confirmButton: @Composable () -> Unit,
+    dismissButton: @Composable () -> Unit,
+    content: @Composable () -> Unit
+) {
+    AdAwareDialog(onDismissRequest = onDismissRequest) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.92f),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            Column {
+                DialogHeader(title = title)
+                Box(modifier = Modifier.weight(1f, fill = false)) {
+                    content()
+                }
+                DialogFooter {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        dismissButton()
+                        Spacer(modifier = Modifier.width(8.dp))
+                        confirmButton()
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -389,10 +428,7 @@ fun AdAwareAlertDialog(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(
-                                footerBg,
-                                RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)
-                            )
+                            .background(footerBg)
                             .padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
                         Row(

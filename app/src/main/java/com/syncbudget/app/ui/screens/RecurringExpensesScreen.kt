@@ -34,7 +34,7 @@ import com.syncbudget.app.ui.theme.DialogHeader
 import com.syncbudget.app.ui.theme.DialogFooter
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
+import com.syncbudget.app.ui.theme.AdAwareDatePickerDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -1115,7 +1115,8 @@ private fun AddEditExpenseDialog(
                 it.atStartOfDay(ZoneId.of("UTC")).toInstant().toEpochMilli()
             }
         )
-        DatePickerDialog(
+        AdAwareDatePickerDialog(
+            title = "Select Date",
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
                 DialogPrimaryButton(onClick = {
