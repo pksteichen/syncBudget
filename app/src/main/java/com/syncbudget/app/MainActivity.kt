@@ -859,9 +859,10 @@ class MainActivity : ComponentActivity() {
                             syncStatus = "error"
                             syncErrorMessage = result.error
                             pendingAdminClaim = result.pendingAdminClaim
-                            // Handle auto-leave on removal
-                            if (result.error == "removed_from_group" || result.error == "group_deleted") {
-                                GroupManager.leaveGroup(context)
+                            // Handle auto-leave on removal (skip for admin — admin
+                            // can't be removed, so this is likely a transient error)
+                            if ((result.error == "removed_from_group" || result.error == "group_deleted") && !isSyncAdmin) {
+                                GroupManager.leaveGroup(context, localOnly = true)
                                 syncPrefs.edit()
                                     .remove("catIdRemap")
                                     .remove("lastSyncVersion")
@@ -2746,8 +2747,8 @@ class MainActivity : ComponentActivity() {
                                         syncStatus = "error"
                                         syncErrorMessage = result.error
                                         pendingAdminClaim = result.pendingAdminClaim
-                                        if (result.error == "removed_from_group" || result.error == "group_deleted") {
-                                            GroupManager.leaveGroup(context)
+                                        if ((result.error == "removed_from_group" || result.error == "group_deleted") && !isSyncAdmin) {
+                                            GroupManager.leaveGroup(context, localOnly = true)
                                             isSyncConfigured = false
                                             syncGroupId = null
                                             isSyncAdmin = false

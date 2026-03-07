@@ -14,6 +14,8 @@ import com.syncbudget.app.data.Transaction
 import com.syncbudget.app.data.TransactionType
 import com.syncbudget.app.data.CategoryAmount
 import com.syncbudget.app.data.RepeatType
+import com.google.firebase.firestore.FirebaseFirestoreException
+import kotlinx.coroutines.delay
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
@@ -126,17 +128,30 @@ class SyncEngine(
             }
 
             // Step 1: Check device registration; bootstrap from snapshot if new
-            val deviceRecord = FirestoreService.getDeviceRecord(groupId, deviceId)
+            var deviceRecord = FirestoreService.getDeviceRecord(groupId, deviceId)
             var snapshotApplied = false
             var snapshotCatchUp = false
             var snapshotState: FullState? = null
             var catchUpSnapshotVersion = 0L
             if (deviceRecord == null) {
+                // Retry once after a short delay to rule out transient Firestore errors
+                delay(2000)
+                deviceRecord = FirestoreService.getDeviceRecord(groupId, deviceId)
+            }
+            if (deviceRecord == null) {
                 // New device — try to bootstrap from snapshot
                 val snapshot = FirestoreService.getSnapshot(groupId)
                 if (snapshot == null) {
-                    // Device not registered and no snapshot — possibly removed from group
-                    return SyncResult(success = false, error = "removed_from_group")
+                    // Verify the group itself still exists before concluding removal
+                    val groupExists = try {
+                        FirestoreService.getGroupNextVersion(groupId)
+                        true
+                    } catch (_: Exception) { false }
+                    return if (groupExists) {
+                        SyncResult(success = false, error = "removed_from_group")
+                    } else {
+                        SyncResult(success = false, error = "group_deleted")
+                    }
                 }
                 snapshotState = decryptSnapshot(snapshot)
                 if (snapshotState == null) {
@@ -611,8 +626,8 @@ class SyncEngine(
             )
         } catch (e: Exception) {
             val errorCode = when {
-                e.message?.contains("NOT_FOUND") == true -> "group_deleted"
-                e.message?.contains("PERMISSION_DENIED") == true -> "removed_from_group"
+                e is FirebaseFirestoreException && e.code == FirebaseFirestoreException.Code.NOT_FOUND -> "group_deleted"
+                e is FirebaseFirestoreException && e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED -> "removed_from_group"
                 e is javax.crypto.AEADBadTagException -> "encryption_error"
                 else -> e.message
             }

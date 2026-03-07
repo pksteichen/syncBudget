@@ -103,11 +103,13 @@ object GroupManager {
         return true
     }
 
-    suspend fun leaveGroup(context: Context) {
+    suspend fun leaveGroup(context: Context, localOnly: Boolean = false) {
         // Remove device document from Firestore so admin roster updates
+        // localOnly=true skips Firestore removal (used for auto-leave on transient errors
+        // to avoid permanently deleting the device doc)
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val groupId = prefs.getString("groupId", null)
-        if (groupId != null) {
+        if (groupId != null && !localOnly) {
             val deviceId = SyncIdGenerator.getOrCreateDeviceId(context)
             try {
                 FirestoreService.removeDevice(groupId, deviceId)
