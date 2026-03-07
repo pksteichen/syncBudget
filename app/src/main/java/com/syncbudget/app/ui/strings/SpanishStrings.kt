@@ -706,7 +706,8 @@ object SpanishStrings : AppStrings {
             "de la cuadr\u00edcula de iconos. Los iconos se muestran en una cuadr\u00edcula visual por la que puedes desplazarte.",
         editCategoryTitle = "Editar una categor\u00eda",
         editCategoryBody = "Toca cualquier categor\u00eda no protegida para abrir el di\u00e1logo de edici\u00f3n. Puedes cambiar el " +
-            "nombre y el icono. El bot\u00f3n de eliminar (icono rojo de papelera) aparece en la barra de t\u00edtulo del di\u00e1logo.",
+            "nombre, el icono y el interruptor de Graficado (si esta categor\u00eda aparece en los gr\u00e1ficos del panel). " +
+            "El bot\u00f3n de eliminar (icono rojo de papelera) aparece en el pie del di\u00e1logo.",
         deleteCategoryTitle = "Eliminar una categor\u00eda",
         deleteCategoryBody = "Al eliminar una categor\u00eda que tiene transacciones existentes:",
         deleteBullet1 = "Si ninguna transacci\u00f3n usa la categor\u00eda, se elimina de inmediato",
@@ -743,7 +744,7 @@ object SpanishStrings : AppStrings {
         addIncomeDesc = "Crear una nueva transacci\u00f3n de ingreso.",
         addExpenseDesc = "Crear una nueva transacci\u00f3n de gasto.",
         searchDesc = "Abrir el men\u00fa de b\u00fasqueda con tres opciones:",
-        dateSearchBullet = "Buscar por fecha \u2014 selecciona una fecha de inicio y fin",
+        dateSearchBullet = "Buscar por fecha \u2014 selecciona una fecha de inicio y fin. Incluye un filtro opcional para transacciones bancarias sin modificar",
         textSearchBullet = "Buscar por texto \u2014 busca por nombre de comercio/fuente",
         amountSearchBullet = "Buscar por monto \u2014 busca por rango de monto",
         searchNote = "Mientras los resultados de b\u00fasqueda est\u00e1n activos, aparece un banner en la parte superior. Toca el banner para borrar la b\u00fasqueda.",
@@ -774,7 +775,7 @@ object SpanishStrings : AppStrings {
         deleteDesc = "Eliminar todas las transacciones seleccionadas.",
         closeDesc = "Salir del modo de selecci\u00f3n sin cambios.",
         addEditTitle = "Di\u00e1logo de Agregar / Editar transacci\u00f3n",
-        addEditBody = "Al agregar o editar una transacci\u00f3n, aparece un di\u00e1logo a pantalla completa con estos campos:",
+        addEditBody = "Al agregar o editar una transacci\u00f3n, aparece un di\u00e1logo con estos campos:",
         fieldDate = "Fecha",
         fieldDateDesc = "Toca el icono de calendario para elegir una fecha.",
         fieldMerchant = "Comercio / Servicio",
@@ -782,7 +783,9 @@ object SpanishStrings : AppStrings {
         fieldDescription = "Descripci\u00f3n",
         fieldDescriptionDesc = "Notas opcionales sobre la transacci\u00f3n (ej., qu\u00e9 se compr\u00f3).",
         fieldLinkButtons = "Botones de vinculaci\u00f3n",
-        fieldLinkButtonsDesc = "Para gastos, aparecen dos botones opcionales: uno con icono de sincronizaci\u00f3n para vincular a un gasto recurrente, y otro con icono de reloj para vincular a una entrada de amortizaci\u00f3n. " +
+        fieldLinkButtonsDesc = "Botones opcionales de vinculaci\u00f3n aparecen debajo del campo de descripci\u00f3n. " +
+            "Para gastos, un icono de sincronizaci\u00f3n vincula a un gasto recurrente y un icono de reloj vincula a una entrada de amortizaci\u00f3n. " +
+            "Para ingresos, un icono de d\u00f3lar vincula a una fuente de ingreso. " +
             "Las transacciones vinculadas ya est\u00e1n contabilizadas en tu presupuesto y NO reducen el efectivo disponible. " +
             "Un peque\u00f1o icono aparece junto al monto en las transacciones vinculadas.",
         fieldCategory = "Categor\u00eda (requerida)",

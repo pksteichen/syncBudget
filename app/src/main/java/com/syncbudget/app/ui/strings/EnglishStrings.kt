@@ -707,7 +707,8 @@ object EnglishStrings : AppStrings {
             "from the icon grid. Icons are displayed as a visual grid you can scroll through.",
         editCategoryTitle = "Editing a Category",
         editCategoryBody = "Tap any non-protected category to open the edit dialog. You can change the " +
-            "name and icon. The delete button (red trash icon) appears in the dialog title bar.",
+            "name, icon, and the Charted toggle (whether this category appears in dashboard charts). " +
+            "The delete button (red trash icon) appears in the dialog footer.",
         deleteCategoryTitle = "Deleting a Category",
         deleteCategoryBody = "When deleting a category that has existing transactions:",
         deleteBullet1 = "If no transactions use the category, it is deleted immediately",
@@ -744,7 +745,7 @@ object EnglishStrings : AppStrings {
         addIncomeDesc = "Create a new income transaction.",
         addExpenseDesc = "Create a new expense transaction.",
         searchDesc = "Open search menu with three options:",
-        dateSearchBullet = "Date Search \u2014 pick a start and end date",
+        dateSearchBullet = "Date Search \u2014 pick a start and end date. Includes an optional filter for unmodified bank transactions only",
         textSearchBullet = "Text Search \u2014 search by merchant/source name",
         amountSearchBullet = "Amount Search \u2014 search by amount range",
         searchNote = "While search results are active, a banner appears at the top. Tap the banner to clear the search.",
@@ -775,7 +776,7 @@ object EnglishStrings : AppStrings {
         deleteDesc = "Delete all selected transactions.",
         closeDesc = "Exit selection mode without changes.",
         addEditTitle = "Add / Edit Transaction Dialog",
-        addEditBody = "When adding or editing a transaction, a full-screen dialog appears with these fields:",
+        addEditBody = "When adding or editing a transaction, a dialog appears with these fields:",
         fieldDate = "Date",
         fieldDateDesc = "Tap the calendar icon to pick a date.",
         fieldMerchant = "Merchant / Service",
@@ -783,7 +784,9 @@ object EnglishStrings : AppStrings {
         fieldDescription = "Description",
         fieldDescriptionDesc = "Optional notes about the transaction (e.g., what was purchased).",
         fieldLinkButtons = "Link Buttons",
-        fieldLinkButtonsDesc = "For expense transactions, two optional link buttons appear: one with a sync icon to link to a recurring expense, and one with a clock icon to link to an amortization entry. " +
+        fieldLinkButtonsDesc = "Optional link buttons appear below the description field. " +
+            "For expenses, a sync icon links to a recurring expense and a clock icon links to an amortization entry. " +
+            "For income, a dollar icon links to an income source. " +
             "Linked transactions are already accounted for in your budget and do NOT reduce available cash. " +
             "A small icon appears next to the amount on linked transactions.",
         fieldCategory = "Category (required)",
