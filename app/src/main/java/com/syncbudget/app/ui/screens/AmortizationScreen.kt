@@ -559,7 +559,7 @@ private fun AddEditAmortizationDialog(
                 DialogSecondaryButton(onClick = { showDatePicker = false }) { Text(S.common.cancel) }
             }
         ) {
-            DatePicker(state = datePickerState)
+            DatePicker(state = datePickerState, title = null)
         }
     }
 }

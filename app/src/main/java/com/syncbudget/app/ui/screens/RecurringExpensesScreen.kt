@@ -567,23 +567,7 @@ fun RecurringExpensesScreen(
         val whyScrollState = rememberScrollState()
         AdAwareAlertDialog(
             onDismissRequest = { showSavingsWhyDialog = false },
-            title = {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = RoundedCornerShape(8.dp)
-                        )
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        S.recurringExpenses.savingsWhyTitle,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-            },
+            title = { Text(S.recurringExpenses.savingsWhyTitle) },
             text = {
                 Column(modifier = Modifier.verticalScroll(whyScrollState)) {
                     Text(S.recurringExpenses.savingsWhyBody)
@@ -1136,7 +1120,7 @@ private fun AddEditExpenseDialog(
                 DialogSecondaryButton(onClick = { showDatePicker = false }) { Text(S.common.cancel) }
             }
         ) {
-            DatePicker(state = datePickerState)
+            DatePicker(state = datePickerState, title = null)
         }
     }
 }
