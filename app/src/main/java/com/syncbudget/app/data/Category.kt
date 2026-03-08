@@ -6,6 +6,7 @@ data class Category(
     val iconName: String,
     val tag: String = "",
     val charted: Boolean = true,
+    val widgetVisible: Boolean = true,
     // Sync fields
     val deviceId: String = "",
     val deleted: Boolean = false,
@@ -13,6 +14,7 @@ data class Category(
     val iconName_clock: Long = 0L,
     val tag_clock: Long = 0L,
     val charted_clock: Long = 0L,
+    val widgetVisible_clock: Long = 0L,
     val deleted_clock: Long = 0L,
     val deviceId_clock: Long = 0L
 )

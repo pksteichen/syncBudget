@@ -123,6 +123,7 @@ fun SettingsScreen(
     onUpdateCategory: (Category) -> Unit = {},
     onDeleteCategory: (Category) -> Unit,
     onToggleCharted: (Category) -> Unit = {},
+    onToggleWidgetVisible: (Category) -> Unit = {},
     onReassignCategory: (fromId: Int, toId: Int) -> Unit = { _, _ -> },
     chartPalette: String = "Bright",
     onChartPaletteChange: (String) -> Unit = {},
@@ -589,6 +590,12 @@ fun SettingsScreen(
                     Text(
                         text = S.settings.charted,
                         style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                    Text(
+                        text = S.settings.widget,
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                     )
                 }
@@ -623,6 +630,14 @@ fun SettingsScreen(
                     Checkbox(
                         checked = category.charted,
                         onCheckedChange = { onToggleCharted(category) },
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = MaterialTheme.colorScheme.primary,
+                            uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                        )
+                    )
+                    Checkbox(
+                        checked = category.widgetVisible,
+                        onCheckedChange = { onToggleWidgetVisible(category) },
                         colors = CheckboxDefaults.colors(
                             checkedColor = MaterialTheme.colorScheme.primary,
                             uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)

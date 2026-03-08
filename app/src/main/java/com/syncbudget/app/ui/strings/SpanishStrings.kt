@@ -126,6 +126,7 @@ object SpanishStrings : AppStrings {
         showWidgetLogo = "Mostrar logo en el widget",
         categories = "Categor\u00edas",
         charted = "Gr\u00e1fica",
+        widget = "Widget",
         addCategory = "Agregar categor\u00eda",
         editCategory = "Editar categor\u00eda",
         categoryName = "Nombre de la categor\u00eda",
@@ -623,7 +624,18 @@ object SpanishStrings : AppStrings {
             "recopila an\u00e1lisis y no comparte tus datos con nadie. Al exportar tus transacciones, puedes elegir formato cifrado " +
             "(ChaCha20-Poly1305 con derivaci\u00f3n de clave PBKDF2) para m\u00e1xima seguridad. " +
             "Si activas la Sincronizaci\u00f3n Familiar, los datos se comparten entre tus dispositivos con cifrado de extremo a extremo \u2014 " +
-            "el servidor no puede leer tus datos financieros. Tu dinero, tus datos, tu control."
+            "el servidor no puede leer tus datos financieros. Tu dinero, tus datos, tu control.",
+        widgetTitle = "Widget de pantalla de inicio",
+        widgetBody = "BudgeXync incluye un widget de pantalla de inicio que muestra tu efectivo disponible " +
+            "en estilo de pantalla Solari, para que puedas consultar tu presupuesto de un vistazo sin abrir la app. " +
+            "Agr\u00e9galo desde el selector de widgets de tu lanzador.",
+        widgetSolariDesc = "El widget muestra tu efectivo disponible actual en tarjetas Solari que " +
+            "se adaptan autom\u00e1ticamente al modo claro y oscuro. Se escala suavemente al cambiar el tama\u00f1o del widget.",
+        widgetButtonsDesc = "Los botones r\u00e1pidos de transacci\u00f3n (+/-) debajo de la pantalla Solari te permiten registrar " +
+            "ingresos o gastos directamente desde el widget. Al tocarlos se abre un di\u00e1logo simplificado " +
+            "con selecci\u00f3n de categor\u00eda.",
+        widgetFreeDesc = "Los usuarios gratuitos pueden agregar 1 transacci\u00f3n de widget por d\u00eda. La pantalla Solari muestra " +
+            "un mensaje de actualizaci\u00f3n. Los usuarios de pago tienen transacciones ilimitadas desde el widget y una pantalla limpia."
     )
 
     override val settingsHelp = SettingsHelpStrings(
@@ -696,11 +708,21 @@ object SpanishStrings : AppStrings {
         paidSave = "Guardar transacciones \u2014 exportar a CSV o archivo cifrado",
         paidLoad = "Cargar transacciones \u2014 importar desde CSV bancario, CSV de la app o respaldo cifrado",
         paidAdFree = "Experiencia sin anuncios \u2014 el banner en la parte superior de todas las pantallas se oculta",
+        paidWidget = "Acceso completo al widget \u2014 transacciones ilimitadas desde el widget por d\u00eda y una pantalla Solari limpia sin el mensaje de actualizaci\u00f3n",
         paidNote = "Cuando el Usuario de pago no est\u00e1 activado, los iconos de Guardar y Cargar en la pantalla " +
-            "de Transacciones aparecen atenuados y no funcionan, y un peque\u00f1o banner publicitario aparece en la parte superior de cada pantalla.",
+            "de Transacciones aparecen atenuados y no funcionan, un peque\u00f1o banner publicitario aparece en la parte superior de cada pantalla, " +
+            "y el widget de la pantalla de inicio est\u00e1 limitado a 1 transacci\u00f3n por d\u00eda.",
+        widgetLogoTitle = "Mostrar logo en el widget",
+        widgetLogoBody = "Al activarlo, el logo de BudgeXync aparece entre los botones de transacci\u00f3n en el " +
+            "widget de la pantalla de inicio. Desact\u00edvalo para ocultar el logo y obtener una apariencia m\u00e1s minimalista.",
         categoriesTitle = "Categor\u00edas",
         categoriesBody = "Las categor\u00edas te permiten clasificar tus transacciones para un mejor an\u00e1lisis de gastos. " +
             "Cada categor\u00eda tiene un nombre y un icono.",
+        chartedColumnDesc = "Gr\u00e1fica \u2014 controla si la categor\u00eda aparece en los gr\u00e1ficos de gastos del panel principal. " +
+            "Desmarca para ocultar una categor\u00eda de los gr\u00e1ficos sin eliminarla.",
+        widgetColumnDesc = "Widget \u2014 controla si la categor\u00eda aparece en el di\u00e1logo de transacci\u00f3n r\u00e1pida del widget. " +
+            "Desmarca categor\u00edas que normalmente no ingresar\u00edas desde el widget (ej. Ingreso Recurrente, Hipoteca) " +
+            "para mantener el selector de categor\u00edas limpio y r\u00e1pido.",
         defaultCategoriesTitle = "Categor\u00edas predeterminadas",
         defaultCategoriesBody = "Dos categor\u00edas est\u00e1n protegidas y no se pueden eliminar ni renombrar:",
         catOther = "Otros \u2014 la categor\u00eda predeterminada para transacciones sin clasificar",
@@ -1386,5 +1408,18 @@ object SpanishStrings : AppStrings {
             "generada al crear el grupo. La clave se comparte solo a trav\u00e9s del mecanismo de c\u00f3digo de emparejamiento. " +
             "El servidor almacena solo datos cifrados \u2014 no puede leer tus transacciones, montos, " +
             "nombres de comercios ni ning\u00fan dato financiero. Tu dinero, tus datos, tu control."
+    )
+
+    override val widgetTransaction = WidgetTransactionStrings(
+        quickExpense = "Gasto R\u00e1pido",
+        quickIncome = "Ingreso R\u00e1pido",
+        amountLabel = { symbol -> "Monto $symbol" },
+        remaining = { symbol, amount -> "Restante: $symbol$amount" },
+        merchantService = "Comercio/Servicio",
+        source = "Fuente",
+        descriptionOptional = "Descripci\u00f3n (opcional)",
+        cancel = "Cancelar",
+        save = "Guardar",
+        freeVersionLimit = "Versi\u00f3n Gratuita: 1 transacci\u00f3n de widget por d\u00eda"
     )
 }

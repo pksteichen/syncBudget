@@ -1543,6 +1543,17 @@ class MainActivity : ComponentActivity() {
                                 saveCategories()
                             }
                         },
+                        onToggleWidgetVisible = { cat ->
+                            val idx = categories.indexOfFirst { it.id == cat.id }
+                            if (idx >= 0) {
+                                val clock = lamportClock.tick()
+                                categories[idx] = categories[idx].copy(
+                                    widgetVisible = !categories[idx].widgetVisible,
+                                    widgetVisible_clock = clock
+                                )
+                                saveCategories()
+                            }
+                        },
                         onReassignCategory = { fromId, toId ->
                             val clock = lamportClock.tick()
                             transactions.forEachIndexed { index, txn ->

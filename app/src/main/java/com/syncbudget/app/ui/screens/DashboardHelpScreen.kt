@@ -418,6 +418,17 @@ fun DashboardHelpScreen(onBack: () -> Unit) {
 
             HelpDividerLine()
 
+            // ─── HOME SCREEN WIDGET ───
+            HelpSectionTitle(S.dashboardHelp.widgetTitle)
+            HelpBodyText(S.dashboardHelp.widgetBody)
+            Spacer(modifier = Modifier.height(8.dp))
+            HelpBulletText(S.dashboardHelp.widgetSolariDesc)
+            HelpBulletText(S.dashboardHelp.widgetButtonsDesc)
+            HelpBulletText(S.dashboardHelp.widgetFreeDesc)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDividerLine()
+
             // ─── SECTION 9: PRIVACY ───
             HelpSectionTitle(S.dashboardHelp.privacyTitle)
             HelpBodyText(S.dashboardHelp.privacyBody)

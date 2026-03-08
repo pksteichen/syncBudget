@@ -126,6 +126,7 @@ object EnglishStrings : AppStrings {
         showWidgetLogo = "Show logo on widget",
         categories = "Categories",
         charted = "Charted",
+        widget = "Widget",
         addCategory = "Add Category",
         editCategory = "Edit Category",
         categoryName = "Category Name",
@@ -624,7 +625,18 @@ object EnglishStrings : AppStrings {
             "and does not share your data with anyone. When you export your transactions, you can choose encrypted " +
             "format (ChaCha20-Poly1305 with PBKDF2 key derivation) for maximum security. " +
             "If you enable Family Sync, data is shared between your devices using end-to-end encryption \u2014 " +
-            "the server cannot read your financial data. Your money, your data, your control."
+            "the server cannot read your financial data. Your money, your data, your control.",
+        widgetTitle = "Home Screen Widget",
+        widgetBody = "BudgeXync includes a home screen widget that displays your available cash " +
+            "in a Solari flip-display style, so you can check your budget at a glance without opening the app. " +
+            "Add it from your launcher's widget picker.",
+        widgetSolariDesc = "The widget shows your current available cash on Solari-style flip cards that " +
+            "automatically adapt to light and dark mode. It scales smoothly as you resize the widget.",
+        widgetButtonsDesc = "Quick transaction buttons (+/-) below the Solari display let you record income " +
+            "or expenses directly from the widget. Tapping opens a streamlined transaction dialog " +
+            "with category selection.",
+        widgetFreeDesc = "Free users can add 1 widget transaction per day. The Solari display shows " +
+            "an upgrade message overlay. Paid users have unlimited widget transactions and a clean display."
     )
 
     override val settingsHelp = SettingsHelpStrings(
@@ -697,11 +709,21 @@ object EnglishStrings : AppStrings {
         paidSave = "Save transactions \u2014 export to CSV or encrypted file",
         paidLoad = "Load transactions \u2014 import from bank CSV, app CSV, or encrypted backup",
         paidAdFree = "Ad-free experience \u2014 the banner at the top of all screens is hidden",
+        paidWidget = "Full widget access \u2014 unlimited widget transactions per day and a clean Solari display without the upgrade overlay",
         paidNote = "When Paid User is not enabled, the Save and Load icons on the Transactions " +
-            "screen appear dimmed and are non-functional, and a small ad banner appears at the top of every screen.",
+            "screen appear dimmed and are non-functional, a small ad banner appears at the top of every screen, " +
+            "and the home screen widget is limited to 1 transaction per day.",
+        widgetLogoTitle = "Show Logo on Widget",
+        widgetLogoBody = "When checked, the BudgeXync logo appears between the transaction buttons on the " +
+            "home screen widget. Uncheck to hide the logo for a more minimal widget appearance.",
         categoriesTitle = "Categories",
         categoriesBody = "Categories let you classify your transactions for better spending insight. " +
             "Each category has a name and an icon.",
+        chartedColumnDesc = "Charted \u2014 controls whether the category appears in spending charts on the dashboard. " +
+            "Uncheck to hide a category from charts without deleting it.",
+        widgetColumnDesc = "Widget \u2014 controls whether the category appears in the widget's quick transaction dialog. " +
+            "Uncheck categories you wouldn't normally enter from the widget (e.g., Recurring Income, Mortgage) " +
+            "to keep the category picker clean and fast.",
         defaultCategoriesTitle = "Default Categories",
         defaultCategoriesBody = "Two categories are protected and cannot be deleted or renamed:",
         catOther = "Other \u2014 the default fallback category for uncategorized transactions",
@@ -1388,5 +1410,18 @@ object EnglishStrings : AppStrings {
             "mechanism. The server stores only encrypted blobs \u2014 it cannot read " +
             "your transactions, amounts, merchant names, or any financial data. " +
             "Your money, your data, your control."
+    )
+
+    override val widgetTransaction = WidgetTransactionStrings(
+        quickExpense = "Quick Expense",
+        quickIncome = "Quick Income",
+        amountLabel = { symbol -> "$symbol Amount" },
+        remaining = { symbol, amount -> "Remaining: $symbol$amount" },
+        merchantService = "Merchant/Service",
+        source = "Source",
+        descriptionOptional = "Description (optional)",
+        cancel = "Cancel",
+        save = "Save",
+        freeVersionLimit = "Free Version: 1 widget transaction per day"
     )
 }

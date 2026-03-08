@@ -31,6 +31,7 @@ interface AppStrings {
     val amortizationHelp: AmortizationHelpStrings
     val recurringExpensesHelp: RecurringExpensesHelpStrings
     val familySyncHelp: FamilySyncHelpStrings
+    val widgetTransaction: WidgetTransactionStrings
 }
 
 data class CommonStrings(
@@ -145,6 +146,7 @@ data class SettingsStrings(
     val showWidgetLogo: String,
     val categories: String,
     val charted: String,
+    val widget: String,
     val addCategory: String,
     val editCategory: String,
     val categoryName: String,
@@ -595,7 +597,12 @@ data class DashboardHelpStrings(
     val syncArrowsBullet: String,
     val syncDotsBullet: String,
     val privacyTitle: String,
-    val privacyBody: String
+    val privacyBody: String,
+    val widgetTitle: String,
+    val widgetBody: String,
+    val widgetSolariDesc: String,
+    val widgetButtonsDesc: String,
+    val widgetFreeDesc: String
 )
 
 data class SettingsHelpStrings(
@@ -649,9 +656,14 @@ data class SettingsHelpStrings(
     val paidSave: String,
     val paidLoad: String,
     val paidAdFree: String,
+    val paidWidget: String,
     val paidNote: String,
+    val widgetLogoTitle: String,
+    val widgetLogoBody: String,
     val categoriesTitle: String,
     val categoriesBody: String,
+    val chartedColumnDesc: String,
+    val widgetColumnDesc: String,
     val defaultCategoriesTitle: String,
     val defaultCategoriesBody: String,
     val catOther: String,
@@ -1122,4 +1134,17 @@ data class FamilySyncHelpStrings(
     val leavingBody: String,
     val privacyTitle: String,
     val privacyBody: String
+)
+
+data class WidgetTransactionStrings(
+    val quickExpense: String,
+    val quickIncome: String,
+    val amountLabel: (String) -> String,
+    val remaining: (String, String) -> String,
+    val merchantService: String,
+    val source: String,
+    val descriptionOptional: String,
+    val cancel: String,
+    val save: String,
+    val freeVersionLimit: String
 )

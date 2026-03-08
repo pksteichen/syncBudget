@@ -71,6 +71,9 @@ import com.syncbudget.app.data.sync.LamportClock
 import com.syncbudget.app.data.sync.SyncIdGenerator
 import com.syncbudget.app.data.sync.active
 import com.syncbudget.app.ui.components.CURRENCY_DECIMALS
+import com.syncbudget.app.ui.strings.AppStrings
+import com.syncbudget.app.ui.strings.EnglishStrings
+import com.syncbudget.app.ui.strings.SpanishStrings
 import java.time.LocalDate
 
 class WidgetTransactionActivity : ComponentActivity() {
@@ -87,8 +90,11 @@ class WidgetTransactionActivity : ComponentActivity() {
                 val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
                 val currencySymbol = prefs.getString("currencySymbol", "$") ?: "$"
                 val maxDecimals = CURRENCY_DECIMALS[currencySymbol] ?: 2
+                val appLanguage = prefs.getString("appLanguage", "en") ?: "en"
+                val S: AppStrings = if (appLanguage == "es") SpanishStrings else EnglishStrings
+                val W = S.widgetTransaction
 
-                val categories = remember { CategoryRepository.load(context).active }
+                val categories = remember { CategoryRepository.load(context).active.filter { it.widgetVisible } }
                 val selectedCategoryIds = remember { mutableStateMapOf<Int, Boolean>() }
                 val categoryAmounts = remember { mutableStateMapOf<Int, String>() }
                 var amount by remember { mutableStateOf("") }
@@ -103,7 +109,7 @@ class WidgetTransactionActivity : ComponentActivity() {
 
                 val headerBg = if (isExpense) Color(0xFFB71C1C) else Color(0xFF1B5E20)
                 val headerText = Color.White
-                val title = if (isExpense) "Quick Expense" else "Quick Income"
+                val title = if (isExpense) W.quickExpense else W.quickIncome
 
                 val selectedIds = selectedCategoryIds.filter { it.value }.keys.toList()
                 val parsedAmount = amount.toDoubleOrNull()
@@ -155,7 +161,7 @@ class WidgetTransactionActivity : ComponentActivity() {
                                         amount = filtered
                                     }
                                 },
-                                label = { Text("$currencySymbol Amount") },
+                                label = { Text(W.amountLabel(currencySymbol)) },
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                 modifier = Modifier.fillMaxWidth()
@@ -169,7 +175,7 @@ class WidgetTransactionActivity : ComponentActivity() {
                                     else -> Color(0xFFFFB74D)
                                 }
                                 Text(
-                                    text = "Remaining: $currencySymbol${"%.${maxDecimals}f".format(remaining)}",
+                                    text = W.remaining(currencySymbol, "%.${maxDecimals}f".format(remaining)),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = remainingColor,
                                     textAlign = TextAlign.End,
@@ -200,7 +206,7 @@ class WidgetTransactionActivity : ComponentActivity() {
                                 OutlinedTextField(
                                     value = source,
                                     onValueChange = { source = it.take(50) },
-                                    label = { Text(if (isExpense) "Merchant/Service" else "Source") },
+                                    label = { Text(if (isExpense) W.merchantService else W.source) },
                                     singleLine = true,
                                     modifier = Modifier.fillMaxWidth()
                                 )
@@ -209,7 +215,7 @@ class WidgetTransactionActivity : ComponentActivity() {
                                 OutlinedTextField(
                                     value = description,
                                     onValueChange = { description = it.take(100) },
-                                    label = { Text("Description (optional)") },
+                                    label = { Text(W.descriptionOptional) },
                                     singleLine = true,
                                     modifier = Modifier.fillMaxWidth()
                                 )
@@ -301,7 +307,7 @@ class WidgetTransactionActivity : ComponentActivity() {
                             if (atDailyLimit) {
                                 // Replace category picker with limit message
                                 Text(
-                                    "Free Version: 1 widget transaction per day",
+                                    W.freeVersionLimit,
                                     color = Color(0xFFFF9800),
                                     style = MaterialTheme.typography.bodySmall,
                                     modifier = Modifier.weight(1f)
@@ -351,7 +357,7 @@ class WidgetTransactionActivity : ComponentActivity() {
 
                             // Buttons
                             OutlinedButton(onClick = { finish() }) {
-                                Text("Cancel")
+                                Text(W.cancel)
                             }
                             Spacer(modifier = Modifier.width(8.dp))
                             Button(
@@ -386,7 +392,7 @@ class WidgetTransactionActivity : ComponentActivity() {
                                     disabledContainerColor = headerBg.copy(alpha = 0.3f)
                                 )
                             ) {
-                                Text("Save", color = if (canSave) Color.White else Color.White.copy(alpha = 0.5f))
+                                Text(W.save, color = if (canSave) Color.White else Color.White.copy(alpha = 0.5f))
                             }
                         }
                     }

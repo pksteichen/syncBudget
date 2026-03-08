@@ -223,6 +223,7 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
             HelpBulletText(S.settingsHelp.paidSave)
             HelpBulletText(S.settingsHelp.paidLoad)
             HelpBulletText(S.settingsHelp.paidAdFree)
+            HelpBulletText(S.settingsHelp.paidWidget)
             Spacer(modifier = Modifier.height(8.dp))
             HelpBodyText(
                 S.settingsHelp.paidNote,
@@ -232,9 +233,19 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
 
             HelpDividerLine()
 
+            // ─── WIDGET LOGO ───
+            HelpSectionTitle(S.settingsHelp.widgetLogoTitle)
+            HelpBodyText(S.settingsHelp.widgetLogoBody)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDividerLine()
+
             // ─── SECTION 10: CATEGORIES ───
             HelpSectionTitle(S.settingsHelp.categoriesTitle)
             HelpBodyText(S.settingsHelp.categoriesBody)
+            Spacer(modifier = Modifier.height(8.dp))
+            HelpBulletText(S.settingsHelp.chartedColumnDesc)
+            HelpBulletText(S.settingsHelp.widgetColumnDesc)
             Spacer(modifier = Modifier.height(10.dp))
 
             HelpSubSectionTitle(S.settingsHelp.defaultCategoriesTitle)

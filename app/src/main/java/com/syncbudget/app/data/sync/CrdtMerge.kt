@@ -217,13 +217,15 @@ object CrdtMerge {
             name = if (shouldAcceptRemote(local.name_clock, remote.name_clock, localDeviceId, remoteDeviceId)) remote.name else local.name,
             iconName = if (shouldAcceptRemote(local.iconName_clock, remote.iconName_clock, localDeviceId, remoteDeviceId)) remote.iconName else local.iconName,
             tag = if (shouldAcceptRemote(local.tag_clock, remote.tag_clock, localDeviceId, remoteDeviceId)) remote.tag else local.tag,
-            charted = if (shouldAcceptRemote(local.charted_clock, remote.charted_clock, localDeviceId, remoteDeviceId)) remote.charted else local.charted,
+            charted = local.charted,           // local-only setting, not synced
+            widgetVisible = local.widgetVisible, // local-only setting, not synced
             deviceId = if (shouldAcceptRemote(local.deviceId_clock, remote.deviceId_clock, localDeviceId, remoteDeviceId)) remote.deviceId else local.deviceId,
             deleted = mergedDeleted,
             name_clock = maxOf(local.name_clock, remote.name_clock),
             iconName_clock = maxOf(local.iconName_clock, remote.iconName_clock),
             tag_clock = maxOf(local.tag_clock, remote.tag_clock),
-            charted_clock = maxOf(local.charted_clock, remote.charted_clock),
+            charted_clock = local.charted_clock,           // local-only, preserve local clock
+            widgetVisible_clock = local.widgetVisible_clock, // local-only, preserve local clock
             deleted_clock = mergedDeletedClock,
             deviceId_clock = maxOf(local.deviceId_clock, remote.deviceId_clock)
         )

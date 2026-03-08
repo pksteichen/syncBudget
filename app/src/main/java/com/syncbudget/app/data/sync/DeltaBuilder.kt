@@ -153,14 +153,12 @@ object DeltaBuilder {
         if (cat.name_clock > lastPushedClock) fields["name"] = FieldDelta(cat.name, cat.name_clock)
         if (cat.iconName_clock > lastPushedClock) fields["iconName"] = FieldDelta(cat.iconName, cat.iconName_clock)
         if (cat.tag_clock > lastPushedClock) fields["tag"] = FieldDelta(cat.tag, cat.tag_clock)
-        if (cat.charted_clock > lastPushedClock) fields["charted"] = FieldDelta(cat.charted, cat.charted_clock)
         if (cat.deleted_clock > lastPushedClock) fields["deleted"] = FieldDelta(cat.deleted, cat.deleted_clock)
         if (cat.deviceId_clock > lastPushedClock) fields["deviceId"] = FieldDelta(cat.deviceId, cat.deviceId_clock)
         if (fields.isEmpty()) return null
         ensureField(fields, "name", cat.name, cat.name_clock)
         ensureField(fields, "iconName", cat.iconName, cat.iconName_clock)
         ensureField(fields, "tag", cat.tag, cat.tag_clock)
-        ensureField(fields, "charted", cat.charted, cat.charted_clock)
         ensureField(fields, "deviceId", cat.deviceId, cat.deviceId_clock)
         return RecordDelta("category", "upsert", cat.id, cat.deviceId, fields)
     }
