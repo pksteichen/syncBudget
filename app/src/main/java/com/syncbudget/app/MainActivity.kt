@@ -129,9 +129,14 @@ class MainActivity : ComponentActivity() {
 
             var currentScreen by remember { mutableStateOf("main") }
 
-            // Dashboard quick-add dialog state
-            var dashboardShowAddIncome by remember { mutableStateOf(false) }
-            var dashboardShowAddExpense by remember { mutableStateOf(false) }
+            // Dashboard quick-add dialog state — check widget intent
+            val widgetAction = remember { intent?.action }
+            var dashboardShowAddIncome by remember {
+                mutableStateOf(widgetAction == com.syncbudget.app.widget.BudgetWidgetProvider.ACTION_ADD_INCOME)
+            }
+            var dashboardShowAddExpense by remember {
+                mutableStateOf(widgetAction == com.syncbudget.app.widget.BudgetWidgetProvider.ACTION_ADD_EXPENSE)
+            }
 
             // Dashboard matching state
             var dashPendingManualSave by remember { mutableStateOf<Transaction?>(null) }
@@ -161,6 +166,7 @@ class MainActivity : ComponentActivity() {
             var showDecimals by remember { mutableStateOf(prefs.getBoolean("showDecimals", false)) }
             var dateFormatPattern by remember { mutableStateOf(prefs.getString("dateFormatPattern", "yyyy-MM-dd") ?: "yyyy-MM-dd") }
             var isPaidUser by remember { mutableStateOf(prefs.getBoolean("isPaidUser", false)) }
+            var showWidgetLogo by remember { mutableStateOf(prefs.getBoolean("showWidgetLogo", true)) }
 
             // Matching configuration
             var matchDays by remember { mutableIntStateOf(prefs.getInt("matchDays", 7)) }
@@ -332,12 +338,12 @@ class MainActivity : ComponentActivity() {
             var staleDays by remember { mutableIntStateOf(0) }
             var syncErrorMessage by remember { mutableStateOf<String?>(null) }
             var pendingAdminClaim by remember { mutableStateOf<AdminClaim?>(null) }
-
             // availableCash may go negative (= overspent). Guard against NaN/Infinity.
             fun persistAvailableCash() {
                 if (availableCash.isNaN() || availableCash.isInfinite()) availableCash = 0.0
                 availableCash = BudgetCalculator.roundCents(availableCash)
                 prefs.edit().putString("availableCash", availableCash.toString()).apply()
+                com.syncbudget.app.widget.BudgetWidgetProvider.updateAllWidgets(context)
             }
 
             // Deterministic cash recomputation from synced data.
@@ -852,6 +858,28 @@ class MainActivity : ComponentActivity() {
                             try {
                                 syncDevices = GroupManager.getDevices(groupId)
                                 isSyncAdmin = GroupManager.isAdmin(context)
+                                // Auto-populate roster with current device names (additive)
+                                val currentRoster = try {
+                                    val obj = org.json.JSONObject(sharedSettings.deviceRoster)
+                                    obj.keys().asSequence().associateWith { obj.getString(it) }.toMutableMap()
+                                } catch (_: Exception) { mutableMapOf() }
+                                var rosterChanged = false
+                                for (dev in syncDevices) {
+                                    val name = dev.deviceName.ifEmpty { dev.deviceId.take(8) }
+                                    if (currentRoster[dev.deviceId] != name) {
+                                        currentRoster[dev.deviceId] = name
+                                        rosterChanged = true
+                                    }
+                                }
+                                if (rosterChanged) {
+                                    val clock = lamportClock.tick()
+                                    sharedSettings = sharedSettings.copy(
+                                        deviceRoster = org.json.JSONObject(currentRoster as Map<*, *>).toString(),
+                                        deviceRoster_clock = clock,
+                                        lastChangedBy = localDeviceId
+                                    )
+                                    SharedSettingsRepository.save(context, sharedSettings)
+                                }
                             } catch (e: Exception) {
                                 android.util.Log.w("SyncLoop", "Failed to refresh device list", e)
                             }
@@ -930,6 +958,18 @@ class MainActivity : ComponentActivity() {
                 transactions.add(stamped)
                 saveTransactions()
                 recomputeCash()
+            }
+
+            // Reload transactions from disk on resume to pick up widget-added entries
+            LaunchedEffect(syncTrigger) {
+                if (syncTrigger == 0) return@LaunchedEffect  // skip initial composition
+                val diskTransactions = TransactionRepository.load(context)
+                if (diskTransactions.size != transactions.size ||
+                    diskTransactions.map { it.id }.toSet() != transactions.map { it.id }.toSet()) {
+                    transactions.clear()
+                    transactions.addAll(diskTransactions)
+                    recomputeCash()
+                }
             }
 
             // Matching chain for dashboard-added transactions
@@ -1444,6 +1484,13 @@ class MainActivity : ComponentActivity() {
                         onPaidUserChange = { newValue ->
                             isPaidUser = newValue
                             prefs.edit().putBoolean("isPaidUser", newValue).apply()
+                            com.syncbudget.app.widget.BudgetWidgetProvider.updateAllWidgets(context)
+                        },
+                        showWidgetLogo = showWidgetLogo,
+                        onWidgetLogoChange = { newValue ->
+                            showWidgetLogo = newValue
+                            prefs.edit().putBoolean("showWidgetLogo", newValue).apply()
+                            com.syncbudget.app.widget.BudgetWidgetProvider.updateAllWidgets(context)
                         },
                         categories = categories.toList().active,
                         transactions = transactions.toList().active,
@@ -1541,7 +1588,14 @@ class MainActivity : ComponentActivity() {
                         matchChars = matchChars,
                         chartPalette = chartPalette,
                         showAttribution = sharedSettings.showAttribution && isSyncConfigured,
-                        deviceNameMap = syncDevices.associate { it.deviceId to it.deviceName.ifEmpty { it.deviceId.take(8) } },
+                        deviceNameMap = run {
+                            val roster = try {
+                                val obj = org.json.JSONObject(sharedSettings.deviceRoster)
+                                obj.keys().asSequence().associateWith { obj.getString(it) }
+                            } catch (_: Exception) { emptyMap() }
+                            // Live devices override roster (freshest names), roster fills in former members
+                            roster + syncDevices.associate { it.deviceId to it.deviceName.ifEmpty { it.deviceId.take(8) } }
+                        },
                         localDeviceId = localDeviceId,
                         onAddTransaction = { txn ->
                             addTransactionWithBudgetEffect(txn)
@@ -2211,6 +2265,55 @@ class MainActivity : ComponentActivity() {
                             )
                             SharedSettingsRepository.save(context, sharedSettings)
                         },
+                        orphanedDeviceIds = remember(transactions.toList(), syncDevices, localDeviceId, sharedSettings.deviceRoster) {
+                            val roster = try {
+                                val obj = org.json.JSONObject(sharedSettings.deviceRoster)
+                                obj.keys().asSequence().toSet()
+                            } catch (_: Exception) { emptySet() }
+                            val knownIds = syncDevices.map { it.deviceId }.toSet() + localDeviceId + roster
+                            transactions.toList()
+                                .map { it.deviceId }
+                                .filter { it.isNotEmpty() && it !in knownIds }
+                                .toSet()
+                        },
+                        deviceRoster = remember(sharedSettings.deviceRoster) {
+                            try {
+                                val obj = org.json.JSONObject(sharedSettings.deviceRoster)
+                                obj.keys().asSequence().associateWith { obj.getString(it) }
+                            } catch (_: Exception) { emptyMap() }
+                        },
+                        onSaveDeviceRoster = { roster ->
+                            val clock = lamportClock.tick()
+                            val json = org.json.JSONObject(roster).toString()
+                            sharedSettings = sharedSettings.copy(
+                                deviceRoster = json,
+                                deviceRoster_clock = clock,
+                                lastChangedBy = localDeviceId
+                            )
+                            SharedSettingsRepository.save(context, sharedSettings)
+                        },
+                        onPurgeStaleRoster = {
+                            val txnDeviceIds = transactions.toList()
+                                .map { it.deviceId }
+                                .filter { it.isNotEmpty() }
+                                .toSet()
+                            val currentIds = syncDevices.map { it.deviceId }.toSet()
+                            val currentRoster = try {
+                                val obj = org.json.JSONObject(sharedSettings.deviceRoster)
+                                obj.keys().asSequence().associateWith { obj.getString(it) }
+                            } catch (_: Exception) { emptyMap() }
+                            // Keep roster entries that have transactions OR are current devices
+                            val pruned = currentRoster.filterKeys { it in txnDeviceIds || it in currentIds }
+                            if (pruned.size < currentRoster.size) {
+                                val clock = lamportClock.tick()
+                                sharedSettings = sharedSettings.copy(
+                                    deviceRoster = org.json.JSONObject(pruned).toString(),
+                                    deviceRoster_clock = clock,
+                                    lastChangedBy = localDeviceId
+                                )
+                                SharedSettingsRepository.save(context, sharedSettings)
+                            }
+                        },
                         staleDays = staleDays,
                         pendingAdminClaim = pendingAdminClaim,
                         onClaimAdmin = {
@@ -2795,6 +2898,19 @@ class MainActivity : ComponentActivity() {
                                     }
                                     // Refresh device list
                                     syncDevices = GroupManager.getDevices(gId)
+                                    // Update permanent roster
+                                    val currentRoster = try {
+                                        val obj = org.json.JSONObject(sharedSettings.deviceRoster)
+                                        obj.keys().asSequence().associateWith { obj.getString(it) }.toMutableMap()
+                                    } catch (_: Exception) { mutableMapOf() }
+                                    currentRoster[targetDeviceId] = newName
+                                    val clock = lamportClock.tick()
+                                    sharedSettings = sharedSettings.copy(
+                                        deviceRoster = org.json.JSONObject(currentRoster as Map<*, *>).toString(),
+                                        deviceRoster_clock = clock,
+                                        lastChangedBy = localDeviceId
+                                    )
+                                    SharedSettingsRepository.save(context, sharedSettings)
                                 } catch (_: Exception) {}
                             }
                         },

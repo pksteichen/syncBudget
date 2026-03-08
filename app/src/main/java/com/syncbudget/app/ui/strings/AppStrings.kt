@@ -142,6 +142,7 @@ data class SettingsStrings(
     val matchChars: String,
     val matchingConfiguration: String,
     val paidUser: String,
+    val showWidgetLogo: String,
     val categories: String,
     val charted: String,
     val addCategory: String,
@@ -456,6 +457,10 @@ data class SyncStrings(
     // Attribution (5.2)
     val showAttributionLabel: String,
     val you: String,
+    val repairAttributions: String,
+    val repairAttributionsBody: String,
+    val nicknameHint: String,
+    val noOrphanedCodes: String,
     // Stale warnings (5.3)
     val staleWarning60: String,
     val staleWarning75: String,

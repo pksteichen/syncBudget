@@ -73,7 +73,7 @@ object SpanishStrings : AppStrings {
     )
 
     override val dashboard = DashboardStrings(
-        appTitle = "SecureSync Presupuesto",
+        appTitle = "BudgeXync",
         notConfigured = "Sin configurar",
         spending = "Gastos",
         settings = "Ajustes",
@@ -123,6 +123,7 @@ object SpanishStrings : AppStrings {
         matchChars = "Caracteres de coincidencia",
         matchingConfiguration = "Configuraci\u00f3n de coincidencias",
         paidUser = "Usuario de pago",
+        showWidgetLogo = "Mostrar logo en el widget",
         categories = "Categor\u00edas",
         charted = "Gr\u00e1fica",
         addCategory = "Agregar categor\u00eda",
@@ -434,8 +435,12 @@ object SpanishStrings : AppStrings {
         adminOnly = "Solo administrador",
         familyTimezone = "Zona Horaria Familiar",
         selectTimezone = "Seleccionar Zona Horaria",
-        showAttributionLabel = "Mostrar Atribuci\u00f3n",
-        you = "T\u00fa",
+        showAttributionLabel = "Mostrar Atribución",
+        you = "Tú",
+        repairAttributions = "Reparar Atribuciones",
+        repairAttributionsBody = "Estos códigos de dispositivo aparecen en tus transacciones pero no están en el grupo familiar actual. Ingresa un apodo para cada uno en lugar del código.",
+        nicknameHint = "Apodo",
+        noOrphanedCodes = "No se encontraron códigos de dispositivo no reconocidos.",
         staleWarning60 = "Sincroniza pronto para mantener tus datos actualizados",
         staleWarning75 = "15 d\u00edas para que los datos de sincronizaci\u00f3n expiren",
         staleWarning85 = "5 d\u00edas para sincronizar o los cambios locales deber\u00e1n descartarse",

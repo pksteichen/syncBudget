@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="top"
+    android:background="@android:color/transparent">
+
+    <!-- Solari display bitmap: sized to content -->
+    <ImageView
+        android:id="@+id/widget_solari"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:adjustViewBounds="true"
+        android:scaleType="fitStart"
+        android:contentDescription="@string/widget_description" />
+
+    <!-- Button bar: tight, directly below Solari -->
+    <RelativeLayout
+        android:id="@+id/widget_button_bar"
+        android:layout_width="match_parent"
+        android:layout_height="36dp">
+
+        <!-- Income (+) button -->
+        <ImageView
+            android:id="@+id/widget_add_income"
+            android:layout_width="36dp"
+            android:layout_height="match_parent"
+            android:layout_alignParentStart="true"
+            android:scaleType="centerInside"
+            android:src="@android:drawable/ic_input_add"
+            android:contentDescription="@string/widget_add_income"
+            android:background="?android:attr/selectableItemBackgroundBorderless" />
+
+        <!-- Logo centered between buttons -->
+        <ImageView
+            android:id="@+id/widget_logo"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_toEndOf="@id/widget_add_income"
+            android:layout_toStartOf="@id/widget_add_expense"
+            android:scaleType="fitCenter"
+            android:adjustViewBounds="true"
+            android:padding="2dp"
+            android:src="@drawable/budgexync_logo"
+            android:contentDescription="@string/app_name" />
+
+        <!-- Expense (-) button -->
+        <ImageView
+            android:id="@+id/widget_add_expense"
+            android:layout_width="36dp"
+            android:layout_height="match_parent"
+            android:layout_alignParentEnd="true"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_minus"
+            android:contentDescription="@string/widget_add_expense"
+            android:background="?android:attr/selectableItemBackgroundBorderless" />
+
+    </RelativeLayout>
+
+</LinearLayout>

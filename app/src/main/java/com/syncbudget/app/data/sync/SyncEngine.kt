@@ -667,6 +667,7 @@ class SyncEngine(
                 "showAttribution" -> s = s.copy(showAttribution = fd.value as? Boolean ?: s.showAttribution, showAttribution_clock = fd.clock)
                 "availableCash" -> s = s.copy(availableCash = (fd.value as? Number)?.toDouble() ?: s.availableCash, availableCash_clock = fd.clock)
                 "incomeMode" -> s = s.copy(incomeMode = fd.value as? String ?: s.incomeMode, incomeMode_clock = fd.clock)
+                "deviceRoster" -> s = s.copy(deviceRoster = fd.value as? String ?: s.deviceRoster, deviceRoster_clock = fd.clock)
             }
         }
         return s

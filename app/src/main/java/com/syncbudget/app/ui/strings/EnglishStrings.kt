@@ -73,7 +73,7 @@ object EnglishStrings : AppStrings {
     )
 
     override val dashboard = DashboardStrings(
-        appTitle = "SecureSync Budget",
+        appTitle = "BudgeXync",
         notConfigured = "Not configured",
         spending = "Spending",
         settings = "Settings",
@@ -123,6 +123,7 @@ object EnglishStrings : AppStrings {
         matchChars = "Match Characters",
         matchingConfiguration = "Matching Configuration",
         paidUser = "Paid User",
+        showWidgetLogo = "Show logo on widget",
         categories = "Categories",
         charted = "Charted",
         addCategory = "Add Category",
@@ -436,6 +437,10 @@ object EnglishStrings : AppStrings {
         selectTimezone = "Select Timezone",
         showAttributionLabel = "Show Attribution",
         you = "You",
+        repairAttributions = "Repair Attributions",
+        repairAttributionsBody = "These device codes appear in your transactions but are not in the current family group. Enter a nickname for each to display instead of the code.",
+        nicknameHint = "Nickname",
+        noOrphanedCodes = "No unrecognized device codes found.",
         staleWarning60 = "Sync soon to keep your data current",
         staleWarning75 = "15 days until sync data expires",
         staleWarning85 = "5 days to sync or local changes will need to be discarded",

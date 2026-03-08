@@ -335,6 +335,7 @@ class SyncWorker(
 
             // Local changes successfully pushed — clear dirty flag
             syncPrefs.edit().putBoolean("syncDirty", false).apply()
+            com.syncbudget.app.widget.BudgetWidgetProvider.updateAllWidgets(applicationContext)
             return Result.success()
         }
 

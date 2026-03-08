@@ -195,6 +195,7 @@ object DeltaBuilder {
         if (settings.showAttribution_clock > lastPushedClock) fields["showAttribution"] = FieldDelta(settings.showAttribution, settings.showAttribution_clock)
         if (settings.availableCash_clock > lastPushedClock) fields["availableCash"] = FieldDelta(settings.availableCash, settings.availableCash_clock)
         if (settings.incomeMode_clock > lastPushedClock) fields["incomeMode"] = FieldDelta(settings.incomeMode, settings.incomeMode_clock)
+        if (settings.deviceRoster_clock > lastPushedClock) fields["deviceRoster"] = FieldDelta(settings.deviceRoster, settings.deviceRoster_clock)
         if (fields.isEmpty()) return null
         return RecordDelta("shared_settings", "upsert", 0, settings.lastChangedBy, fields)
     }

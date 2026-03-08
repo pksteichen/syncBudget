@@ -11,23 +11,34 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Help
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.foundation.background
+import androidx.compose.material3.HorizontalDivider
 import com.syncbudget.app.ui.theme.AdAwareAlertDialog
+import com.syncbudget.app.ui.theme.AdAwareDialog
 import com.syncbudget.app.ui.theme.DialogStyle
 import com.syncbudget.app.ui.theme.DialogPrimaryButton
 import com.syncbudget.app.ui.theme.DialogSecondaryButton
 import com.syncbudget.app.ui.theme.DialogDangerButton
 import com.syncbudget.app.ui.theme.DialogWarningButton
+import com.syncbudget.app.ui.theme.dialogHeaderColor
+import com.syncbudget.app.ui.theme.dialogHeaderTextColor
+import com.syncbudget.app.ui.theme.dialogFooterColor
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -42,7 +53,9 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,6 +65,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -106,6 +120,10 @@ fun FamilySyncScreen(
     onTimezoneChange: (String) -> Unit = {},
     showAttribution: Boolean = false,
     onShowAttributionChange: (Boolean) -> Unit = {},
+    orphanedDeviceIds: Set<String> = emptySet(),
+    deviceRoster: Map<String, String> = emptyMap(),
+    onSaveDeviceRoster: (Map<String, String>) -> Unit = {},
+    onPurgeStaleRoster: () -> Unit = {},
     staleDays: Int = 0,
     pendingAdminClaim: AdminClaim? = null,
     onClaimAdmin: () -> Unit = {},
@@ -140,6 +158,7 @@ fun FamilySyncScreen(
     var showLeaveConfirm by remember { mutableStateOf(false) }
     var showDissolveConfirm by remember { mutableStateOf(false) }
     var showTimezoneDialog by remember { mutableStateOf(false) }
+    var showRepairDialog by remember { mutableStateOf(false) }
 
     val textFieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = MaterialTheme.colorScheme.onBackground,
@@ -395,6 +414,21 @@ fun FamilySyncScreen(
                                 style = MaterialTheme.typography.bodyMedium,
                                 modifier = Modifier.weight(1f)
                             )
+                            IconButton(
+                                onClick = {
+                                    onPurgeStaleRoster()
+                                    showRepairDialog = true
+                                },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    Icons.Filled.Build,
+                                    contentDescription = S.sync.repairAttributions,
+                                    tint = if (orphanedDeviceIds.isNotEmpty()) Color(0xFFF44336)
+                                           else MaterialTheme.colorScheme.onBackground,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                             Switch(
                                 checked = showAttribution,
                                 onCheckedChange = onShowAttributionChange
@@ -871,6 +905,141 @@ fun FamilySyncScreen(
                     }
                 }
             )
+        }
+
+        // Repair attributions dialog
+        if (showRepairDialog) {
+            // Combine roster + orphaned IDs + current devices for complete list
+            val allDeviceIds = remember(deviceRoster, orphanedDeviceIds, devices, localDeviceId) {
+                val ids = linkedSetOf<String>()
+                devices.forEach { if (it.deviceId != localDeviceId) ids.add(it.deviceId) }
+                deviceRoster.keys.forEach { ids.add(it) }
+                orphanedDeviceIds.forEach { ids.add(it) }
+                ids.toList()
+            }
+            val currentDeviceIds = remember(devices) { devices.map { it.deviceId }.toSet() }
+            val editableRoster = remember(allDeviceIds, deviceRoster, devices) {
+                mutableStateOf(
+                    allDeviceIds.associateWith { id ->
+                        deviceRoster[id]
+                            ?: devices.find { it.deviceId == id }?.deviceName
+                            ?: ""
+                    }
+                )
+            }
+            val headerBg = dialogHeaderColor()
+            val headerTxt = dialogHeaderTextColor()
+            val footerBg = dialogFooterColor()
+            val scrollState = rememberScrollState()
+
+            AdAwareDialog(onDismissRequest = { showRepairDialog = false }) {
+                val focusManager = LocalFocusManager.current
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth(0.92f)
+                        .imePadding(),
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 6.dp
+                ) {
+                    Column(
+                        modifier = Modifier.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { focusManager.clearFocus() }
+                    ) {
+                        // Header
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(headerBg, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                                .padding(horizontal = 20.dp, vertical = 14.dp)
+                        ) {
+                            CompositionLocalProvider(LocalContentColor provides headerTxt) {
+                                Text(
+                                    S.sync.repairAttributions,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = headerTxt
+                                )
+                            }
+                        }
+                        // Scrollable body
+                        Column(
+                            modifier = Modifier
+                                .weight(1f, fill = false)
+                                .verticalScroll(scrollState)
+                                .padding(20.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                S.sync.repairAttributionsBody,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            allDeviceIds.forEach { deviceId ->
+                                val isOrphaned = deviceId in orphanedDeviceIds
+                                val isCurrent = deviceId in currentDeviceIds
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            deviceId.take(8),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = if (isOrphaned) Color(0xFFF44336)
+                                                   else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                                        )
+                                        if (isCurrent) {
+                                            Canvas(modifier = Modifier.size(8.dp)) {
+                                                drawCircle(Color(0xFF4CAF50))
+                                            }
+                                        }
+                                    }
+                                    OutlinedTextField(
+                                        value = editableRoster.value[deviceId] ?: "",
+                                        onValueChange = { newVal ->
+                                            editableRoster.value = editableRoster.value.toMutableMap().apply {
+                                                put(deviceId, newVal)
+                                            }
+                                        },
+                                        label = { Text(S.sync.nicknameHint) },
+                                        singleLine = true,
+                                        colors = textFieldColors,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                            }
+                        }
+                        // Footer
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(footerBg)
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                DialogSecondaryButton(onClick = { showRepairDialog = false }) {
+                                    Text(S.common.cancel)
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                DialogPrimaryButton(onClick = {
+                                    val result = editableRoster.value.filterValues { it.isNotBlank() }
+                                    onSaveDeviceRoster(result)
+                                    showRepairDialog = false
+                                }) {
+                                    Text(S.common.save)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

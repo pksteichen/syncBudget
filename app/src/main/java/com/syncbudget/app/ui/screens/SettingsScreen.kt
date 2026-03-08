@@ -1,6 +1,7 @@
 package com.syncbudget.app.ui.screens
 
 import androidx.compose.foundation.border
+import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -106,6 +107,8 @@ fun SettingsScreen(
     onDateFormatChange: (String) -> Unit,
     isPaidUser: Boolean = false,
     onPaidUserChange: (Boolean) -> Unit = {},
+    showWidgetLogo: Boolean = true,
+    onWidgetLogoChange: (Boolean) -> Unit = {},
     matchDays: Int = 7,
     onMatchDaysChange: (Int) -> Unit = {},
     matchPercent: Double = 1.0,
@@ -545,6 +548,25 @@ fun SettingsScreen(
                     )
                     Text(
                         text = S.settings.paidUser,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                }
+            }
+
+            // Show Widget Logo checkbox
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(
+                        checked = showWidgetLogo,
+                        onCheckedChange = onWidgetLogoChange,
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = MaterialTheme.colorScheme.primary,
+                            uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                        )
+                    )
+                    Text(
+                        text = S.settings.showWidgetLogo,
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onBackground
                     )

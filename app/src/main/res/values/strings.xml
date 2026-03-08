@@ -1,3 +1,7 @@
 <resources>
-    <string name="app_name">SecureSync Budget</string>
+    <string name="app_name">BudgeXync</string>
+    <string name="widget_description">Budget display with quick transaction buttons</string>
+    <string name="widget_add_income">Add Income</string>
+    <string name="widget_add_expense">Add Expense</string>
+    <string name="widget_paid_only">Widget requires paid version</string>
 </resources>

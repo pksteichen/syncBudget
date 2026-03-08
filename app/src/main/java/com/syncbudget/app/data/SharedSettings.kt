@@ -18,6 +18,7 @@ data class SharedSettings(
     val showAttribution: Boolean = false,
     val availableCash: Double = 0.0,
     val incomeMode: String = "FIXED",
+    val deviceRoster: String = "{}",   // JSON map: deviceId → nickname
     val lastChangedBy: String = "",
     // Per-field clocks
     val currency_clock: Long = 0L,
@@ -36,5 +37,6 @@ data class SharedSettings(
     val matchChars_clock: Long = 0L,
     val showAttribution_clock: Long = 0L,
     val availableCash_clock: Long = 0L,
-    val incomeMode_clock: Long = 0L
+    val incomeMode_clock: Long = 0L,
+    val deviceRoster_clock: Long = 0L
 )

@@ -9,9 +9,12 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -70,6 +73,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -322,19 +326,26 @@ fun MainScreen(
     val pulseColor = if (showPulse) animatedBoltColor else customColors.cardText.copy(alpha = 0.5f)
 
     var showSuperchargeDialog by remember { mutableStateOf(false) }
-    var selectedRange by remember { mutableStateOf(SpendingRange.ROLLING_7) }
-    var showBarChart by remember { mutableStateOf(false) }
+    val chartPrefs = LocalContext.current.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+    var selectedRange by remember {
+        val saved = chartPrefs.getString("chartRange", null)
+        val initial = SpendingRange.entries.find { it.name == saved } ?: SpendingRange.ROLLING_7
+        mutableStateOf(initial)
+    }
+    var showBarChart by remember { mutableStateOf(chartPrefs.getBoolean("showBarChart", false)) }
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
-                    Text(
-                        text = S.dashboard.appTitle,
-                        style = MaterialTheme.typography.titleLarge,
-                        color = customColors.headerText,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                    Image(
+                        painter = painterResource(id = com.syncbudget.app.R.drawable.budgexync_logo),
+                        contentDescription = S.dashboard.appTitle,
+                        contentScale = ContentScale.Fit,
+                        colorFilter = ColorFilter.tint(customColors.headerText),
+                        modifier = Modifier
+                            .fillMaxHeight(0.8f)
+                            .fillMaxWidth(0.6f)
                     )
                 },
                 navigationIcon = {
@@ -476,6 +487,7 @@ fun MainScreen(
                             val values = SpendingRange.entries.toTypedArray()
                             val next = (selectedRange.ordinal + 1) % values.size
                             selectedRange = values[next]
+                            chartPrefs.edit().putString("chartRange", values[next].name).apply()
                         }
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 )
@@ -499,7 +511,11 @@ fun MainScreen(
                             chartBarFg.copy(alpha = 0.15f),
                             RoundedCornerShape(6.dp)
                         )
-                        .clickable { showBarChart = !showBarChart }
+                        .clickable {
+                            val newVal = !showBarChart
+                            showBarChart = newVal
+                            chartPrefs.edit().putBoolean("showBarChart", newVal).apply()
+                        }
                         .padding(4.dp)
                         .size(18.dp)
                 )

@@ -26,6 +26,7 @@ object SharedSettingsRepository {
         json.put("showAttribution", settings.showAttribution)
         json.put("availableCash", settings.availableCash)
         json.put("incomeMode", settings.incomeMode)
+        json.put("deviceRoster", settings.deviceRoster)
         json.put("lastChangedBy", settings.lastChangedBy)
         // Clocks
         json.put("currency_clock", settings.currency_clock)
@@ -45,6 +46,7 @@ object SharedSettingsRepository {
         json.put("showAttribution_clock", settings.showAttribution_clock)
         json.put("availableCash_clock", settings.availableCash_clock)
         json.put("incomeMode_clock", settings.incomeMode_clock)
+        json.put("deviceRoster_clock", settings.deviceRoster_clock)
 
         context.openFileOutput(FILE_NAME, Context.MODE_PRIVATE).use {
             it.write(json.toString().toByteArray())
@@ -75,6 +77,7 @@ object SharedSettingsRepository {
                 showAttribution = json.optBoolean("showAttribution", false),
                 availableCash = json.optDouble("availableCash", 0.0),
                 incomeMode = json.optString("incomeMode", "FIXED"),
+                deviceRoster = json.optString("deviceRoster", "{}"),
                 lastChangedBy = json.optString("lastChangedBy", ""),
                 currency_clock = json.optLong("currency_clock", 0L),
                 budgetPeriod_clock = json.optLong("budgetPeriod_clock", 0L),
@@ -92,7 +95,8 @@ object SharedSettingsRepository {
                 matchChars_clock = json.optLong("matchChars_clock", 0L),
                 showAttribution_clock = json.optLong("showAttribution_clock", 0L),
                 availableCash_clock = json.optLong("availableCash_clock", 0L),
-                incomeMode_clock = json.optLong("incomeMode_clock", 0L)
+                incomeMode_clock = json.optLong("incomeMode_clock", 0L),
+                deviceRoster_clock = json.optLong("deviceRoster_clock", 0L)
             )
         } catch (_: Exception) {
             SharedSettings()
@@ -118,6 +122,7 @@ object SharedSettingsRepository {
         json.put("showAttribution", settings.showAttribution)
         json.put("availableCash", settings.availableCash)
         json.put("incomeMode", settings.incomeMode)
+        json.put("deviceRoster", settings.deviceRoster)
         json.put("lastChangedBy", settings.lastChangedBy)
         json.put("currency_clock", settings.currency_clock)
         json.put("budgetPeriod_clock", settings.budgetPeriod_clock)
@@ -136,6 +141,7 @@ object SharedSettingsRepository {
         json.put("showAttribution_clock", settings.showAttribution_clock)
         json.put("availableCash_clock", settings.availableCash_clock)
         json.put("incomeMode_clock", settings.incomeMode_clock)
+        json.put("deviceRoster_clock", settings.deviceRoster_clock)
         return json
     }
 
@@ -157,6 +163,7 @@ object SharedSettingsRepository {
             matchChars = json.optInt("matchChars", 5),
             showAttribution = json.optBoolean("showAttribution", false),
             availableCash = json.optDouble("availableCash", 0.0),
+            deviceRoster = json.optString("deviceRoster", "{}"),
             lastChangedBy = json.optString("lastChangedBy", ""),
             currency_clock = json.optLong("currency_clock", 0L),
             budgetPeriod_clock = json.optLong("budgetPeriod_clock", 0L),
@@ -173,7 +180,8 @@ object SharedSettingsRepository {
             matchDollar_clock = json.optLong("matchDollar_clock", 0L),
             matchChars_clock = json.optLong("matchChars_clock", 0L),
             showAttribution_clock = json.optLong("showAttribution_clock", 0L),
-            availableCash_clock = json.optLong("availableCash_clock", 0L)
+            availableCash_clock = json.optLong("availableCash_clock", 0L),
+            deviceRoster_clock = json.optLong("deviceRoster_clock", 0L)
         )
     }
 }
