@@ -5,6 +5,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -50,6 +51,8 @@ import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.ui.res.painterResource
+import com.syncbudget.app.R
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Block
@@ -135,6 +138,7 @@ import com.syncbudget.app.data.Transaction
 import com.syncbudget.app.data.TransactionType
 import com.syncbudget.app.data.autoCategorize
 import com.syncbudget.app.data.IncomeSource
+import com.syncbudget.app.data.SavingsGoal
 import com.syncbudget.app.data.filterAlreadyLoadedDays
 import com.syncbudget.app.data.findAmortizationMatch
 import com.syncbudget.app.data.findBudgetIncomeMatch
@@ -218,6 +222,7 @@ fun TransactionsScreen(
     recurringExpenses: List<RecurringExpense> = emptyList(),
     amortizationEntries: List<AmortizationEntry> = emptyList(),
     incomeSources: List<IncomeSource> = emptyList(),
+    savingsGoals: List<SavingsGoal> = emptyList(),
     matchDays: Int = 7,
     matchPercent: Double = 1.0,
     matchDollar: Int = 1,
@@ -954,6 +959,7 @@ fun TransactionsScreen(
                         if (transaction.linkedIncomeSourceAmount > 0.0) transaction.linkedIncomeSourceAmount
                         else incomeSources.find { it.id == transaction.linkedIncomeSourceId }?.amount
                     } else null
+                    val isLinkedSavingsGoal = transaction.linkedSavingsGoalId != null || transaction.linkedSavingsGoalAmount > 0.0
                     val isLinkedAmortization = transaction.linkedAmortizationEntryId != null
                     val amortEntry = if (isLinkedAmortization)
                         amortizationEntries.find { it.id == transaction.linkedAmortizationEntryId }
@@ -1018,7 +1024,8 @@ fun TransactionsScreen(
                         linkedRecurringAmount = linkedRecurringAmount,
                         linkedAmortizationApplied = linkedAmortizationApplied,
                         linkedIncomeAmount = linkedIncomeAmount,
-                        incomeMode = incomeMode
+                        incomeMode = incomeMode,
+                        isLinkedSavingsGoal = isLinkedSavingsGoal
                     )
                     HorizontalDivider(
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f)
@@ -1041,9 +1048,10 @@ fun TransactionsScreen(
             recurringExpenses = recurringExpenses,
             amortizationEntries = amortizationEntries,
             incomeSources = incomeSources,
+            savingsGoals = savingsGoals,
             onDismiss = { showAddIncome = false },
             onSave = { txn ->
-                val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null
+                val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null || txn.linkedSavingsGoalId != null
                 val dup = findDuplicate(txn, transactions, percentTolerance, matchDollar, matchDays, matchChars)
                 if (dup != null) {
                     pendingManualSave = txn
@@ -1098,9 +1106,10 @@ fun TransactionsScreen(
             recurringExpenses = recurringExpenses,
             amortizationEntries = amortizationEntries,
             incomeSources = incomeSources,
+            savingsGoals = savingsGoals,
             onDismiss = { showAddExpense = false },
             onSave = { txn ->
-                val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null
+                val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null || txn.linkedSavingsGoalId != null
                 val dup = findDuplicate(txn, transactions, percentTolerance, matchDollar, matchDays, matchChars)
                 if (dup != null) {
                     pendingManualSave = txn
@@ -1148,6 +1157,7 @@ fun TransactionsScreen(
             recurringExpenses = recurringExpenses,
             amortizationEntries = amortizationEntries,
             incomeSources = incomeSources,
+            savingsGoals = savingsGoals,
             onDismiss = { editingTransaction = null },
             onSave = { updated ->
                 // Only run duplicate/matching checks if merchant, date, or amount changed
@@ -1156,7 +1166,7 @@ fun TransactionsScreen(
                 if (!coreChanged) {
                     onUpdateTransaction(updated)
                 } else {
-                    val alreadyLinked = updated.linkedRecurringExpenseId != null || updated.linkedAmortizationEntryId != null || updated.linkedIncomeSourceId != null
+                    val alreadyLinked = updated.linkedRecurringExpenseId != null || updated.linkedAmortizationEntryId != null || updated.linkedIncomeSourceId != null || updated.linkedSavingsGoalId != null
                     val dup = findDuplicate(updated, transactions.filter { it.id != updated.id }, percentTolerance, matchDollar, matchDays, matchChars)
                     if (dup != null) {
                         pendingManualSave = updated
@@ -1994,7 +2004,7 @@ fun TransactionsScreen(
                 pendingManualSave = null
                 manualDuplicateMatch = null
                 showManualDuplicateDialog = false
-                val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null
+                val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null || txn.linkedSavingsGoalId != null
                 if (!alreadyLinked) {
                     val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
                     if (recurringMatch != null) {
@@ -2033,7 +2043,7 @@ fun TransactionsScreen(
                 pendingManualSave = null
                 manualDuplicateMatch = null
                 showManualDuplicateDialog = false
-                val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null
+                val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null || txn.linkedSavingsGoalId != null
                 if (!alreadyLinked) {
                     val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
                     if (recurringMatch != null) {
@@ -2587,6 +2597,7 @@ private fun TransactionRow(
     isLinkedAmortization: Boolean = false,
     isAmortComplete: Boolean = false,
     isLinkedIncome: Boolean = false,
+    isLinkedSavingsGoal: Boolean = false,
     linkedRecurringAmount: Double? = null,
     linkedAmortizationApplied: Double? = null,
     linkedIncomeAmount: Double? = null,
@@ -2618,6 +2629,11 @@ private fun TransactionRow(
         effectAmount = linkedAmortizationApplied
         effectColor = if (isExpense) Color(0xFFF44336) else Color(0xFF4CAF50)
         effectPrefix = if (isExpense) "-" else ""
+    } else if (isLinkedSavingsGoal) {
+        showEffect = true
+        effectAmount = 0.0
+        effectColor = Color(0xFFFF9800)
+        effectPrefix = ""
     } else if (transaction.excludeFromBudget) {
         showEffect = true
         effectAmount = 0.0
@@ -2636,7 +2652,7 @@ private fun TransactionRow(
     val formattedEffect = if (showEffect) "$effectPrefix${formatCurrency(effectAmount, currencySymbol)}" else ""
 
     // For non-linked transactions, use colored amount as before
-    val isLinked = isLinkedRecurring || isLinkedAmortization || isLinkedIncome
+    val isLinked = isLinkedRecurring || isLinkedAmortization || isLinkedIncome || isLinkedSavingsGoal
     val actualAmountColor = if (isLinked || transaction.excludeFromBudget) MaterialTheme.colorScheme.onBackground
         else if (isExpense) Color(0xFFF44336) else Color(0xFF4CAF50)
 
@@ -2718,7 +2734,11 @@ private fun TransactionRow(
                         text = transaction.source,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onBackground,
-                        maxLines = if (useExpandedLayout) 2 else 1
+                        maxLines = if (useExpandedLayout) 2 else 1,
+                        modifier = if (!useExpandedLayout) Modifier.basicMarquee(
+                            iterations = Int.MAX_VALUE,
+                            repeatDelayMillis = 3000
+                        ) else Modifier
                     )
                     if (transaction.description.isNotBlank()) {
                         Text(
@@ -2726,17 +2746,16 @@ private fun TransactionRow(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            modifier = Modifier.basicMarquee(
+                                iterations = Int.MAX_VALUE,
+                                repeatDelayMillis = 3000
+                            )
                         )
                     }
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = if (isLinked) Modifier.combinedClickable(
-                        onClick = {},
-                        onLongClick = onLongPress
-                    ) else Modifier
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (isLinkedRecurring) {
                         Icon(
@@ -2759,6 +2778,14 @@ private fun TransactionRow(
                             imageVector = Icons.Filled.AccountBalance,
                             contentDescription = null,
                             tint = Color(0xFF2196F3),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(Modifier.width(3.dp))
+                    } else if (isLinkedSavingsGoal) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_coins),
+                            contentDescription = null,
+                            tint = Color(0xFFFF9800),
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(Modifier.width(3.dp))
@@ -2907,6 +2934,7 @@ fun TransactionDialog(
     recurringExpenses: List<RecurringExpense> = emptyList(),
     amortizationEntries: List<AmortizationEntry> = emptyList(),
     incomeSources: List<IncomeSource> = emptyList(),
+    savingsGoals: List<SavingsGoal> = emptyList(),
     onDismiss: () -> Unit,
     onSave: (Transaction) -> Unit,
     onDelete: (() -> Unit)? = null
@@ -2931,9 +2959,11 @@ fun TransactionDialog(
     var linkedRecurringId by remember { mutableStateOf(editTransaction?.linkedRecurringExpenseId) }
     var linkedAmortizationId by remember { mutableStateOf(editTransaction?.linkedAmortizationEntryId) }
     var linkedIncomeId by remember { mutableStateOf(editTransaction?.linkedIncomeSourceId) }
+    var linkedSavingsGoalId by remember { mutableStateOf(editTransaction?.linkedSavingsGoalId) }
     var showLinkRecurringPicker by remember { mutableStateOf(false) }
     var showLinkAmortizationPicker by remember { mutableStateOf(false) }
     var showLinkIncomePicker by remember { mutableStateOf(false) }
+    var showLinkSavingsGoalPicker by remember { mutableStateOf(false) }
     var showLinkMismatchDialog by remember { mutableStateOf(false) }
     var pendingLinkEntry by remember { mutableStateOf<Any?>(null) }
 
@@ -3210,26 +3240,59 @@ fun TransactionDialog(
                                     Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(16.dp))
                                 }
                             }
+                        } else if (linkedSavingsGoalId != null) {
+                            val linkedName = savingsGoals.find { it.id == linkedSavingsGoalId }?.name ?: "?"
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .border(1.dp, Color(0xFFFF9800), RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                Icon(painter = painterResource(id = R.drawable.ic_coins), contentDescription = null, tint = Color(0xFFFF9800), modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(S.transactions.linkedToSavingsGoal(linkedName), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                                IconButton(onClick = { linkedSavingsGoalId = null }, modifier = Modifier.size(24.dp)) {
+                                    Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(16.dp))
+                                }
+                            }
                         } else {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
+                                val linkPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                val fixedFontSize = with(LocalDensity.current) { 13.dp.toSp() }
+                                val fixedIconSize = 18.dp / LocalDensity.current.fontScale
                                 if (recurringExpenses.isNotEmpty()) {
                                     OutlinedButton(
                                         onClick = { showLinkRecurringPicker = true },
-                                        modifier = Modifier.weight(1f)
+                                        modifier = Modifier.weight(1f),
+                                        contentPadding = linkPadding
                                     ) {
-                                        Text(S.transactions.linkToRecurring)
-                                        Spacer(Modifier.width(4.dp))
-                                        Icon(Icons.Filled.Sync, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Text(S.transactions.linkToRecurring, fontSize = fixedFontSize, maxLines = 1)
+                                        Spacer(Modifier.width(2.dp))
+                                        Icon(Icons.Filled.Sync, contentDescription = null, modifier = Modifier.size(fixedIconSize))
                                     }
                                 }
                                 if (amortizationEntries.isNotEmpty()) {
                                     OutlinedButton(
                                         onClick = { showLinkAmortizationPicker = true },
-                                        modifier = Modifier.weight(1f)
+                                        modifier = Modifier.weight(1f),
+                                        contentPadding = linkPadding
                                     ) {
-                                        Text(S.transactions.linkToAmortization)
-                                        Spacer(Modifier.width(4.dp))
-                                        Icon(Icons.Filled.Schedule, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Text(S.transactions.linkToAmortization, fontSize = fixedFontSize, maxLines = 1)
+                                        Spacer(Modifier.width(2.dp))
+                                        Icon(Icons.Filled.Schedule, contentDescription = null, modifier = Modifier.size(fixedIconSize))
+                                    }
+                                }
+                                if (savingsGoals.isNotEmpty()) {
+                                    OutlinedButton(
+                                        onClick = { showLinkSavingsGoalPicker = true },
+                                        modifier = Modifier.weight(1f),
+                                        contentPadding = linkPadding
+                                    ) {
+                                        Text(S.transactions.linkToSavingsGoal, fontSize = fixedFontSize, maxLines = 1)
+                                        Spacer(Modifier.width(2.dp))
+                                        Icon(painter = painterResource(id = R.drawable.ic_coins), contentDescription = null, modifier = Modifier.size(fixedIconSize))
                                     }
                                 }
                             }
@@ -3763,6 +3826,9 @@ fun TransactionDialog(
                                 incomeSources.find { it.id == isId }?.amount ?: 0.0
                             } ?: 0.0
 
+                            // Compute savings goal remembered amount
+                            val sgAmount = if (linkedSavingsGoalId != null) totalAmount else 0.0
+
                             val txn = if (editTransaction != null) {
                                 // Preserve fields not editable in this dialog
                                 editTransaction.copy(
@@ -3775,8 +3841,10 @@ fun TransactionDialog(
                                     linkedRecurringExpenseId = linkedRecurringId,
                                     linkedAmortizationEntryId = linkedAmortizationId,
                                     linkedIncomeSourceId = linkedIncomeId,
+                                    linkedSavingsGoalId = linkedSavingsGoalId,
                                     linkedRecurringExpenseAmount = if (linkedRecurringId != null) reAmount else editTransaction.linkedRecurringExpenseAmount,
                                     linkedIncomeSourceAmount = if (linkedIncomeId != null) isAmount else editTransaction.linkedIncomeSourceAmount,
+                                    linkedSavingsGoalAmount = if (linkedSavingsGoalId != null) sgAmount else editTransaction.linkedSavingsGoalAmount,
                                     isUserCategorized = verified,
                                     excludeFromBudget = excludeFromBudget
                                 )
@@ -3792,8 +3860,10 @@ fun TransactionDialog(
                                     linkedRecurringExpenseId = linkedRecurringId,
                                     linkedAmortizationEntryId = linkedAmortizationId,
                                     linkedIncomeSourceId = linkedIncomeId,
+                                    linkedSavingsGoalId = linkedSavingsGoalId,
                                     linkedRecurringExpenseAmount = reAmount,
                                     linkedIncomeSourceAmount = isAmount,
+                                    linkedSavingsGoalAmount = sgAmount,
                                     excludeFromBudget = excludeFromBudget
                                 )
                             }
@@ -4304,6 +4374,51 @@ fun TransactionDialog(
             confirmButton = {},
             dismissButton = {
                 DialogSecondaryButton(onClick = { showLinkIncomePicker = false }) {
+                    Text(S.common.cancel)
+                }
+            }
+        )
+    }
+
+    // Link to savings goal picker dialog
+    if (showLinkSavingsGoalPicker) {
+        AdAwareAlertDialog(
+            onDismissRequest = { showLinkSavingsGoalPicker = false },
+            title = { Text(S.transactions.linkToSavingsGoal) },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    savingsGoals.sortedBy { it.name }.forEach { goal ->
+                        val remaining = goal.targetAmount - goal.totalSavedSoFar
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    linkedSavingsGoalId = goal.id
+                                    linkedRecurringId = null
+                                    linkedAmortizationId = null
+                                    showLinkSavingsGoalPicker = false
+                                }
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(painter = painterResource(id = R.drawable.ic_coins), contentDescription = null, tint = Color(0xFFFF9800), modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(goal.name, style = MaterialTheme.typography.bodyMedium)
+                                Text(
+                                    "${formatCurrency(goal.totalSavedSoFar, currencySymbol)} / ${formatCurrency(goal.targetAmount, currencySymbol)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                DialogSecondaryButton(onClick = { showLinkSavingsGoalPicker = false }) {
                     Text(S.common.cancel)
                 }
             }

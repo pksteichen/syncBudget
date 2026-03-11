@@ -50,6 +50,8 @@ object CrdtMerge {
             amortizationAppliedAmount = if (shouldAcceptRemote(local.amortizationAppliedAmount_clock, remote.amortizationAppliedAmount_clock, localDeviceId, remoteDeviceId)) remote.amortizationAppliedAmount else local.amortizationAppliedAmount,
             linkedRecurringExpenseAmount = if (shouldAcceptRemote(local.linkedRecurringExpenseAmount_clock, remote.linkedRecurringExpenseAmount_clock, localDeviceId, remoteDeviceId)) remote.linkedRecurringExpenseAmount else local.linkedRecurringExpenseAmount,
             linkedIncomeSourceAmount = if (shouldAcceptRemote(local.linkedIncomeSourceAmount_clock, remote.linkedIncomeSourceAmount_clock, localDeviceId, remoteDeviceId)) remote.linkedIncomeSourceAmount else local.linkedIncomeSourceAmount,
+            linkedSavingsGoalId = if (shouldAcceptRemote(local.linkedSavingsGoalId_clock, remote.linkedSavingsGoalId_clock, localDeviceId, remoteDeviceId)) remote.linkedSavingsGoalId else local.linkedSavingsGoalId,
+            linkedSavingsGoalAmount = if (shouldAcceptRemote(local.linkedSavingsGoalAmount_clock, remote.linkedSavingsGoalAmount_clock, localDeviceId, remoteDeviceId)) remote.linkedSavingsGoalAmount else local.linkedSavingsGoalAmount,
             deviceId = if (shouldAcceptRemote(local.deviceId_clock, remote.deviceId_clock, localDeviceId, remoteDeviceId)) remote.deviceId else local.deviceId,
             deleted = mergedDeleted,
             source_clock = maxOf(local.source_clock, remote.source_clock),
@@ -67,6 +69,8 @@ object CrdtMerge {
             amortizationAppliedAmount_clock = maxOf(local.amortizationAppliedAmount_clock, remote.amortizationAppliedAmount_clock),
             linkedRecurringExpenseAmount_clock = maxOf(local.linkedRecurringExpenseAmount_clock, remote.linkedRecurringExpenseAmount_clock),
             linkedIncomeSourceAmount_clock = maxOf(local.linkedIncomeSourceAmount_clock, remote.linkedIncomeSourceAmount_clock),
+            linkedSavingsGoalId_clock = maxOf(local.linkedSavingsGoalId_clock, remote.linkedSavingsGoalId_clock),
+            linkedSavingsGoalAmount_clock = maxOf(local.linkedSavingsGoalAmount_clock, remote.linkedSavingsGoalAmount_clock),
             deleted_clock = mergedDeletedClock,
             deviceId_clock = maxOf(local.deviceId_clock, remote.deviceId_clock)
         )

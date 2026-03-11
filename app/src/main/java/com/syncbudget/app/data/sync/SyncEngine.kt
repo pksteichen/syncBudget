@@ -38,7 +38,8 @@ data class SyncResult(
     val mergedSharedSettings: SharedSettings? = null,
     val pendingAdminClaim: AdminClaim? = null,
     val catIdRemap: Map<Int, Int>? = null,
-    val error: String? = null
+    val error: String? = null,
+    val repairAttempted: Boolean = false
 )
 
 class SyncEngine(
@@ -52,6 +53,7 @@ class SyncEngine(
         const val SNAPSHOT_CATCHUP_THRESHOLD = 500
         const val SNAPSHOT_WRITE_THRESHOLD = 500
         const val STALE_CHECK_DAYS = 3L
+        const val INTEGRITY_CHECK_INTERVAL_MS = 30 * 60 * 1000L  // 30 minutes
     }
 
     private val prefs = context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
@@ -88,6 +90,10 @@ class SyncEngine(
     private var lastSnapshotVersion: Long
         get() = prefs.getLong("lastSnapshotVersion", 0L)
         set(value) = prefs.edit().putLong("lastSnapshotVersion", value).apply()
+
+    private var lastIntegrityCheckTime: Long
+        get() = prefs.getLong("lastIntegrityCheckTime", 0L)
+        set(value) = prefs.edit().putLong("lastIntegrityCheckTime", value).apply()
 
     /** Create a snapshot of current data for new device bootstrapping.
      *  Call after a successful sync to ensure the snapshot is up-to-date. */
@@ -597,21 +603,6 @@ class SyncEngine(
             var deltasPushed = 0
             if (localDeltas.isNotEmpty()) {
                 reportProgress("Sending local changes…")
-                // Advance lastPushedClock past ALL pushed records (including
-                // foreign records received via merge).  This prevents re-pushing
-                // received data on the next sync cycle.  Any locally-owned records
-                // whose clocks fall below the new lastPushedClock will be caught
-                // by the rescue mechanism on the next sync.
-                val maxDeltaClock = localDeltas
-                    .maxOfOrNull { delta ->
-                        delta.fields.values.maxOfOrNull { it.clock } ?: 0L
-                    } ?: lastPushedClock
-                lastPushedClock = maxDeltaClock
-                // Ensure lamport clock stays ahead of lastPushedClock so that
-                // future tick() calls produce values > lastPushedClock
-                if (maxDeltaClock > lamportClock.value) {
-                    lamportClock.merge(maxDeltaClock)
-                }
 
                 val packet = DeltaPacket(
                     sourceDeviceId = deviceId,
@@ -626,16 +617,43 @@ class SyncEngine(
                 FirestoreService.pushDeltaAtomically(groupId, deviceId, encoded)
                 deltasPushed = localDeltas.size
                 syncLog("Push complete ($deltasPushed records)")
+
+                // Advance lastPushedClock AFTER successful push.  This ensures
+                // that if the push fails (e.g. network error), the delta will
+                // be retried on the next sync cycle.
+                val maxDeltaClock = localDeltas
+                    .maxOfOrNull { delta ->
+                        delta.fields.values.maxOfOrNull { it.clock } ?: 0L
+                    } ?: lastPushedClock
+                lastPushedClock = maxDeltaClock
+                // Ensure lamport clock stays ahead of lastPushedClock so that
+                // future tick() calls produce values > lastPushedClock
+                if (maxDeltaClock > lamportClock.value) {
+                    lamportClock.merge(maxDeltaClock)
+                }
             }
 
-            // Step 7: Update metadata
+            // Step 7: Update metadata (with optional integrity fingerprint)
             val newSyncVersion = if (remoteDeltas.isNotEmpty()) {
                 remoteDeltas.maxOf { it.version }
             } else {
                 lastSyncVersion
             }
             lastSyncVersion = newSyncVersion
-            FirestoreService.updateDeviceMetadata(groupId, deviceId, newSyncVersion)
+            val now = System.currentTimeMillis()
+            val runIntegrityCheck = now - lastIntegrityCheckTime > INTEGRITY_CHECK_INTERVAL_MS &&
+                localDeltas.isEmpty()
+            val fpJson = if (runIntegrityCheck) {
+                try {
+                    val fp = IntegrityChecker.computeFingerprint(
+                        deviceId, newSyncVersion,
+                        mergedTxns, mergedRe, mergedIs, mergedSg,
+                        mergedAe, mergedCat, mergedPl, mergedSettings
+                    )
+                    IntegrityChecker.toJson(fp).toString()
+                } catch (_: Exception) { null }
+            } else null
+            FirestoreService.updateDeviceMetadata(groupId, deviceId, newSyncVersion, fpJson)
 
             // Save merged settings if changed
             if (settingsChanged) {
@@ -693,6 +711,132 @@ class SyncEngine(
                 android.util.Log.w("SyncEngine", "Failed to check/resolve admin claim", e)
             }
 
+            // Step 10.5: Periodic integrity check — compare fingerprints
+            var didRepair = false
+            if (runIntegrityCheck && fpJson != null) {
+                try {
+                    val localFp = IntegrityChecker.fromJson(JSONObject(fpJson))
+                    val devices = FirestoreService.getDevices(groupId)
+                    val allReports = mutableListOf<IntegrityChecker.DivergenceReport>()
+                    var anyOk = false
+                    for (device in devices) {
+                        if (device.deviceId == deviceId) continue
+                        val name = device.deviceName.ifEmpty { device.deviceId.take(8) }
+                        if (device.fingerprintData == null) continue
+                        if (device.fingerprintSyncVersion != newSyncVersion) {
+                            syncLog("Integrity skip $name: syncVer mismatch " +
+                                "(local=$newSyncVersion, remote=${device.fingerprintSyncVersion})")
+                            continue
+                        }
+                        val remoteFp = IntegrityChecker.fromJson(JSONObject(device.fingerprintData))
+                        val report = IntegrityChecker.compare(localFp, remoteFp)
+                        if (report.diverged) {
+                            syncLog("INTEGRITY DIVERGENCE with $name:")
+                            for (detail in report.details) syncLog("  · $detail")
+                            allReports.add(report)
+                        } else {
+                            syncLog("Integrity OK with $name")
+                            anyOk = true
+                        }
+                    }
+
+                    // Execute surgical repair if any divergence was found
+                    val merged = IntegrityChecker.mergeRepairs(allReports)
+                    if (merged.isNotEmpty()) {
+                        val repairDeltas = mutableListOf<RecordDelta>()
+                        for (action in merged) {
+                            when (action.collection) {
+                                "transactions" -> {
+                                    val ids = IntegrityChecker.resolveIds(action, mergedTxns) { it.id }
+                                    for (txn in mergedTxns) {
+                                        if (txn.id in ids) {
+                                            DeltaBuilder.buildTransactionDelta(txn, 0L)?.let { repairDeltas.add(it) }
+                                        }
+                                    }
+                                    syncLog("  REPAIR transactions: ${ids.size} records (${action.reason})")
+                                }
+                                "recurringExpenses" -> {
+                                    val ids = IntegrityChecker.resolveIds(action, mergedRe) { it.id }
+                                    for (re in mergedRe) {
+                                        if (re.id in ids) {
+                                            DeltaBuilder.buildRecurringExpenseDelta(re, 0L)?.let { repairDeltas.add(it) }
+                                        }
+                                    }
+                                    syncLog("  REPAIR recurringExpenses: ${ids.size} records (${action.reason})")
+                                }
+                                "incomeSources" -> {
+                                    val ids = IntegrityChecker.resolveIds(action, mergedIs) { it.id }
+                                    for (src in mergedIs) {
+                                        if (src.id in ids) {
+                                            DeltaBuilder.buildIncomeSourceDelta(src, 0L)?.let { repairDeltas.add(it) }
+                                        }
+                                    }
+                                    syncLog("  REPAIR incomeSources: ${ids.size} records (${action.reason})")
+                                }
+                                "savingsGoals" -> {
+                                    val ids = IntegrityChecker.resolveIds(action, mergedSg) { it.id }
+                                    for (g in mergedSg) {
+                                        if (g.id in ids) {
+                                            DeltaBuilder.buildSavingsGoalDelta(g, 0L)?.let { repairDeltas.add(it) }
+                                        }
+                                    }
+                                    syncLog("  REPAIR savingsGoals: ${ids.size} records (${action.reason})")
+                                }
+                                "amortizationEntries" -> {
+                                    val ids = IntegrityChecker.resolveIds(action, mergedAe) { it.id }
+                                    for (e in mergedAe) {
+                                        if (e.id in ids) {
+                                            DeltaBuilder.buildAmortizationEntryDelta(e, 0L)?.let { repairDeltas.add(it) }
+                                        }
+                                    }
+                                    syncLog("  REPAIR amortizationEntries: ${ids.size} records (${action.reason})")
+                                }
+                                "categories" -> {
+                                    val ids = IntegrityChecker.resolveIds(action, mergedCat) { it.id }
+                                    for (cat in mergedCat) {
+                                        if (cat.id in ids) {
+                                            DeltaBuilder.buildCategoryDelta(cat, 0L)?.let { repairDeltas.add(it) }
+                                        }
+                                    }
+                                    syncLog("  REPAIR categories: ${ids.size} records (${action.reason})")
+                                }
+                                "periodLedger" -> {
+                                    val ids = IntegrityChecker.resolveIds(action, mergedPl) { it.id }
+                                    for (pl in mergedPl) {
+                                        if (pl.id in ids) {
+                                            DeltaBuilder.buildPeriodLedgerDelta(pl, 0L)?.let { repairDeltas.add(it) }
+                                        }
+                                    }
+                                    syncLog("  REPAIR periodLedger: ${ids.size} records (${action.reason})")
+                                }
+                            }
+                        }
+                        if (repairDeltas.isNotEmpty()) {
+                            // Safety cap: don't push more than 200 records in a single repair
+                            val capped = repairDeltas.take(200)
+                            if (capped.size < repairDeltas.size) {
+                                syncLog("  REPAIR capped to ${capped.size}/${repairDeltas.size} records")
+                            }
+                            val packet = DeltaPacket(
+                                sourceDeviceId = deviceId,
+                                timestamp = java.time.Instant.now(),
+                                changes = capped
+                            )
+                            val serialized = DeltaSerializer.serialize(packet).toString().toByteArray()
+                            val encrypted = CryptoHelper.encryptWithKey(serialized, encryptionKey)
+                            val encoded = android.util.Base64.encodeToString(encrypted, android.util.Base64.NO_WRAP)
+                            syncLog("  REPAIR pushing ${capped.size} records (${encoded.length} chars)")
+                            FirestoreService.pushDeltaAtomically(groupId, deviceId, encoded)
+                            syncLog("  REPAIR push complete")
+                            didRepair = true
+                        }
+                    }
+                    lastIntegrityCheckTime = now
+                } catch (e: Exception) {
+                    syncLog("Integrity check failed: ${e.message}")
+                }
+            }
+
             // Dedup period ledger: mergeRecordIntoList only merges with the
             // first matching entry, leaving duplicates with the same epoch-day ID.
             // This ensures the highest-clock entry wins before saving.
@@ -718,7 +862,8 @@ class SyncEngine(
                 mergedPeriodLedgerEntries = if (hasChanges) mergedPl else null,
                 mergedSharedSettings = if (settingsChanged || snapshotApplied || snapshotCatchUp) mergedSettings else null,
                 pendingAdminClaim = adminClaim,
-                catIdRemap = catIdRemap
+                catIdRemap = catIdRemap,
+                repairAttempted = didRepair
             )
         } catch (e: Exception) {
             val errorCode = when {
@@ -801,12 +946,12 @@ class SyncEngine(
         if (existingIndex >= 0) {
             list[existingIndex] = mergeFn(list[existingIndex], remote)
         } else {
-            // Guard: don't add skeleton records from partial deltas.
+            // Accept skeleton records instead of dropping them — future
+            // deltas will merge into the existing record and complete it.
+            // Silently dropping violated CRDT delivery guarantees.
             if (isSkeletonRecord(remote)) {
-                android.util.Log.w("SyncEngine",
-                    "Skipping skeleton ${change.type} id=${change.id} " +
-                    "(missing critical field clocks)")
-                return list
+                syncLog("WARNING: Accepted skeleton ${change.type} id=${change.id} " +
+                    "(missing critical field clocks — awaiting completion)")
             }
             val newIdx = list.size
             list.add(remote)
@@ -879,6 +1024,8 @@ class SyncEngine(
             amortizationAppliedAmount = (f["amortizationAppliedAmount"]?.value as? Number)?.toDouble() ?: 0.0,
             linkedRecurringExpenseAmount = (f["linkedRecurringExpenseAmount"]?.value as? Number)?.toDouble() ?: 0.0,
             linkedIncomeSourceAmount = (f["linkedIncomeSourceAmount"]?.value as? Number)?.toDouble() ?: 0.0,
+            linkedSavingsGoalId = (f["linkedSavingsGoalId"]?.value as? Number)?.toInt(),
+            linkedSavingsGoalAmount = (f["linkedSavingsGoalAmount"]?.value as? Number)?.toDouble() ?: 0.0,
             deviceId = f["deviceId"]?.value as? String ?: change.deviceId,
             deleted = f["deleted"]?.value as? Boolean ?: false,
             source_clock = f["source"]?.clock ?: 0L,
@@ -896,6 +1043,8 @@ class SyncEngine(
             amortizationAppliedAmount_clock = f["amortizationAppliedAmount"]?.clock ?: 0L,
             linkedRecurringExpenseAmount_clock = f["linkedRecurringExpenseAmount"]?.clock ?: 0L,
             linkedIncomeSourceAmount_clock = f["linkedIncomeSourceAmount"]?.clock ?: 0L,
+            linkedSavingsGoalId_clock = f["linkedSavingsGoalId"]?.clock ?: 0L,
+            linkedSavingsGoalAmount_clock = f["linkedSavingsGoalAmount"]?.clock ?: 0L,
             deleted_clock = f["deleted"]?.clock ?: 0L,
             deviceId_clock = f["deviceId"]?.clock ?: 0L
         )

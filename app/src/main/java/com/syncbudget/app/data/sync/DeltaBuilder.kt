@@ -47,6 +47,8 @@ object DeltaBuilder {
         if (txn.amortizationAppliedAmount_clock > lastPushedClock) fields["amortizationAppliedAmount"] = FieldDelta(txn.amortizationAppliedAmount, txn.amortizationAppliedAmount_clock)
         if (txn.linkedRecurringExpenseAmount_clock > lastPushedClock) fields["linkedRecurringExpenseAmount"] = FieldDelta(txn.linkedRecurringExpenseAmount, txn.linkedRecurringExpenseAmount_clock)
         if (txn.linkedIncomeSourceAmount_clock > lastPushedClock) fields["linkedIncomeSourceAmount"] = FieldDelta(txn.linkedIncomeSourceAmount, txn.linkedIncomeSourceAmount_clock)
+        if (txn.linkedSavingsGoalId_clock > lastPushedClock) fields["linkedSavingsGoalId"] = FieldDelta(txn.linkedSavingsGoalId, txn.linkedSavingsGoalId_clock)
+        if (txn.linkedSavingsGoalAmount_clock > lastPushedClock) fields["linkedSavingsGoalAmount"] = FieldDelta(txn.linkedSavingsGoalAmount, txn.linkedSavingsGoalAmount_clock)
         if (txn.deleted_clock > lastPushedClock) fields["deleted"] = FieldDelta(txn.deleted, txn.deleted_clock)
         if (txn.deviceId_clock > lastPushedClock) fields["deviceId"] = FieldDelta(txn.deviceId, txn.deviceId_clock)
         if (fields.isEmpty()) return null
@@ -64,6 +66,8 @@ object DeltaBuilder {
         ensureField(fields, "amortizationAppliedAmount", txn.amortizationAppliedAmount, txn.amortizationAppliedAmount_clock)
         ensureField(fields, "linkedRecurringExpenseAmount", txn.linkedRecurringExpenseAmount, txn.linkedRecurringExpenseAmount_clock)
         ensureField(fields, "linkedIncomeSourceAmount", txn.linkedIncomeSourceAmount, txn.linkedIncomeSourceAmount_clock)
+        ensureField(fields, "linkedSavingsGoalId", txn.linkedSavingsGoalId, txn.linkedSavingsGoalId_clock)
+        ensureField(fields, "linkedSavingsGoalAmount", txn.linkedSavingsGoalAmount, txn.linkedSavingsGoalAmount_clock)
         ensureField(fields, "isBudgetIncome", txn.isBudgetIncome, txn.isBudgetIncome_clock)
         ensureField(fields, "excludeFromBudget", txn.excludeFromBudget, txn.excludeFromBudget_clock)
         if ("categoryAmounts" !in fields && txn.categoryAmounts_clock > 0L) {

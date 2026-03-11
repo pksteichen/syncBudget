@@ -2,7 +2,9 @@ package com.syncbudget.app.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -55,6 +57,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -67,13 +70,21 @@ import com.syncbudget.app.ui.theme.PulsingScrollArrow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.syncbudget.app.data.BudgetPeriod
+import com.syncbudget.app.data.IncomeSource
+import com.syncbudget.app.data.RecurringExpense
 import com.syncbudget.app.data.SavingsGoal
+import com.syncbudget.app.data.SavingsSimulator
+import com.syncbudget.app.data.Transaction
 import com.syncbudget.app.data.calculatePerPeriodDeduction
 import com.syncbudget.app.data.generateSavingsGoalId
 import com.syncbudget.app.ui.components.CURRENCY_DECIMALS
 import com.syncbudget.app.ui.components.formatCurrency
 import com.syncbudget.app.ui.strings.LocalStrings
+import com.syncbudget.app.ui.theme.LocalAppToast
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.text.font.FontWeight
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -85,9 +96,18 @@ import kotlin.math.ceil
 @Composable
 fun FutureExpendituresScreen(
     savingsGoals: List<SavingsGoal>,
+    transactions: List<Transaction> = emptyList(),
     currencySymbol: String,
     budgetPeriod: BudgetPeriod,
     dateFormatPattern: String = "yyyy-MM-dd",
+    recurringExpenses: List<RecurringExpense> = emptyList(),
+    incomeSources: List<IncomeSource> = emptyList(),
+    budgetAmount: Double = 0.0,
+    availableCash: Double = 0.0,
+    resetDayOfWeek: Int = 7,
+    resetDayOfMonth: Int = 1,
+    isManualOverBudget: Boolean = false,
+    budgetPeriodLabel: String = "",
     onAddGoal: (SavingsGoal) -> Unit,
     onUpdateGoal: (SavingsGoal) -> Unit,
     onDeleteGoal: (SavingsGoal) -> Unit,
@@ -98,9 +118,13 @@ fun FutureExpendituresScreen(
     val customColors = LocalSyncBudgetColors.current
     val dateFormatter = remember(dateFormatPattern) { DateTimeFormatter.ofPattern(dateFormatPattern) }
 
+    val toastState = LocalAppToast.current
     var showAddDialog by remember { mutableStateOf(false) }
     var editingGoal by remember { mutableStateOf<SavingsGoal?>(null) }
     var deletingGoal by remember { mutableStateOf<SavingsGoal?>(null) }
+    var showSavingsWhyDialog by remember { mutableStateOf(false) }
+    var savingsTextYPx by remember { mutableIntStateOf(0) }
+    var linkedTransactionsGoal by remember { mutableStateOf<SavingsGoal?>(null) }
 
     val allPaused = savingsGoals.isNotEmpty() && savingsGoals.all { it.isPaused }
     val anyActive = savingsGoals.any { !it.isPaused }
@@ -177,6 +201,67 @@ fun FutureExpendituresScreen(
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
+                if (!isManualOverBudget) {
+                    val simResult = remember(
+                        recurringExpenses, incomeSources, budgetPeriod,
+                        budgetAmount, availableCash, resetDayOfWeek, resetDayOfMonth
+                    ) {
+                        SavingsSimulator.calculateSavingsRequired(
+                            incomeSources = incomeSources,
+                            recurringExpenses = recurringExpenses,
+                            budgetPeriod = budgetPeriod,
+                            budgetAmount = budgetAmount,
+                            availableCash = availableCash,
+                            resetDayOfWeek = resetDayOfWeek,
+                            resetDayOfMonth = resetDayOfMonth
+                        )
+                    }
+                    if (simResult.savingsRequired > 0.0) {
+                        val formattedAmount = formatCurrency(simResult.savingsRequired, currencySymbol)
+                        val periodText = budgetPeriodLabel
+                        val lowPointDateStr = simResult.lowPointDate?.format(
+                            DateTimeFormatter.ofPattern(dateFormatPattern)
+                        ) ?: ""
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(
+                                    width = 1.dp,
+                                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = S.futureExpenditures.savingsRequiredMessage(formattedAmount, periodText),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .onGloballyPositioned { savingsTextYPx = it.positionInWindow().y.toInt() }
+                                        .clickable {
+                                            if (lowPointDateStr.isNotEmpty()) {
+                                                toastState.show(S.futureExpenditures.savingsLowPointToast(lowPointDateStr), savingsTextYPx)
+                                            }
+                                        }
+                                )
+                                Text(
+                                    text = S.futureExpenditures.savingsWhyLink,
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = Color(0xFF4CAF50),
+                                    modifier = Modifier
+                                        .padding(start = 8.dp)
+                                        .clickable { showSavingsWhyDialog = true }
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+                }
                 OutlinedButton(
                     onClick = { showAddDialog = true },
                     modifier = Modifier.fillMaxWidth()
@@ -199,10 +284,23 @@ fun FutureExpendituresScreen(
                 val deduction = calculatePerPeriodDeduction(goal, budgetPeriod)
                 val contentAlpha = if (goal.isPaused) 0.5f else 1f
 
+                @OptIn(ExperimentalFoundationApi::class)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { editingGoal = goal }
+                        .combinedClickable(
+                            onClick = { editingGoal = goal },
+                            onLongClick = {
+                                val linked = transactions.filter { it.linkedSavingsGoalId == goal.id }
+                                    .sortedByDescending { it.date }
+                                    .take(10)
+                                if (linked.isEmpty()) {
+                                    toastState.show(S.futureExpenditures.noLinkedTransactions, savingsTextYPx)
+                                } else {
+                                    linkedTransactionsGoal = goal
+                                }
+                            }
+                        )
                         .padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -390,6 +488,65 @@ fun FutureExpendituresScreen(
             },
             dismissButton = {
                 DialogSecondaryButton(onClick = { deletingGoal = null }) { Text(S.common.cancel) }
+            }
+        )
+    }
+
+    if (showSavingsWhyDialog) {
+        val whyScrollState = rememberScrollState()
+        AdAwareAlertDialog(
+            onDismissRequest = { showSavingsWhyDialog = false },
+            title = { Text(S.futureExpenditures.savingsWhyTitle) },
+            text = {
+                Column(modifier = Modifier.verticalScroll(whyScrollState)) {
+                    Text(S.futureExpenditures.savingsWhyBody)
+                }
+            },
+            confirmButton = {
+                DialogPrimaryButton(onClick = { showSavingsWhyDialog = false }) { Text(S.common.ok) }
+            },
+            scrollState = whyScrollState
+        )
+    }
+
+    linkedTransactionsGoal?.let { goal ->
+        val linked = remember(goal, transactions) {
+            transactions.filter { it.linkedSavingsGoalId == goal.id }
+                .sortedByDescending { it.date }
+                .take(10)
+        }
+        AdAwareAlertDialog(
+            onDismissRequest = { linkedTransactionsGoal = null },
+            title = { Text(goal.name) },
+            text = {
+                Column {
+                    Text(
+                        S.futureExpenditures.linkedTransactions,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    linked.forEach { tx ->
+                        val txDate = tx.date.format(dateFormatter)
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(tx.source, style = MaterialTheme.typography.bodyMedium)
+                                Text(txDate, style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                            }
+                            Text(
+                                formatCurrency(tx.amount, currencySymbol),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                DialogSecondaryButton(onClick = { linkedTransactionsGoal = null }) { Text(S.common.close) }
             }
         )
     }

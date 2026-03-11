@@ -303,6 +303,7 @@ object SpanishStrings : AppStrings {
         linkToRecurring = "Vincular a",
         linkToAmortization = "Vincular a",
         linkToIncome = "Vincular a",
+        linkToSavingsGoal = "Vincular a",
         linkMismatchTitle = "Montos diferentes",
         linkMismatchBody = { txnAmt, entryAmt -> "La transacci\u00f3n ($txnAmt) difiere de la entrada ($entryAmt)." },
         linkAnyway = "Vincular de todos modos",
@@ -310,6 +311,7 @@ object SpanishStrings : AppStrings {
         linkedToRecurring = { name -> "Recurrente: $name" },
         linkedToAmortization = { name -> "Amortizaci\u00f3n: $name" },
         linkedToIncome = { name -> "Ingreso: $name" },
+        linkedToSavingsGoal = { name -> "Meta de ahorro: $name" },
         unmodifiedBankTransactions = "Transacciones no verificadas",
         formatGenericCsv = "CSV de cualquier banco",
         formatUsBank = "US Bank",
@@ -353,7 +355,17 @@ object SpanishStrings : AppStrings {
         exampleTargetAmount = "ej. 1000.00",
         exampleContribution = "ej. 5.00",
         mustBeLessThanTarget = "Debe ser menor que el objetivo",
-        payoffDate = { date -> "Pago final: $date" }
+        payoffDate = { date -> "Pago final: $date" },
+        savingsRequiredMessage = { amount, period -> "Necesitas $amount ahorrado para cubrir el presupuesto $period y estos gastos." },
+        savingsPeriodDaily = "de hoy",
+        savingsPeriodWeekly = "de esta semana",
+        savingsPeriodMonthly = "de este mes",
+        savingsWhyLink = "\u00bfPor qu\u00e9?",
+        savingsWhyTitle = "\u00bfPor qu\u00e9 se necesitan ahorros?",
+        savingsWhyBody = "Este n\u00famero proviene de una simulaci\u00f3n de flujo de efectivo que avanza desde hoy a trav\u00e9s de todos tus pr\u00f3ximos dep\u00f3sitos de ingresos, fechas de vencimiento de gastos y necesidades de gasto del presupuesto.\n\nEncuentra el punto en el futuro donde tu saldo de efectivo bajar\u00eda m\u00e1s \u2014 por ejemplo, justo antes de un gran d\u00eda de pago pero despu\u00e9s de que se vence el alquiler \u2014 y te dice cu\u00e1nto colch\u00f3n necesitas para sobrevivir esa ca\u00edda.\n\nEste n\u00famero cambia diariamente a medida que te acercas a las fechas de ingresos y gastos. Por ejemplo, justo despu\u00e9s del d\u00eda de pago ser\u00e1 el m\u00e1s alto (muchos d\u00edas de gasto por delante), y justo antes del d\u00eda de pago ser\u00e1 el m\u00e1s bajo. Una vez que est\u00e9s al d\u00eda, deber\u00edas mantenerte al d\u00eda si no gastas de m\u00e1s. Si tu cuenta bancaria es menor que este n\u00famero, considera configurar un plan de ahorro en la p\u00e1gina de Ahorros para ponerte al d\u00eda.",
+        savingsLowPointToast = { date -> "Punto m\u00e1s bajo del flujo: $date" },
+        linkedTransactions = "Transacciones vinculadas",
+        noLinkedTransactions = "No hay transacciones vinculadas"
     )
 
     override val amortization = AmortizationStrings(
@@ -405,15 +417,7 @@ object SpanishStrings : AppStrings {
         everyTwoWeeks = "Cada 2 semanas",
         twicePerMonth = "Dos veces al mes",
         linkedTransactions = "Transacciones vinculadas",
-        noLinkedTransactions = "No hay transacciones vinculadas",
-        savingsRequiredMessage = { amount, period -> "Necesitas $amount ahorrado para cubrir el presupuesto $period y estos gastos." },
-        savingsPeriodDaily = "de hoy",
-        savingsPeriodWeekly = "de esta semana",
-        savingsPeriodMonthly = "de este mes",
-        savingsWhyLink = "\u00bfPor qu\u00e9?",
-        savingsWhyTitle = "\u00bfPor qu\u00e9 se necesitan ahorros?",
-        savingsWhyBody = "Este n\u00famero proviene de una simulaci\u00f3n de flujo de efectivo que avanza desde hoy a trav\u00e9s de todos tus pr\u00f3ximos dep\u00f3sitos de ingresos, fechas de vencimiento de gastos y necesidades de gasto del presupuesto.\n\nEncuentra el punto en el futuro donde tu saldo de efectivo bajar\u00eda m\u00e1s \u2014 por ejemplo, justo antes de un gran d\u00eda de pago pero despu\u00e9s de que se vence el alquiler \u2014 y te dice cu\u00e1nto colch\u00f3n necesitas para sobrevivir esa ca\u00edda.\n\nEste n\u00famero cambia diariamente a medida que te acercas a las fechas de ingresos y gastos. Por ejemplo, justo despu\u00e9s del d\u00eda de pago ser\u00e1 el m\u00e1s alto (muchos d\u00edas de gasto por delante), y justo antes del d\u00eda de pago ser\u00e1 el m\u00e1s bajo. Una vez que est\u00e9s al d\u00eda, deber\u00edas mantenerte al d\u00eda si no gastas de m\u00e1s. Si tu cuenta bancaria es menor que este n\u00famero, considera configurar un plan de ahorro en la p\u00e1gina de Ahorros para ponerte al d\u00eda.",
-        savingsLowPointToast = { date -> "Punto m\u00e1s bajo del flujo: $date" }
+        noLinkedTransactions = "No hay transacciones vinculadas"
     )
 
     override val sync = SyncStrings(

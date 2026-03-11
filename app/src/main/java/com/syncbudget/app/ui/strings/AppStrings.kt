@@ -323,6 +323,7 @@ data class TransactionsStrings(
     val linkToRecurring: String,
     val linkToAmortization: String,
     val linkToIncome: String,
+    val linkToSavingsGoal: String,
     val linkMismatchTitle: String,
     val linkMismatchBody: (String, String) -> String,
     val linkAnyway: String,
@@ -330,6 +331,7 @@ data class TransactionsStrings(
     val linkedToRecurring: (String) -> String,
     val linkedToAmortization: (String) -> String,
     val linkedToIncome: (String) -> String,
+    val linkedToSavingsGoal: (String) -> String,
     val unmodifiedBankTransactions: String,
     // Bank format names
     val formatGenericCsv: String,
@@ -375,7 +377,17 @@ data class FutureExpendituresStrings(
     val exampleTargetAmount: String,
     val exampleContribution: String,
     val mustBeLessThanTarget: String,
-    val payoffDate: (String) -> String
+    val payoffDate: (String) -> String,
+    val savingsRequiredMessage: (String, String) -> String,
+    val savingsPeriodDaily: String,
+    val savingsPeriodWeekly: String,
+    val savingsPeriodMonthly: String,
+    val savingsWhyLink: String,
+    val savingsWhyTitle: String,
+    val savingsWhyBody: String,
+    val savingsLowPointToast: (String) -> String,
+    val linkedTransactions: String,
+    val noLinkedTransactions: String
 )
 
 data class AmortizationStrings(
@@ -427,15 +439,7 @@ data class RecurringExpensesStrings(
     val everyTwoWeeks: String,
     val twicePerMonth: String,
     val linkedTransactions: String,
-    val noLinkedTransactions: String,
-    val savingsRequiredMessage: (String, String) -> String,
-    val savingsPeriodDaily: String,
-    val savingsPeriodWeekly: String,
-    val savingsPeriodMonthly: String,
-    val savingsWhyLink: String,
-    val savingsWhyTitle: String,
-    val savingsWhyBody: String,
-    val savingsLowPointToast: (String) -> String
+    val noLinkedTransactions: String
 )
 
 data class SyncStrings(

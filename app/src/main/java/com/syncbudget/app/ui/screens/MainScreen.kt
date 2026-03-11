@@ -14,7 +14,9 @@ import androidx.compose.foundation.border
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -279,6 +281,8 @@ fun MainScreen(
     staleDays: Int = 0,
     syncDevices: List<DeviceInfo> = emptyList(),
     localDeviceId: String = "",
+    syncRepairAlert: Boolean = false,
+    onDismissRepairAlert: () -> Unit = {},
     onSyncNow: () -> Unit = {}
 ) {
     val customColors = LocalSyncBudgetColors.current
@@ -409,19 +413,37 @@ fun MainScreen(
                         modifier = Modifier.size(44.dp)
                     )
                 }
+                @OptIn(ExperimentalFoundationApi::class)
                 if (syncStatus != "off") {
-                    val syncColor = when (syncStatus) {
+                    val baseSyncColor = when (syncStatus) {
                         "synced" -> Color(0xFF4CAF50)
                         "syncing" -> Color(0xFFFFEB3B)
                         "stale" -> Color(0xFFFF9800)
                         "error" -> Color(0xFFF44336)
                         else -> Color(0xFF9E9E9E)
                     }
+                    // Flash between magenta and base color when repair alert is active
+                    val syncColor = if (syncRepairAlert) {
+                        val flash = rememberInfiniteTransition(label = "repairFlash")
+                        flash.animateColor(
+                            initialValue = Color(0xFFFF00FF),  // Magenta
+                            targetValue = baseSyncColor,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(600, easing = LinearEasing),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "repairColor"
+                        ).value
+                    } else baseSyncColor
                     Row(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
                             .padding(start = 20.dp, bottom = 20.dp)
-                            .clickable(enabled = syncStatus != "syncing") { onSyncNow() },
+                            .combinedClickable(
+                                enabled = syncStatus != "syncing",
+                                onClick = { onSyncNow() },
+                                onLongClick = { onDismissRepairAlert() }
+                            ),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {

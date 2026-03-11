@@ -490,6 +490,8 @@ class WidgetTransactionActivity : ComponentActivity() {
                                         amortizationAppliedAmount_clock = clock,
                                         linkedRecurringExpenseAmount_clock = clock,
                                         linkedIncomeSourceAmount_clock = clock,
+                                        linkedSavingsGoalId_clock = clock,
+                                        linkedSavingsGoalAmount_clock = clock,
                                         deviceId_clock = clock
                                     )
                                     runMatchingChain(txn, catAmounts)

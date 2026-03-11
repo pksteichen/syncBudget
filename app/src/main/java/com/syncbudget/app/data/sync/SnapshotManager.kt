@@ -60,6 +60,8 @@ object SnapshotManager {
             obj.put("amortizationAppliedAmount", t.amortizationAppliedAmount)
             obj.put("linkedRecurringExpenseAmount", t.linkedRecurringExpenseAmount)
             obj.put("linkedIncomeSourceAmount", t.linkedIncomeSourceAmount)
+            obj.put("linkedSavingsGoalId", t.linkedSavingsGoalId ?: JSONObject.NULL)
+            obj.put("linkedSavingsGoalAmount", t.linkedSavingsGoalAmount)
             if (t.categoryAmounts.isNotEmpty()) {
                 val catArray = JSONArray()
                 for (ca in t.categoryAmounts) {
@@ -87,6 +89,8 @@ object SnapshotManager {
             obj.put("amortizationAppliedAmount_clock", t.amortizationAppliedAmount_clock)
             obj.put("linkedRecurringExpenseAmount_clock", t.linkedRecurringExpenseAmount_clock)
             obj.put("linkedIncomeSourceAmount_clock", t.linkedIncomeSourceAmount_clock)
+            obj.put("linkedSavingsGoalId_clock", t.linkedSavingsGoalId_clock)
+            obj.put("linkedSavingsGoalAmount_clock", t.linkedSavingsGoalAmount_clock)
             obj.put("deleted_clock", t.deleted_clock)
             obj.put("deviceId_clock", t.deviceId_clock)
             txnArray.put(obj)
@@ -270,6 +274,8 @@ object SnapshotManager {
                     amortizationAppliedAmount = obj.optDouble("amortizationAppliedAmount", 0.0),
                     linkedRecurringExpenseAmount = obj.optDouble("linkedRecurringExpenseAmount", 0.0),
                     linkedIncomeSourceAmount = obj.optDouble("linkedIncomeSourceAmount", 0.0),
+                    linkedSavingsGoalId = if (obj.has("linkedSavingsGoalId") && !obj.isNull("linkedSavingsGoalId")) obj.getInt("linkedSavingsGoalId") else null,
+                    linkedSavingsGoalAmount = obj.optDouble("linkedSavingsGoalAmount", 0.0),
                     deviceId = obj.optString("deviceId", ""),
                     deleted = obj.optBoolean("deleted", false),
                     source_clock = obj.optLong("source_clock", 0L),
@@ -287,6 +293,8 @@ object SnapshotManager {
                     amortizationAppliedAmount_clock = obj.optLong("amortizationAppliedAmount_clock", 0L),
                     linkedRecurringExpenseAmount_clock = obj.optLong("linkedRecurringExpenseAmount_clock", 0L),
                     linkedIncomeSourceAmount_clock = obj.optLong("linkedIncomeSourceAmount_clock", 0L),
+                    linkedSavingsGoalId_clock = obj.optLong("linkedSavingsGoalId_clock", 0L),
+                    linkedSavingsGoalAmount_clock = obj.optLong("linkedSavingsGoalAmount_clock", 0L),
                     deleted_clock = obj.optLong("deleted_clock", 0L),
                     deviceId_clock = obj.optLong("deviceId_clock", 0L)
                 )

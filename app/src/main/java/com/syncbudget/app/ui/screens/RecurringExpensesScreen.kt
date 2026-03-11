@@ -67,10 +67,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.syncbudget.app.ui.theme.AdAwareDialog
 import com.syncbudget.app.data.BudgetCalculator
-import com.syncbudget.app.data.BudgetPeriod
-import com.syncbudget.app.data.IncomeSource
 import com.syncbudget.app.data.RecurringExpense
-import com.syncbudget.app.data.SavingsSimulator
 import com.syncbudget.app.data.Transaction
 import com.syncbudget.app.data.RepeatType
 import com.syncbudget.app.data.generateRecurringExpenseId
@@ -103,14 +100,6 @@ fun RecurringExpensesScreen(
     onUpdateRecurringExpense: (RecurringExpense) -> Unit,
     onDeleteRecurringExpense: (RecurringExpense) -> Unit,
     transactions: List<Transaction> = emptyList(),
-    incomeSources: List<IncomeSource> = emptyList(),
-    budgetPeriod: BudgetPeriod = BudgetPeriod.DAILY,
-    budgetAmount: Double = 0.0,
-    availableCash: Double = 0.0,
-    resetDayOfWeek: Int = 7,
-    resetDayOfMonth: Int = 1,
-    isManualOverBudget: Boolean = false,
-    budgetPeriodLabel: String = "",
     onBack: () -> Unit,
     onHelpClick: () -> Unit = {}
 ) {
@@ -118,13 +107,11 @@ fun RecurringExpensesScreen(
     val customColors = LocalSyncBudgetColors.current
     val context = LocalContext.current
     val toastState = LocalAppToast.current
-    var savingsTextYPx by remember { mutableIntStateOf(0) }
     val dateFormatter = remember(dateFormatPattern) { DateTimeFormatter.ofPattern(dateFormatPattern) }
     var showAddDialog by remember { mutableStateOf(false) }
     var editingExpense by remember { mutableStateOf<RecurringExpense?>(null) }
     var deletingExpense by remember { mutableStateOf<RecurringExpense?>(null) }
     var linkedTransactionsExpense by remember { mutableStateOf<RecurringExpense?>(null) }
-    var showSavingsWhyDialog by remember { mutableStateOf(false) }
     val appPrefs = remember { context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE) }
     var sortByAlpha by remember { mutableStateOf(appPrefs.getBoolean("recurringExpenseSortAlpha", false)) }
 
@@ -176,67 +163,6 @@ fun RecurringExpensesScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                 )
-                if (recurringExpenses.isNotEmpty() && !isManualOverBudget) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    val simResult = remember(
-                        recurringExpenses, incomeSources, budgetPeriod,
-                        budgetAmount, availableCash, resetDayOfWeek, resetDayOfMonth
-                    ) {
-                        SavingsSimulator.calculateSavingsRequired(
-                            incomeSources = incomeSources,
-                            recurringExpenses = recurringExpenses,
-                            budgetPeriod = budgetPeriod,
-                            budgetAmount = budgetAmount,
-                            availableCash = availableCash,
-                            resetDayOfWeek = resetDayOfWeek,
-                            resetDayOfMonth = resetDayOfMonth
-                        )
-                    }
-                    if (simResult.savingsRequired > 0.0) {
-                    val formattedAmount = formatCurrency(simResult.savingsRequired, currencySymbol)
-                    val periodText = budgetPeriodLabel
-                    val lowPointDateStr = simResult.lowPointDate?.format(
-                        DateTimeFormatter.ofPattern(dateFormatPattern)
-                    ) ?: ""
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .border(
-                                width = 1.dp,
-                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                                shape = RoundedCornerShape(10.dp)
-                            )
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = S.recurringExpenses.savingsRequiredMessage(formattedAmount, periodText),
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .onGloballyPositioned { savingsTextYPx = it.positionInWindow().y.toInt() }
-                                    .clickable {
-                                        if (lowPointDateStr.isNotEmpty()) {
-                                            toastState.show(S.recurringExpenses.savingsLowPointToast(lowPointDateStr), savingsTextYPx)
-                                        }
-                                    }
-                            )
-                            Text(
-                                text = S.recurringExpenses.savingsWhyLink,
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                color = Color(0xFF4CAF50),
-                                modifier = Modifier
-                                    .padding(start = 8.dp)
-                                    .clickable { showSavingsWhyDialog = true }
-                            )
-                        }
-                    }
-                    } // end if savingsRequired > 0
-                }
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedButton(
                     onClick = { showAddDialog = true },
@@ -566,22 +492,6 @@ fun RecurringExpensesScreen(
         )
     }
 
-    if (showSavingsWhyDialog) {
-        val whyScrollState = rememberScrollState()
-        AdAwareAlertDialog(
-            onDismissRequest = { showSavingsWhyDialog = false },
-            title = { Text(S.recurringExpenses.savingsWhyTitle) },
-            text = {
-                Column(modifier = Modifier.verticalScroll(whyScrollState)) {
-                    Text(S.recurringExpenses.savingsWhyBody)
-                }
-            },
-            confirmButton = {
-                DialogPrimaryButton(onClick = { showSavingsWhyDialog = false }) { Text(S.common.ok) }
-            },
-            scrollState = whyScrollState
-        )
-    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)

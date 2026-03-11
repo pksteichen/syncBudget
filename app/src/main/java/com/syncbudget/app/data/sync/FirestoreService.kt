@@ -18,7 +18,9 @@ data class DeviceRecord(
     val deviceName: String = "",
     val isAdmin: Boolean = false,
     val lastSyncVersion: Long = 0L,
-    val lastSeen: Long = 0L
+    val lastSeen: Long = 0L,
+    val fingerprintData: String? = null,
+    val fingerprintSyncVersion: Long = 0L
 )
 
 data class PairingData(
@@ -85,11 +87,20 @@ object FirestoreService {
         return allDeltas
     }
 
-    suspend fun updateDeviceMetadata(groupId: String, deviceId: String, syncVersion: Long) {
-        val data = mapOf(
+    suspend fun updateDeviceMetadata(
+        groupId: String,
+        deviceId: String,
+        syncVersion: Long,
+        fingerprintJson: String? = null
+    ) {
+        val data = mutableMapOf<String, Any>(
             "lastSyncVersion" to syncVersion,
             "lastSeen" to System.currentTimeMillis()
         )
+        if (fingerprintJson != null) {
+            data["fingerprintData"] = fingerprintJson
+            data["fingerprintSyncVersion"] = syncVersion
+        }
         db.collection("groups")
             .document(groupId)
             .collection("devices")
@@ -244,7 +255,9 @@ object FirestoreService {
                 deviceName = doc.getString("deviceName") ?: "",
                 isAdmin = doc.getBoolean("isAdmin") ?: false,
                 lastSyncVersion = doc.getLong("lastSyncVersion") ?: 0L,
-                lastSeen = doc.getLong("lastSeen") ?: 0L
+                lastSeen = doc.getLong("lastSeen") ?: 0L,
+                fingerprintData = doc.getString("fingerprintData"),
+                fingerprintSyncVersion = doc.getLong("fingerprintSyncVersion") ?: 0L
             )
         }
     }
