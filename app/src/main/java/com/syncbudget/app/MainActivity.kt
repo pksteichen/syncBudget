@@ -1781,8 +1781,9 @@ class MainActivity : ComponentActivity() {
                             }
                             if (deposits.isNotEmpty()) {
                                 saveSavingsGoals()
-                                // Create expense transactions so recomputation includes
-                                // the cash outflow (CRDT-correct — syncs to other devices).
+                                // Create internal expense transactions so recomputeAvailableCash
+                                // reflects the immediate cash outflow. These are hidden from the
+                                // transaction list (filtered by "Savings: " source prefix).
                                 val currentIds = transactions.map { it.id }.toSet()
                                 for ((goalName, depositAmount) in deposits) {
                                     val txn = Transaction(

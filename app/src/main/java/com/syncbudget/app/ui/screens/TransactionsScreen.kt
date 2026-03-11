@@ -629,7 +629,7 @@ fun TransactionsScreen(
 
     // Filter and sort transactions (no remember — SnapshotStateList mutations trigger recomposition)
     val filteredTransactions = run {
-        var list = transactions.toList()
+        var list = transactions.filter { !it.source.startsWith("Savings: ") }
         list = when (viewFilter) {
             ViewFilter.EXPENSES -> list.filter { it.type == TransactionType.EXPENSE }
             ViewFilter.INCOME -> list.filter { it.type == TransactionType.INCOME }
