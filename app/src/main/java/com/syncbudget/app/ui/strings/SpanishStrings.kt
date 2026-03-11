@@ -8,9 +8,9 @@ object SpanishStrings : AppStrings {
         transportation = "Transporte/Gasolina",
         groceries = "Supermercado",
         entertainment = "Entretenimiento",
-        homeSupplies = "Hogar",
+        homeSupplies = "Art\u00edculos del Hogar",
         restaurants = "Restaurantes",
-        charity = "Caridad",
+        charity = "Donaciones",
         clothes = "Ropa"
     )
 
@@ -30,10 +30,10 @@ object SpanishStrings : AppStrings {
         periodDays = "d\u00edas",
         periodWeeks = "semanas",
         periodMonths = "meses",
-        addNewIncomeTransaction = "Nueva transacci\u00f3n de ingreso",
-        addNewExpenseTransaction = "Nueva transacci\u00f3n de gasto",
+        addNewIncomeTransaction = "Agregar nueva transacci\u00f3n de ingreso",
+        addNewExpenseTransaction = "Agregar nueva transacci\u00f3n de gasto",
         applyToPastTitle = "\u00bfAplicar a transacciones pasadas?",
-        applyToPastBody = "\u00bfDesea actualizar las transacciones vinculadas anteriores para reflejar el nuevo monto? Esto afectar\u00e1 su presupuesto disponible actual.",
+        applyToPastBody = "\u00bfQuieres actualizar las transacciones vinculadas anteriores para reflejar el nuevo monto? Esto afectar\u00e1 tu presupuesto disponible actual.",
         applyToPastConfirm = "S\u00ed, actualizar",
         applyToPastDeny = "No, solo futuras",
         sourceLabel = "Fuente",
@@ -70,7 +70,7 @@ object SpanishStrings : AppStrings {
         exampleBiMonthlyDay2 = "ej. 15",
         language = "Idioma",
         dateDayTooHigh = "Selecciona una fecha entre el 1 y el 28 del mes",
-        descriptionFieldLabel = "Descripción"
+        descriptionFieldLabel = "Descripci\u00f3n"
     )
 
     override val dashboard = DashboardStrings(
@@ -97,11 +97,11 @@ object SpanishStrings : AppStrings {
         superchargeReduceContributions = "Reducir contribuciones futuras",
         superchargeAchieveSooner = "Alcanzar meta antes",
         superchargeExtraShouldLabel = "La contribuci\u00f3n extra debe...",
-        superchargeNewContribution = { amount, period -> "Nuevo: $amount/$period" },
-        superchargeNewPayoff = { date -> "Nuevo pago final: $date" },
+        superchargeNewContribution = { amount, period -> "Nueva: $amount/$period" },
+        superchargeNewPayoff = { date -> "Nueva fecha de pago: $date" },
         superchargeNewCompletion = { date -> "Se completa: $date" },
-        superchargeAutoAdjust = "Las contribuciones se ajustan automáticamente",
-        superchargeTargetDateNote = "Esto cambiará tu fecha objetivo"
+        superchargeAutoAdjust = "Las contribuciones se ajustan autom\u00e1ticamente",
+        superchargeTargetDateNote = "Esto cambiar\u00e1 tu fecha objetivo"
     )
 
     override val settings = SettingsStrings(
@@ -118,9 +118,9 @@ object SpanishStrings : AppStrings {
         bright = "Vibrante",
         pastel = "Pastel",
         sunset = "Atardecer",
-        matchDays = "D\u00edas de coincidencia (\u2060\u00b1\u2060N\u2060)",
-        matchPercent = "Porcentaje de coincidencia (\u2060\u00b1\u2060%\u2060)",
-        matchDollar = "Monto de coincidencia (\u2060\u00b1\u2060\$\u2060)",
+        matchDays = "D\u00edas de coincidencia\u00A0(\u2060\u00b1\u2060N\u2060)",
+        matchPercent = "Porcentaje de coincidencia\u00A0(\u2060\u00b1\u2060%\u2060)",
+        matchDollar = "Monto de coincidencia\u00A0(\u2060\u00b1\u2060\$\u2060)",
         matchChars = "Caracteres de coincidencia",
         matchingConfiguration = "Configuraci\u00f3n de coincidencias",
         paidUser = "Usuario de pago",
@@ -148,12 +148,12 @@ object SpanishStrings : AppStrings {
         budgetPeriod = "Per\u00edodo del presupuesto",
         safeBudgetAmountLabel = { symbol, amount, period -> "Presupuesto seguro: $symbol$amount/$period" },
         budgetTrackingSince = { date -> "Seguimiento del presupuesto desde: $date" },
-        refreshTime = "Hora de refresco",
+        refreshTime = "Hora de actualizaci\u00f3n",
         resetDay = "D\u00eda de reinicio",
         resetDate = "Fecha de reinicio",
-        startResetBudget = "Iniciar/Restablecer",
+        startResetBudget = "Iniciar/Restablecer presupuesto",
         manualBudgetOverride = "Presupuesto manual",
-        budgetAmountPer = { period -> "Monto por $period" },
+        budgetAmountPer = { period -> "Monto del presupuesto por $period" },
         manualOverrideNote = { period -> "Las Metas de Ahorro y Amortizaciones reducir\u00e1n este monto. Si deseas exactamente esta cantidad cada $period, pausa tus deducciones en esas p\u00e1ginas." },
         manualOverrideSavingsWarning = "Establecer un monto superior al presupuesto seguro calculado arriba desactivar\u00e1 el c\u00e1lculo de ahorros necesarios en la p\u00e1gina de Gastos Recurrentes.",
         manualOverrideSeeHelp = "Ver ayuda (?) para detalles.",
@@ -164,7 +164,7 @@ object SpanishStrings : AppStrings {
         deleteSourceConfirmBody = "Esta fuente de ingreso se eliminar\u00e1 permanentemente.",
         resetBudgetConfirmTitle = "\u00bfIniciar/Restablecer presupuesto?",
         resetBudgetConfirmBody = "Esto restablecer\u00e1 la fecha de inicio a hoy y fijar\u00e1 el efectivo disponible en el monto de un per\u00edodo. Tus transacciones no se ver\u00e1n afectadas.",
-        resetSettingsTitle = "Ajustes de hora de refresco",
+        resetSettingsTitle = "Ajustes de hora de actualizaci\u00f3n",
         resetDayTitle = "D\u00eda de reinicio",
         resetDateTitle = "Fecha de reinicio",
         resetHour = "Hora de reinicio",
@@ -229,7 +229,7 @@ object SpanishStrings : AppStrings {
         ignoreAll = "Omitir todos",
         excludedToast = "Transacci\u00f3n excluida del presupuesto.",
         includedToast = "Transacci\u00f3n incluida en el presupuesto.",
-        verifiedToast = "Has verificado esta transacci\u00f3n!",
+        verifiedToast = "\u00a1Has verificado esta transacci\u00f3n!",
         unverifiedToast = "Has marcado esta transacci\u00f3n como no verificada.",
         bulkVerifyTitle = "Verificar transacciones",
         bulkVerifyMessage = { count -> "Marcar $count transacci\u00f3n(es) seleccionada(s) como:" },
@@ -263,7 +263,7 @@ object SpanishStrings : AppStrings {
         newMerchantName = "Descripci\u00f3n",
         filterByCategory = { name -> "Filtrado por: $name" },
         tapToClearFilter = "Toca para borrar el filtro",
-        dateRangeSearch = "Búsqueda por rango de fechas",
+        dateRangeSearch = "B\u00fasqueda por rango de fechas",
         startDate = "Seleccionar fecha de inicio",
         endDate = "Seleccionar fecha de fin",
         minAmount = "Monto m\u00ednimo",
@@ -283,25 +283,25 @@ object SpanishStrings : AppStrings {
         includeAllData = "Incluir todos los datos (respaldo completo)",
         fullBackupNote = "Se guardar\u00e1n todos los datos de la app incluyendo ajustes, categor\u00edas, gastos recurrentes, metas de ahorro y entradas de amortizaci\u00f3n.",
         fullBackupDetected = "Respaldo completo detectado",
-        fullBackupBody = "Este archivo contiene ajustes, categor\u00edas, gastos recurrentes, metas de ahorro, entradas de amortizaci\u00f3n y todos los dem\u00e1s datos. \u00bfC\u00f3mo desea cargarlo?",
+        fullBackupBody = "Este archivo contiene ajustes, categor\u00edas, gastos recurrentes, metas de ahorro, entradas de amortizaci\u00f3n y todos los dem\u00e1s datos. \u00bfC\u00f3mo deseas cargarlo?",
         loadTransactionsOnly = "Cargar solo transacciones",
         loadAllDataOverwrite = "Cargar todo y sobrescribir",
         fullRestoreWarning = "Advertencia: Una restauraci\u00f3n completa eliminar\u00e1 cualquier transacci\u00f3n o cambio realizado desde que se cre\u00f3 este respaldo. Las transacciones ingresadas despu\u00e9s deber\u00e1n volver a ingresarse o recargarse desde un CSV bancario.",
         fullBackupRestored = "Respaldo completo restaurado exitosamente",
         fullBackupSaved = "Respaldo completo guardado exitosamente",
-        fullBackupSyncWarning = "Restaurar un respaldo completo disolverá el grupo de sincronización familiar actual. Deberás crear un nuevo grupo y compartir un nuevo código de emparejamiento con los miembros de la familia.",
-        fullBackupNonAdminBlock = "Solo el administrador del grupo puede restaurar un respaldo completo. Una restauración completa corrompería el estado de sincronización de todos los dispositivos.",
-        fullBackupGroupRecreated = "Respaldo restaurado. Nuevo grupo familiar creado \u2014 comparte el código de emparejamiento con los miembros de la familia.",
+        fullBackupSyncWarning = "Restaurar un respaldo completo disolver\u00e1 el grupo de sincronizaci\u00f3n familiar actual. Deber\u00e1s crear un nuevo grupo y compartir un nuevo c\u00f3digo de emparejamiento con los miembros de la familia.",
+        fullBackupNonAdminBlock = "Solo el administrador del grupo puede restaurar un respaldo completo. Una restauraci\u00f3n completa corromper\u00eda el estado de sincronizaci\u00f3n de todos los dispositivos.",
+        fullBackupGroupRecreated = "Respaldo restaurado. Nuevo grupo familiar creado \u2014 comparte el c\u00f3digo de emparejamiento con los miembros de la familia.",
         fullBackupGroupDissolved = "Respaldo restaurado. Grupo familiar disuelto.",
         linkToRecurring = "Vincular a",
         linkToAmortization = "Vincular a",
         linkToIncome = "Vincular a",
         linkMismatchTitle = "Montos diferentes",
-        linkMismatchBody = { txnAmt, entryAmt -> "La transaccion ($txnAmt) difiere de la entrada ($entryAmt)." },
+        linkMismatchBody = { txnAmt, entryAmt -> "La transacci\u00f3n ($txnAmt) difiere de la entrada ($entryAmt)." },
         linkAnyway = "Vincular de todos modos",
-        updateTransactionAmount = "Actualizar transaccion",
+        updateTransactionAmount = "Actualizar transacci\u00f3n",
         linkedToRecurring = { name -> "Recurrente: $name" },
-        linkedToAmortization = { name -> "Amortizacion: $name" },
+        linkedToAmortization = { name -> "Amortizaci\u00f3n: $name" },
         linkedToIncome = { name -> "Ingreso: $name" },
         unmodifiedBankTransactions = "Transacciones no verificadas"
     )
@@ -394,9 +394,9 @@ object SpanishStrings : AppStrings {
         savingsPeriodDaily = "de hoy",
         savingsPeriodWeekly = "de esta semana",
         savingsPeriodMonthly = "de este mes",
-        savingsWhyLink = "¿Por qué?",
-        savingsWhyTitle = "¿Por qué se necesitan ahorros?",
-        savingsWhyBody = "Este número proviene de una simulación de flujo de efectivo que avanza desde hoy a través de todos tus próximos depósitos de ingresos, fechas de vencimiento de gastos y necesidades de gasto del presupuesto.\n\nEncuentra el punto en el futuro donde tu saldo de efectivo bajaría más — por ejemplo, justo antes de un gran día de pago pero después de que se vence el alquiler — y te dice cuánto colchón necesitas para sobrevivir esa caída.\n\nEste número cambia diariamente a medida que te acercas a las fechas de ingresos y gastos. Por ejemplo, justo después del día de pago será el más alto (muchos días de gasto por delante), y justo antes del día de pago será el más bajo. Una vez que estés al día, deberías mantenerte al día si no gastas de más. Si tu cuenta bancaria es menor que este número, considera configurar un plan de ahorro en la página de Ahorros para ponerte al día.",
+        savingsWhyLink = "\u00bfPor qu\u00e9?",
+        savingsWhyTitle = "\u00bfPor qu\u00e9 se necesitan ahorros?",
+        savingsWhyBody = "Este n\u00famero proviene de una simulaci\u00f3n de flujo de efectivo que avanza desde hoy a trav\u00e9s de todos tus pr\u00f3ximos dep\u00f3sitos de ingresos, fechas de vencimiento de gastos y necesidades de gasto del presupuesto.\n\nEncuentra el punto en el futuro donde tu saldo de efectivo bajar\u00eda m\u00e1s \u2014 por ejemplo, justo antes de un gran d\u00eda de pago pero despu\u00e9s de que se vence el alquiler \u2014 y te dice cu\u00e1nto colch\u00f3n necesitas para sobrevivir esa ca\u00edda.\n\nEste n\u00famero cambia diariamente a medida que te acercas a las fechas de ingresos y gastos. Por ejemplo, justo despu\u00e9s del d\u00eda de pago ser\u00e1 el m\u00e1s alto (muchos d\u00edas de gasto por delante), y justo antes del d\u00eda de pago ser\u00e1 el m\u00e1s bajo. Una vez que est\u00e9s al d\u00eda, deber\u00edas mantenerte al d\u00eda si no gastas de m\u00e1s. Si tu cuenta bancaria es menor que este n\u00famero, considera configurar un plan de ahorro en la p\u00e1gina de Ahorros para ponerte al d\u00eda.",
         savingsLowPointToast = { date -> "Punto m\u00e1s bajo del flujo: $date" }
     )
 
@@ -447,12 +447,12 @@ object SpanishStrings : AppStrings {
         adminOnly = "Solo administrador",
         familyTimezone = "Zona Horaria Familiar",
         selectTimezone = "Seleccionar Zona Horaria",
-        showAttributionLabel = "Mostrar Atribución",
-        you = "Tú",
+        showAttributionLabel = "Mostrar Atribuci\u00f3n",
+        you = "T\u00fa",
         repairAttributions = "Reparar Atribuciones",
-        repairAttributionsBody = "Estos códigos de dispositivo aparecen en tus transacciones pero no están en el grupo familiar actual. Ingresa un apodo para cada uno en lugar del código.",
+        repairAttributionsBody = "Estos c\u00f3digos de dispositivo aparecen en tus transacciones pero no est\u00e1n en el grupo familiar actual. Ingresa un apodo para cada uno en lugar del c\u00f3digo.",
         nicknameHint = "Apodo",
-        noOrphanedCodes = "No se encontraron códigos de dispositivo no reconocidos.",
+        noOrphanedCodes = "No se encontraron c\u00f3digos de dispositivo no reconocidos.",
         staleWarning60 = "Sincroniza pronto para mantener tus datos actualizados",
         staleWarning75 = "15 d\u00edas para que los datos de sincronizaci\u00f3n expiren",
         staleWarning85 = "5 d\u00edas para sincronizar o los cambios locales deber\u00e1n descartarse",
@@ -559,7 +559,7 @@ object SpanishStrings : AppStrings {
         safeBudgetStep1Desc = "Tus fuentes de ingreso y sus calendarios de repetici\u00f3n se proyectan un a\u00f1o hacia adelante.",
         safeBudgetStep2 = "Simulaci\u00f3n de gastos",
         safeBudgetStep2Desc = "Tus gastos recurrentes se proyectan en el mismo per\u00edodo.",
-        safeBudgetStep3 = "Protecci\u00f3n de timing",
+        safeBudgetStep3 = "Protecci\u00f3n temporal",
         safeBudgetStep3Desc = "El motor se asegura de que incluso en meses con muchas facturas juntas, el monto del presupuesto cubra todas las obligaciones.",
         budgetAmountTitle = "Monto del presupuesto",
         budgetAmountBody = "Tu presupuesto real por per\u00edodo es el Presupuesto Seguro menos las deducciones activas:",
@@ -688,8 +688,8 @@ object SpanishStrings : AppStrings {
         dateIso = "2026-02-17 \u2014 Formato ISO (predeterminado)",
         dateUs = "02/17/2026 \u2014 Formato estadounidense",
         dateEu = "17/02/2026 \u2014 Formato europeo",
-        dateAbbrev = "Feb 17, 2026 \u2014 Mes abreviado",
-        dateFull = "February 17, 2026 \u2014 Mes completo",
+        dateAbbrev = "17 feb 2026 \u2014 Mes abreviado",
+        dateFull = "17 de febrero de 2026 \u2014 Mes completo",
         dateMore = "Y otros formatos internacionales",
         dateNote = "El men\u00fa desplegable muestra una fecha de ejemplo en cada formato para que puedas " +
             "ver c\u00f3mo se ver\u00e1 antes de seleccionarlo.",
@@ -969,7 +969,7 @@ object SpanishStrings : AppStrings {
         periodMonthlyDesc = "Tu presupuesto se calcula por mes. Adecuado para personas con pago mensual que prefieren planificar por mes.",
         periodNote = "El per\u00edodo tambi\u00e9n afecta c\u00f3mo se calculan las deducciones de Metas de Ahorro y Amortizaci\u00f3n, " +
             "ya que deducen un monto fijo por per\u00edodo.",
-        resetSettingsTitle = "Ajustes de hora de refresco",
+        resetSettingsTitle = "Ajustes de hora de actualizaci\u00f3n",
         resetSettingsBody = "Toca el bot\u00f3n \"Hora de refresco\" junto al selector de Per\u00edodo del presupuesto para configurar " +
             "cu\u00e1ndo cambia tu per\u00edodo:",
         resetHourTitle = "Hora de reinicio",
@@ -993,7 +993,7 @@ object SpanishStrings : AppStrings {
         calcStep1Desc = "Todas las ocurrencias de fuentes de ingreso se generan para los pr\u00f3ximos 12 meses seg\u00fan sus calendarios de repetici\u00f3n. Se calcula el ingreso anual total.",
         calcStep2 = "Monto base",
         calcStep2Desc = "El presupuesto base es el ingreso anual dividido por el n\u00famero de per\u00edodos en un a\u00f1o (ej. 365 para diario, 52 para semanal, 12 para mensual).",
-        calcStep3 = "Protecci\u00f3n de timing",
+        calcStep3 = "Protecci\u00f3n temporal",
         calcStep3Desc = "El motor simula cada per\u00edodo y verifica que los gastos acumulados nunca superen el presupuesto. Si las facturas se acumulan en ciertos per\u00edodos, el monto se aumenta para cubrir el peor caso.",
         importantTitle = "Importante",
         importantBody = "El Presupuesto Seguro solo considera fuentes de ingreso y gastos recurrentes " +
@@ -1026,7 +1026,7 @@ object SpanishStrings : AppStrings {
         manualBullet4 = "Establecer un monto superior al presupuesto seguro calculado desactivar\u00e1 el c\u00e1lculo de ahorros necesarios en la p\u00e1gina de Gastos Recurrentes",
         warningTitle = "Nota",
         warningBody = "Las deducciones de Metas de Ahorro y Amortizaci\u00f3n a\u00fan se restan de tu monto " +
-            "manual. Si deseas exactamente el monto ingresado cada per\u00edodo, " +
+            "manual. Si quieres exactamente el monto ingresado cada per\u00edodo, " +
             "pausa tus Metas de Ahorro y entradas de Amortizaci\u00f3n en esas p\u00e1ginas.",
         incomeSourcesTitle = "Fuentes de ingreso",
         incomeSourcesBody = "Las fuentes de ingreso representan tus ingresos confiables y recurrentes \u2014 el dinero con " +
@@ -1101,7 +1101,7 @@ object SpanishStrings : AppStrings {
             "no se usa en ese caso.",
         manualOverrideDetailsTitle = "Presupuesto Manual \u2014 Detalles",
         manualOverrideDetailsBody = "Las deducciones de Metas de Ahorro y Amortizaciones se siguen restando de tu presupuesto manual. " +
-            "Si deseas exactamente el monto ingresado cada per\u00edodo, pausa esas deducciones en sus respectivas p\u00e1ginas.\n\n" +
+            "Si quieres exactamente el monto ingresado cada per\u00edodo, pausa esas deducciones en sus respectivas p\u00e1ginas.\n\n" +
             "Establecer un monto superior al presupuesto seguro calculado desactivar\u00e1 el c\u00e1lculo de ahorros necesarios " +
             "en la p\u00e1gina de Gastos Recurrentes.",
         tipsTitle = "Consejos",
@@ -1191,14 +1191,14 @@ object SpanishStrings : AppStrings {
         manualOverrideTitle = "Presupuesto manual",
         manualOverrideBody = "Si el Presupuesto manual est\u00e1 activado en Configuraci\u00f3n del presupuesto, las deducciones " +
             "de Metas de Ahorro a\u00fan se restan de tu monto manual. Puedes pausar metas individuales " +
-            "o todas las metas a la vez si deseas el monto manual completo.",
+            "o todas las metas a la vez si quieres el monto manual completo.",
         tipsTitle = "Consejos",
         tip1 = "Crea metas con fecha objetivo lo antes posible \u2014 cuanto m\u00e1s tiempo tengas, menor ser\u00e1 la deducci\u00f3n de cada per\u00edodo.",
         tip2 = "Usa metas de contribuci\u00f3n fija para ahorros sin fecha l\u00edmite, como fondos de emergencia o ahorro general.",
         tip3 = "Usa Pausar estrat\u00e9gicamente en meses ajustados, pero reanuda pronto para evitar un aumento brusco en las deducciones al acercarse la fecha objetivo.",
         tip4 = "Ingresa un monto ya ahorrado al crear una meta si ya tienes dinero apartado.",
         tip5 = "Usos comunes: mantenimiento del auto, procedimientos m\u00e9dicos, regalos navide\u00f1os, vacaciones, electr\u00f3nica, muebles, suscripciones anuales, fondo de emergencia.",
-        tip6 = "Combin\u00e1lo con Amortizaci\u00f3n: usa Metas de Ahorro para ahorrar antes de una compra, y Amortizaci\u00f3n para distribuir costos despu\u00e9s de una compra inesperada."
+        tip6 = "Comb\u00ednalo con Amortizaci\u00f3n: usa Metas de Ahorro para ahorrar antes de una compra, y Amortizaci\u00f3n para distribuir costos despu\u00e9s de una compra inesperada."
     )
 
     override val amortizationHelp = AmortizationHelpStrings(
@@ -1258,9 +1258,9 @@ object SpanishStrings : AppStrings {
         manualOverrideTitle = "Presupuesto manual",
         manualOverrideBody = "Si el Presupuesto manual est\u00e1 activado en Configuraci\u00f3n del presupuesto, las deducciones " +
             "de amortizaci\u00f3n a\u00fan se restan de tu monto manual. Puedes pausar entradas individuales " +
-            "o todas las entradas a la vez si deseas el monto manual completo.",
+            "o todas las entradas a la vez si quieres el monto manual completo.",
         tipsTitle = "Consejos",
-        tip1 = "Elige un n\u00famero de per\u00edodos que resulte en una deducci\u00f3n c\u00f3moda. Si \$10/d\u00eda es demasiado, distr\u00edbuyelo en m\u00e1s d\u00edas.",
+        tip1 = "Elige un n\u00famero de per\u00edodos que resulte en una deducci\u00f3n c\u00f3moda. Si \$10/d\u00eda es demasiado, distrib\u00fayelo en m\u00e1s d\u00edas.",
         tip2 = "Usa la amortizaci\u00f3n para cualquier gasto que de otro modo devastar\u00eda tu presupuesto: facturas m\u00e9dicas, reparaciones del auto, reemplazo de electrodom\u00e9sticos, viajes de emergencia.",
         tip3 = "Las entradas completadas (todos los per\u00edodos transcurridos) se pueden eliminar para mantener la lista limpia.",
         tip4 = "Recuerda tambi\u00e9n registrar la transacci\u00f3n real \u2014 la amortizaci\u00f3n solo ajusta la tasa de tu presupuesto, no registra el gasto en s\u00ed.",
@@ -1327,7 +1327,7 @@ object SpanishStrings : AppStrings {
         deleteDesc = "Eliminar permanentemente el gasto recurrente.",
         budgetEffectTitle = "C\u00f3mo afectan los gastos recurrentes a tu presupuesto",
         budgetEffectBody = "Los gastos recurrentes cumplen dos funciones en el sistema de presupuesto:",
-        timingSafetyTitle = "1. C\u00e1lculo del presupuesto (Protecci\u00f3n de timing)",
+        timingSafetyTitle = "1. C\u00e1lculo del presupuesto (Protecci\u00f3n temporal)",
         timingSafetyBody = "La calculadora proyecta todos los gastos recurrentes un a\u00f1o hacia adelante y " +
             "simula cada per\u00edodo. Se asegura de que tu monto de presupuesto sea suficiente " +
             "para cubrir las facturas incluso en meses donde se acumulan varios gastos. " +
@@ -1370,7 +1370,7 @@ object SpanishStrings : AppStrings {
             "Nadie \u2014 ni siquiera el servidor \u2014 puede leer tus datos financieros.",
         adminRoleTitle = "El Rol de Administrador",
         adminRoleBody = "La persona que crea el grupo familiar se convierte en administrador. El admin puede " +
-            "cambiar la configuraci\u00f3n compartida del presupuesto (moneda, per\u00edodo, horario de reinicio), " +
+            "cambiar la configuraci\u00f3n compartida del presupuesto (moneda, per\u00edodo, calendario de reinicio), " +
             "iniciar o restablecer el presupuesto, generar c\u00f3digos de emparejamiento para invitar nuevos dispositivos, " +
             "configurar la zona horaria familiar, habilitar la atribuci\u00f3n de transacciones y disolver el " +
             "grupo. Los miembros no admin pueden ver la configuraci\u00f3n pero no pueden cambiarla, y el " +
@@ -1438,17 +1438,17 @@ object SpanishStrings : AppStrings {
         duplicateNew = "Nueva",
         duplicateKeepOld = "Conservar existente",
         duplicateKeepNew = "Conservar nueva",
-        duplicateKeepBoth = "Guardar ambas",
-        recurringTitle = "Gasto recurrente",
+        duplicateKeepBoth = "Conservar ambas",
+        recurringTitle = "Coincidencia recurrente",
         recurringBody = { source -> "Coincide con gasto recurrente \"$source\". \u00bfVincular?" },
         recurringLink = "Vincular",
         recurringNoLink = "No",
-        amortizationTitle = "Amortizaci\u00f3n",
+        amortizationTitle = "Coincidencia de amortizaci\u00f3n",
         amortizationBody = { source -> "Coincide con amortizaci\u00f3n \"$source\". \u00bfVincular?" },
         amortizationLink = "Vincular",
         amortizationNoLink = "No",
-        budgetIncomeTitle = "Ingreso presupuestario",
-        budgetIncomeBody = { source -> "Coincide con fuente de ingreso \"$source\". \u00bfMarcar como ingreso presupuestario?" },
+        budgetIncomeTitle = "Coincidencia de ingreso presupuestado",
+        budgetIncomeBody = { source -> "Coincide con fuente de ingreso \"$source\". \u00bfMarcar como ingreso presupuestado?" },
         budgetIncomeLink = "S\u00ed",
         budgetIncomeNoLink = "No"
     )
