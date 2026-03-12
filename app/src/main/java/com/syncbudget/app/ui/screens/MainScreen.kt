@@ -381,239 +381,264 @@ fun MainScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
-        Column(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(paddingValues)
         ) {
-            // Solari board with bolt
-            Box(contentAlignment = Alignment.Center) {
-                FlipDisplay(
-                    amount = displayAmount,
-                    isNegative = isNegative,
-                    currencySymbol = currencySymbol,
-                    digitCount = autoDigitCount,
-                    decimalPlaces = decimalPlaces,
-                    soundPlayer = soundPlayer,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 16.dp),
-                    bottomLabel = bottomLabel
-                )
-                IconButton(
-                    onClick = { showSuperchargeDialog = true },
+            // Bottom bars: nav icons ~72dp + tx buttons ~56dp = ~128dp
+            val contentSpace = maxHeight - 128.dp
+            val showChart = contentSpace >= 180.dp
+            val showChartTitle = contentSpace >= 120.dp
+            val showSolari = contentSpace >= 60.dp
+            val solariWidthFraction = when {
+                contentSpace >= 300.dp -> 1f
+                contentSpace >= 180.dp -> 0.80f
+                else -> 0.60f
+            }
+
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // ── Content area (weighted: shrinks before bottom bars) ──
+                Column(
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 16.dp, bottom = 16.dp)
-                        .size(64.dp)
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.Bolt,
-                        contentDescription = S.dashboard.supercharge,
-                        tint = pulseColor,
-                        modifier = Modifier.size(44.dp)
-                    )
-                }
-                @OptIn(ExperimentalFoundationApi::class)
-                if (syncStatus != "off") {
-                    val baseSyncColor = when (syncStatus) {
-                        "synced" -> Color(0xFF4CAF50)
-                        "syncing" -> Color(0xFFFFEB3B)
-                        "stale" -> Color(0xFFFF9800)
-                        "error" -> Color(0xFFF44336)
-                        else -> Color(0xFF9E9E9E)
-                    }
-                    // Flash between magenta and base color when repair alert is active
-                    val syncColor = if (syncRepairAlert) {
-                        val flash = rememberInfiniteTransition(label = "repairFlash")
-                        flash.animateColor(
-                            initialValue = Color(0xFFFF00FF),  // Magenta
-                            targetValue = baseSyncColor,
-                            animationSpec = infiniteRepeatable(
-                                animation = tween(600, easing = LinearEasing),
-                                repeatMode = RepeatMode.Reverse
-                            ),
-                            label = "repairColor"
-                        ).value
-                    } else baseSyncColor
-                    Row(
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(start = 20.dp, bottom = 20.dp)
-                            .combinedClickable(
-                                enabled = syncStatus != "syncing",
-                                onClick = { onSyncNow() },
-                                onLongClick = { onDismissRepairAlert() }
-                            ),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Sync,
-                            contentDescription = S.sync.title,
-                            tint = syncColor,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        val otherDevices = syncDevices
-                            .filter { it.deviceId != localDeviceId }
-                            .take(4)
-                        otherDevices.forEach { device ->
-                            Canvas(modifier = Modifier.size(8.dp)) {
-                                drawCircle(color = deviceSyncColor(device.lastSeen))
+                    // Solari board with bolt
+                    if (showSolari) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.fillMaxWidth(solariWidthFraction)
+                        ) {
+                            FlipDisplay(
+                                amount = displayAmount,
+                                isNegative = isNegative,
+                                currencySymbol = currencySymbol,
+                                digitCount = autoDigitCount,
+                                decimalPlaces = decimalPlaces,
+                                soundPlayer = soundPlayer,
+                                modifier = if (solariWidthFraction < 0.80f)
+                                    Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
+                                else
+                                    Modifier.padding(horizontal = 12.dp, vertical = 16.dp),
+                                bottomLabel = bottomLabel
+                            )
+                            IconButton(
+                                onClick = { showSuperchargeDialog = true },
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(end = 16.dp, bottom = 16.dp)
+                                    .size(64.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Bolt,
+                                    contentDescription = S.dashboard.supercharge,
+                                    tint = pulseColor,
+                                    modifier = Modifier.size(44.dp)
+                                )
+                            }
+                            @OptIn(ExperimentalFoundationApi::class)
+                            if (syncStatus != "off") {
+                                val baseSyncColor = when (syncStatus) {
+                                    "synced" -> Color(0xFF4CAF50)
+                                    "syncing" -> Color(0xFFFFEB3B)
+                                    "stale" -> Color(0xFFFF9800)
+                                    "error" -> Color(0xFFF44336)
+                                    else -> Color(0xFF9E9E9E)
+                                }
+                                val syncColor = if (syncRepairAlert) {
+                                    val flash = rememberInfiniteTransition(label = "repairFlash")
+                                    flash.animateColor(
+                                        initialValue = Color(0xFFFF00FF),
+                                        targetValue = baseSyncColor,
+                                        animationSpec = infiniteRepeatable(
+                                            animation = tween(600, easing = LinearEasing),
+                                            repeatMode = RepeatMode.Reverse
+                                        ),
+                                        label = "repairColor"
+                                    ).value
+                                } else baseSyncColor
+                                Row(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomStart)
+                                        .padding(start = 20.dp, bottom = 20.dp)
+                                        .combinedClickable(
+                                            enabled = syncStatus != "syncing",
+                                            onClick = { onSyncNow() },
+                                            onLongClick = { onDismissRepairAlert() }
+                                        ),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Sync,
+                                        contentDescription = S.sync.title,
+                                        tint = syncColor,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    val otherDevices = syncDevices
+                                        .filter { it.deviceId != localDeviceId }
+                                        .take(4)
+                                    otherDevices.forEach { device ->
+                                        Canvas(modifier = Modifier.size(8.dp)) {
+                                            drawCircle(color = deviceSyncColor(device.lastSeen))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Stale device warning banner
+                        if (staleDays >= 60) {
+                            val (staleBannerColor, staleBannerText) = when {
+                                staleDays >= 90 -> Color(0xFFB71C1C) to S.sync.staleBlocked
+                                staleDays >= 85 -> Color(0xFFF44336) to S.sync.staleWarning85
+                                staleDays >= 75 -> Color(0xFFFF5722) to S.sync.staleWarning75
+                                else -> Color(0xFFFF9800) to S.sync.staleWarning60
+                            }
+                            Surface(
+                                color = staleBannerColor.copy(alpha = 0.15f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = staleBannerText,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = staleBannerColor,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                                    textAlign = TextAlign.Center
+                                )
                             }
                         }
                     }
-                }
-            }
 
+                    // Chart title bar
+                    if (showChartTitle) {
+                        val chartBarBg = customColors.headerBackground
+                        val chartBarFg = customColors.headerText
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(chartBarBg)
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = selectedRange.label,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = chartBarFg,
+                                fontSize = 11.sp,
+                                modifier = Modifier
+                                    .background(
+                                        chartBarFg.copy(alpha = 0.15f),
+                                        RoundedCornerShape(6.dp)
+                                    )
+                                    .clickable {
+                                        val values = SpendingRange.entries.toTypedArray()
+                                        val next = (selectedRange.ordinal + 1) % values.size
+                                        selectedRange = values[next]
+                                        chartPrefs.edit().putString("chartRange", values[next].name).apply()
+                                    }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                            Text(
+                                text = S.dashboard.spending,
+                                style = MaterialTheme.typography.titleSmall,
+                                color = chartBarFg,
+                                modifier = Modifier.weight(1f),
+                                textAlign = TextAlign.Center
+                            )
+                            Icon(
+                                imageVector = if (showBarChart) Icons.Filled.PieChart else Icons.Filled.BarChart,
+                                contentDescription = if (showBarChart) S.dashboard.switchToPieChart else S.dashboard.switchToBarChart,
+                                tint = chartBarFg,
+                                modifier = Modifier
+                                    .background(
+                                        chartBarFg.copy(alpha = 0.15f),
+                                        RoundedCornerShape(6.dp)
+                                    )
+                                    .clickable {
+                                        val newVal = !showBarChart
+                                        showBarChart = newVal
+                                        chartPrefs.edit().putBoolean("showBarChart", newVal).apply()
+                                    }
+                                    .padding(4.dp)
+                                    .size(18.dp)
+                            )
+                        }
+                    }
 
-            // Stale device warning banner
-            if (staleDays >= 60) {
-                val (staleBannerColor, staleBannerText) = when {
-                    staleDays >= 90 -> Color(0xFFB71C1C) to S.sync.staleBlocked
-                    staleDays >= 85 -> Color(0xFFF44336) to S.sync.staleWarning85
-                    staleDays >= 75 -> Color(0xFFFF5722) to S.sync.staleWarning75
-                    else -> Color(0xFFFF9800) to S.sync.staleWarning60
+                    // Chart area
+                    if (showChart) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        SpendingPieChart(
+                            transactions = transactions,
+                            categories = categories,
+                            selectedRange = selectedRange,
+                            onRangeChange = { selectedRange = it },
+                            currencySymbol = currencySymbol,
+                            weekStartDay = weekStartDay,
+                            chartPalette = chartPalette,
+                            showBarChart = showBarChart,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                    }
                 }
-                Surface(
-                    color = staleBannerColor.copy(alpha = 0.15f),
-                    modifier = Modifier.fillMaxWidth()
+
+                // ── +/- buttons (fixed, protected) ──
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(customColors.displayBackground)
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = staleBannerText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = staleBannerColor,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                        textAlign = TextAlign.Center
+                    Icon(
+                        imageVector = Icons.Filled.Add,
+                        contentDescription = S.dashboard.addIncome,
+                        tint = Color(0xFF4CAF50),
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clickable(onClick = onAddIncome)
+                    )
+                    Icon(
+                        imageVector = Icons.Filled.Remove,
+                        contentDescription = S.dashboard.addExpense,
+                        tint = Color(0xFFF44336),
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clickable(onClick = onAddExpense)
                     )
                 }
-            }
 
-            // Chart title bar
-            val isDarkTheme = isSystemInDarkTheme()
-            val chartBarBg = customColors.headerBackground
-            val chartBarFg = customColors.headerText
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(chartBarBg)
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Range selector button
-                Text(
-                    text = selectedRange.label,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = chartBarFg,
-                    fontSize = 11.sp,
+                // ── Nav icons (fixed, most protected) ──
+                Row(
                     modifier = Modifier
-                        .background(
-                            chartBarFg.copy(alpha = 0.15f),
-                            RoundedCornerShape(6.dp)
-                        )
-                        .clickable {
-                            val values = SpendingRange.entries.toTypedArray()
-                            val next = (selectedRange.ordinal + 1) % values.size
-                            selectedRange = values[next]
-                            chartPrefs.edit().putString("chartRange", values[next].name).apply()
-                        }
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                )
-
-                // Centered title
-                Text(
-                    text = S.dashboard.spending,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = chartBarFg,
-                    modifier = Modifier.weight(1f),
-                    textAlign = TextAlign.Center
-                )
-
-                // Chart type toggle icon
-                Icon(
-                    imageVector = if (showBarChart) Icons.Filled.PieChart else Icons.Filled.BarChart,
-                    contentDescription = if (showBarChart) S.dashboard.switchToPieChart else S.dashboard.switchToBarChart,
-                    tint = chartBarFg,
-                    modifier = Modifier
-                        .background(
-                            chartBarFg.copy(alpha = 0.15f),
-                            RoundedCornerShape(6.dp)
-                        )
-                        .clickable {
-                            val newVal = !showBarChart
-                            showBarChart = newVal
-                            chartPrefs.edit().putBoolean("showBarChart", newVal).apply()
-                        }
-                        .padding(4.dp)
-                        .size(18.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // Chart area
-            SpendingPieChart(
-                transactions = transactions,
-                categories = categories,
-                selectedRange = selectedRange,
-                onRangeChange = { selectedRange = it },
-                currencySymbol = currencySymbol,
-                weekStartDay = weekStartDay,
-                chartPalette = chartPalette,
-                showBarChart = showBarChart,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp)
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // +/- buttons
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(customColors.displayBackground)
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Add,
-                    contentDescription = S.dashboard.addIncome,
-                    tint = Color(0xFF4CAF50),
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clickable(onClick = onAddIncome)
-                )
-                Icon(
-                    imageVector = Icons.Filled.Remove,
-                    contentDescription = S.dashboard.addExpense,
-                    tint = Color(0xFFF44336),
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clickable(onClick = onAddExpense)
-                )
-            }
-
-            // Nav icons
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = { onNavigate("transactions") }, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.AutoMirrored.Filled.List, S.dashboard.transactions, tint = customColors.accentTint, modifier = Modifier.size(32.dp))
-                }
-                IconButton(onClick = { onNavigate("future_expenditures") }, modifier = Modifier.size(48.dp)) {
-                    Icon(painter = painterResource(id = R.drawable.ic_coins), contentDescription = S.dashboard.savingsGoals, tint = customColors.accentTint, modifier = Modifier.size(32.dp))
-                }
-                IconButton(onClick = { onNavigate("amortization") }, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Filled.Schedule, S.dashboard.amortization, tint = customColors.accentTint, modifier = Modifier.size(32.dp))
-                }
-                IconButton(onClick = { onNavigate("recurring_expenses") }, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Filled.Sync, S.dashboard.recurringExpenses, tint = customColors.accentTint, modifier = Modifier.size(32.dp))
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { onNavigate("transactions") }, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.AutoMirrored.Filled.List, S.dashboard.transactions, tint = customColors.accentTint, modifier = Modifier.size(32.dp))
+                    }
+                    IconButton(onClick = { onNavigate("future_expenditures") }, modifier = Modifier.size(48.dp)) {
+                        Icon(painter = painterResource(id = R.drawable.ic_coins), contentDescription = S.dashboard.savingsGoals, tint = customColors.accentTint, modifier = Modifier.size(32.dp))
+                    }
+                    IconButton(onClick = { onNavigate("amortization") }, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Filled.Schedule, S.dashboard.amortization, tint = customColors.accentTint, modifier = Modifier.size(32.dp))
+                    }
+                    IconButton(onClick = { onNavigate("recurring_expenses") }, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Filled.Sync, S.dashboard.recurringExpenses, tint = customColors.accentTint, modifier = Modifier.size(32.dp))
+                    }
                 }
             }
         }

@@ -368,8 +368,10 @@ object SpanishStrings : AppStrings {
         noLinkedTransactions = "No hay transacciones vinculadas",
         viewSimulationChart = "Toca para ver gr\u00e1fico",
         simulationGraphTitle = "Simulaci\u00f3n de Flujo",
-        simulationGraphDescription = "Flujo de efectivo proyectado durante el per\u00edodo de simulaci\u00f3n. Ajusta tus ahorros actuales para ver c\u00f3mo afectan tu saldo.",
+        simulationGraphDescription = "Flujo de efectivo proyectado durante el per\u00edodo de simulaci\u00f3n. Ajusta tus ahorros actuales o aparta dinero extra para ver c\u00f3mo afecta tu efectivo futuro esperado.",
         simulationSavingsLabel = "Ahorros Actuales",
+        simulationSavedPerLabel = { period -> "Ahorro por $period" },
+        simulationSavingsExceedBudget = "El ahorro por per\u00edodo supera el presupuesto",
         simulationNoData = "No hay datos de simulaci\u00f3n disponibles"
     )
 
@@ -1449,6 +1451,42 @@ object SpanishStrings : AppStrings {
             "generada al crear el grupo. La clave se comparte solo a trav\u00e9s del mecanismo de c\u00f3digo de emparejamiento. " +
             "El servidor almacena solo datos cifrados \u2014 no puede leer tus transacciones, montos, " +
             "nombres de comercios ni ning\u00fan dato financiero. Tu dinero, tus datos, tu control."
+    )
+
+    override val simulationGraphHelp = SimulationGraphHelpStrings(
+        title = "Ayuda de Simulaci\u00f3n de Flujo de Caja",
+        overviewTitle = "\u00bfQu\u00e9 es la Simulaci\u00f3n de Flujo de Caja?",
+        overviewBody = "La Simulaci\u00f3n de Flujo de Caja proyecta tu trayectoria financiera durante los pr\u00f3ximos 18 meses. " +
+            "Toma tu presupuesto actual, fuentes de ingreso, gastos recurrentes, metas de ahorro y entradas de " +
+            "amortizaci\u00f3n y los proyecta hacia adelante para mostrar c\u00f3mo se espera que cambie tu efectivo disponible.",
+        howItWorksTitle = "C\u00f3mo Funciona",
+        howItWorksBody = "La simulaci\u00f3n comienza con tu efectivo disponible actual y avanza por cada per\u00edodo presupuestario " +
+            "(d\u00eda, semana o mes seg\u00fan tu configuraci\u00f3n). En cada paso suma tus ingresos, resta gastos recurrentes, " +
+            "contribuciones a metas de ahorro y deducciones de amortizaci\u00f3n. El saldo resultante se grafica " +
+            "para que puedas ver la tendencia general \u2014 si tu efectivo crece, disminuye o cicla con tu calendario de pagos.",
+        currentSavingsTitle = "Campo de Ahorros Actuales",
+        currentSavingsBody = "El campo \"Ahorros Actuales\" te permite ingresar dinero que ya tienes ahorrado fuera de tu " +
+            "presupuesto. Esto desplaza todo el gr\u00e1fico hacia arriba, d\u00e1ndote una imagen m\u00e1s completa de tu " +
+            "posici\u00f3n financiera total. \u00dasalo para ver c\u00f3mo tus ahorros existentes se combinan con tu flujo de caja. " +
+            "Este n\u00famero se establece por defecto en un valor que te mantiene justo por encima de cero durante toda la simulaci\u00f3n. " +
+            "Si tienes menos dinero que esto (en cuentas corrientes, cuentas de ahorro o enterrado en tu jard\u00edn) " +
+            "deber\u00edas considerar crear una Meta de Ahorro para ponerte al d\u00eda. \u00a1Por supuesto, aumentar ingresos o reducir gastos tambi\u00e9n ayuda!",
+        savedPerPeriodTitle = "Campo de Ahorro por Per\u00edodo",
+        savedPerPeriodBody = "El campo \"Ahorro por Per\u00edodo\" simula apartar una cantidad fija cada per\u00edodo. " +
+            "Las Metas de Ahorro ya configuradas en esa p\u00e1gina ya est\u00e1n consideradas. Agregar un monto positivo aqu\u00ed simula dinero adicional ahorrado cada per\u00edodo m\u00e1s all\u00e1 de lo ya configurado. Un " +
+            "valor negativo simula gastar de m\u00e1s. Esto te permite responder preguntas como " +
+            "\"\u00bfQu\u00e9 pasar\u00eda si ahorro \$50 por semana?\" o \"\u00bfQu\u00e9 pasa si gasto de m\u00e1s \$20 por d\u00eda?\"",
+        insightsTitle = "Obteniendo Perspectivas Financieras",
+        insightsBody = "Prueba ajustar ambos campos juntos para explorar diferentes escenarios. Por ejemplo, ingresa tu " +
+            "saldo real de ahorros y luego experimenta con diferentes montos de ahorro por per\u00edodo para ver qu\u00e9 tan " +
+            "r\u00e1pido crece tu patrimonio total. Si el gr\u00e1fico tiende a la baja, significa que tus gastos superan " +
+            "tus ingresos \u2014 una se\u00f1al para revisar tus gastos. Si tiende al alza, tienes margen para ahorrar " +
+            "m\u00e1s agresivamente o pagar deudas m\u00e1s r\u00e1pido.",
+        tipsTitle = "Consejos",
+        tip1 = "Pellizca para acercar rangos espec\u00edficos y desliza para recorrer la l\u00ednea de tiempo.",
+        tip2 = "Usa los botones +/\u2013 para ajustar el zoom por pasos.",
+        tip3 = "Prueba primero un monto peque\u00f1o de ahorro por per\u00edodo, luego aum\u00e9ntalo para encontrar un equilibrio c\u00f3modo entre ahorrar y gastar.",
+        tip4 = "Si tu \"Ahorro por Per\u00edodo\" excede tu presupuesto, el gr\u00e1fico mostrar\u00e1 un mensaje \u2014 esto significa que tu meta de ahorro no es sostenible con tus ingresos actuales."
     )
 
     override val widgetTransaction = WidgetTransactionStrings(

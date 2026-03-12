@@ -31,6 +31,7 @@ interface AppStrings {
     val amortizationHelp: AmortizationHelpStrings
     val recurringExpensesHelp: RecurringExpensesHelpStrings
     val familySyncHelp: FamilySyncHelpStrings
+    val simulationGraphHelp: SimulationGraphHelpStrings
     val widgetTransaction: WidgetTransactionStrings
 }
 
@@ -392,6 +393,8 @@ data class FutureExpendituresStrings(
     val simulationGraphTitle: String,
     val simulationGraphDescription: String,
     val simulationSavingsLabel: String,
+    val simulationSavedPerLabel: (String) -> String,
+    val simulationSavingsExceedBudget: String,
     val simulationNoData: String
 )
 
@@ -1210,4 +1213,23 @@ data class WidgetTransactionStrings(
     val budgetIncomeBody: (String) -> String, // source
     val budgetIncomeLink: String,
     val budgetIncomeNoLink: String
+)
+
+data class SimulationGraphHelpStrings(
+    val title: String,
+    val overviewTitle: String,
+    val overviewBody: String,
+    val howItWorksTitle: String,
+    val howItWorksBody: String,
+    val currentSavingsTitle: String,
+    val currentSavingsBody: String,
+    val savedPerPeriodTitle: String,
+    val savedPerPeriodBody: String,
+    val insightsTitle: String,
+    val insightsBody: String,
+    val tipsTitle: String,
+    val tip1: String,
+    val tip2: String,
+    val tip3: String,
+    val tip4: String
 )

@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -105,7 +106,8 @@ fun SimulationGraphScreen(
     resetDayOfWeek: Int,
     resetDayOfMonth: Int,
     currencySymbol: String,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onHelpClick: () -> Unit = {}
 ) {
     val S = LocalStrings.current
     val customColors = LocalSyncBudgetColors.current
@@ -128,6 +130,31 @@ fun SimulationGraphScreen(
         mutableStateOf("%.${maxDecimals}f".format(simResult.savingsRequired))
     }
     val currentSavings = savingsText.toDoubleOrNull() ?: simResult.savingsRequired
+
+    var savedPerPeriodText by remember { mutableStateOf("") }
+    val savedPerPeriod = savedPerPeriodText.toDoubleOrNull() ?: 0.0
+
+    val periodLabel = when (budgetPeriod) {
+        BudgetPeriod.DAILY -> S.common.periodDay
+        BudgetPeriod.WEEKLY -> S.common.periodWeek
+        BudgetPeriod.MONTHLY -> S.common.periodMonth
+    }
+
+    val savingsExceedBudget = savedPerPeriod > 0 && savedPerPeriod >= baseBudget
+
+    // Re-run simulation when savedPerPeriod changes
+    val (adjSimResult, adjTimeline) = remember(
+        incomeSources, recurringExpenses, budgetPeriod,
+        baseBudget, amortizationEntries, savingsGoals,
+        availableCash, resetDayOfWeek, resetDayOfMonth,
+        savedPerPeriod
+    ) {
+        SavingsSimulator.simulateTimeline(
+            incomeSources, recurringExpenses, budgetPeriod,
+            baseBudget - savedPerPeriod, amortizationEntries, savingsGoals,
+            availableCash, resetDayOfWeek, resetDayOfMonth
+        )
+    }
 
     val textFieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = MaterialTheme.colorScheme.onBackground,
@@ -157,6 +184,15 @@ fun SimulationGraphScreen(
                         )
                     }
                 },
+                actions = {
+                    IconButton(onClick = onHelpClick) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.Help,
+                            contentDescription = S.common.help,
+                            tint = customColors.headerText
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = customColors.headerBackground
                 )
@@ -177,25 +213,58 @@ fun SimulationGraphScreen(
             )
             Spacer(Modifier.height(12.dp))
 
-            OutlinedTextField(
-                value = savingsText,
-                onValueChange = { newVal ->
-                    if (newVal.isEmpty() || newVal == "." || newVal.toDoubleOrNull() != null) {
-                        val dotIdx = newVal.indexOf('.')
-                        val decs = if (dotIdx >= 0) newVal.length - dotIdx - 1 else 0
-                        if (maxDecimals == 0 && dotIdx >= 0) { /* block */ }
-                        else if (decs <= maxDecimals) { savingsText = newVal }
-                    }
-                },
-                label = { Text(S.futureExpenditures.simulationSavingsLabel) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = if (maxDecimals > 0) KeyboardType.Decimal else KeyboardType.Number),
-                colors = textFieldColors,
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth()
-            )
+            ) {
+                OutlinedTextField(
+                    value = savingsText,
+                    onValueChange = { newVal ->
+                        if (newVal.isEmpty() || newVal == "." || newVal.toDoubleOrNull() != null) {
+                            val dotIdx = newVal.indexOf('.')
+                            val decs = if (dotIdx >= 0) newVal.length - dotIdx - 1 else 0
+                            if (maxDecimals == 0 && dotIdx >= 0) { /* block */ }
+                            else if (decs <= maxDecimals) { savingsText = newVal }
+                        }
+                    },
+                    label = { Text(S.futureExpenditures.simulationSavingsLabel) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = if (maxDecimals > 0) KeyboardType.Decimal else KeyboardType.Number),
+                    colors = textFieldColors,
+                    modifier = Modifier.weight(1f)
+                )
+                OutlinedTextField(
+                    value = savedPerPeriodText,
+                    onValueChange = { newVal ->
+                        val cleaned = newVal.filter { it.isDigit() || it == '.' || it == '-' }
+                        // Allow empty, just minus, minus-dot, or valid number
+                        if (cleaned.isEmpty() || cleaned == "-" || cleaned == "." || cleaned == "-." ||
+                            cleaned.toDoubleOrNull() != null) {
+                            val dotIdx = cleaned.indexOf('.')
+                            val decs = if (dotIdx >= 0) cleaned.length - dotIdx - 1 else 0
+                            // Only one minus, must be at start
+                            val minusCount = cleaned.count { it == '-' }
+                            if (minusCount > 1 || (minusCount == 1 && cleaned[0] != '-')) return@OutlinedTextField
+                            if (maxDecimals == 0 && dotIdx >= 0) { /* block */ }
+                            else if (decs <= maxDecimals) { savedPerPeriodText = cleaned }
+                        }
+                    },
+                    label = { Text(S.futureExpenditures.simulationSavedPerLabel(periodLabel)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    colors = textFieldColors,
+                    modifier = Modifier.weight(1f)
+                )
+            }
             Spacer(Modifier.height(12.dp))
 
-            if (timeline.size < 2) {
+            if (savingsExceedBudget) {
+                Text(
+                    S.futureExpenditures.simulationSavingsExceedBudget,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                )
+            } else if (adjTimeline.size < 2) {
                 Text(
                     S.futureExpenditures.simulationNoData,
                     style = MaterialTheme.typography.bodyLarge,
@@ -205,12 +274,12 @@ fun SimulationGraphScreen(
                 val yAxisWidthDp = 80.dp
                 val xAxisHeightDp = 80.dp
 
-                val startDate = timeline.first().date
-                val totalDays = ChronoUnit.DAYS.between(startDate, timeline.last().date)
+                val startDate = adjTimeline.first().date
+                val totalDays = ChronoUnit.DAYS.between(startDate, adjTimeline.last().date)
                     .toInt().coerceAtLeast(1)
 
-                val adjustedPoints = remember(timeline, currentSavings) {
-                    timeline.map { it.balance + currentSavings }
+                val adjustedPoints = remember(adjTimeline, currentSavings) {
+                    adjTimeline.map { it.balance + currentSavings }
                 }
                 val yMin = remember(adjustedPoints) {
                     minOf(0.0, adjustedPoints.minOrNull() ?: 0.0)
@@ -426,7 +495,7 @@ fun SimulationGraphScreen(
                                     val shadePath = Path()
                                     val bottomY = h - pad
 
-                                    timeline.forEachIndexed { i, point ->
+                                    adjTimeline.forEachIndexed { i, point ->
                                         val x = dateToX(point.date)
                                         val y = valueToY(adjustedPoints[i])
                                         if (i == 0) {
@@ -439,8 +508,8 @@ fun SimulationGraphScreen(
                                     }
 
                                     // Close shade path along bottom
-                                    val lastX = dateToX(timeline.last().date)
-                                    val firstX = dateToX(timeline.first().date)
+                                    val lastX = dateToX(adjTimeline.last().date)
+                                    val firstX = dateToX(adjTimeline.first().date)
                                     shadePath.lineTo(lastX, bottomY)
                                     shadePath.lineTo(firstX, bottomY)
                                     shadePath.close()
@@ -470,12 +539,12 @@ fun SimulationGraphScreen(
                                     )
 
                                     // Low point marker
-                                    if (simResult.lowPointDate != null) {
-                                        val lowIdx = timeline.indexOfFirst {
-                                            it.date == simResult.lowPointDate
+                                    if (adjSimResult.lowPointDate != null) {
+                                        val lowIdx = adjTimeline.indexOfFirst {
+                                            it.date == adjSimResult.lowPointDate
                                         }
                                         if (lowIdx >= 0) {
-                                            val lx = dateToX(timeline[lowIdx].date)
+                                            val lx = dateToX(adjTimeline[lowIdx].date)
                                             val ly = valueToY(adjustedPoints[lowIdx])
                                             drawCircle(
                                                 Color(0xFFF44336),
@@ -506,13 +575,14 @@ fun SimulationGraphScreen(
                                     }
 
                                     val labelInterval = when {
+                                        dpPerDay < 2f -> 61
                                         dpPerDay < 4f -> 30
                                         dpPerDay < 10f -> 14
                                         dpPerDay < 55f -> 7
                                         else -> 1
                                     }
                                     val dateFormat = when {
-                                        labelInterval >= 28 -> "MMM d"
+                                        labelInterval > 30 -> "MMM yy"
                                         else -> "MMM d"
                                     }
                                     val formatter = DateTimeFormatter.ofPattern(dateFormat)
@@ -533,7 +603,7 @@ fun SimulationGraphScreen(
                                         drawLine(0f, 0f, w, 0f, borderPaint)
 
                                         var d = startDate
-                                        val endDate = timeline.last().date
+                                        val endDate = adjTimeline.last().date
                                         while (!d.isAfter(endDate)) {
                                             val x = dateToX(d)
                                             // Tick mark

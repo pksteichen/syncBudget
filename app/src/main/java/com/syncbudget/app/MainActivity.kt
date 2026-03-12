@@ -84,6 +84,7 @@ import com.syncbudget.app.ui.screens.RecurringExpenseConfirmDialog
 import com.syncbudget.app.ui.screens.RecurringExpensesHelpScreen
 import com.syncbudget.app.ui.screens.RecurringExpensesScreen
 import com.syncbudget.app.ui.screens.SettingsHelpScreen
+import com.syncbudget.app.ui.screens.SimulationGraphHelpScreen
 import com.syncbudget.app.ui.screens.SimulationGraphScreen
 import com.syncbudget.app.ui.screens.SettingsScreen
 import com.syncbudget.app.ui.screens.TransactionDialog
@@ -1582,6 +1583,7 @@ class MainActivity : ComponentActivity() {
                             "amortization_help" -> "amortization"
                             "recurring_expenses_help" -> "recurring_expenses"
                             "budget_config_help" -> "budget_config"
+                            "simulation_graph_help" -> "simulation_graph"
                             "simulation_graph" -> "future_expenditures"
                             "budget_config" -> "settings"
                             "family_sync" -> "settings"
@@ -2515,7 +2517,8 @@ class MainActivity : ComponentActivity() {
                         resetDayOfWeek = resetDayOfWeek,
                         resetDayOfMonth = resetDayOfMonth,
                         currencySymbol = currencySymbol,
-                        onBack = { currentScreen = "future_expenditures" }
+                        onBack = { currentScreen = "future_expenditures" },
+                        onHelpClick = { currentScreen = "simulation_graph_help" }
                     )
                     "amortization" -> AmortizationScreen(
                         amortizationEntries = amortizationEntries.toList().active,
@@ -3381,6 +3384,9 @@ class MainActivity : ComponentActivity() {
                     )
                     "family_sync_help" -> FamilySyncHelpScreen(
                         onBack = { currentScreen = "family_sync" }
+                    )
+                    "simulation_graph_help" -> SimulationGraphHelpScreen(
+                        onBack = { currentScreen = "simulation_graph" }
                     )
                 }
 

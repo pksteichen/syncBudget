@@ -368,8 +368,10 @@ object EnglishStrings : AppStrings {
         noLinkedTransactions = "No linked transactions",
         viewSimulationChart = "Tap to view chart",
         simulationGraphTitle = "Cash Flow Simulation",
-        simulationGraphDescription = "Projected cash flow over the simulation period. Adjust your current savings to see how different levels affect your balance.",
+        simulationGraphDescription = "Projected cash flow over the simulation period. Adjust your current savings or set aside extra money to see how it affects your future expected cash on hand.",
         simulationSavingsLabel = "Current Savings",
+        simulationSavedPerLabel = { period -> "Saved per $period" },
+        simulationSavingsExceedBudget = "Savings per period exceed the budget amount",
         simulationNoData = "No simulation data available"
     )
 
@@ -1451,6 +1453,44 @@ object EnglishStrings : AppStrings {
             "mechanism. The server stores only encrypted blobs \u2014 it cannot read " +
             "your transactions, amounts, merchant names, or any financial data. " +
             "Your money, your data, your control."
+    )
+
+    override val simulationGraphHelp = SimulationGraphHelpStrings(
+        title = "Cash Flow Simulation Help",
+        overviewTitle = "What is the Cash Flow Simulation?",
+        overviewBody = "The Cash Flow Simulation projects your financial trajectory over the next 18 months. " +
+            "It takes your current budget, income sources, recurring expenses, savings goals, and amortization " +
+            "entries and plays them forward in time to show how your available cash is expected to change.",
+        howItWorksTitle = "How It Works",
+        howItWorksBody = "The simulation starts with your current available cash and steps through each budget period " +
+            "(day, week, or month depending on your settings). At each step it adds your income, subtracts " +
+            "recurring expenses, savings goal contributions, and amortization deductions. The resulting cash " +
+            "balance is plotted on the chart so you can see the overall trend \u2014 whether your cash is growing, " +
+            "shrinking, or cycling with your pay schedule.",
+        currentSavingsTitle = "Current Savings Input",
+        currentSavingsBody = "The \"Current Savings\" field lets you enter money you already have saved outside of your " +
+            "budget. This shifts the entire chart upward by that amount, giving you a more complete picture " +
+            "of your total financial position. Use this to see how your existing savings cushion combines " +
+            "with your ongoing cash flow. " +
+            "This number defaults to a value that just keeps you above zero throughout the simulation. " +
+            "If you have less money than this (in checking accounts, savings accounts, or buried in your garden) " +
+            "you should consider setting up a Savings Goal to catch up. Of course increasing income or reducing expenses also helps!",
+        savedPerPeriodTitle = "Saved per Period Input",
+        savedPerPeriodBody = "The \"Saved per Period\" field simulates setting aside a fixed amount each budget period. " +
+            "Savings Goals already set up on that page are already considered. Adding a positive amount here simulates additional money saved each period beyond what's already configured. A negative " +
+            "value simulates overspending (spending more than your budget). This lets you answer questions like " +
+            "\"What if I saved \$50 per week?\" or \"What happens if I consistently overspend by \$20 per day?\"",
+        insightsTitle = "Gaining Financial Insights",
+        insightsBody = "Try adjusting both inputs together to explore different scenarios. For example, enter your " +
+            "actual savings balance and then experiment with different per-period savings amounts to see how " +
+            "quickly your total wealth grows. If the chart trends downward, it means your expenses exceed " +
+            "your income over time \u2014 a signal to review your spending. If it trends upward, you have room " +
+            "to save more aggressively or pay down debt faster.",
+        tipsTitle = "Tips",
+        tip1 = "Pinch to zoom in on specific time ranges, and swipe to scroll through the timeline.",
+        tip2 = "Use the +/\u2013 buttons to adjust the zoom level in steps.",
+        tip3 = "Try a small per-period savings amount first, then increase it to find a comfortable balance between saving and spending.",
+        tip4 = "If your \"Saved per Period\" exceeds your budget, the chart will show a message \u2014 this means your savings goal isn't sustainable with your current income."
     )
 
     override val widgetTransaction = WidgetTransactionStrings(

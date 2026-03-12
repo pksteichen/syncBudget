@@ -36,24 +36,18 @@ object SavingsSimulator {
         resetDayOfMonth: Int,
         today: LocalDate
     ): MutableList<CashEvent>? {
-        val twoYearsAhead = today.plusYears(2)
+        val horizon = today.plusMonths(18)
 
-        var horizon = today
-        for (src in incomeSources) {
-            val occ = BudgetCalculator.generateOccurrences(
-                src.repeatType, src.repeatInterval, src.startDate,
-                src.monthDay1, src.monthDay2, today, twoYearsAhead
-            ).firstOrNull()
-            if (occ != null && occ.isAfter(horizon)) horizon = occ
-        }
-        for (exp in recurringExpenses) {
-            val occ = BudgetCalculator.generateOccurrences(
-                exp.repeatType, exp.repeatInterval, exp.startDate,
-                exp.monthDay1, exp.monthDay2, today, twoYearsAhead
-            ).firstOrNull()
-            if (occ != null && occ.isAfter(horizon)) horizon = occ
-        }
-        if (horizon == today) return null
+        // Check that at least one income or expense exists to simulate
+        val hasIncome = incomeSources.any { BudgetCalculator.generateOccurrences(
+            it.repeatType, it.repeatInterval, it.startDate,
+            it.monthDay1, it.monthDay2, today, horizon
+        ).isNotEmpty() }
+        val hasExpenses = recurringExpenses.any { BudgetCalculator.generateOccurrences(
+            it.repeatType, it.repeatInterval, it.startDate,
+            it.monthDay1, it.monthDay2, today, horizon
+        ).isNotEmpty() }
+        if (!hasIncome && !hasExpenses) return null
 
         val events = mutableListOf<CashEvent>()
         events.add(CashEvent(today, -availableCash, priority = 1))
@@ -334,26 +328,20 @@ object SavingsSimulator {
         }
         sb.appendLine()
 
-        val twoYearsAhead = today.plusYears(2)
-        var horizon = today
-        for (src in incomeSources) {
-            val occ = BudgetCalculator.generateOccurrences(
-                src.repeatType, src.repeatInterval, src.startDate,
-                src.monthDay1, src.monthDay2, today, twoYearsAhead
-            ).firstOrNull()
-            if (occ != null && occ.isAfter(horizon)) horizon = occ
-        }
-        for (exp in recurringExpenses) {
-            val occ = BudgetCalculator.generateOccurrences(
-                exp.repeatType, exp.repeatInterval, exp.startDate,
-                exp.monthDay1, exp.monthDay2, today, twoYearsAhead
-            ).firstOrNull()
-            if (occ != null && occ.isAfter(horizon)) horizon = occ
-        }
+        val horizon = today.plusMonths(18)
+
+        val hasIncome = incomeSources.any { BudgetCalculator.generateOccurrences(
+            it.repeatType, it.repeatInterval, it.startDate,
+            it.monthDay1, it.monthDay2, today, horizon
+        ).isNotEmpty() }
+        val hasExpenses = recurringExpenses.any { BudgetCalculator.generateOccurrences(
+            it.repeatType, it.repeatInterval, it.startDate,
+            it.monthDay1, it.monthDay2, today, horizon
+        ).isNotEmpty() }
 
         sb.appendLine("── HORIZON ──")
         sb.appendLine("Horizon date: $horizon")
-        if (horizon == today) {
+        if (!hasIncome && !hasExpenses) {
             sb.appendLine("Nothing upcoming. Savings required = ${currencySymbol}${fmt(maxOf(0.0, availableCash))}")
             return sb.toString()
         }
