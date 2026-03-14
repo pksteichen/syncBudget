@@ -140,16 +140,39 @@ object FullBackupSerializer {
         }
     }
 
+    /**
+     * Auto-backup current state before a restore, so the user can
+     * recover if the restore data is corrupt or wrong.
+     */
+    fun backupBeforeRestore(context: Context): String {
+        return serialize(context)
+    }
+
     fun restoreFullState(context: Context, content: String) {
         val json = JSONObject(content)
 
-        // Write each data array to its repo file
+        // Validate backup format before overwriting anything
+        val type = json.optString("type", "")
+        if (type != "syncbudget_full_backup") {
+            throw IllegalArgumentException("Not a valid BudgeTrak backup file")
+        }
+
+        // Auto-backup current state so the user can recover
+        val preRestoreBackup = try { backupBeforeRestore(context) } catch (_: Exception) { null }
+        if (preRestoreBackup != null) {
+            try {
+                val dir = android.os.Environment.getExternalStoragePublicDirectory(
+                    android.os.Environment.DIRECTORY_DOWNLOADS
+                )
+                java.io.File(dir, "pre_restore_backup.json").writeText(preRestoreBackup)
+            } catch (_: Exception) { /* best effort */ }
+        }
+
+        // Write each data array to its repo file using atomic writes
         fun writeArray(key: String, fileName: String) {
             val arr = json.optJSONArray(key)
             if (arr != null) {
-                context.openFileOutput(fileName, Context.MODE_PRIVATE).use {
-                    it.write(arr.toString().toByteArray())
-                }
+                SafeIO.atomicWriteJson(context, fileName, arr)
             }
         }
 

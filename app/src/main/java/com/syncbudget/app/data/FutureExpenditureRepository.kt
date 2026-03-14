@@ -1,6 +1,7 @@
 package com.syncbudget.app.data
 
 import android.content.Context
+import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
@@ -8,6 +9,7 @@ import java.time.LocalDate
 object SavingsGoalRepository {
 
     private const val FILE_NAME = "future_expenditures.json"
+    private const val TAG = "SavingsGoalRepo"
 
     fun save(context: Context, goals: List<SavingsGoal>) {
         val jsonArray = JSONArray()
@@ -35,46 +37,44 @@ object SavingsGoalRepository {
             obj.put("deviceId_clock", g.deviceId_clock)
             jsonArray.put(obj)
         }
-        context.openFileOutput(FILE_NAME, Context.MODE_PRIVATE).use { fos ->
-            fos.write(jsonArray.toString().toByteArray())
-        }
+        SafeIO.atomicWriteJson(context, FILE_NAME, jsonArray)
     }
 
     fun load(context: Context): List<SavingsGoal> {
-        val file = context.getFileStreamPath(FILE_NAME)
-        if (!file.exists()) return emptyList()
-        val json = context.openFileInput(FILE_NAME).bufferedReader().use { it.readText() }
-        if (json.isBlank()) return emptyList()
-        val jsonArray = JSONArray(json)
+        val jsonArray = SafeIO.readJsonArray(context, FILE_NAME)
         val list = mutableListOf<SavingsGoal>()
         for (i in 0 until jsonArray.length()) {
-            val obj = jsonArray.getJSONObject(i)
-            val name = if (obj.has("name")) obj.getString("name") else ""
-            val targetAmount = if (obj.has("targetAmount")) obj.getDouble("targetAmount") else 0.0
-            val targetDate = if (obj.has("targetDate") && !obj.isNull("targetDate")) {
-                try { LocalDate.parse(obj.getString("targetDate")) } catch (_: Exception) { null }
-            } else null
-            list.add(
-                SavingsGoal(
-                    id = obj.getInt("id"),
-                    name = name,
-                    targetAmount = targetAmount,
-                    targetDate = targetDate,
-                    totalSavedSoFar = if (obj.has("totalSavedSoFar")) obj.getDouble("totalSavedSoFar") else 0.0,
-                    contributionPerPeriod = if (obj.has("contributionPerPeriod")) obj.getDouble("contributionPerPeriod") else 0.0,
-                    isPaused = if (obj.has("isPaused")) obj.getBoolean("isPaused") else false,
-                    deviceId = obj.optString("deviceId", ""),
-                    deleted = obj.optBoolean("deleted", false),
-                    name_clock = obj.optLong("name_clock", 0L),
-                    targetAmount_clock = obj.optLong("targetAmount_clock", 0L),
-                    targetDate_clock = obj.optLong("targetDate_clock", 0L),
-                    totalSavedSoFar_clock = obj.optLong("totalSavedSoFar_clock", 0L),
-                    contributionPerPeriod_clock = obj.optLong("contributionPerPeriod_clock", 0L),
-                    isPaused_clock = obj.optLong("isPaused_clock", 0L),
-                    deleted_clock = obj.optLong("deleted_clock", 0L),
-                    deviceId_clock = obj.optLong("deviceId_clock", 0L)
+            try {
+                val obj = jsonArray.getJSONObject(i)
+                val name = if (obj.has("name")) obj.getString("name") else ""
+                val targetAmount = SafeIO.safeDouble(if (obj.has("targetAmount")) obj.getDouble("targetAmount") else 0.0)
+                val targetDate = if (obj.has("targetDate") && !obj.isNull("targetDate")) {
+                    try { LocalDate.parse(obj.getString("targetDate")) } catch (_: Exception) { null }
+                } else null
+                list.add(
+                    SavingsGoal(
+                        id = obj.getInt("id"),
+                        name = name,
+                        targetAmount = targetAmount,
+                        targetDate = targetDate,
+                        totalSavedSoFar = SafeIO.safeDouble(if (obj.has("totalSavedSoFar")) obj.getDouble("totalSavedSoFar") else 0.0),
+                        contributionPerPeriod = SafeIO.safeDouble(if (obj.has("contributionPerPeriod")) obj.getDouble("contributionPerPeriod") else 0.0),
+                        isPaused = if (obj.has("isPaused")) obj.getBoolean("isPaused") else false,
+                        deviceId = obj.optString("deviceId", ""),
+                        deleted = obj.optBoolean("deleted", false),
+                        name_clock = obj.optLong("name_clock", 0L),
+                        targetAmount_clock = obj.optLong("targetAmount_clock", 0L),
+                        targetDate_clock = obj.optLong("targetDate_clock", 0L),
+                        totalSavedSoFar_clock = obj.optLong("totalSavedSoFar_clock", 0L),
+                        contributionPerPeriod_clock = obj.optLong("contributionPerPeriod_clock", 0L),
+                        isPaused_clock = obj.optLong("isPaused_clock", 0L),
+                        deleted_clock = obj.optLong("deleted_clock", 0L),
+                        deviceId_clock = obj.optLong("deviceId_clock", 0L)
+                    )
                 )
-            )
+            } catch (e: Exception) {
+                Log.w(TAG, "Skipping corrupt record at index $i: ${e.message}")
+            }
         }
         return list
     }

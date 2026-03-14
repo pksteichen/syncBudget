@@ -437,6 +437,11 @@ class SyncEngine(
                     }
                 }
             }
+            // Dedup period ledger immediately after merge so downstream
+            // consumers (BudgetCalculator, simAvailableCash) never see
+            // duplicate entries for the same epoch day.
+            mergedPl = PeriodLedgerRepository.dedup(mergedPl).toMutableList()
+
             syncLog("Merge complete: ${mergedTxns.size} txns, ${mergedRe.size} RE, ${mergedIs.size} IS, ${mergedCat.size} cats")
 
             // Step 5: Remap category IDs in transactions (handles different random IDs per device)
@@ -1020,16 +1025,20 @@ class SyncEngine(
     }
 
     /** A skeleton record is one created from a partial delta that is missing
-     *  critical field clocks (meaning those fields were not included in the
-     *  delta and defaulted to 0).  Such records would appear as $0 amounts
-     *  or empty names in the UI. */
+     *  critical fields.  Checks both clocks (field not included in delta)
+     *  AND values (field included but deserialized to default/empty).
+     *  Such records would appear as $0 amounts or empty names in the UI. */
     private fun isSkeletonRecord(record: Any): Boolean = when (record) {
         is Transaction -> record.amount_clock == 0L || record.source_clock == 0L
+            || record.source.isEmpty() || (record.amount == 0.0 && record.amount_clock > 0L)
         is RecurringExpense -> record.amount_clock == 0L || record.source_clock == 0L
+            || record.source.isEmpty()
         is IncomeSource -> record.amount_clock == 0L || record.source_clock == 0L
+            || record.source.isEmpty()
         is AmortizationEntry -> record.amount_clock == 0L || record.source_clock == 0L
-        is SavingsGoal -> record.name_clock == 0L
-        is Category -> record.name_clock == 0L
+            || record.source.isEmpty()
+        is SavingsGoal -> record.name_clock == 0L || record.name.isEmpty()
+        is Category -> record.name_clock == 0L || record.name.isEmpty()
         is PeriodLedgerEntry -> false  // entries are immutable, never skeleton
         else -> false
     }

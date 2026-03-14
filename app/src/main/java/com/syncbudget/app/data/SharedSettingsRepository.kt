@@ -1,11 +1,13 @@
 package com.syncbudget.app.data
 
 import android.content.Context
+import android.util.Log
 import org.json.JSONObject
 
 object SharedSettingsRepository {
 
     private const val FILE_NAME = "shared_settings.json"
+    private const val TAG = "SharedSettingsRepo"
 
     fun save(context: Context, settings: SharedSettings) {
         val json = JSONObject()
@@ -48,34 +50,29 @@ object SharedSettingsRepository {
         json.put("incomeMode_clock", settings.incomeMode_clock)
         json.put("deviceRoster_clock", settings.deviceRoster_clock)
 
-        context.openFileOutput(FILE_NAME, Context.MODE_PRIVATE).use {
-            it.write(json.toString().toByteArray())
-        }
+        SafeIO.atomicWriteJson(context, FILE_NAME, json)
     }
 
     fun load(context: Context): SharedSettings {
-        val file = context.getFileStreamPath(FILE_NAME)
-        if (!file.exists()) return SharedSettings()
+        val json = SafeIO.readJsonObject(context, FILE_NAME) ?: return SharedSettings()
         return try {
-            val text = file.readText()
-            val json = JSONObject(text)
             SharedSettings(
                 currency = json.optString("currency", "$"),
                 budgetPeriod = json.optString("budgetPeriod", "DAILY"),
                 budgetStartDate = if (json.isNull("budgetStartDate")) null else json.optString("budgetStartDate", null),
                 isManualBudgetEnabled = json.optBoolean("isManualBudgetEnabled", false),
-                manualBudgetAmount = json.optDouble("manualBudgetAmount", 0.0),
+                manualBudgetAmount = SafeIO.safeDouble(json.optDouble("manualBudgetAmount", 0.0)),
                 weekStartSunday = json.optBoolean("weekStartSunday", true),
                 resetDayOfWeek = json.optInt("resetDayOfWeek", 7),
                 resetDayOfMonth = json.optInt("resetDayOfMonth", 1),
                 resetHour = json.optInt("resetHour", 0),
                 familyTimezone = json.optString("familyTimezone", ""),
                 matchDays = json.optInt("matchDays", 7),
-                matchPercent = json.optDouble("matchPercent", 1.0),
+                matchPercent = SafeIO.safeDouble(json.optDouble("matchPercent", 1.0), 1.0),
                 matchDollar = json.optInt("matchDollar", 1),
                 matchChars = json.optInt("matchChars", 5),
                 showAttribution = json.optBoolean("showAttribution", false),
-                availableCash = json.optDouble("availableCash", 0.0),
+                availableCash = SafeIO.safeDouble(json.optDouble("availableCash", 0.0)),
                 incomeMode = json.optString("incomeMode", "FIXED"),
                 deviceRoster = json.optString("deviceRoster", "{}"),
                 lastChangedBy = json.optString("lastChangedBy", ""),
@@ -98,7 +95,8 @@ object SharedSettingsRepository {
                 incomeMode_clock = json.optLong("incomeMode_clock", 0L),
                 deviceRoster_clock = json.optLong("deviceRoster_clock", 0L)
             )
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse shared settings: ${e.message}")
             SharedSettings()
         }
     }

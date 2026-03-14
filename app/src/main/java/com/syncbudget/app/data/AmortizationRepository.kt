@@ -1,6 +1,7 @@
 package com.syncbudget.app.data
 
 import android.content.Context
+import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
@@ -8,6 +9,7 @@ import java.time.LocalDate
 object AmortizationRepository {
 
     private const val FILE_NAME = "amortization_entries.json"
+    private const val TAG = "AmortizationRepo"
 
     fun save(context: Context, entries: List<AmortizationEntry>) {
         val jsonArray = JSONArray()
@@ -33,41 +35,41 @@ object AmortizationRepository {
             obj.put("deviceId_clock", e.deviceId_clock)
             jsonArray.put(obj)
         }
-        context.openFileOutput(FILE_NAME, Context.MODE_PRIVATE).use { fos ->
-            fos.write(jsonArray.toString().toByteArray())
-        }
+        SafeIO.atomicWriteJson(context, FILE_NAME, jsonArray)
     }
 
     fun load(context: Context): List<AmortizationEntry> {
-        val file = context.getFileStreamPath(FILE_NAME)
-        if (!file.exists()) return emptyList()
-        val json = context.openFileInput(FILE_NAME).bufferedReader().use { it.readText() }
-        if (json.isBlank()) return emptyList()
-        val jsonArray = JSONArray(json)
+        val jsonArray = SafeIO.readJsonArray(context, FILE_NAME)
         val list = mutableListOf<AmortizationEntry>()
         for (i in 0 until jsonArray.length()) {
-            val obj = jsonArray.getJSONObject(i)
-            list.add(
-                AmortizationEntry(
-                    id = obj.getInt("id"),
-                    source = obj.getString("source"),
-                    description = obj.optString("description", ""),
-                    amount = obj.getDouble("amount"),
-                    totalPeriods = obj.getInt("totalPeriods"),
-                    startDate = LocalDate.parse(obj.getString("startDate")),
-                    deviceId = obj.optString("deviceId", ""),
-                    deleted = obj.optBoolean("deleted", false),
-                    source_clock = obj.optLong("source_clock", 0L),
-                    description_clock = obj.optLong("description_clock", 0L),
-                    amount_clock = obj.optLong("amount_clock", 0L),
-                    totalPeriods_clock = obj.optLong("totalPeriods_clock", 0L),
-                    startDate_clock = obj.optLong("startDate_clock", 0L),
-                    deleted_clock = obj.optLong("deleted_clock", 0L),
-                    isPaused = obj.optBoolean("isPaused", false),
-                    isPaused_clock = obj.optLong("isPaused_clock", 0L),
-                    deviceId_clock = obj.optLong("deviceId_clock", 0L)
+            try {
+                val obj = jsonArray.getJSONObject(i)
+                val amount = SafeIO.safeDouble(obj.getDouble("amount"))
+                val startDate = try { LocalDate.parse(obj.getString("startDate")) } catch (_: Exception) { LocalDate.now() }
+                list.add(
+                    AmortizationEntry(
+                        id = obj.getInt("id"),
+                        source = obj.getString("source"),
+                        description = obj.optString("description", ""),
+                        amount = amount,
+                        totalPeriods = obj.getInt("totalPeriods"),
+                        startDate = startDate,
+                        deviceId = obj.optString("deviceId", ""),
+                        deleted = obj.optBoolean("deleted", false),
+                        source_clock = obj.optLong("source_clock", 0L),
+                        description_clock = obj.optLong("description_clock", 0L),
+                        amount_clock = obj.optLong("amount_clock", 0L),
+                        totalPeriods_clock = obj.optLong("totalPeriods_clock", 0L),
+                        startDate_clock = obj.optLong("startDate_clock", 0L),
+                        deleted_clock = obj.optLong("deleted_clock", 0L),
+                        isPaused = obj.optBoolean("isPaused", false),
+                        isPaused_clock = obj.optLong("isPaused_clock", 0L),
+                        deviceId_clock = obj.optLong("deviceId_clock", 0L)
+                    )
                 )
-            )
+            } catch (e: Exception) {
+                Log.w(TAG, "Skipping corrupt record at index $i: ${e.message}")
+            }
         }
         return list
     }

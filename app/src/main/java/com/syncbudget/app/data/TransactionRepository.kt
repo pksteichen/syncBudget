@@ -1,6 +1,7 @@
 package com.syncbudget.app.data
 
 import android.content.Context
+import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
@@ -8,6 +9,7 @@ import java.time.LocalDate
 object TransactionRepository {
 
     private const val FILE_NAME = "transactions.json"
+    private const val TAG = "TransactionRepo"
 
     fun save(context: Context, transactions: List<Transaction>) {
         val jsonArray = JSONArray()
@@ -64,82 +66,84 @@ object TransactionRepository {
             obj.put("deviceId_clock", t.deviceId_clock)
             jsonArray.put(obj)
         }
-        context.openFileOutput(FILE_NAME, Context.MODE_PRIVATE).use { fos ->
-            fos.write(jsonArray.toString().toByteArray())
-        }
+        SafeIO.atomicWriteJson(context, FILE_NAME, jsonArray)
     }
 
     fun load(context: Context): List<Transaction> {
-        val file = context.getFileStreamPath(FILE_NAME)
-        if (!file.exists()) return emptyList()
-        val json = context.openFileInput(FILE_NAME).bufferedReader().use { it.readText() }
-        if (json.isBlank()) return emptyList()
-        val jsonArray = JSONArray(json)
+        val jsonArray = SafeIO.readJsonArray(context, FILE_NAME)
         val list = mutableListOf<Transaction>()
         for (i in 0 until jsonArray.length()) {
-            val obj = jsonArray.getJSONObject(i)
-            val amount = obj.getDouble("amount")
-            val categoryAmounts = if (obj.has("categoryAmounts")) {
-                val catArray = obj.getJSONArray("categoryAmounts")
-                (0 until catArray.length()).map { j ->
-                    val catObj = catArray.getJSONObject(j)
-                    CategoryAmount(
-                        categoryId = catObj.getInt("categoryId"),
-                        amount = catObj.getDouble("amount")
-                    )
+            try {
+                val obj = jsonArray.getJSONObject(i)
+                val amount = SafeIO.safeDouble(obj.getDouble("amount"))
+                val categoryAmounts = if (obj.has("categoryAmounts")) {
+                    val catArray = obj.getJSONArray("categoryAmounts")
+                    (0 until catArray.length()).mapNotNull { j ->
+                        try {
+                            val catObj = catArray.getJSONObject(j)
+                            CategoryAmount(
+                                categoryId = catObj.getInt("categoryId"),
+                                amount = SafeIO.safeDouble(catObj.getDouble("amount"))
+                            )
+                        } catch (_: Exception) { null }
+                    }
+                } else {
+                    emptyList()
                 }
-            } else {
-                emptyList()
-            }
-            val isUserCategorized = if (obj.has("isUserCategorized")) obj.getBoolean("isUserCategorized") else true
-            val excludeFromBudget = if (obj.has("excludeFromBudget")) obj.getBoolean("excludeFromBudget") else false
-            val isBudgetIncome = if (obj.has("isBudgetIncome")) obj.getBoolean("isBudgetIncome") else false
-            val linkedRecurringExpenseId = if (obj.has("linkedRecurringExpenseId") && !obj.isNull("linkedRecurringExpenseId")) obj.getInt("linkedRecurringExpenseId") else null
-            val linkedAmortizationEntryId = if (obj.has("linkedAmortizationEntryId") && !obj.isNull("linkedAmortizationEntryId")) obj.getInt("linkedAmortizationEntryId") else null
-            val linkedIncomeSourceId = if (obj.has("linkedIncomeSourceId") && !obj.isNull("linkedIncomeSourceId")) obj.getInt("linkedIncomeSourceId") else null
-            list.add(
-                Transaction(
-                    id = obj.getInt("id"),
-                    type = TransactionType.valueOf(obj.getString("type")),
-                    date = LocalDate.parse(obj.getString("date")),
-                    source = obj.getString("source"),
-                    description = obj.optString("description", ""),
-                    categoryAmounts = categoryAmounts,
-                    amount = amount,
-                    isUserCategorized = isUserCategorized,
-                    excludeFromBudget = excludeFromBudget,
-                    isBudgetIncome = isBudgetIncome,
-                    linkedRecurringExpenseId = linkedRecurringExpenseId,
-                    linkedAmortizationEntryId = linkedAmortizationEntryId,
-                    linkedIncomeSourceId = linkedIncomeSourceId,
-                    amortizationAppliedAmount = obj.optDouble("amortizationAppliedAmount", 0.0),
-                    linkedRecurringExpenseAmount = obj.optDouble("linkedRecurringExpenseAmount", 0.0),
-                    linkedIncomeSourceAmount = obj.optDouble("linkedIncomeSourceAmount", 0.0),
-                    linkedSavingsGoalId = if (obj.has("linkedSavingsGoalId") && !obj.isNull("linkedSavingsGoalId")) obj.getInt("linkedSavingsGoalId") else null,
-                    linkedSavingsGoalAmount = obj.optDouble("linkedSavingsGoalAmount", 0.0),
-                    deviceId = obj.optString("deviceId", ""),
-                    deleted = obj.optBoolean("deleted", false),
-                    source_clock = obj.optLong("source_clock", 0L),
-                    description_clock = obj.optLong("description_clock", 0L),
-                    amount_clock = obj.optLong("amount_clock", 0L),
-                    date_clock = obj.optLong("date_clock", 0L),
-                    type_clock = obj.optLong("type_clock", 0L),
-                    categoryAmounts_clock = obj.optLong("categoryAmounts_clock", 0L),
-                    isUserCategorized_clock = obj.optLong("isUserCategorized_clock", 0L),
-                    excludeFromBudget_clock = obj.optLong("excludeFromBudget_clock", 0L),
-                    isBudgetIncome_clock = obj.optLong("isBudgetIncome_clock", 0L),
-                    linkedRecurringExpenseId_clock = obj.optLong("linkedRecurringExpenseId_clock", 0L),
-                    linkedAmortizationEntryId_clock = obj.optLong("linkedAmortizationEntryId_clock", 0L),
-                    linkedIncomeSourceId_clock = obj.optLong("linkedIncomeSourceId_clock", 0L),
-                    amortizationAppliedAmount_clock = obj.optLong("amortizationAppliedAmount_clock", 0L),
-                    linkedRecurringExpenseAmount_clock = obj.optLong("linkedRecurringExpenseAmount_clock", 0L),
-                    linkedIncomeSourceAmount_clock = obj.optLong("linkedIncomeSourceAmount_clock", 0L),
-                    linkedSavingsGoalId_clock = obj.optLong("linkedSavingsGoalId_clock", 0L),
-                    linkedSavingsGoalAmount_clock = obj.optLong("linkedSavingsGoalAmount_clock", 0L),
-                    deleted_clock = obj.optLong("deleted_clock", 0L),
-                    deviceId_clock = obj.optLong("deviceId_clock", 0L)
+                val isUserCategorized = if (obj.has("isUserCategorized")) obj.getBoolean("isUserCategorized") else true
+                val excludeFromBudget = if (obj.has("excludeFromBudget")) obj.getBoolean("excludeFromBudget") else false
+                val isBudgetIncome = if (obj.has("isBudgetIncome")) obj.getBoolean("isBudgetIncome") else false
+                val linkedRecurringExpenseId = if (obj.has("linkedRecurringExpenseId") && !obj.isNull("linkedRecurringExpenseId")) obj.getInt("linkedRecurringExpenseId") else null
+                val linkedAmortizationEntryId = if (obj.has("linkedAmortizationEntryId") && !obj.isNull("linkedAmortizationEntryId")) obj.getInt("linkedAmortizationEntryId") else null
+                val linkedIncomeSourceId = if (obj.has("linkedIncomeSourceId") && !obj.isNull("linkedIncomeSourceId")) obj.getInt("linkedIncomeSourceId") else null
+                val type = try { TransactionType.valueOf(obj.getString("type")) } catch (_: Exception) { TransactionType.EXPENSE }
+                val date = try { LocalDate.parse(obj.getString("date")) } catch (_: Exception) { LocalDate.now() }
+                list.add(
+                    Transaction(
+                        id = obj.getInt("id"),
+                        type = type,
+                        date = date,
+                        source = obj.getString("source"),
+                        description = obj.optString("description", ""),
+                        categoryAmounts = categoryAmounts,
+                        amount = amount,
+                        isUserCategorized = isUserCategorized,
+                        excludeFromBudget = excludeFromBudget,
+                        isBudgetIncome = isBudgetIncome,
+                        linkedRecurringExpenseId = linkedRecurringExpenseId,
+                        linkedAmortizationEntryId = linkedAmortizationEntryId,
+                        linkedIncomeSourceId = linkedIncomeSourceId,
+                        amortizationAppliedAmount = SafeIO.safeDouble(obj.optDouble("amortizationAppliedAmount", 0.0)),
+                        linkedRecurringExpenseAmount = SafeIO.safeDouble(obj.optDouble("linkedRecurringExpenseAmount", 0.0)),
+                        linkedIncomeSourceAmount = SafeIO.safeDouble(obj.optDouble("linkedIncomeSourceAmount", 0.0)),
+                        linkedSavingsGoalId = if (obj.has("linkedSavingsGoalId") && !obj.isNull("linkedSavingsGoalId")) obj.getInt("linkedSavingsGoalId") else null,
+                        linkedSavingsGoalAmount = SafeIO.safeDouble(obj.optDouble("linkedSavingsGoalAmount", 0.0)),
+                        deviceId = obj.optString("deviceId", ""),
+                        deleted = obj.optBoolean("deleted", false),
+                        source_clock = obj.optLong("source_clock", 0L),
+                        description_clock = obj.optLong("description_clock", 0L),
+                        amount_clock = obj.optLong("amount_clock", 0L),
+                        date_clock = obj.optLong("date_clock", 0L),
+                        type_clock = obj.optLong("type_clock", 0L),
+                        categoryAmounts_clock = obj.optLong("categoryAmounts_clock", 0L),
+                        isUserCategorized_clock = obj.optLong("isUserCategorized_clock", 0L),
+                        excludeFromBudget_clock = obj.optLong("excludeFromBudget_clock", 0L),
+                        isBudgetIncome_clock = obj.optLong("isBudgetIncome_clock", 0L),
+                        linkedRecurringExpenseId_clock = obj.optLong("linkedRecurringExpenseId_clock", 0L),
+                        linkedAmortizationEntryId_clock = obj.optLong("linkedAmortizationEntryId_clock", 0L),
+                        linkedIncomeSourceId_clock = obj.optLong("linkedIncomeSourceId_clock", 0L),
+                        amortizationAppliedAmount_clock = obj.optLong("amortizationAppliedAmount_clock", 0L),
+                        linkedRecurringExpenseAmount_clock = obj.optLong("linkedRecurringExpenseAmount_clock", 0L),
+                        linkedIncomeSourceAmount_clock = obj.optLong("linkedIncomeSourceAmount_clock", 0L),
+                        linkedSavingsGoalId_clock = obj.optLong("linkedSavingsGoalId_clock", 0L),
+                        linkedSavingsGoalAmount_clock = obj.optLong("linkedSavingsGoalAmount_clock", 0L),
+                        deleted_clock = obj.optLong("deleted_clock", 0L),
+                        deviceId_clock = obj.optLong("deviceId_clock", 0L)
+                    )
                 )
-            )
+            } catch (e: Exception) {
+                Log.w(TAG, "Skipping corrupt transaction at index $i: ${e.message}")
+            }
         }
         return list
     }

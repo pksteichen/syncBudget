@@ -155,19 +155,23 @@ object BudgetCalculator {
                 RepeatType.BI_WEEKLY -> nextOcc.minusDays(14)
                 RepeatType.MONTHS -> nextOcc.minusMonths(exp.repeatInterval.toLong())
                 RepeatType.BI_MONTHLY -> {
-                    // Two days per month: find the other day in the cycle
+                    // Two days per month: generate the two most recent
+                    // occurrences before nextOcc and pick the latest one.
+                    // This handles all orderings of d1/d2 correctly.
                     val d1 = exp.monthDay1 ?: 1
                     val d2 = exp.monthDay2 ?: 15
-                    val nextDay = nextOcc.dayOfMonth
-                    val clampedD1 = d1.coerceAtMost(nextOcc.lengthOfMonth())
-                    if (nextDay == clampedD1) {
-                        // Previous was d2 of prior month
-                        val prevMonth = nextOcc.minusMonths(1)
-                        prevMonth.withDayOfMonth(d2.coerceAtMost(prevMonth.lengthOfMonth()))
-                    } else {
-                        // Previous was d1 of same month
-                        nextOcc.withDayOfMonth(clampedD1)
+                    val candidates = mutableListOf<LocalDate>()
+                    // Check d1 and d2 in current month and previous month
+                    for (monthOffset in 0L..1L) {
+                        val m = nextOcc.minusMonths(monthOffset)
+                        val cd1 = d1.coerceAtMost(m.lengthOfMonth())
+                        val cd2 = d2.coerceAtMost(m.lengthOfMonth())
+                        val date1 = m.withDayOfMonth(cd1)
+                        val date2 = m.withDayOfMonth(cd2)
+                        if (date1.isBefore(nextOcc)) candidates.add(date1)
+                        if (date2.isBefore(nextOcc)) candidates.add(date2)
                     }
+                    candidates.maxOrNull() ?: nextOcc.minusMonths(1)
                 }
                 RepeatType.ANNUAL -> nextOcc.minusYears(1)
             }
@@ -232,11 +236,9 @@ object BudgetCalculator {
         resetDayOfMonth: Int,
         timezone: ZoneId? = null
     ): LocalDate {
-        val today = if (timezone != null) {
-            Instant.now().atZone(timezone).toLocalDate()
-        } else {
-            LocalDate.now()
-        }
+        // Always use explicit timezone to prevent period misalignment
+        // across devices with different system timezones.
+        val today = Instant.now().atZone(timezone ?: ZoneId.systemDefault()).toLocalDate()
         return when (budgetPeriod) {
             BudgetPeriod.DAILY -> today
             BudgetPeriod.WEEKLY -> {
@@ -270,7 +272,12 @@ object BudgetCalculator {
             }.coerceAtLeast(0)
             // Active when elapsed periods < totalPeriods (elapsed == totalPeriods means fully amortized)
             if (elapsed < entry.totalPeriods) {
-                total += roundCents(entry.amount / entry.totalPeriods.toDouble())
+                // Use cumulative approach to avoid rounding drift:
+                // deduction = what SHOULD have been deducted after (elapsed+1) periods
+                //           - what SHOULD have been deducted after (elapsed) periods
+                val afterThis = roundCents(entry.amount * (elapsed + 1).toDouble() / entry.totalPeriods)
+                val beforeThis = roundCents(entry.amount * elapsed.toDouble() / entry.totalPeriods)
+                total += afterThis - beforeThis
             }
         }
         return total

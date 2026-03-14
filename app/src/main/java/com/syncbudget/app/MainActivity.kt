@@ -422,81 +422,87 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // One-time migration: fix stale budget-start ledger entry.
-            // If the entry on budgetStartDate has a clock older than
-            // budgetStartDate_clock, it's from before the reset and wrong.
+            // One-time migrations — each wrapped in try-catch so a failure
+            // in one migration doesn't block subsequent migrations or crash
+            // the LaunchedEffect.  Flags are set AFTER success.
             LaunchedEffect(Unit) {
-                if (!syncPrefs.getBoolean("migration_fix_stale_budgetstart_ledger_ui", false)) {
-                    val bsd = budgetStartDate
-                    if (bsd != null) {
-                        val bsdEpochDay = bsd.toEpochDay().toInt()
-                        val bsdEntry = periodLedger.find { it.id == bsdEpochDay }
-                        if (bsdEntry != null && bsdEntry.clock < sharedSettings.budgetStartDate_clock) {
-                            val nextDayEntry = periodLedger.find { it.id == bsdEpochDay + 1 }
-                            val correctAmount = nextDayEntry?.appliedAmount ?: budgetAmount
-                            val lamportClock = LamportClock(context)
-                            val migClock = lamportClock.tick()
-                            val idx = periodLedger.indexOfFirst { it.id == bsdEpochDay }
-                            if (idx >= 0) {
-                                periodLedger[idx] = periodLedger[idx].copy(
-                                    appliedAmount = correctAmount,
-                                    clock = migClock,
-                                    deviceId = localDeviceId
+                try {
+                    if (!syncPrefs.getBoolean("migration_fix_stale_budgetstart_ledger_ui", false)) {
+                        val bsd = budgetStartDate
+                        if (bsd != null) {
+                            val bsdEpochDay = bsd.toEpochDay().toInt()
+                            val bsdEntry = periodLedger.find { it.id == bsdEpochDay }
+                            if (bsdEntry != null && bsdEntry.clock < sharedSettings.budgetStartDate_clock) {
+                                val nextDayEntry = periodLedger.find { it.id == bsdEpochDay + 1 }
+                                val correctAmount = nextDayEntry?.appliedAmount ?: budgetAmount
+                                val lamportClock = LamportClock(context)
+                                val migClock = lamportClock.tick()
+                                val idx = periodLedger.indexOfFirst { it.id == bsdEpochDay }
+                                if (idx >= 0) {
+                                    periodLedger[idx] = periodLedger[idx].copy(
+                                        appliedAmount = correctAmount,
+                                        clock = migClock,
+                                        deviceId = localDeviceId
+                                    )
+                                    savePeriodLedger()
+                                }
+                            }
+                        }
+                        syncPrefs.edit().putBoolean("migration_fix_stale_budgetstart_ledger_ui", true).apply()
+                    }
+                } catch (e: Exception) { android.util.Log.e("Migration", "fix_stale_budgetstart_ledger_ui failed", e) }
+
+                try {
+                    if (!syncPrefs.getBoolean("migration_restamp_all_period_ledger_ui", false)) {
+                        if (isSyncAdmin && periodLedger.isNotEmpty()) {
+                            val lc = LamportClock(context)
+                            val migClock = lc.tick()
+                            for (i in periodLedger.indices) {
+                                periodLedger[i] = periodLedger[i].copy(
+                                    clock = migClock, deviceId = localDeviceId
                                 )
-                                savePeriodLedger()
                             }
+                            savePeriodLedger()
                         }
+                        syncPrefs.edit().putBoolean("migration_restamp_all_period_ledger_ui", true).apply()
                     }
-                    syncPrefs.edit().putBoolean("migration_fix_stale_budgetstart_ledger_ui", true).apply()
-                }
-                // Admin re-stamps ALL period ledger entries so they get re-pushed
-                // to non-admin devices that may be missing entries.
-                if (!syncPrefs.getBoolean("migration_restamp_all_period_ledger_ui", false)) {
-                    if (isSyncAdmin && periodLedger.isNotEmpty()) {
-                        val lc = LamportClock(context)
-                        val migClock = lc.tick()
-                        for (i in periodLedger.indices) {
-                            periodLedger[i] = periodLedger[i].copy(
-                                clock = migClock, deviceId = localDeviceId
-                            )
-                        }
-                        savePeriodLedger()
-                    }
-                    syncPrefs.edit().putBoolean("migration_restamp_all_period_ledger_ui", true).apply()
-                }
-                // Backfill remembered amounts on existing linked transactions
-                if (!syncPrefs.getBoolean("migration_backfill_linked_amounts", false)) {
-                    var anyChanged = false
-                    val reMap = recurringExpenses.associateBy { it.id }
-                    val isMap = incomeSources.associateBy { it.id }
-                    transactions.forEachIndexed { i, txn ->
-                        var updated = txn
-                        if (txn.linkedRecurringExpenseId != null && txn.linkedRecurringExpenseAmount == 0.0) {
-                            val re = reMap[txn.linkedRecurringExpenseId]
-                            if (re != null) {
-                                updated = updated.copy(linkedRecurringExpenseAmount = re.amount)
-                                anyChanged = true
+                } catch (e: Exception) { android.util.Log.e("Migration", "restamp_all_period_ledger_ui failed", e) }
+
+                try {
+                    if (!syncPrefs.getBoolean("migration_backfill_linked_amounts", false)) {
+                        var anyChanged = false
+                        val reMap = recurringExpenses.associateBy { it.id }
+                        val isMap = incomeSources.associateBy { it.id }
+                        transactions.forEachIndexed { i, txn ->
+                            var updated = txn
+                            if (txn.linkedRecurringExpenseId != null && txn.linkedRecurringExpenseAmount == 0.0) {
+                                val re = reMap[txn.linkedRecurringExpenseId]
+                                if (re != null) {
+                                    updated = updated.copy(linkedRecurringExpenseAmount = re.amount)
+                                    anyChanged = true
+                                }
                             }
-                        }
-                        if (txn.linkedIncomeSourceId != null && txn.linkedIncomeSourceAmount == 0.0) {
-                            val src = isMap[txn.linkedIncomeSourceId]
-                            if (src != null) {
-                                updated = updated.copy(linkedIncomeSourceAmount = src.amount)
-                                anyChanged = true
+                            if (txn.linkedIncomeSourceId != null && txn.linkedIncomeSourceAmount == 0.0) {
+                                val src = isMap[txn.linkedIncomeSourceId]
+                                if (src != null) {
+                                    updated = updated.copy(linkedIncomeSourceAmount = src.amount)
+                                    anyChanged = true
+                                }
                             }
+                            if (updated !== txn) transactions[i] = updated
                         }
-                        if (updated !== txn) transactions[i] = updated
+                        if (anyChanged) saveTransactions()
+                        syncPrefs.edit().putBoolean("migration_backfill_linked_amounts", true).apply()
                     }
-                    if (anyChanged) saveTransactions()
-                    syncPrefs.edit().putBoolean("migration_backfill_linked_amounts", true).apply()
-                }
-                // Add savings goal linking fields to all existing transactions
-                if (!syncPrefs.getBoolean("migration_add_savings_goal_fields", false)) {
-                    // Fields default to null/0.0/0L in the data class, but we force a
-                    // re-save so the JSON file explicitly contains them.
-                    saveTransactions()
-                    syncPrefs.edit().putBoolean("migration_add_savings_goal_fields", true).apply()
-                }
+                } catch (e: Exception) { android.util.Log.e("Migration", "backfill_linked_amounts failed", e) }
+
+                try {
+                    if (!syncPrefs.getBoolean("migration_add_savings_goal_fields", false)) {
+                        saveTransactions()
+                        syncPrefs.edit().putBoolean("migration_add_savings_goal_fields", true).apply()
+                    }
+                } catch (e: Exception) { android.util.Log.e("Migration", "add_savings_goal_fields failed", e) }
+
                 recomputeCash()
             }
 

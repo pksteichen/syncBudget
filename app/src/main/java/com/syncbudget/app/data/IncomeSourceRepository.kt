@@ -1,6 +1,7 @@
 package com.syncbudget.app.data
 
 import android.content.Context
+import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
@@ -8,6 +9,7 @@ import java.time.LocalDate
 object IncomeSourceRepository {
 
     private const val FILE_NAME = "income_sources.json"
+    private const val TAG = "IncomeSourceRepo"
 
     fun save(context: Context, incomeSources: List<IncomeSource>) {
         val jsonArray = JSONArray()
@@ -37,45 +39,48 @@ object IncomeSourceRepository {
             obj.put("deviceId_clock", s.deviceId_clock)
             jsonArray.put(obj)
         }
-        context.openFileOutput(FILE_NAME, Context.MODE_PRIVATE).use { fos ->
-            fos.write(jsonArray.toString().toByteArray())
-        }
+        SafeIO.atomicWriteJson(context, FILE_NAME, jsonArray)
     }
 
     fun load(context: Context): List<IncomeSource> {
-        val file = context.getFileStreamPath(FILE_NAME)
-        if (!file.exists()) return emptyList()
-        val json = context.openFileInput(FILE_NAME).bufferedReader().use { it.readText() }
-        if (json.isBlank()) return emptyList()
-        val jsonArray = JSONArray(json)
+        val jsonArray = SafeIO.readJsonArray(context, FILE_NAME)
         val list = mutableListOf<IncomeSource>()
         for (i in 0 until jsonArray.length()) {
-            val obj = jsonArray.getJSONObject(i)
-            list.add(
-                IncomeSource(
-                    id = obj.getInt("id"),
-                    source = obj.getString("source"),
-                    description = obj.optString("description", ""),
-                    amount = obj.getDouble("amount"),
-                    repeatType = RepeatType.valueOf(obj.getString("repeatType")),
-                    repeatInterval = obj.getInt("repeatInterval"),
-                    startDate = if (obj.has("startDate")) LocalDate.parse(obj.getString("startDate")) else null,
-                    monthDay1 = if (obj.has("monthDay1")) obj.getInt("monthDay1") else null,
-                    monthDay2 = if (obj.has("monthDay2")) obj.getInt("monthDay2") else null,
-                    deviceId = obj.optString("deviceId", ""),
-                    deleted = obj.optBoolean("deleted", false),
-                    source_clock = obj.optLong("source_clock", 0L),
-                    description_clock = obj.optLong("description_clock", 0L),
-                    amount_clock = obj.optLong("amount_clock", 0L),
-                    repeatType_clock = obj.optLong("repeatType_clock", 0L),
-                    repeatInterval_clock = obj.optLong("repeatInterval_clock", 0L),
-                    startDate_clock = obj.optLong("startDate_clock", 0L),
-                    monthDay1_clock = obj.optLong("monthDay1_clock", 0L),
-                    monthDay2_clock = obj.optLong("monthDay2_clock", 0L),
-                    deleted_clock = obj.optLong("deleted_clock", 0L),
-                    deviceId_clock = obj.optLong("deviceId_clock", 0L)
+            try {
+                val obj = jsonArray.getJSONObject(i)
+                val amount = SafeIO.safeDouble(obj.getDouble("amount"))
+                val repeatType = try { RepeatType.valueOf(obj.getString("repeatType")) } catch (_: Exception) { RepeatType.MONTHS }
+                val startDate = if (obj.has("startDate")) {
+                    try { LocalDate.parse(obj.getString("startDate")) } catch (_: Exception) { null }
+                } else null
+                list.add(
+                    IncomeSource(
+                        id = obj.getInt("id"),
+                        source = obj.getString("source"),
+                        description = obj.optString("description", ""),
+                        amount = amount,
+                        repeatType = repeatType,
+                        repeatInterval = obj.getInt("repeatInterval"),
+                        startDate = startDate,
+                        monthDay1 = if (obj.has("monthDay1")) obj.getInt("monthDay1") else null,
+                        monthDay2 = if (obj.has("monthDay2")) obj.getInt("monthDay2") else null,
+                        deviceId = obj.optString("deviceId", ""),
+                        deleted = obj.optBoolean("deleted", false),
+                        source_clock = obj.optLong("source_clock", 0L),
+                        description_clock = obj.optLong("description_clock", 0L),
+                        amount_clock = obj.optLong("amount_clock", 0L),
+                        repeatType_clock = obj.optLong("repeatType_clock", 0L),
+                        repeatInterval_clock = obj.optLong("repeatInterval_clock", 0L),
+                        startDate_clock = obj.optLong("startDate_clock", 0L),
+                        monthDay1_clock = obj.optLong("monthDay1_clock", 0L),
+                        monthDay2_clock = obj.optLong("monthDay2_clock", 0L),
+                        deleted_clock = obj.optLong("deleted_clock", 0L),
+                        deviceId_clock = obj.optLong("deviceId_clock", 0L)
+                    )
                 )
-            )
+            } catch (e: Exception) {
+                Log.w(TAG, "Skipping corrupt record at index $i: ${e.message}")
+            }
         }
         return list
     }
