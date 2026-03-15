@@ -3,6 +3,7 @@ package com.syncbudget.app.ui.screens
 import androidx.compose.foundation.border
 import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -108,6 +109,10 @@ fun SettingsScreen(
     onDateFormatChange: (String) -> Unit,
     isPaidUser: Boolean = false,
     onPaidUserChange: (Boolean) -> Unit = {},
+    isSubscriber: Boolean = false,
+    onSubscriberChange: (Boolean) -> Unit = {},
+    subscriptionExpiry: Long = System.currentTimeMillis() + 30L * 24 * 60 * 60 * 1000,
+    onSubscriptionExpiryChange: (Long) -> Unit = {},
     showWidgetLogo: Boolean = true,
     onWidgetLogoChange: (Boolean) -> Unit = {},
     matchDays: Int = 7,
@@ -596,6 +601,63 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onBackground
                     )
+                }
+            }
+
+            // Subscriber checkbox + expiration date picker (for testing)
+            item {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Checkbox(
+                        checked = isSubscriber,
+                        onCheckedChange = { newValue ->
+                            onSubscriberChange(newValue)
+                            if (newValue && !isPaidUser) onPaidUserChange(true)
+                        },
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = MaterialTheme.colorScheme.primary,
+                            uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                        )
+                    )
+                    Text(
+                        text = S.settings.subscriber,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    if (isSubscriber) {
+                        Spacer(modifier = Modifier.weight(1f))
+                        val dateFormatter = remember { java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd") }
+                        val expiryDate = java.time.Instant.ofEpochMilli(subscriptionExpiry)
+                            .atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+                        var showExpiryPicker by remember { mutableStateOf(false) }
+                        Text(
+                            text = "Exp: ${expiryDate.format(dateFormatter)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .clickable { showExpiryPicker = true }
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                        if (showExpiryPicker) {
+                            val context = LocalContext.current
+                            android.app.DatePickerDialog(
+                                context,
+                                { _, year, month, day ->
+                                    val picked = java.time.LocalDate.of(year, month + 1, day)
+                                    val millis = picked.atStartOfDay(java.time.ZoneId.systemDefault())
+                                        .toInstant().toEpochMilli()
+                                    onSubscriptionExpiryChange(millis)
+                                    showExpiryPicker = false
+                                },
+                                expiryDate.year, expiryDate.monthValue - 1, expiryDate.dayOfMonth
+                            ).apply {
+                                setOnDismissListener { showExpiryPicker = false }
+                                show()
+                            }
+                        }
+                    }
                 }
             }
 

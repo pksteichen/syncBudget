@@ -116,15 +116,16 @@ fun FutureExpendituresScreen(
     onAddGoal: (SavingsGoal) -> Unit,
     onUpdateGoal: (SavingsGoal) -> Unit,
     onDeleteGoal: (SavingsGoal) -> Unit,
+    isPaidUser: Boolean = false,
+    isSubscriber: Boolean = false,
     onBack: () -> Unit,
     onHelpClick: () -> Unit = {},
     onViewChart: () -> Unit = {}
 ) {
     val S = LocalStrings.current
     val customColors = LocalSyncBudgetColors.current
-    val dateFormatter = remember(dateFormatPattern) { DateTimeFormatter.ofPattern(dateFormatPattern) }
-
     val toastState = LocalAppToast.current
+    val dateFormatter = remember(dateFormatPattern) { DateTimeFormatter.ofPattern(dateFormatPattern) }
     var showAddDialog by remember { mutableStateOf(false) }
     var editingGoal by remember { mutableStateOf<SavingsGoal?>(null) }
     var deletingGoal by remember { mutableStateOf<SavingsGoal?>(null) }
@@ -288,9 +289,13 @@ fun FutureExpendituresScreen(
                         )
                     }
                     OutlinedButton(
-                        onClick = { onViewChart() },
+                        onClick = {
+                            if (isSubscriber) onViewChart()
+                            else toastState.show(S.settings.subscribeToAccess)
+                        },
                         modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                        enabled = isSubscriber
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ShowChart,

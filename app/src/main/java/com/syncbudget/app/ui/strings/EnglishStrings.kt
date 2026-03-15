@@ -131,6 +131,9 @@ object EnglishStrings : AppStrings {
         matchChars = "Match Characters",
         matchingConfiguration = "Matching Configuration",
         paidUser = "Paid User",
+        subscriber = "Subscriber",
+        upgradeToAccess = "Upgrade to access this feature",
+        subscribeToAccess = "Subscribe to access this feature",
         showWidgetLogo = "Show logo on widget",
         categories = "Categories",
         charted = "Charted",
@@ -525,6 +528,7 @@ object EnglishStrings : AppStrings {
         removeDeviceTitle = "Remove Device",
         removeDeviceMessage = { name -> "Remove \"$name\" from this group? The device will be disconnected from family sync." },
         removeDeviceConfirm = "Remove",
+        subscriptionExpiredNotice = "Admin subscription expired. Group will be dissolved soon. Subscribe and claim admin to keep the group active.",
         copy = "Copy"
     )
 

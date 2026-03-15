@@ -131,6 +131,9 @@ object SpanishStrings : AppStrings {
         matchChars = "Caracteres de coincidencia",
         matchingConfiguration = "Configuraci\u00f3n de coincidencias",
         paidUser = "Usuario de pago",
+        subscriber = "Suscriptor",
+        upgradeToAccess = "Actualiza para acceder a esta funci\u00f3n",
+        subscribeToAccess = "Suscr\u00edbete para acceder a esta funci\u00f3n",
         showWidgetLogo = "Mostrar logo en el widget",
         categories = "Categor\u00edas",
         charted = "Gr\u00e1fica",
@@ -525,6 +528,7 @@ object SpanishStrings : AppStrings {
         removeDeviceTitle = "Eliminar Dispositivo",
         removeDeviceMessage = { name -> "Eliminar \"$name\" de este grupo? El dispositivo se desconectar\u00e1 de la sincronizaci\u00f3n familiar." },
         removeDeviceConfirm = "Eliminar",
+        subscriptionExpiredNotice = "La suscripci\u00f3n del admin expir\u00f3. El grupo se disolver\u00e1 pronto. Suscr\u00edbete y reclama admin para mantener el grupo activo.",
         copy = "Copiar"
     )
 

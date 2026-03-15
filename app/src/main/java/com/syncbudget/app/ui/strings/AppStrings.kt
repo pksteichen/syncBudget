@@ -154,6 +154,9 @@ data class SettingsStrings(
     val matchChars: String,
     val matchingConfiguration: String,
     val paidUser: String,
+    val subscriber: String,
+    val upgradeToAccess: String,
+    val subscribeToAccess: String,
     val showWidgetLogo: String,
     val categories: String,
     val charted: String,
@@ -556,6 +559,7 @@ data class SyncStrings(
     val removeDeviceTitle: String,
     val removeDeviceMessage: (deviceName: String) -> String,
     val removeDeviceConfirm: String,
+    val subscriptionExpiredNotice: String,
     val copy: String
 )
 

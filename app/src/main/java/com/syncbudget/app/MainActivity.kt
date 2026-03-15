@@ -56,6 +56,7 @@ import com.syncbudget.app.data.sync.PeriodLedgerEntry
 import com.syncbudget.app.data.sync.PeriodLedgerRepository
 import com.syncbudget.app.data.sync.SyncEngine
 import com.syncbudget.app.data.sync.SyncIdGenerator
+import com.syncbudget.app.data.sync.SubscriptionReminderReceiver
 import com.syncbudget.app.data.sync.SyncWorker
 import com.syncbudget.app.data.sync.active
 import kotlinx.coroutines.delay
@@ -198,6 +199,11 @@ class MainActivity : ComponentActivity() {
             var showDecimals by remember { mutableStateOf(prefs.getBoolean("showDecimals", false)) }
             var dateFormatPattern by remember { mutableStateOf(prefs.getString("dateFormatPattern", "yyyy-MM-dd") ?: "yyyy-MM-dd") }
             var isPaidUser by remember { mutableStateOf(prefs.getBoolean("isPaidUser", false)) }
+            var isSubscriber by remember { mutableStateOf(prefs.getBoolean("isSubscriber", false)) }
+            var subscriptionExpiry by remember {
+                mutableStateOf(prefs.getLong("subscriptionExpiry",
+                    System.currentTimeMillis() + 30L * 24 * 60 * 60 * 1000))
+            }
             var showWidgetLogo by remember { mutableStateOf(prefs.getBoolean("showWidgetLogo", true)) }
 
             // Matching configuration
@@ -703,6 +709,55 @@ class MainActivity : ComponentActivity() {
 
                 var consecutiveErrors = 0
                 while (true) {
+                    // Admin: post subscription expiry to Firestore
+                    if (isSyncAdmin) {
+                        try {
+                            if (isSubscriber) {
+                                // Post the subscription expiry date (from Settings test
+                                // picker now, from Google Play Billing in production)
+                                FirestoreService.updateSubscriptionExpiry(groupId, subscriptionExpiry)
+                            } else {
+                                // Admin lost subscription: post current time as expiry
+                                val currentExpiry = try { FirestoreService.getSubscriptionExpiry(groupId) } catch (_: Exception) { 0L }
+                                if (currentExpiry == 0L || currentExpiry > System.currentTimeMillis() + 8 * 24 * 60 * 60 * 1000) {
+                                    FirestoreService.updateSubscriptionExpiry(groupId, System.currentTimeMillis())
+                                }
+                            }
+                        } catch (_: Exception) {}
+                    }
+
+                    // Check subscription grace period — auto-dissolve if expired 7+ days
+                    try {
+                        val expiry = FirestoreService.getSubscriptionExpiry(groupId)
+                        if (expiry > 0L) {
+                            val gracePeriodMs = 7L * 24 * 60 * 60 * 1000
+                            val elapsed = System.currentTimeMillis() - expiry
+                            if (elapsed > gracePeriodMs) {
+                                // Add random delay (0-30 min) to prevent all devices dissolving simultaneously
+                                val randomDelay = (Math.random() * 30 * 60 * 1000).toLong()
+                                delay(randomDelay)
+                                // Re-check in case another device already dissolved
+                                if (!FirestoreService.isGroupDissolved(groupId)) {
+                                    android.util.Log.w("SyncLoop", "Admin subscription expired ${elapsed / (24*60*60*1000)}d ago — auto-dissolving group")
+                                    GroupManager.dissolveGroup(context, groupId)
+                                }
+                                isSyncConfigured = false
+                                syncGroupId = null
+                                isSyncAdmin = false
+                                syncStatus = "off"
+                                syncDevices = emptyList()
+                                return@LaunchedEffect
+                            } else if (elapsed > 0) {
+                                // Within grace period — show warning and schedule daily reminder
+                                syncErrorMessage = strings.sync.subscriptionExpiredNotice
+                                SubscriptionReminderReceiver.scheduleNextReminder(context)
+                            } else {
+                                // Subscription active — cancel any pending reminders
+                                SubscriptionReminderReceiver.cancelReminder(context)
+                            }
+                        }
+                    } catch (_: Exception) {}
+
                     // File-based lock works across processes (unlike ReentrantLock)
                     val syncFileLock = SyncWorker.createSyncLock(context)
                     if (!syncFileLock.tryLock()) {
@@ -2114,6 +2169,16 @@ class MainActivity : ComponentActivity() {
                             prefs.edit().putBoolean("isPaidUser", newValue).apply()
                             com.syncbudget.app.widget.BudgetWidgetProvider.updateAllWidgets(context)
                         },
+                        isSubscriber = isSubscriber,
+                        onSubscriberChange = { newValue ->
+                            isSubscriber = newValue
+                            prefs.edit().putBoolean("isSubscriber", newValue).apply()
+                        },
+                        subscriptionExpiry = subscriptionExpiry,
+                        onSubscriptionExpiryChange = { newValue ->
+                            subscriptionExpiry = newValue
+                            prefs.edit().putLong("subscriptionExpiry", newValue).apply()
+                        },
                         showWidgetLogo = showWidgetLogo,
                         onWidgetLogoChange = { newValue ->
                             showWidgetLogo = newValue
@@ -2220,6 +2285,7 @@ class MainActivity : ComponentActivity() {
                         dateFormatPattern = dateFormatPattern,
                         categories = activeCategories,
                         isPaidUser = isPaidUser,
+                        isSubscriber = isSubscriber,
                         recurringExpenses = activeRecurringExpenses,
                         amortizationEntries = activeAmortizationEntries,
                         incomeSources = activeIncomeSources,
@@ -2560,6 +2626,8 @@ class MainActivity : ComponentActivity() {
                         onHelpClick = { currentScreen = "transactions_help" }
                     )
                     "future_expenditures" -> FutureExpendituresScreen(
+                        isPaidUser = isPaidUser,
+                        isSubscriber = isSubscriber,
                         savingsGoals = activeSavingsGoals,
                         transactions = activeTransactions,
                         currencySymbol = currencySymbol,
@@ -3003,6 +3071,7 @@ class MainActivity : ComponentActivity() {
                     )
                     "family_sync" -> FamilySyncScreen(
                         isConfigured = isSyncConfigured,
+                        isSubscriber = isSubscriber,
                         groupId = syncGroupId,
                         isAdmin = isSyncAdmin,
                         deviceName = GroupManager.getDeviceName(context),

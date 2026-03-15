@@ -116,6 +116,7 @@ private val COMMON_TIMEZONES = listOf(
 @Composable
 fun FamilySyncScreen(
     isConfigured: Boolean,
+    isSubscriber: Boolean = false,
     groupId: String?,
     isAdmin: Boolean,
     deviceName: String,
@@ -237,8 +238,12 @@ fun FamilySyncScreen(
 
                 item {
                     OutlinedButton(
-                        onClick = { showCreateDialog = true },
-                        modifier = Modifier.fillMaxWidth()
+                        onClick = {
+                            if (isSubscriber) showCreateDialog = true
+                            else toastState.show(S.settings.subscribeToAccess)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = isSubscriber
                     ) {
                         Text(S.sync.createGroup)
                     }
@@ -602,12 +607,16 @@ fun FamilySyncScreen(
                     }
                 } else {
                     item { Spacer(modifier = Modifier.height(8.dp)) }
-                    // Claim Admin button (only when no pending claim)
+                    // Claim Admin button (only when no pending claim, requires subscription)
                     if (pendingAdminClaim == null) {
                         item {
                             OutlinedButton(
-                                onClick = onClaimAdmin,
-                                modifier = Modifier.fillMaxWidth()
+                                onClick = {
+                                    if (isSubscriber) onClaimAdmin()
+                                    else toastState.show(S.settings.subscribeToAccess)
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = isSubscriber
                             ) {
                                 Text(S.sync.claimAdmin)
                             }

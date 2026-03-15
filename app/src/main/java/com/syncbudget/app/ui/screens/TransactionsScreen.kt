@@ -225,6 +225,7 @@ fun TransactionsScreen(
     dateFormatPattern: String = "yyyy-MM-dd",
     categories: List<Category>,
     isPaidUser: Boolean = false,
+    isSubscriber: Boolean = false,
     recurringExpenses: List<RecurringExpense> = emptyList(),
     amortizationEntries: List<AmortizationEntry> = emptyList(),
     incomeSources: List<IncomeSource> = emptyList(),
@@ -709,19 +710,25 @@ fun TransactionsScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { if (isPaidUser) showSaveDialog = true }) {
+                    IconButton(onClick = {
+                        if (isSubscriber) showSaveDialog = true
+                        else toastState.show(S.settings.subscribeToAccess)
+                    }) {
                         Icon(
                             imageVector = Icons.Filled.Save,
                             contentDescription = S.transactions.save,
-                            tint = if (isPaidUser) customColors.headerText
+                            tint = if (isSubscriber) customColors.headerText
                                    else customColors.headerText.copy(alpha = 0.35f)
                         )
                     }
-                    IconButton(onClick = { if (isPaidUser) showImportFormatDialog = true }) {
+                    IconButton(onClick = {
+                        if (isSubscriber) showImportFormatDialog = true
+                        else toastState.show(S.settings.subscribeToAccess)
+                    }) {
                         Icon(
                             imageVector = Icons.Filled.MoveToInbox,
                             contentDescription = S.transactions.load,
-                            tint = if (isPaidUser) customColors.headerText
+                            tint = if (isSubscriber) customColors.headerText
                                    else customColors.headerText.copy(alpha = 0.35f)
                         )
                     }
@@ -1290,7 +1297,7 @@ fun TransactionsScreen(
             },
             bankFilterChecked = bankFilterOnly,
             onBankFilterChanged = { bankFilterOnly = it },
-            showBankFilter = isPaidUser
+            showBankFilter = isSubscriber
         )
     }
 
@@ -1322,7 +1329,7 @@ fun TransactionsScreen(
             },
             bankFilterChecked = bankFilterOnly,
             onBankFilterChanged = { bankFilterOnly = it },
-            showBankFilter = isPaidUser
+            showBankFilter = isSubscriber
         )
     }
 

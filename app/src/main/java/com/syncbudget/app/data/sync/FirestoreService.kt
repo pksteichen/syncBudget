@@ -131,6 +131,19 @@ object FirestoreService {
         return totalPruned
     }
 
+    /** Update the admin subscription expiration date on the group doc. */
+    suspend fun updateSubscriptionExpiry(groupId: String, expiryTimestamp: Long) = withTimeout(OP_TIMEOUT_MS) {
+        db.collection("groups").document(groupId)
+            .set(mapOf("subscriptionExpiry" to expiryTimestamp), SetOptions.merge())
+            .await()
+    }
+
+    /** Read the admin subscription expiration date from the group doc. Returns 0 if not set. */
+    suspend fun getSubscriptionExpiry(groupId: String): Long = withTimeout(OP_TIMEOUT_MS) {
+        val doc = db.collection("groups").document(groupId).get().await()
+        doc.getLong("subscriptionExpiry") ?: 0L
+    }
+
     suspend fun updateDeviceMetadata(
         groupId: String,
         deviceId: String,
