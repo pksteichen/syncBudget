@@ -1368,17 +1368,22 @@ class MainActivity : ComponentActivity() {
                         val now = java.time.LocalDateTime.now()
                         val today = if (budgetPeriod == BudgetPeriod.DAILY && resetHour > 0 && now.hour < resetHour)
                             now.toLocalDate().minusDays(1) else now.toLocalDate()
-                        val missedPeriods = BudgetCalculator.countPeriodsCompleted(lastRefreshDate!!, today, budgetPeriod)
+                        // Use aligned period start for counting, not raw lastRefreshDate,
+                        // to prevent drift when the user misses opening the app.
+                        val currentPeriod = BudgetCalculator.currentPeriodStart(
+                            budgetPeriod, resetDayOfWeek, resetDayOfMonth, resetHour = resetHour
+                        )
+                        val missedPeriods = BudgetCalculator.countPeriodsCompleted(lastRefreshDate!!, currentPeriod, budgetPeriod)
                         if (missedPeriods > 0) {
-                            lastRefreshDate = today
+                            lastRefreshDate = currentPeriod
 
-                            // Create one ledger entry per missed period with CRDT stamping
+                            // Create one ledger entry per missed period using aligned dates
                             for (period in 0 until missedPeriods) {
                                 val periodsBack = (missedPeriods - 1 - period).toLong()
                                 val periodDate = when (budgetPeriod) {
-                                    BudgetPeriod.DAILY -> today.minusDays(periodsBack)
-                                    BudgetPeriod.WEEKLY -> today.minusWeeks(periodsBack)
-                                    BudgetPeriod.MONTHLY -> today.minusMonths(periodsBack)
+                                    BudgetPeriod.DAILY -> currentPeriod.minusDays(periodsBack)
+                                    BudgetPeriod.WEEKLY -> currentPeriod.minusWeeks(periodsBack)
+                                    BudgetPeriod.MONTHLY -> currentPeriod.minusMonths(periodsBack)
                                 }
                                 val alreadyRecorded = periodLedger.any {
                                     it.periodStartDate.toLocalDate() == periodDate
@@ -1405,9 +1410,9 @@ class MainActivity : ComponentActivity() {
                             for (period in 0 until missedPeriods) {
                                 val periodsBack = (missedPeriods - 1 - period).toLong()
                                 val periodDate = when (budgetPeriod) {
-                                    BudgetPeriod.DAILY -> today.minusDays(periodsBack)
-                                    BudgetPeriod.WEEKLY -> today.minusWeeks(periodsBack)
-                                    BudgetPeriod.MONTHLY -> today.minusMonths(periodsBack)
+                                    BudgetPeriod.DAILY -> currentPeriod.minusDays(periodsBack)
+                                    BudgetPeriod.WEEKLY -> currentPeriod.minusWeeks(periodsBack)
+                                    BudgetPeriod.MONTHLY -> currentPeriod.minusMonths(periodsBack)
                                 }
                                 savingsGoals.forEachIndexed { idx, goal ->
                                     if (!goal.isPaused && !goal.deleted) {
@@ -1452,9 +1457,9 @@ class MainActivity : ComponentActivity() {
                             for (period in 0 until missedPeriods) {
                                 val periodsBack = (missedPeriods - 1 - period).toLong()
                                 val periodDate = when (budgetPeriod) {
-                                    BudgetPeriod.DAILY -> today.minusDays(periodsBack)
-                                    BudgetPeriod.WEEKLY -> today.minusWeeks(periodsBack)
-                                    BudgetPeriod.MONTHLY -> today.minusMonths(periodsBack)
+                                    BudgetPeriod.DAILY -> currentPeriod.minusDays(periodsBack)
+                                    BudgetPeriod.WEEKLY -> currentPeriod.minusWeeks(periodsBack)
+                                    BudgetPeriod.MONTHLY -> currentPeriod.minusMonths(periodsBack)
                                 }
                                 val periodEnd = when (budgetPeriod) {
                                     BudgetPeriod.DAILY -> periodDate.plusDays(1)
