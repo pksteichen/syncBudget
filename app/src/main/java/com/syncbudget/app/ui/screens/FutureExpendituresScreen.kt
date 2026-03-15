@@ -110,6 +110,7 @@ fun FutureExpendituresScreen(
     availableCash: Double = 0.0,
     resetDayOfWeek: Int = 7,
     resetDayOfMonth: Int = 1,
+    today: LocalDate = LocalDate.now(),
     isManualOverBudget: Boolean = false,
     budgetPeriodLabel: String = "",
     onAddGoal: (SavingsGoal) -> Unit,
@@ -216,7 +217,8 @@ fun FutureExpendituresScreen(
                         savingsGoals = savingsGoals,
                         availableCash = availableCash,
                         resetDayOfWeek = resetDayOfWeek,
-                        resetDayOfMonth = resetDayOfMonth
+                        resetDayOfMonth = resetDayOfMonth,
+                        today = today
                     )
                     run {
                         val formattedAmount = formatCurrency(maxOf(0.0, simResult.savingsRequired), currencySymbol)

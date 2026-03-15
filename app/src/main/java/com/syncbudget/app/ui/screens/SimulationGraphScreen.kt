@@ -106,6 +106,7 @@ fun SimulationGraphScreen(
     resetDayOfWeek: Int,
     resetDayOfMonth: Int,
     currencySymbol: String,
+    today: LocalDate = LocalDate.now(),
     onBack: () -> Unit,
     onHelpClick: () -> Unit = {}
 ) {
@@ -116,7 +117,7 @@ fun SimulationGraphScreen(
     val (simResult, timeline) = SavingsSimulator.simulateTimeline(
         incomeSources, recurringExpenses, budgetPeriod,
         baseBudget, amortizationEntries, savingsGoals,
-        availableCash, resetDayOfWeek, resetDayOfMonth
+        availableCash, resetDayOfWeek, resetDayOfMonth, today
     )
 
     val maxDecimals = CURRENCY_DECIMALS[currencySymbol] ?: 2
@@ -140,7 +141,7 @@ fun SimulationGraphScreen(
     val (adjSimResult, adjTimeline) = SavingsSimulator.simulateTimeline(
         incomeSources, recurringExpenses, budgetPeriod,
         baseBudget - savedPerPeriod, amortizationEntries, savingsGoals,
-        availableCash, resetDayOfWeek, resetDayOfMonth
+        availableCash, resetDayOfWeek, resetDayOfMonth, today
     )
 
     val textFieldColors = OutlinedTextFieldDefaults.colors(

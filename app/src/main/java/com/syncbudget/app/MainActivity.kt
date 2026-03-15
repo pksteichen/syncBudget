@@ -1349,7 +1349,8 @@ class MainActivity : ComponentActivity() {
                         availableCash = simAvailableCash,
                         resetDayOfWeek = resetDayOfWeek,
                         resetDayOfMonth = resetDayOfMonth,
-                        currencySymbol = currencySymbol
+                        currencySymbol = currencySymbol,
+                        today = budgetToday
                     )
                     val file = java.io.File("/storage/emulated/0/Download/simulation_trace.txt")
                     file.writeText(trace)
@@ -2522,6 +2523,7 @@ class MainActivity : ComponentActivity() {
                         availableCash = simAvailableCash,
                         resetDayOfWeek = resetDayOfWeek,
                         resetDayOfMonth = resetDayOfMonth,
+                        today = budgetToday,
                         isManualOverBudget = isManualBudgetEnabled && manualBudgetAmount > safeBudgetAmount,
                         budgetPeriodLabel = when (budgetPeriod) {
                             BudgetPeriod.DAILY -> strings.futureExpenditures.savingsPeriodDaily
@@ -2596,6 +2598,7 @@ class MainActivity : ComponentActivity() {
                         resetDayOfWeek = resetDayOfWeek,
                         resetDayOfMonth = resetDayOfMonth,
                         currencySymbol = currencySymbol,
+                        today = budgetToday,
                         onBack = { currentScreen = "future_expenditures" },
                         onHelpClick = { currentScreen = "simulation_graph_help" }
                     )
