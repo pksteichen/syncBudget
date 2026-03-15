@@ -325,13 +325,26 @@ class MainActivity : ComponentActivity() {
             val activeSavingsGoals: List<SavingsGoal> by remember { derivedStateOf { savingsGoals.filter { !it.deleted } } }
             val activeCategories: List<Category> by remember { derivedStateOf { categories.filter { !it.deleted } } }
 
+            // Budget "today" respects resetHour: before resetHour in DAILY mode
+            // we're still in yesterday's period, so calculations should use yesterday.
+            val budgetToday by remember {
+                derivedStateOf {
+                    val now = java.time.LocalDateTime.now()
+                    if (budgetPeriod == BudgetPeriod.DAILY && resetHour > 0 && now.hour < resetHour)
+                        now.toLocalDate().minusDays(1)
+                    else
+                        now.toLocalDate()
+                }
+            }
+
             // Derived safeBudgetAmount — auto-recalculates when income/expenses change
             val safeBudgetAmount by remember {
                 derivedStateOf {
                     BudgetCalculator.calculateSafeBudgetAmount(
                         activeIncomeSources,
                         activeRecurringExpenses,
-                        budgetPeriod
+                        budgetPeriod,
+                        budgetToday
                     )
                 }
             }
@@ -341,13 +354,13 @@ class MainActivity : ComponentActivity() {
                 derivedStateOf {
                     val base = if (isManualBudgetEnabled) manualBudgetAmount else safeBudgetAmount
                     val amortDeductions = BudgetCalculator.activeAmortizationDeductions(
-                        activeAmortizationEntries, budgetPeriod
+                        activeAmortizationEntries, budgetPeriod, budgetToday
                     )
                     val savingsDeductions = BudgetCalculator.activeSavingsGoalDeductions(
-                        activeSavingsGoals, budgetPeriod
+                        activeSavingsGoals, budgetPeriod, budgetToday
                     )
                     val acceleratedDeductions = BudgetCalculator.acceleratedREExtraDeductions(
-                        activeRecurringExpenses, budgetPeriod
+                        activeRecurringExpenses, budgetPeriod, budgetToday
                     )
                     BudgetCalculator.roundCents(maxOf(0.0, base - amortDeductions - savingsDeductions - acceleratedDeductions))
                 }
@@ -414,7 +427,8 @@ class MainActivity : ComponentActivity() {
                         availableCash
                     } else {
                         val currentPeriod = BudgetCalculator.currentPeriodStart(
-                            budgetPeriod, resetDayOfWeek, resetDayOfMonth
+                            budgetPeriod, resetDayOfWeek, resetDayOfMonth,
+                            resetHour = resetHour
                         )
                         val adjustedLedger = periodLedger.map { entry ->
                             if (entry.periodStartDate.toLocalDate() == currentPeriod) {
@@ -2880,7 +2894,7 @@ class MainActivity : ComponentActivity() {
                         onResetBudget = {
                             val tz = if (isSyncConfigured && sharedSettings.familyTimezone.isNotEmpty())
                                 ZoneId.of(sharedSettings.familyTimezone) else null
-                            budgetStartDate = BudgetCalculator.currentPeriodStart(budgetPeriod, resetDayOfWeek, resetDayOfMonth, tz)
+                            budgetStartDate = BudgetCalculator.currentPeriodStart(budgetPeriod, resetDayOfWeek, resetDayOfMonth, tz, resetHour)
                             lastRefreshDate = budgetStartDate
                             // Record period ledger entry with CRDT stamping
                             val entryClock = lamportClock.tick()

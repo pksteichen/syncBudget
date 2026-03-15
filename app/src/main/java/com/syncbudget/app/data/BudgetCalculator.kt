@@ -234,11 +234,16 @@ object BudgetCalculator {
         budgetPeriod: BudgetPeriod,
         resetDayOfWeek: Int,
         resetDayOfMonth: Int,
-        timezone: ZoneId? = null
+        timezone: ZoneId? = null,
+        resetHour: Int = 0
     ): LocalDate {
         // Always use explicit timezone to prevent period misalignment
         // across devices with different system timezones.
-        val today = Instant.now().atZone(timezone ?: ZoneId.systemDefault()).toLocalDate()
+        val zone = timezone ?: ZoneId.systemDefault()
+        val now = Instant.now().atZone(zone)
+        // In DAILY mode, before resetHour we're still in yesterday's period
+        val today = if (budgetPeriod == BudgetPeriod.DAILY && resetHour > 0 && now.hour < resetHour)
+            now.toLocalDate().minusDays(1) else now.toLocalDate()
         return when (budgetPeriod) {
             BudgetPeriod.DAILY -> today
             BudgetPeriod.WEEKLY -> {
