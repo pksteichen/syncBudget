@@ -762,6 +762,19 @@ class SyncEngine(
                         catIdRemap
                     )
                     lastSnapshotVersion = newSyncVersion
+                    // Prune old deltas that are fully covered by the snapshot.
+                    // Keep a buffer of SNAPSHOT_CATCHUP_THRESHOLD deltas so devices
+                    // slightly behind can still fetch deltas without needing the
+                    // snapshot.  Devices further behind use snapshot catch-up.
+                    val pruneBelow = newSyncVersion - SNAPSHOT_CATCHUP_THRESHOLD
+                    if (pruneBelow > 0) {
+                        try {
+                            val pruned = FirestoreService.pruneDeltas(groupId, pruneBelow)
+                            if (pruned > 0) syncLog("Pruned $pruned old deltas (version < $pruneBelow)")
+                        } catch (e: Exception) {
+                            syncLog("Delta pruning failed: ${e.message}")
+                        }
+                    }
                 } catch (e: Exception) {
                     android.util.Log.w("SyncEngine", "Failed to write snapshot", e)
                 }

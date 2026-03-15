@@ -101,6 +101,35 @@ object FirestoreService {
         return allDeltas
     }
 
+    /**
+     * Delete deltas with version < [belowVersion].  Runs in batches
+     * to avoid downloading large payloads — only fetches document IDs.
+     * Returns the number of deltas pruned.
+     */
+    suspend fun pruneDeltas(groupId: String, belowVersion: Long, batchSize: Int = 100): Int {
+        var totalPruned = 0
+        val deltasRef = db.collection("groups").document(groupId).collection("deltas")
+        while (true) {
+            val snapshot = withTimeout(OP_TIMEOUT_EXTENDED_MS) {
+                deltasRef
+                    .whereLessThan("version", belowVersion)
+                    .orderBy("version", Query.Direction.ASCENDING)
+                    .limit(batchSize.toLong())
+                    .get()
+                    .await()
+            }
+            if (snapshot.isEmpty) break
+            val batch = db.batch()
+            for (doc in snapshot.documents) {
+                batch.delete(doc.reference)
+            }
+            withTimeout(OP_TIMEOUT_EXTENDED_MS) { batch.commit().await() }
+            totalPruned += snapshot.size()
+            if (snapshot.size() < batchSize) break
+        }
+        return totalPruned
+    }
+
     suspend fun updateDeviceMetadata(
         groupId: String,
         deviceId: String,
