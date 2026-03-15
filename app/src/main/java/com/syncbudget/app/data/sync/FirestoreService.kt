@@ -4,6 +4,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
+import com.google.firebase.Timestamp
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeout
 
@@ -345,7 +346,10 @@ object FirestoreService {
         val data = mapOf(
             "groupId" to groupId,
             "encryptedKey" to encryptedKey,
-            "expiresAt" to expiresAt,
+            // Convert epoch millis to Firestore Timestamp so TTL policy works correctly.
+            // TTL requires a Timestamp type; storing as raw millis would be interpreted
+            // as a date in year ~50,000 and TTL would never fire.
+            "expiresAt" to Timestamp(expiresAt / 1000, 0),
             "timestamp" to System.currentTimeMillis()
         )
         db.collection("pairing_codes")
