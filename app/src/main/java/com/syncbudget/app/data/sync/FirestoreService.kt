@@ -381,7 +381,10 @@ object FirestoreService {
 
         if (!doc.exists()) return null
 
-        val expiresAt = doc.getLong("expiresAt") ?: 0L
+        // expiresAt may be a Firestore Timestamp (new) or Long (legacy)
+        val expiresAt = (doc.getTimestamp("expiresAt")?.toDate()?.time)
+            ?: doc.getLong("expiresAt")
+            ?: 0L
         if (System.currentTimeMillis() > expiresAt) return null
 
         val groupId = doc.getString("groupId") ?: return null
