@@ -136,6 +136,7 @@ data class DashboardStrings(
 data class SettingsStrings(
     val title: String,
     val configureYourBudget: String,
+    val quickStartGuide: String,
     val currency: String,
     val showDecimalPlaces: String,
     val dateFormat: String,

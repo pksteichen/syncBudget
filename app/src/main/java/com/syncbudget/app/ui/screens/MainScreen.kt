@@ -411,6 +411,9 @@ fun MainScreen(
                 ) {
                     // Solari board with bolt
                     if (showSolari) {
+                        // Inset matches FlipDisplay's internal padding so icons
+                        // visually anchor to the Solari border corners
+                        val solariInset = if (solariWidthFraction < 0.80f) 8.dp else 12.dp
                         Box(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier.fillMaxWidth(solariWidthFraction)
@@ -428,11 +431,12 @@ fun MainScreen(
                                     Modifier.padding(horizontal = 12.dp, vertical = 16.dp),
                                 bottomLabel = bottomLabel
                             )
+                            // Supercharge bolt — anchored to bottom-right of Solari
                             IconButton(
                                 onClick = { showSuperchargeDialog = true },
                                 modifier = Modifier
                                     .align(Alignment.BottomEnd)
-                                    .padding(end = 16.dp, bottom = 16.dp)
+                                    .padding(end = solariInset, bottom = solariInset)
                                     .size(64.dp)
                             ) {
                                 Icon(
@@ -463,10 +467,11 @@ fun MainScreen(
                                         label = "repairColor"
                                     ).value
                                 } else baseSyncColor
+                                // Sync indicator — anchored to bottom-left of Solari
                                 Row(
                                     modifier = Modifier
                                         .align(Alignment.BottomStart)
-                                        .padding(start = 20.dp, bottom = 20.dp)
+                                        .padding(start = solariInset + 16.dp, bottom = solariInset + 6.dp)
                                         .combinedClickable(
                                             enabled = syncStatus != "syncing",
                                             onClick = { onSyncNow() },

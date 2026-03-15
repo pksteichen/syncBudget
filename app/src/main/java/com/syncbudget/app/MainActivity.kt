@@ -2038,6 +2038,7 @@ class MainActivity : ComponentActivity() {
                         },
                         onNavigateToBudgetConfig = { currentScreen = "budget_config" },
                         onNavigateToFamilySync = { currentScreen = "family_sync" },
+                        onNavigateToQuickStart = { /* TODO: currentScreen = "quick_start" */ },
                         matchDays = matchDays,
                         onMatchDaysChange = {
                             matchDays = it; prefs.edit().putInt("matchDays", it).apply()

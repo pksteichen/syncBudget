@@ -112,7 +112,8 @@ object SpanishStrings : AppStrings {
 
     override val settings = SettingsStrings(
         title = "Ajustes",
-        configureYourBudget = "Configurar tu presupuesto",
+        configureYourBudget = "Configurar Presupuesto",
+        quickStartGuide = "Gu\u00eda de Inicio R\u00e1pido",
         currency = "Moneda",
         showDecimalPlaces = "Mostrar decimales",
         dateFormat = "Formato de fecha",
@@ -449,8 +450,8 @@ object SpanishStrings : AppStrings {
     )
 
     override val sync = SyncStrings(
-        title = "Sincronizaci\u00f3n Familiar",
-        familySync = "Sincronizaci\u00f3n Familiar",
+        title = "Sincronizar",
+        familySync = "Sincronizar",
         familySyncDescription = "Sincroniza tu presupuesto en hasta 5 dispositivos de tu hogar.",
         createGroup = "Crear Grupo Familiar",
         createGroupDescription = "Inicia un nuevo grupo de sincronizaci\u00f3n e invita a familiares con un c\u00f3digo de emparejamiento.",
@@ -1414,7 +1415,7 @@ object SpanishStrings : AppStrings {
     )
 
     override val familySyncHelp = FamilySyncHelpStrings(
-        title = "Ayuda de Sincronizaci\u00f3n Familiar",
+        title = "Ayuda de Sincronizaci\u00f3n",
         whatTitle = "\u00bfQu\u00e9 es la Sincronizaci\u00f3n Familiar?",
         whatBody = "La Sincronizaci\u00f3n Familiar te permite compartir un presupuesto familiar en hasta 5 dispositivos. " +
             "Todas las transacciones, fuentes de ingreso, gastos recurrentes, metas de ahorro y configuraciones " +

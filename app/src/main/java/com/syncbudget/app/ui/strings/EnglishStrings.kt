@@ -112,7 +112,8 @@ object EnglishStrings : AppStrings {
 
     override val settings = SettingsStrings(
         title = "Settings",
-        configureYourBudget = "Configure Your Budget",
+        configureYourBudget = "Configure Budget",
+        quickStartGuide = "Quick Start Guide",
         currency = "Currency",
         showDecimalPlaces = "Show decimal places",
         dateFormat = "Date Format",
@@ -449,8 +450,8 @@ object EnglishStrings : AppStrings {
     )
 
     override val sync = SyncStrings(
-        title = "Family Sync",
-        familySync = "Family Sync",
+        title = "Sync",
+        familySync = "Sync",
         familySyncDescription = "Sync your budget across up to 5 devices in your household.",
         createGroup = "Create Family Group",
         createGroupDescription = "Start a new sync group and invite family members with a pairing code.",
@@ -1415,7 +1416,7 @@ object EnglishStrings : AppStrings {
     )
 
     override val familySyncHelp = FamilySyncHelpStrings(
-        title = "Family Sync Help",
+        title = "Sync Help",
         whatTitle = "What is Family Sync?",
         whatBody = "Family Sync lets you share a single household budget across up to 5 devices. " +
             "All transactions, income sources, recurring expenses, savings goals, and settings " +

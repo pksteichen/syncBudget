@@ -133,6 +133,7 @@ fun SettingsScreen(
     budgetPeriod: String = "DAILY",
     onNavigateToBudgetConfig: () -> Unit = {},
     onNavigateToFamilySync: () -> Unit = {},
+    onNavigateToQuickStart: () -> Unit = {},
     isSyncConfigured: Boolean = false,
     isAdmin: Boolean = true,
     onBack: () -> Unit,
@@ -204,19 +205,30 @@ fun SettingsScreen(
             }
             item {
                 OutlinedButton(
-                    onClick = onNavigateToBudgetConfig,
+                    onClick = onNavigateToQuickStart,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(S.settings.configureYourBudget)
+                    Text(S.settings.quickStartGuide)
                 }
             }
 
             item {
-                OutlinedButton(
-                    onClick = onNavigateToFamilySync,
-                    modifier = Modifier.fillMaxWidth()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(S.sync.familySync)
+                    OutlinedButton(
+                        onClick = onNavigateToBudgetConfig,
+                        modifier = Modifier.weight(2f)
+                    ) {
+                        Text(S.settings.configureYourBudget)
+                    }
+                    OutlinedButton(
+                        onClick = onNavigateToFamilySync,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(S.sync.familySync)
+                    }
                 }
             }
 

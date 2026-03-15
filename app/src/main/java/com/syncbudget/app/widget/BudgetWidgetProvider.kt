@@ -1,5 +1,6 @@
 package com.syncbudget.app.widget
 
+import android.app.AlarmManager
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
@@ -12,8 +13,10 @@ import android.view.View
 import android.widget.RemoteViews
 import com.syncbudget.app.MainActivity
 import com.syncbudget.app.R
+import com.syncbudget.app.data.BudgetPeriod
 import com.syncbudget.app.data.getDoubleCompat
 import com.syncbudget.app.ui.components.CURRENCY_DECIMALS
+import java.util.Calendar
 
 class BudgetWidgetProvider : AppWidgetProvider() {
 
@@ -24,6 +27,19 @@ class BudgetWidgetProvider : AppWidgetProvider() {
     ) {
         for (appWidgetId in appWidgetIds) {
             updateWidget(context, appWidgetManager, appWidgetId)
+        }
+        // Ensure background refresh is scheduled whenever widgets exist
+        WidgetRefreshWorker.schedule(context)
+        scheduleResetAlarm(context)
+    }
+
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        if (intent.action == ACTION_RESET_REFRESH) {
+            // Budget period just reset — trigger immediate widget refresh
+            WidgetRefreshWorker.runOnce(context)
+            // Schedule the next reset alarm
+            scheduleResetAlarm(context)
         }
     }
 
@@ -39,6 +55,75 @@ class BudgetWidgetProvider : AppWidgetProvider() {
     companion object {
         const val ACTION_ADD_INCOME = "com.syncbudget.app.widget.ADD_INCOME"
         const val ACTION_ADD_EXPENSE = "com.syncbudget.app.widget.ADD_EXPENSE"
+        private const val ACTION_RESET_REFRESH = "com.syncbudget.app.widget.RESET_REFRESH"
+
+        /**
+         * Schedule an exact alarm at the next budget reset time so the
+         * widget updates promptly when the period flips.
+         */
+        fun scheduleResetAlarm(context: Context) {
+            val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+            val budgetPeriod = try {
+                BudgetPeriod.valueOf(prefs.getString("budgetPeriod", "DAILY") ?: "DAILY")
+            } catch (_: Exception) { BudgetPeriod.DAILY }
+            val resetHour = prefs.getInt("resetHour", 0)
+            val resetDayOfWeek = prefs.getInt("resetDayOfWeek", 7)
+            val resetDayOfMonth = prefs.getInt("resetDayOfMonth", 1)
+
+            val cal = Calendar.getInstance()
+            when (budgetPeriod) {
+                BudgetPeriod.DAILY -> {
+                    cal.set(Calendar.HOUR_OF_DAY, resetHour)
+                    cal.set(Calendar.MINUTE, 0)
+                    cal.set(Calendar.SECOND, 30)
+                    if (cal.timeInMillis <= System.currentTimeMillis()) {
+                        cal.add(Calendar.DAY_OF_YEAR, 1)
+                    }
+                }
+                BudgetPeriod.WEEKLY -> {
+                    // Calendar uses Sunday=1, our resetDayOfWeek uses Monday=1..Sunday=7
+                    val calDay = if (resetDayOfWeek == 7) Calendar.SUNDAY
+                        else resetDayOfWeek + 1
+                    cal.set(Calendar.DAY_OF_WEEK, calDay)
+                    cal.set(Calendar.HOUR_OF_DAY, 0)
+                    cal.set(Calendar.MINUTE, 0)
+                    cal.set(Calendar.SECOND, 30)
+                    if (cal.timeInMillis <= System.currentTimeMillis()) {
+                        cal.add(Calendar.WEEK_OF_YEAR, 1)
+                    }
+                }
+                BudgetPeriod.MONTHLY -> {
+                    cal.set(Calendar.DAY_OF_MONTH,
+                        resetDayOfMonth.coerceAtMost(cal.getActualMaximum(Calendar.DAY_OF_MONTH)))
+                    cal.set(Calendar.HOUR_OF_DAY, 0)
+                    cal.set(Calendar.MINUTE, 0)
+                    cal.set(Calendar.SECOND, 30)
+                    if (cal.timeInMillis <= System.currentTimeMillis()) {
+                        cal.add(Calendar.MONTH, 1)
+                        cal.set(Calendar.DAY_OF_MONTH,
+                            resetDayOfMonth.coerceAtMost(cal.getActualMaximum(Calendar.DAY_OF_MONTH)))
+                    }
+                }
+            }
+
+            val intent = Intent(context, BudgetWidgetProvider::class.java).apply {
+                action = ACTION_RESET_REFRESH
+            }
+            val pendingIntent = PendingIntent.getBroadcast(
+                context, 0, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            try {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP, cal.timeInMillis, pendingIntent
+                )
+            } catch (_: SecurityException) {
+                // Exact alarms not permitted on Android 12+ without SCHEDULE_EXACT_ALARM
+                // Fall back to inexact — still better than nothing
+                alarmManager.set(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pendingIntent)
+            }
+        }
 
         fun updateAllWidgets(context: Context) {
             val manager = AppWidgetManager.getInstance(context)
