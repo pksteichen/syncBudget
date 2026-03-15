@@ -11,7 +11,7 @@ data class PeriodLedgerEntry(
     val periodStartDate: LocalDateTime,
     val appliedAmount: Double,
     val clockAtReset: Long,
-    val corrected: Boolean = false,
+    val corrected: Boolean = false,  // unused — kept for JSON backward compatibility
     // CRDT sync fields
     val deviceId: String = "",
     val clock: Long = 0L  // single creation clock (entries are immutable)

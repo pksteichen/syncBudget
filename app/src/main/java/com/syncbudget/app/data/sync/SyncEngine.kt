@@ -913,6 +913,7 @@ class SyncEngine(
                             syncLog("  REPAIR pushing ${capped.size} records (${encoded.length} chars)")
                             FirestoreService.pushDeltaAtomically(groupId, deviceId, encoded)
                             syncLog("  REPAIR push complete")
+                            deltasPushed += capped.size
                             didRepair = true
                         }
                     }
@@ -1097,10 +1098,18 @@ class SyncEngine(
             } catch (_: Exception) { emptyList() }
         } else emptyList<CategoryAmount>()
 
+        val type = try { TransactionType.valueOf(f["type"]?.value as? String ?: "EXPENSE") } catch (e: Exception) {
+            android.util.Log.w("SyncEngine", "Delta txn id=${change.id}: bad type '${f["type"]?.value}', defaulting to EXPENSE")
+            TransactionType.EXPENSE
+        }
+        val date = try { LocalDate.parse(f["date"]?.value as? String) } catch (e: Exception) {
+            android.util.Log.w("SyncEngine", "Delta txn id=${change.id}: bad date '${f["date"]?.value}', defaulting to today")
+            LocalDate.now()
+        }
         return Transaction(
             id = change.id,
-            type = try { TransactionType.valueOf(f["type"]?.value as? String ?: "EXPENSE") } catch (_: Exception) { TransactionType.EXPENSE },
-            date = try { LocalDate.parse(f["date"]?.value as? String) } catch (_: Exception) { LocalDate.now() },
+            type = type,
+            date = date,
             source = f["source"]?.value as? String ?: "",
             description = f["description"]?.value as? String ?: "",
             categoryAmounts = categoryAmounts,

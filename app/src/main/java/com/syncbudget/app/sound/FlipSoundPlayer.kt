@@ -71,7 +71,10 @@ class FlipSoundPlayer(context: Context) {
         val cacheFile = File(context.cacheDir, "clack.wav")
         cacheFile.writeBytes(wavBytes)
 
-        return soundPool.load(cacheFile.absolutePath, 1)
+        val id = soundPool.load(cacheFile.absolutePath, 1)
+        // Clean up temp file — SoundPool copies the data on load
+        cacheFile.delete()
+        return id
     }
 
     private fun encodeWav(samples: ShortArray, sampleRate: Int): ByteArray {

@@ -88,9 +88,17 @@ fun parseCsvLine(line: String): List<String> {
     val fields = mutableListOf<String>()
     val current = StringBuilder()
     var inQuotes = false
+    var i = 0
 
-    for (ch in line) {
+    while (i < line.length) {
+        val ch = line[i]
         when {
+            // Handle backslash-escaped quotes: \" inside quoted fields
+            ch == '\\' && inQuotes && i + 1 < line.length && line[i + 1] == '"' -> {
+                current.append('"')
+                i += 2
+                continue
+            }
             ch == '"' -> inQuotes = !inQuotes
             ch == ',' && !inQuotes -> {
                 fields.add(current.toString())
@@ -98,6 +106,7 @@ fun parseCsvLine(line: String): List<String> {
             }
             else -> current.append(ch)
         }
+        i++
     }
     fields.add(current.toString())
     return fields

@@ -174,7 +174,7 @@ object WidgetRenderer {
         // Overlay message for non-paid users
         if (!isPaidUser) {
             val overlayPaint = Paint().apply {
-                color = if (isDarkMode) 0xCCFFFFFF.toInt() else 0xCC000000.toInt()
+                color = if (isDarkMode) 0xFFFFFFFF.toInt() else 0xCC000000.toInt()
                 textAlign = Paint.Align.CENTER
                 isAntiAlias = true
                 isFakeBoldText = true
