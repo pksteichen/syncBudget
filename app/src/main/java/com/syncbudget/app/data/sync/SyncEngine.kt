@@ -70,7 +70,15 @@ class SyncEngine(
         val ts = LocalDateTime.now().toString()
         val line = "[$ts] $msg\n"
         android.util.Log.d("SyncEngine", msg)
-        try { syncLogFile.appendText(line) } catch (_: Exception) {}
+        try {
+            // Rotate log at 1MB to prevent unbounded growth
+            if (syncLogFile.exists() && syncLogFile.length() > 1_000_000L) {
+                val rotated = java.io.File(syncLogFile.parent, "sync_log_prev.txt")
+                rotated.delete()
+                syncLogFile.renameTo(rotated)
+            }
+            syncLogFile.appendText(line)
+        } catch (_: Exception) {}
     }
 
     private fun reportProgress(msg: String) {
@@ -104,11 +112,13 @@ class SyncEngine(
         amortizationEntries: List<AmortizationEntry>,
         categories: List<Category>,
         sharedSettings: SharedSettings,
-        periodLedgerEntries: List<PeriodLedgerEntry>
+        periodLedgerEntries: List<PeriodLedgerEntry>,
+        catIdRemap: Map<Int, Int> = emptyMap()
     ) {
         val snapshotJson = SnapshotManager.serializeFullState(
             transactions, recurringExpenses, incomeSources, savingsGoals,
-            amortizationEntries, categories, sharedSettings, periodLedgerEntries
+            amortizationEntries, categories, sharedSettings, periodLedgerEntries,
+            catIdRemap
         )
         val snapshotBytes = snapshotJson.toString().toByteArray()
         val encryptedSnapshot = CryptoHelper.encryptWithKey(snapshotBytes, encryptionKey)
@@ -263,7 +273,12 @@ class SyncEngine(
                     val encrypted = Base64.decode(delta.encryptedPayload, Base64.NO_WRAP)
                     val decrypted = CryptoHelper.decryptWithKey(encrypted, encryptionKey)
                     val json = JSONObject(String(decrypted))
-                    packets.add(DeltaSerializer.deserialize(json))
+                    val packet = DeltaSerializer.deserialize(json)
+                    // Validate payload deviceId matches Firestore metadata
+                    if (packet.sourceDeviceId != delta.sourceDeviceId) {
+                        syncLog("WARNING: Delta v${delta.version} payload deviceId=${packet.sourceDeviceId} != metadata deviceId=${delta.sourceDeviceId}")
+                    }
+                    packets.add(packet)
                 } catch (e: Exception) {
                     android.util.Log.w("SyncEngine", "Skipping unreadable delta from ${delta.sourceDeviceId}: ${e.message}")
                     continue
@@ -326,6 +341,12 @@ class SyncEngine(
             var settingsChanged = false
             var budgetRecalcNeeded = false
             val catIdRemap = existingCatIdRemap.toMutableMap() // remote ID -> local ID (seeded from persistent map)
+            // Seed remap from snapshot so new devices inherit dedup context
+            if (snapshotState != null && snapshotState.catIdRemap.isNotEmpty()) {
+                for ((k, v) in snapshotState.catIdRemap) {
+                    catIdRemap.putIfAbsent(k, v)
+                }
+            }
 
             // Build index maps for O(1) lookups during merge (avoids O(n²) indexOfFirst)
             val txnIndex = buildIndexMap(mergedTxns)
@@ -737,7 +758,8 @@ class SyncEngine(
                 try {
                     writeSnapshot(
                         mergedTxns, mergedRe, mergedIs, mergedSg,
-                        mergedAe, mergedCat, mergedSettings, mergedPl
+                        mergedAe, mergedCat, mergedSettings, mergedPl,
+                        catIdRemap
                     )
                     lastSnapshotVersion = newSyncVersion
                 } catch (e: Exception) {

@@ -18,13 +18,15 @@ object PeriodLedgerCorrector {
         for (entry in ledger) {
             if (entry.corrected) continue
 
-            // Reconstruct which records existed at the time of this period reset
-            // by checking which records had any clock value <= the clockAtReset
+            // Reconstruct which records existed at the time of this period reset.
+            // Use the creation clock (source_clock) rather than maxFieldClock,
+            // because edits after the reset inflate maxFieldClock and would
+            // incorrectly exclude records that existed at reset time.
             val activeExpensesAtTime = allRecurringExpenses.filter { re ->
-                !re.deleted && maxFieldClock(re) <= entry.clockAtReset
+                !re.deleted && re.source_clock <= entry.clockAtReset
             }
             val activeIncomeAtTime = allIncomeSources.filter { src ->
-                !src.deleted && maxFieldClock(src) <= entry.clockAtReset
+                !src.deleted && src.source_clock <= entry.clockAtReset
             }
 
             // Compute what budgetAmount should have been at that point

@@ -545,7 +545,8 @@ class MainActivity : ComponentActivity() {
                 onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
             }
 
-            // Foreground sync loop
+            // Foreground sync loop — uses SupervisorJob so exceptions in
+            // the sync coroutine don't cancel sibling LaunchedEffects.
             LaunchedEffect(isSyncConfigured) {
                 if (!isSyncConfigured) return@LaunchedEffect
                 val groupId = GroupManager.getGroupId(context) ?: return@LaunchedEffect
@@ -1089,8 +1090,12 @@ class MainActivity : ComponentActivity() {
                             recomputeCash()
                             // Persist updated category ID remap
                             result.catIdRemap?.let { remap ->
-                                val json = org.json.JSONObject(remap.mapKeys { it.key.toString() })
-                                syncPrefs.edit().putString("catIdRemap", json.toString()).apply()
+                                try {
+                                    val json = org.json.JSONObject(remap.mapKeys { it.key.toString() })
+                                    syncPrefs.edit().putString("catIdRemap", json.toString()).commit()
+                                } catch (e: Exception) {
+                                    android.util.Log.e("SyncLoop", "Failed to save catIdRemap: ${e.message}")
+                                }
                             }
                             syncStatus = "synced"
                             syncErrorMessage = null

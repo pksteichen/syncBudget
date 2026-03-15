@@ -120,7 +120,7 @@ class FlipSoundPlayer(context: Context) {
     }
 
     fun playClack() {
-        if (loaded) {
+        if (loaded && clackSoundId > 0) {
             soundPool.play(clackSoundId, 0.8f, 0.8f, 1, 0, 1.0f)
         }
     }

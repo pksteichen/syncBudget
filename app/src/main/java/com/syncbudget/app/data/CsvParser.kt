@@ -78,7 +78,7 @@ fun parseUsBank(reader: BufferedReader, existingIds: Set<Int>): CsvParseResult {
 
     // If more than half the rows were skipped, escalate to an error
     if (error == null && totalDataRows > 0 && skippedRows > totalDataRows / 2) {
-        error = "Only $skippedRows of $totalDataRows rows could not be parsed — file may not be a US Bank CSV"
+        error = "$skippedRows of $totalDataRows rows could not be parsed — file may not be a US Bank CSV"
     }
 
     return CsvParseResult(transactions, error, totalDataRows, skippedRows)

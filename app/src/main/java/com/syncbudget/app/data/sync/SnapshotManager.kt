@@ -24,7 +24,8 @@ data class FullState(
     val amortizationEntries: List<AmortizationEntry>,
     val categories: List<Category>,
     val sharedSettings: SharedSettings = SharedSettings(),
-    val periodLedgerEntries: List<PeriodLedgerEntry> = emptyList()
+    val periodLedgerEntries: List<PeriodLedgerEntry> = emptyList(),
+    val catIdRemap: Map<Int, Int> = emptyMap()
 )
 
 object SnapshotManager {
@@ -37,7 +38,8 @@ object SnapshotManager {
         amortizationEntries: List<AmortizationEntry>,
         categories: List<Category>,
         sharedSettings: SharedSettings = SharedSettings(),
-        periodLedgerEntries: List<PeriodLedgerEntry> = emptyList()
+        periodLedgerEntries: List<PeriodLedgerEntry> = emptyList(),
+        catIdRemap: Map<Int, Int> = emptyMap()
     ): JSONObject {
         val json = JSONObject()
 
@@ -245,6 +247,11 @@ object SnapshotManager {
         json.put("periodLedger", plArray)
 
         json.put("sharedSettings", SharedSettingsRepository.toJson(sharedSettings))
+
+        // Include category ID remap so new devices inherit dedup context
+        if (catIdRemap.isNotEmpty()) {
+            json.put("catIdRemap", JSONObject(catIdRemap.mapKeys { it.key.toString() }))
+        }
 
         return json
     }
@@ -467,6 +474,14 @@ object SnapshotManager {
             SharedSettingsRepository.fromJson(json.getJSONObject("sharedSettings"))
         } else SharedSettings()
 
+        // Read category ID remap if present
+        val catIdRemap = if (json.has("catIdRemap")) {
+            try {
+                val obj = json.getJSONObject("catIdRemap")
+                obj.keys().asSequence().associate { it.toInt() to obj.getInt(it) }
+            } catch (_: Exception) { emptyMap() }
+        } else emptyMap<Int, Int>()
+
         return FullState(
             transactions = transactions,
             recurringExpenses = recurringExpenses,
@@ -475,7 +490,8 @@ object SnapshotManager {
             amortizationEntries = amortizationEntries,
             categories = categories,
             sharedSettings = loadedSettings,
-            periodLedgerEntries = periodLedgerEntries
+            periodLedgerEntries = periodLedgerEntries,
+            catIdRemap = catIdRemap
         )
     }
 }
