@@ -241,18 +241,10 @@ object BudgetCalculator {
         // across devices with different system timezones.
         val zone = timezone ?: ZoneId.systemDefault()
         val now = Instant.now().atZone(zone)
-        // Before resetHour on a reset day, we're still in the previous period.
-        // Shifting back one day causes WEEKLY previousOrSame() and MONTHLY
-        // candidate checks to correctly return the previous period's start.
-        val calendarToday = now.toLocalDate()
-        val isBeforeResetHour = resetHour > 0 && now.hour < resetHour
-        val isResetDay = when (budgetPeriod) {
-            BudgetPeriod.DAILY -> true  // every day is a reset day
-            BudgetPeriod.WEEKLY -> calendarToday.dayOfWeek == DayOfWeek.of(resetDayOfWeek)
-            BudgetPeriod.MONTHLY -> calendarToday.dayOfMonth == resetDayOfMonth.coerceAtMost(calendarToday.lengthOfMonth())
-        }
-        val today = if (isResetDay && isBeforeResetHour)
-            calendarToday.minusDays(1) else calendarToday
+        // In DAILY mode, before resetHour we're still in yesterday's period.
+        // WEEKLY and MONTHLY always reset at midnight (no UI for resetHour).
+        val today = if (budgetPeriod == BudgetPeriod.DAILY && resetHour > 0 && now.hour < resetHour)
+            now.toLocalDate().minusDays(1) else now.toLocalDate()
         return when (budgetPeriod) {
             BudgetPeriod.DAILY -> today
             BudgetPeriod.WEEKLY -> {
