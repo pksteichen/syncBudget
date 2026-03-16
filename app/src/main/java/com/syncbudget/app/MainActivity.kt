@@ -81,6 +81,8 @@ import com.syncbudget.app.ui.screens.FamilySyncHelpScreen
 import com.syncbudget.app.ui.screens.FamilySyncScreen
 import com.syncbudget.app.ui.screens.FutureExpendituresHelpScreen
 import com.syncbudget.app.ui.screens.FutureExpendituresScreen
+import com.syncbudget.app.ui.screens.QuickStartOverlay
+import com.syncbudget.app.ui.screens.QuickStartStep
 import com.syncbudget.app.ui.screens.MainScreen
 import com.syncbudget.app.ui.screens.RecurringExpenseConfirmDialog
 import com.syncbudget.app.ui.screens.RecurringExpensesHelpScreen
@@ -200,6 +202,7 @@ class MainActivity : ComponentActivity() {
             var dateFormatPattern by remember { mutableStateOf(prefs.getString("dateFormatPattern", "yyyy-MM-dd") ?: "yyyy-MM-dd") }
             var isPaidUser by remember { mutableStateOf(prefs.getBoolean("isPaidUser", false)) }
             var isSubscriber by remember { mutableStateOf(prefs.getBoolean("isSubscriber", false)) }
+            var quickStartStep by remember { mutableStateOf<QuickStartStep?>(null) }
             var subscriptionExpiry by remember {
                 mutableStateOf(prefs.getLong("subscriptionExpiry",
                     System.currentTimeMillis() + 30L * 24 * 60 * 60 * 1000))
@@ -215,7 +218,10 @@ class MainActivity : ComponentActivity() {
             var matchChars by remember { mutableIntStateOf(prefs.getInt("matchChars", 5)) }
             var weekStartSunday by remember { mutableStateOf(prefs.getBoolean("weekStartSunday", true)) }
             var chartPalette by remember { mutableStateOf(prefs.getString("chartPalette", "Sunset") ?: "Sunset") }
-            var appLanguage by remember { mutableStateOf(prefs.getString("appLanguage", "en") ?: "en") }
+            // Default to device language if we support it, otherwise English
+            val deviceLang = java.util.Locale.getDefault().language
+            val defaultLang = if (deviceLang == "es") "es" else "en"
+            var appLanguage by remember { mutableStateOf(prefs.getString("appLanguage", null) ?: defaultLang) }
             val strings: AppStrings = if (appLanguage == "es") SpanishStrings else EnglishStrings
             var budgetPeriod by remember {
                 mutableStateOf(
@@ -1439,6 +1445,15 @@ class MainActivity : ComponentActivity() {
             val existingIds = transactions.map { it.id }.toSet()
             val categoryMap = categories.associateBy { it.id }
 
+            // Auto-launch quick start guide if no income sources exist
+            // (indicates a brand new user who hasn't set up their budget)
+            LaunchedEffect(Unit) {
+                if (incomeSources.isEmpty() && !isSyncConfigured &&
+                    !prefs.getBoolean("quickStartCompleted", false)) {
+                    quickStartStep = QuickStartStep.WELCOME
+                }
+            }
+
             // One-time simulation trace on startup
             LaunchedEffect(Unit) {
                 try {
@@ -2093,7 +2108,10 @@ class MainActivity : ComponentActivity() {
                         },
                         onNavigateToBudgetConfig = { currentScreen = "budget_config" },
                         onNavigateToFamilySync = { currentScreen = "family_sync" },
-                        onNavigateToQuickStart = { /* TODO: currentScreen = "quick_start" */ },
+                        onNavigateToQuickStart = {
+                            quickStartStep = QuickStartStep.WELCOME
+                            currentScreen = "main"
+                        },
                         matchDays = matchDays,
                         onMatchDaysChange = {
                             matchDays = it; prefs.edit().putInt("matchDays", it).apply()
@@ -3914,6 +3932,38 @@ class MainActivity : ComponentActivity() {
                 }
                 } // Box(weight)
               } // Column
+            // Quick Start Guide overlay
+            if (quickStartStep != null) {
+                QuickStartOverlay(
+                    step = quickStartStep!!,
+                    onNext = {
+                        val nextStep = when (quickStartStep) {
+                            QuickStartStep.WELCOME -> QuickStartStep.BUDGET_PERIOD
+                            QuickStartStep.BUDGET_PERIOD -> QuickStartStep.INCOME
+                            QuickStartStep.INCOME -> QuickStartStep.EXPENSES
+                            QuickStartStep.EXPENSES -> QuickStartStep.FIRST_TRANSACTION
+                            QuickStartStep.FIRST_TRANSACTION -> QuickStartStep.DONE
+                            QuickStartStep.DONE -> null
+                            null -> null
+                        }
+                        quickStartStep = nextStep
+                        if (nextStep == null) {
+                            prefs.edit().putBoolean("quickStartCompleted", true).apply()
+                        }
+                    },
+                    onSkip = {
+                        quickStartStep = null
+                        prefs.edit().putBoolean("quickStartCompleted", true).apply()
+                    },
+                    onNavigate = { screen -> currentScreen = screen },
+                    isEnglish = appLanguage != "es",
+                    isPaidUser = isPaidUser,
+                    onLanguageChange = { lang ->
+                        appLanguage = lang
+                        prefs.edit().putString("appLanguage", lang).apply()
+                    }
+                )
+            }
             } // SyncBudgetTheme
         }
     }

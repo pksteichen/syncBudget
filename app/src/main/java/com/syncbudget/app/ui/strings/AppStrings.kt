@@ -157,6 +157,7 @@ data class SettingsStrings(
     val subscriber: String,
     val upgradeToAccess: String,
     val subscribeToAccess: String,
+    val administratorOnly: String,
     val showWidgetLogo: String,
     val categories: String,
     val charted: String,

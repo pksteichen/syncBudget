@@ -3,6 +3,8 @@ package com.syncbudget.app.ui.screens
 import androidx.compose.foundation.border
 import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.clickable
+import androidx.compose.runtime.LaunchedEffect
+import com.syncbudget.app.ui.theme.LocalAppToast
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -146,6 +148,7 @@ fun SettingsScreen(
 ) {
     val customColors = LocalSyncBudgetColors.current
     val S = LocalStrings.current
+    val toastState = LocalAppToast.current
     var showAddCategory by remember { mutableStateOf(false) }
     var editingCategory by remember { mutableStateOf<Category?>(null) }
     val isLocked = isSyncConfigured && !isAdmin
@@ -248,7 +251,10 @@ fun SettingsScreen(
                     var currencyExpanded by remember { mutableStateOf(false) }
                     ExposedDropdownMenuBox(
                         expanded = if (isLocked) false else currencyExpanded,
-                        onExpandedChange = { if (!isLocked) currencyExpanded = it },
+                        onExpandedChange = {
+                            if (isLocked) toastState.show(S.settings.administratorOnly)
+                            else currencyExpanded = it
+                        },
                         modifier = Modifier.weight(1f)
                     ) {
                         OutlinedTextField(
@@ -352,7 +358,10 @@ fun SettingsScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         ExposedDropdownMenuBox(
                             expanded = if (isDisabled) false else weekStartExpanded,
-                            onExpandedChange = { if (!isDisabled) weekStartExpanded = it }
+                            onExpandedChange = {
+                                if (isLocked) toastState.show(S.settings.administratorOnly)
+                                else if (!isDisabled) weekStartExpanded = it
+                            }
                         ) {
                             OutlinedTextField(
                                 value = if (weekStartSunday) S.settings.sunday else S.settings.monday,
@@ -503,6 +512,9 @@ fun SettingsScreen(
 
             // Row 1: Match Days + Match Percent
             item {
+                Box(modifier = if (isLocked) Modifier.fillMaxWidth().clickable {
+                    toastState.show(S.settings.administratorOnly)
+                } else Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -541,10 +553,14 @@ fun SettingsScreen(
                         modifier = Modifier.weight(1f)
                     )
                 }
+                } // Box
             }
 
             // Row 2: Match Dollar + Match Chars
             item {
+                Box(modifier = if (isLocked) Modifier.fillMaxWidth().clickable {
+                    toastState.show(S.settings.administratorOnly)
+                } else Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -583,6 +599,7 @@ fun SettingsScreen(
                         modifier = Modifier.weight(1f)
                     )
                 }
+                } // Box
             }
 
             // Paid User checkbox
@@ -632,6 +649,7 @@ fun SettingsScreen(
                         val expiryDate = java.time.Instant.ofEpochMilli(subscriptionExpiry)
                             .atZone(java.time.ZoneId.systemDefault()).toLocalDate()
                         var showExpiryPicker by remember { mutableStateOf(false) }
+                        val pickerContext = LocalContext.current
                         Text(
                             text = "Exp: ${expiryDate.format(dateFormatter)}",
                             style = MaterialTheme.typography.bodySmall,
@@ -641,20 +659,20 @@ fun SettingsScreen(
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                         if (showExpiryPicker) {
-                            val context = LocalContext.current
-                            android.app.DatePickerDialog(
-                                context,
-                                { _, year, month, day ->
-                                    val picked = java.time.LocalDate.of(year, month + 1, day)
-                                    val millis = picked.atStartOfDay(java.time.ZoneId.systemDefault())
-                                        .toInstant().toEpochMilli()
-                                    onSubscriptionExpiryChange(millis)
-                                    showExpiryPicker = false
-                                },
-                                expiryDate.year, expiryDate.monthValue - 1, expiryDate.dayOfMonth
-                            ).apply {
-                                setOnDismissListener { showExpiryPicker = false }
-                                show()
+                            LaunchedEffect(Unit) {
+                                val dialog = android.app.DatePickerDialog(
+                                    pickerContext,
+                                    { _, year, month, day ->
+                                        val picked = java.time.LocalDate.of(year, month + 1, day)
+                                        val millis = picked.atStartOfDay(java.time.ZoneId.systemDefault())
+                                            .toInstant().toEpochMilli()
+                                        onSubscriptionExpiryChange(millis)
+                                        showExpiryPicker = false
+                                    },
+                                    expiryDate.year, expiryDate.monthValue - 1, expiryDate.dayOfMonth
+                                )
+                                dialog.setOnDismissListener { showExpiryPicker = false }
+                                dialog.show()
                             }
                         }
                     }

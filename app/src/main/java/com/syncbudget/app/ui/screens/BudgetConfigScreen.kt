@@ -145,6 +145,7 @@ fun BudgetConfigScreen(
     var showResetBudgetConfirm by remember { mutableStateOf(false) }
     var periodExpanded by remember { mutableStateOf(false) }
     val isLocked = isSyncConfigured && !isAdmin
+    val toastState = LocalAppToast.current
 
     val textFieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = MaterialTheme.colorScheme.onBackground,
@@ -204,7 +205,10 @@ fun BudgetConfigScreen(
                 ) {
                     ExposedDropdownMenuBox(
                         expanded = if (isLocked) false else periodExpanded,
-                        onExpandedChange = { if (!isLocked) periodExpanded = it },
+                        onExpandedChange = {
+                            if (isLocked) toastState.show(S.settings.administratorOnly)
+                            else periodExpanded = it
+                        },
                         modifier = Modifier.weight(1f)
                     ) {
                         OutlinedTextField(
@@ -245,7 +249,10 @@ fun BudgetConfigScreen(
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     OutlinedButton(
-                        onClick = { showResetDialog = true },
+                        onClick = {
+                            if (isLocked) toastState.show(S.settings.administratorOnly)
+                            else showResetDialog = true
+                        },
                         enabled = !isLocked
                     ) {
                         Text(when (budgetPeriod) {
@@ -279,7 +286,10 @@ fun BudgetConfigScreen(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedButton(
-                    onClick = { showResetBudgetConfirm = true },
+                    onClick = {
+                        if (isLocked) toastState.show(S.settings.administratorOnly)
+                        else showResetBudgetConfirm = true
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !isLocked
                 ) {
@@ -293,7 +303,7 @@ fun BudgetConfigScreen(
                 ) {
                     Checkbox(
                         checked = isManualBudgetEnabled,
-                        onCheckedChange = if (isLocked) null else onManualBudgetToggle,
+                        onCheckedChange = if (isLocked) { { toastState.show(S.settings.administratorOnly) } } else onManualBudgetToggle,
                         enabled = !isLocked
                     )
                     Text(
@@ -373,7 +383,9 @@ fun BudgetConfigScreen(
                     // Income mode toggle (cycles on tap)
                     Surface(
                         onClick = {
-                            if (!isLocked) {
+                            if (isLocked) {
+                                toastState.show(S.settings.administratorOnly)
+                            } else {
                                 val idx = modes.indexOf(incomeMode)
                                 var nextIdx = (idx + 1) % modes.size
                                 // Skip ACTUAL_ADJUST if manual override is on

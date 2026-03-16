@@ -134,6 +134,7 @@ object EnglishStrings : AppStrings {
         subscriber = "Subscriber",
         upgradeToAccess = "Upgrade to access this feature",
         subscribeToAccess = "Subscribe to access this feature",
+        administratorOnly = "Administrator only",
         showWidgetLogo = "Show logo on widget",
         categories = "Categories",
         charted = "Charted",
