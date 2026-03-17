@@ -166,7 +166,7 @@ When a device sees a transaction with `receiptId` but has no local file:
 1. **Check cloud first** — try to download `groups/{groupId}/receipts/{receiptId}.enc` directly
 2. **If found in cloud** → download, decrypt, store locally. Done. No ledger entry needed.
 3. **If NOT in cloud** → check if a ledger entry already exists for this `receiptId`
-   - If ledger entry exists with `uploadedAt > 0` → cloud file was pruned between check and download (race). Wait for re-upload.
+   - If ledger entry exists with `uploadedAt > 0` → file may have just been re-uploaded. Try downloading from cloud again. If it fails, normal download failure handling applies (retry 3 times, then replace with request entry).
    - If ledger entry exists with `uploadedAt = 0` → another device already requested. Wait.
    - If no ledger entry → create one as a request, and bump the flag clock:
      ```
