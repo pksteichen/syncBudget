@@ -1,5 +1,5 @@
 # BudgeTrak Receipt Photo Feature — Design Document
-**Date:** 2026-03-16 | **Status:** Designed, not yet implemented | **Tier:** Subscriber
+**Date:** 2026-03-16 | **Status:** Designed, not yet implemented | **Tier:** Paid (one-time purchase, not subscription)
 
 ---
 
@@ -173,7 +173,9 @@ When a device sees a transaction with `receiptId` but has no local file:
      Ledger entry: possessions: {}, uploadedAt: 0, uploadAssignee: null, assignedAt: 0
      group document: imageLedgerFlagClock++
      ```
-4. **Requesting device waits** — does NOT keep polling the cloud. On subsequent syncs, it checks the flag clock. Only when `flagClock > lastSeenFlagClock` does it pull the ledger to check if `uploadedAt` has been set.
+4. **Requesting device waits** — does NOT keep polling the cloud. On subsequent syncs, it checks the flag clock. Only when `flagClock > lastSeenFlagClock` does it pull the ledger to check if:
+   - `uploadedAt` has been set → download the file
+   - Its request entry was pruned (14-day cleanup) → re-create the request entry and bump flag clock again
 5. **Other devices** see the flag clock change on their next sync, pull the ledger, find the request entry, check if they have the file locally
 6. **Hash-based scoring** among online devices with the file determines uploader (see Upload Assignment)
 7. **Winner claims** assignment via CAS transaction, uploads, sets `uploadedAt`, bumps flag clock
@@ -319,9 +321,11 @@ firestore.runTransaction { tx ->
 }
 ```
 
-### Upload Assignment Takeover — Compare-and-Swap Transaction
+### Upload Assignment Takeover — Compare-and-Swap (CAS) Transaction
 
-When a device wants to take over a stale assignment (`assignedAt` 5+ minutes ago, `uploadedAt` still 0), use a transaction to claim it conditionally. This avoids redundant uploads when two devices try to volunteer simultaneously:
+A CAS transaction reads the current value, verifies it hasn't changed since you last checked, and only then writes the new value — atomically. If another device changed it between your read and write, Firestore retries the transaction with the updated data.
+
+When a device wants to take over a stale assignment (`assignedAt` 5+ minutes ago, `uploadedAt` still 0), use a CAS transaction to claim it conditionally. This avoids redundant uploads when two devices try to volunteer simultaneously:
 
 ```kotlin
 firestore.runTransaction { tx ->
@@ -431,19 +435,14 @@ Admin-only setting, configured in Settings. Syncs to all group devices via norma
 
 On app startup, if `receiptPruneAgeDays` is set:
 
-1. Calculate the **effective prune date** = `max(today - pruneAgeDays, mostRecentPrunedDate)`
-   - `mostRecentPrunedDate` is stored locally and tracks the last prune date used
-   - If the admin changes the prune age to a longer period (further into the past), we use the most recent pruned date to avoid re-requesting files that were already intentionally deleted
-2. Delete all local receipt files + thumbnails linked to transactions older than the effective prune date
-3. Update `mostRecentPrunedDate` to the current effective prune date
+1. Calculate the **prune date** = `today - pruneAgeDays`
+2. For each transaction older than the prune date that has any `receiptIdN` set:
+   - Delete local receipt files + thumbnails for those receiptIds
+   - Set `receiptIdN = null` and bump the corresponding `receiptIdN_clock`
+3. The null'd `receiptIdN` fields propagate via normal CRDT sync to all other devices
+4. On receiving devices, merge-time link removal detection fires (old non-null → new null) and deletes their local copies automatically
 
-### Re-Upload Suppression
-
-Devices must NOT create recovery request ledger entries for photos linked to transactions older than the effective prune date. Otherwise pruning would trigger a storm of re-upload requests:
-
-- Before creating a recovery request, check the transaction date against the effective prune date
-- If the transaction is older → show a dimmed placeholder or no thumbnail, do NOT request re-upload
-- This check also applies to the cloud download step — don't download files that would be immediately pruned
+No re-upload suppression logic is needed — once the links are cleared, no device knows the photos existed. No `mostRecentPrunedDate` tracking is needed either, since there are no links left to trigger re-requests.
 
 ### Future: Transaction Pruning
 
@@ -485,7 +484,7 @@ The flag clock is skipped (full ledger pulled regardless) when:
 
 ### Capture Points
 - Camera button on add-transaction dialog
-- "Attach receipt" button on transaction detail/edit
+- Camera icon on the right side of the transaction detail/edit dialog header
 
 ### Display
 - Thumbnail on transaction list items (if receipt attached)
@@ -513,11 +512,11 @@ The flag clock is skipped (full ledger pulled regardless) when:
 - Cloud Storage: up to ~1MB (encrypted, transient)
 - Firestore ledger: up to 5 entries (~1KB total)
 
-### At Scale (1,000 users × 30 transactions/month, avg 2 photos each)
-- Cloud Storage: transient (~12GB peak if all in-flight, pruned to near-zero)
-- Firestore: ~60K ledger entries/month, ~120K writes/month (create + possession + prune)
-- Well within free tier initially
-- ~$0.25/month on Blaze plan
+### At Scale (1,000 users × 150 transactions/month, avg 2 photos each)
+- Photos/month: ~300,000
+- Cloud Storage: transient (~60GB peak if all in-flight, pruned to near-zero in practice)
+- Firestore: ~300K ledger entries/month, ~600K writes/month (create + possession + prune)
+- ~$1.50/month on Blaze plan
 
 ### Firebase Free Tier
 - Cloud Storage: 5GB storage, 1GB/day download
@@ -566,9 +565,9 @@ The flag clock is skipped (full ledger pulled regardless) when:
 ### Recovery & Retry
 - [ ] Recovery flow: check cloud first, then create ledger request + bump flag clock if missing
 - [ ] Requesting device waits on flag clock (no cloud polling)
+- [ ] Re-create request if flag clock reveals previous request was pruned
 - [ ] Download retry tracking: 3 real failures (excluding network errors) → replace entry with request
 - [ ] Full ledger pull on any download failure
-- [ ] Suppress recovery requests for transactions older than effective prune date
 
 ### Cloud Pruning (14-day)
 - [ ] 14-day stale pruning of all entry types (normal + request)
@@ -580,9 +579,9 @@ The flag clock is skipped (full ledger pulled regardless) when:
 - [ ] `receiptPruneAgeDays` admin-only shared setting (CRDT-synced)
 - [ ] Settings UI: show total receipt cache size
 - [ ] Settings UI: admin retention picker (30/60/90/180/365 days or "Keep all")
-- [ ] On startup: delete local files + thumbnails for transactions older than effective prune date
-- [ ] Track `mostRecentPrunedDate` locally to prevent re-request after date change
-- [ ] Suppress cloud downloads for photos that would be immediately pruned
+- [ ] On startup: clear receiptIdN fields (with clock bumps) on transactions older than prune date
+- [ ] On startup: delete corresponding local files + thumbnails
+- [ ] CRDT sync propagates null'd links → merge-time cleanup handles other devices automatically
 
 ### Deletion
 - [ ] Long-press thumbnail → confirm → clear receiptIdN slot, remove ledger entry, delete cloud file
@@ -594,7 +593,9 @@ The flag clock is skipped (full ledger pulled regardless) when:
 - [ ] 5-slot photo row integration with `receiptId1`–`receiptId5` (connect existing `SwipeablePhotoRow`)
 - [ ] Full-size photo viewer
 - [ ] Long-press thumbnail picker with Delete option
-- [ ] Gate behind Subscriber tier
+- [ ] Gate all photo features behind paid user check (`isPaidUser` in `app_prefs`)
+- [ ] Disable swipe-left photo row on transactions page for free users
+- [ ] Hide camera icons in dialog headers for free users
 
 ---
 
