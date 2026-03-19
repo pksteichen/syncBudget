@@ -21,6 +21,7 @@ object ReceiptManager {
     private const val TAG = "ReceiptManager"
     private const val MAX_IMAGE_DIMENSION = 1000
     private const val THUMBNAIL_SIZE = 200
+    private const val TARGET_BYTES_PER_MEGAPIXEL = 250 * 1024  // 250KB per 1M pixels
     private const val PENDING_QUEUE_FILE = "pending_receipt_uploads.json"
     private const val RECEIPTS_DIR = "receipts"
     private const val THUMBS_DIR = "receipt_thumbs"
@@ -119,33 +120,47 @@ object ReceiptManager {
         getReceiptFile(context, receiptId).exists()
 
     /**
-     * Process a photo from URI: downsize, save full + thumbnail, return receiptId.
+     * Process a photo from URI: save full (no re-encoding if ≤1000px),
+     * resize only if needed (100% quality), generate thumbnail.
      * Does NOT encrypt — encryption happens at upload time.
      */
     fun processAndSavePhoto(context: Context, uri: Uri): String? {
         return try {
-            val inputStream = context.contentResolver.openInputStream(uri) ?: return null
-            val original = BitmapFactory.decodeStream(inputStream)
-            inputStream.close()
-            if (original == null) return null
+            val rawBytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                ?: return null
 
+            val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            android.graphics.BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, opts)
+            if (opts.outWidth <= 0 || opts.outHeight <= 0) return null
+
+            val needsResize = opts.outWidth > MAX_IMAGE_DIMENSION || opts.outHeight > MAX_IMAGE_DIMENSION
             val receiptId = generateReceiptId()
-            val resized = resizeBitmap(original, MAX_IMAGE_DIMENSION)
-
-            // Save full-size (92% quality to preserve receipt text readability)
             val fullFile = getReceiptFile(context, receiptId)
-            fullFile.outputStream().use { out ->
-                resized.compress(Bitmap.CompressFormat.JPEG, 92, out)
+
+            val pixelArea = opts.outWidth.toLong() * opts.outHeight
+            val targetBytes = (pixelArea * TARGET_BYTES_PER_MEGAPIXEL / 1_000_000L).toInt()
+            val bitmapForThumb: android.graphics.Bitmap
+            if (!needsResize && rawBytes.size <= targetBytes) {
+                fullFile.writeBytes(rawBytes)
+                bitmapForThumb = android.graphics.BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size)
+                    ?: return null
+            } else {
+                val original = android.graphics.BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size)
+                    ?: return null
+                val bitmap = if (needsResize) resizeBitmap(original, MAX_IMAGE_DIMENSION) else original
+                val area = bitmap.width.toLong() * bitmap.height
+                val target = (area * TARGET_BYTES_PER_MEGAPIXEL / 1_000_000L).toInt()
+                compressToTargetSize(bitmap, fullFile, target)
+                if (bitmap !== original) original.recycle()
+                bitmapForThumb = bitmap
             }
 
             // Save thumbnail (70% is fine for small preview)
-            val thumb = resizeBitmap(resized, THUMBNAIL_SIZE)
+            val thumb = resizeBitmap(bitmapForThumb, THUMBNAIL_SIZE)
             getThumbFile(context, receiptId).outputStream().use { out ->
-                thumb.compress(Bitmap.CompressFormat.JPEG, 70, out)
+                thumb.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, out)
             }
-
-            if (resized !== original) original.recycle()
-            if (thumb !== resized) thumb.recycle()
+            if (thumb !== bitmapForThumb) bitmapForThumb.recycle()
 
             receiptId
         } catch (e: Exception) {
@@ -294,6 +309,52 @@ object ReceiptManager {
         if (t.receiptId4 == null) return 4
         if (t.receiptId5 == null) return 5
         return null
+    }
+
+    /**
+     * Compress a bitmap to a target file size in bytes.
+     * Iterates on the ORIGINAL bitmap (never re-compresses compressed data).
+     * Starts at Q=92, uses log-linear interpolation from accumulated data points.
+     */
+    private fun compressToTargetSize(bitmap: Bitmap, outFile: File, targetBytes: Int) {
+        val minTarget = (targetBytes * 0.9).toInt()
+        val maxTarget = (targetBytes * 1.1).toInt()
+        val samples = mutableListOf<Pair<Int, Int>>()
+        var bestBytes: ByteArray? = null
+        var bestDistance = Int.MAX_VALUE
+
+        fun tryQuality(q: Int): Boolean {
+            if (samples.any { it.first == q }) return false
+            val buf = java.io.ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.JPEG, q, buf)
+            val size = buf.size()
+            samples.add(q to size)
+            val dist = kotlin.math.abs(size - targetBytes)
+            if (dist < bestDistance) { bestDistance = dist; bestBytes = buf.toByteArray() }
+            return size in minTarget..maxTarget
+        }
+
+        if (tryQuality(92)) { outFile.writeBytes(bestBytes!!); return }
+        val secondQ = if (samples[0].second > targetBytes) 50 else 98
+        if (tryQuality(secondQ)) { outFile.writeBytes(bestBytes!!); return }
+
+        for (round in 0 until 3) {
+            val below = samples.filter { it.second <= targetBytes }.maxByOrNull { it.second }
+            val above = samples.filter { it.second > targetBytes }.minByOrNull { it.second }
+            val predictedQ = if (below != null && above != null) {
+                val lnT = kotlin.math.ln(targetBytes.toDouble())
+                val lnL = kotlin.math.ln(below.second.toDouble())
+                val lnH = kotlin.math.ln(above.second.toDouble())
+                val d = lnH - lnL
+                if (d > 0.001) (((lnT - lnL) / d) * (above.first - below.first) + below.first).toInt()
+                else (below.first + above.first) / 2
+            } else {
+                val s = samples.sortedBy { it.first }
+                (s.last().first * (targetBytes.toDouble() / s.last().second)).toInt()
+            }
+            if (tryQuality(predictedQ.coerceIn(20, 100))) { outFile.writeBytes(bestBytes!!); return }
+        }
+        outFile.writeBytes(bestBytes!!)
     }
 
     private fun resizeBitmap(bitmap: Bitmap, maxDimension: Int): Bitmap {

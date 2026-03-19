@@ -569,6 +569,31 @@ class MainActivity : ComponentActivity() {
 
                 recomputeCash()
 
+                // Dump receipt file inventory to support dir
+                try {
+                    val receiptDir = java.io.File(context.filesDir, "receipts")
+                    val thumbDir = java.io.File(context.filesDir, "receipt_thumbs")
+                    val sb = StringBuilder()
+                    sb.appendLine("=== Receipt File Inventory ${java.time.LocalDateTime.now()} ===")
+                    val receiptFiles = receiptDir.listFiles()?.sortedBy { it.name } ?: emptyList()
+                    sb.appendLine("Full-size receipts: ${receiptFiles.size} files")
+                    for (f in receiptFiles) {
+                        val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                        android.graphics.BitmapFactory.decodeFile(f.absolutePath, opts)
+                        val kb = "%.1f".format(f.length() / 1024.0)
+                        sb.appendLine("  ${f.name}  ${opts.outWidth}x${opts.outHeight}  ${kb} KB")
+                    }
+                    val thumbFiles = thumbDir.listFiles()?.sortedBy { it.name } ?: emptyList()
+                    sb.appendLine("Thumbnails: ${thumbFiles.size} files")
+                    for (f in thumbFiles) {
+                        val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                        android.graphics.BitmapFactory.decodeFile(f.absolutePath, opts)
+                        val kb = "%.1f".format(f.length() / 1024.0)
+                        sb.appendLine("  ${f.name}  ${opts.outWidth}x${opts.outHeight}  ${kb} KB")
+                    }
+                    java.io.File(BackupManager.getSupportDir(), "receipts.txt").writeText(sb.toString())
+                } catch (_: Exception) {}
+
                 // Receipt local storage pruning
                 val pruneAge = sharedSettings.receiptPruneAgeDays
                 if (pruneAge != null) {
