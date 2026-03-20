@@ -471,9 +471,10 @@ class MainActivity : ComponentActivity() {
                     if (bsd == null) {
                         availableCash
                     } else {
+                        val simTz = if (isSyncConfigured && sharedSettings.familyTimezone.isNotEmpty())
+                            java.time.ZoneId.of(sharedSettings.familyTimezone) else null
                         val currentPeriod = BudgetCalculator.currentPeriodStart(
-                            budgetPeriod, resetDayOfWeek, resetDayOfMonth,
-                            resetHour = resetHour
+                            budgetPeriod, resetDayOfWeek, resetDayOfMonth, simTz, resetHour
                         )
                         val adjustedLedger = periodLedger.map { entry ->
                             if (entry.periodStartDate.toLocalDate() == currentPeriod) {
@@ -1701,8 +1702,10 @@ class MainActivity : ComponentActivity() {
                             now.toLocalDate().minusDays(1) else now.toLocalDate()
                         // Use aligned period start for counting, not raw lastRefreshDate,
                         // to prevent drift when the user misses opening the app.
+                        val refreshTz = if (isSyncConfigured && sharedSettings.familyTimezone.isNotEmpty())
+                            java.time.ZoneId.of(sharedSettings.familyTimezone) else null
                         val currentPeriod = BudgetCalculator.currentPeriodStart(
-                            budgetPeriod, resetDayOfWeek, resetDayOfMonth, resetHour = resetHour
+                            budgetPeriod, resetDayOfWeek, resetDayOfMonth, refreshTz, resetHour
                         )
                         val missedPeriods = BudgetCalculator.countPeriodsCompleted(lastRefreshDate!!, currentPeriod, budgetPeriod)
                         if (missedPeriods > 0) {
@@ -2992,12 +2995,16 @@ class MainActivity : ComponentActivity() {
                                 val clock = lamportClock.tick()
                                 savingsGoals[idx] = savingsGoals[idx].copy(deleted = true, deleted_clock = clock)
                                 saveSavingsGoals()
-                                // Unlink any transactions linked to this goal
+                                // Unlink any transactions linked to this goal.
+                                // Clear remembered amount so transactions count toward
+                                // budget again (consistent with manual unlink behavior).
                                 transactions.forEachIndexed { i, txn ->
                                     if (txn.linkedSavingsGoalId == goal.id) {
                                         transactions[i] = txn.copy(
                                             linkedSavingsGoalId = null,
-                                            linkedSavingsGoalId_clock = clock
+                                            linkedSavingsGoalId_clock = clock,
+                                            linkedSavingsGoalAmount = 0.0,
+                                            linkedSavingsGoalAmount_clock = clock
                                         )
                                     }
                                 }
