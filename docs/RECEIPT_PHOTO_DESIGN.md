@@ -599,4 +599,60 @@ The flag clock is skipped (full ledger pulled regardless) when:
 
 ---
 
-*Designed 2026-03-16. Ready for implementation.*
+## Orphan Detection via Explicit No-Possession
+
+**Status:** Designed, not yet implemented.
+
+### Problem
+
+A receiptId exists in a transaction's CRDT data, but the actual photo file is permanently lost from all devices and cloud. The receiptId becomes a ghost — placeholder frames that never resolve, recovery requests that are never fulfilled.
+
+### Current Gap
+
+The possessions map on ledger entries only tracks positive signals (`deviceId → true`). A device absent from the map could mean "hasn't checked yet" OR "doesn't have it." There's no way to distinguish, so the system can't determine when a file is confirmed unrecoverable.
+
+### Solution: Three-State Possession
+
+Extend the possessions map semantics:
+
+| State | Meaning |
+|---|---|
+| Key not present | Device hasn't evaluated this entry yet |
+| `possessions.{deviceId} = true` | Device has the file locally |
+| `possessions.{deviceId} = false` | Device has confirmed it does NOT have the file |
+
+### Flow
+
+1. **New device joins** → snapshot/batch recovery downloads all available photos
+2. **After recovery completes**, any remaining missing photos → device creates recovery requests via the ledger
+3. **Each device** that comes online and sees a recovery request checks if it has the file locally:
+   - Has it → marks `possessions.{deviceId} = true`, uploads
+   - Doesn't have it → marks `possessions.{deviceId} = false` (dot-notation update, same as positive marking)
+4. **Orphan check**: When ALL photo-capable devices have an entry in possessions AND every entry is `false`:
+   - File is confirmed permanently lost
+   - The cleanup device nulls the corresponding receiptId on the transaction and bumps its CRDT clock
+   - Deletes the ledger entry
+   - The null propagates via CRDT merge to all devices — placeholder frames disappear
+
+### Why This Is Safe
+
+- **No false positives from unsynced devices**: A device isn't counted until it explicitly reports. New devices that haven't synced yet simply have no entry in the map.
+- **Minimal cost**: Only genuinely missing files (after snapshot/batch recovery) generate no-possession marks. Not a "report on every file" pattern.
+- **Uses existing infrastructure**: Same dot-notation Firestore update as positive possession marking. No new data structures.
+- **Deterministic**: Any device can independently verify the "all false" condition.
+
+### Timing Safeguard
+
+A device should only mark no-possession AFTER completing its initial sync (snapshot + batch recovery). Otherwise a newly joined device would immediately mark no-possession for everything it hasn't downloaded yet. The `lastSyncVersion > 0` check (device has synced at least once) serves as the gate.
+
+### Implementation Checklist
+
+- [ ] Modify `ReceiptSyncManager.processRecovery()`: after recovery completes, for any remaining missing files with existing ledger entries, mark `possessions.{deviceId} = false`
+- [ ] Modify `ImageLedgerService`: `markPossession()` already uses dot-notation — same call works for `false` values
+- [ ] Add orphan check: during stale pruning or ledger processing, if all photo-capable devices are in possessions and all are `false`, null the receiptId on the transaction (with clock bump) and delete the ledger entry
+- [ ] Gate no-possession marking behind "has completed initial sync" check
+- [ ] Solo devices (not in a group) continue to use the simpler startup orphan cleanup
+
+---
+
+*Designed 2026-03-16. Updated 2026-03-19 with orphan detection design.*

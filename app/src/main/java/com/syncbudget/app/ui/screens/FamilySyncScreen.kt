@@ -943,6 +943,7 @@ fun FamilySyncScreen(
             AdAwareAlertDialog(
                 onDismissRequest = { showTimezoneDialog = false },
                 title = { Text(S.sync.selectTimezone) },
+                scrollable = false,  // content has LazyColumn
                 text = {
                     LazyColumn(modifier = Modifier.height(300.dp)) {
                         items(COMMON_TIMEZONES) { tz ->

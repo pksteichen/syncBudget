@@ -49,6 +49,7 @@ import com.syncbudget.app.ui.theme.DialogDangerButton
 import com.syncbudget.app.ui.theme.DialogSecondaryButton
 import com.syncbudget.app.ui.theme.DialogStyle
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -100,6 +101,8 @@ fun SwipeablePhotoRow(
     onSwipeOpen: () -> Unit = {},
     onPhotoTap: ((Int) -> Unit)? = null,    // slot index (0-4) tapped
     onPhotoDelete: ((Int) -> Unit)? = null,  // slot index (0-4) to delete
+    onPhotoRotated: (() -> Unit)? = null,    // called after rotation save to refresh thumbnails
+    enabled: Boolean = true,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
@@ -110,6 +113,10 @@ fun SwipeablePhotoRow(
 
     var containerWidthPx by remember { mutableIntStateOf(0) }
     val offsetX = remember { Animatable(0f) }
+
+    LaunchedEffect(enabled) {
+        if (!enabled) offsetX.animateTo(0f, tween(1000))
+    }
 
     var showCameraPicker by remember { mutableStateOf(false) }
     var tempPhotoUri by remember { mutableStateOf<Uri?>(null) }
@@ -185,7 +192,8 @@ fun SwipeablePhotoRow(
                         fullScreenSlot = -1
                         deleteConfirmSlot = slot
                     }
-                } else null
+                } else null,
+                onRotated = onPhotoRotated
             )
         } else {
             fullScreenSlot = -1
@@ -268,7 +276,7 @@ fun SwipeablePhotoRow(
                 }
             }
 
-            // 5 photo frames
+            // Photo frames — only show occupied slots + pending-download placeholders
             val frameSize = PHOTO_ROW_HEIGHT - 8.dp
             Row(
                 modifier = Modifier
@@ -279,6 +287,11 @@ fun SwipeablePhotoRow(
             ) {
                 for (i in 0 until 5) {
                     val thumb = photos.getOrNull(i)
+                    val rid = receiptIds.getOrNull(i)
+                    // Skip empty slots (no receiptId = truly empty, not pending download)
+                    if (thumb == null && rid == null) continue
+                    // Show placeholder only if receiptId exists but file missing (pending download)
+                    val isPendingDownload = thumb == null && rid != null
                     Box(
                         modifier = Modifier
                             .size(frameSize)
@@ -317,6 +330,7 @@ fun SwipeablePhotoRow(
                                     .clip(RoundedCornerShape(6.dp))
                             )
                         } else {
+                            // Pending download placeholder
                             Icon(
                                 imageVector = Icons.Filled.CameraAlt,
                                 contentDescription = null,
@@ -369,7 +383,8 @@ fun FullScreenPhotoViewer(
     bitmap: Bitmap,
     receiptId: String? = null,
     onDismiss: () -> Unit,
-    onDelete: (() -> Unit)? = null
+    onDelete: (() -> Unit)? = null,
+    onRotated: (() -> Unit)? = null
 ) {
     val S = LocalStrings.current
     val context = LocalContext.current
@@ -391,38 +406,42 @@ fun FullScreenPhotoViewer(
 
     val handleDismiss: () -> Unit = {
         if (rotationSteps % 4 != 0 && receiptId != null) {
-            // Save rotated image and regenerate thumbnail
-            scope.launch(Dispatchers.IO) {
-                try {
-                    val matrix = android.graphics.Matrix()
-                    matrix.postRotate((rotationSteps * 90).toFloat())
-                    val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            // Save rotated image, regenerate thumbnail, THEN dismiss
+            scope.launch {
+                kotlinx.coroutines.withContext(Dispatchers.IO) {
+                    try {
+                        val matrix = android.graphics.Matrix()
+                        matrix.postRotate((rotationSteps * 90).toFloat())
+                        val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
 
-                    // Overwrite full-size file (100% to avoid cumulative compression loss)
-                    val fullFile = com.syncbudget.app.data.sync.ReceiptManager.getReceiptFile(context, receiptId)
-                    fullFile.outputStream().use { out ->
-                        rotated.compress(Bitmap.CompressFormat.JPEG, 100, out)
-                    }
+                        val fullFile = com.syncbudget.app.data.sync.ReceiptManager.getReceiptFile(context, receiptId)
+                        val area = rotated.width.toLong() * rotated.height
+                        val targetBytes = (area * TARGET_BYTES_PER_MEGAPIXEL / 1_000_000L).toInt()
+                        compressToTargetSize(rotated, fullFile, targetBytes)
 
-                    // Regenerate thumbnail
-                    val thumbSize = 200
-                    val thumbScale = thumbSize.toFloat() / maxOf(rotated.width, rotated.height)
-                    val thumb = Bitmap.createScaledBitmap(
-                        rotated,
-                        (rotated.width * thumbScale).toInt(),
-                        (rotated.height * thumbScale).toInt(),
-                        true
-                    )
-                    com.syncbudget.app.data.sync.ReceiptManager.getThumbFile(context, receiptId).outputStream().use { out ->
-                        thumb.compress(Bitmap.CompressFormat.JPEG, 70, out)
+                        val thumbSize = 200
+                        val thumbScale = thumbSize.toFloat() / maxOf(rotated.width, rotated.height)
+                        val thumb = Bitmap.createScaledBitmap(
+                            rotated,
+                            (rotated.width * thumbScale).toInt(),
+                            (rotated.height * thumbScale).toInt(),
+                            true
+                        )
+                        com.syncbudget.app.data.sync.ReceiptManager.getThumbFile(context, receiptId).outputStream().use { out ->
+                            thumb.compress(Bitmap.CompressFormat.JPEG, 70, out)
+                        }
+                        if (thumb !== rotated) rotated.recycle()
+                    } catch (e: Exception) {
+                        android.util.Log.w("PhotoViewer", "Failed to save rotation: ${e.message}")
                     }
-                    if (thumb !== rotated) rotated.recycle()
-                } catch (e: Exception) {
-                    android.util.Log.w("PhotoViewer", "Failed to save rotation: ${e.message}")
                 }
+                // Files are written — now refresh and dismiss on main thread
+                onRotated?.invoke()
+                onDismiss()
             }
+        } else {
+            onDismiss()
         }
-        onDismiss()
     }
 
     Dialog(

@@ -1065,7 +1065,7 @@ private fun SavingsSuperchargeDialog(
                     if (eligibleGoals.isEmpty()) {
                         item {
                             Text(
-                                text = S.dashboard.noDataAvailable,
+                                text = S.dashboard.noSavingsGoalsConfigured,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                             )

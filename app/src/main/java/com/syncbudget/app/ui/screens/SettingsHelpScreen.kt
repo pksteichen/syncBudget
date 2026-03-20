@@ -283,6 +283,8 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
                     lineHeight = 18.sp
                 )
             }
+            Spacer(modifier = Modifier.height(8.dp))
+            HelpBodyText(S.settingsHelp.backupsOffPhoneTip, italic = true)
             Spacer(modifier = Modifier.height(12.dp))
 
             HelpSubSectionTitle(S.settingsHelp.backupsRestoreTitle)
@@ -292,8 +294,6 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
             HelpBulletText(S.settingsHelp.backupsRestoreBullet2)
             HelpBulletText(S.settingsHelp.backupsRestoreBullet3)
             HelpBulletText(S.settingsHelp.backupsRestoreBullet4)
-            Spacer(modifier = Modifier.height(8.dp))
-            HelpBodyText(S.settingsHelp.backupsRestoreNote, italic = true)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()

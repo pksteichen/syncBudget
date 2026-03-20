@@ -157,6 +157,7 @@ fun SettingsScreen(
     nextBackupDate: String? = null,
     onBackupNow: () -> Unit = {},
     onRestoreBackup: () -> Unit = {},
+    onSavePhotos: () -> Unit = {},
     onBack: () -> Unit,
     onHelpClick: () -> Unit = {}
 ) {
@@ -737,7 +738,7 @@ fun SettingsScreen(
                             value = currentLabel,
                             onValueChange = {},
                             readOnly = true,
-                            enabled = isAdmin,
+                            enabled = !isLocked,
                             label = { Text(S.settings.receiptRetention) },
                             modifier = Modifier.fillMaxWidth(),
                             colors = textFieldColors
@@ -746,7 +747,7 @@ fun SettingsScreen(
                         Box(
                             modifier = Modifier
                                 .matchParentSize()
-                                .clickable(enabled = isAdmin) { pruneExpanded = true }
+                                .clickable(enabled = !isLocked) { pruneExpanded = true }
                         )
                         DropdownMenu(
                             expanded = pruneExpanded,
@@ -763,12 +764,20 @@ fun SettingsScreen(
                             }
                         }
                     }
-                    if (!isAdmin) {
+                    if (isLocked) {
                         Text(
                             text = S.settings.adminOnlyRetention,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                         )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = onSavePhotos,
+                        enabled = isPaidUser,
+                        modifier = Modifier.alpha(if (isPaidUser) 1f else 0.5f)
+                    ) {
+                        Text("Save Photos")
                     }
                 }
             }
@@ -901,11 +910,23 @@ fun SettingsScreen(
                             modifier = Modifier.weight(1f)
                         ) { Text(S.settings.backupNow) }
                         val canRestore = !isSyncConfigured
-                        OutlinedButton(
-                            onClick = onRestoreBackup,
-                            enabled = canRestore,
-                            modifier = Modifier.weight(1f)
-                        ) { Text(S.settings.restoreBackup) }
+                        Box(modifier = Modifier.weight(1f)) {
+                            OutlinedButton(
+                                onClick = onRestoreBackup,
+                                enabled = canRestore,
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text(S.settings.restoreBackup) }
+                            if (!canRestore) {
+                                Box(
+                                    modifier = Modifier
+                                        .matchParentSize()
+                                        .clickable {
+                                            val action = if (isAdmin) "dissolve" else "leave"
+                                            toastState.show("You must $action your SYNC group to use this feature.")
+                                        }
+                                )
+                            }
+                        }
                     }
                     if (isSyncConfigured) {
                         Text(
@@ -913,18 +934,40 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                         )
+                        Text(
+                            "See help (?) page for more information.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                        )
                     }
                 } else {
                     // Even when disabled, show restore button
                     Spacer(Modifier.height(8.dp))
-                    val canRestore = !isSyncConfigured || isAdmin
-                    OutlinedButton(
-                        onClick = onRestoreBackup,
-                        enabled = canRestore
-                    ) { Text(S.settings.restoreBackup) }
+                    val canRestore = !isSyncConfigured
+                    Box {
+                        OutlinedButton(
+                            onClick = onRestoreBackup,
+                            enabled = canRestore
+                        ) { Text(S.settings.restoreBackup) }
+                        if (!canRestore) {
+                            Box(
+                                modifier = Modifier
+                                    .matchParentSize()
+                                    .clickable {
+                                        val action = if (isAdmin) "dissolve" else "leave"
+                                        toastState.show("You must $action your SYNC group to use this feature.")
+                                    }
+                            )
+                        }
+                    }
                     if (isSyncConfigured) {
                         Text(
                             S.settings.leaveGroupToRestore,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                        )
+                        Text(
+                            "See help (?) page for more information.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                         )
@@ -1367,6 +1410,7 @@ private fun ReassignCategoryDialog(
     AdAwareAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(S.settings.reassignCategoryTitle(deletingCategory.name, txnCount)) },
+        scrollable = false,  // content has LazyColumn
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(

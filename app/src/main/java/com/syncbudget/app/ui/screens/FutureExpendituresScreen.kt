@@ -531,19 +531,15 @@ fun FutureExpendituresScreen(
     }
 
     if (showSavingsWhyDialog) {
-        val whyScrollState = rememberScrollState()
         AdAwareAlertDialog(
             onDismissRequest = { showSavingsWhyDialog = false },
             title = { Text(S.futureExpenditures.savingsWhyTitle) },
             text = {
-                Column(modifier = Modifier.verticalScroll(whyScrollState)) {
-                    Text(S.futureExpenditures.savingsWhyBody)
-                }
+                Text(S.futureExpenditures.savingsWhyBody)
             },
             confirmButton = {
                 DialogPrimaryButton(onClick = { showSavingsWhyDialog = false }) { Text(S.common.ok) }
-            },
-            scrollState = whyScrollState
+            }
         )
     }
 

@@ -103,6 +103,7 @@ import com.syncbudget.app.ui.strings.SpanishStrings
 import com.syncbudget.app.ui.theme.AdAwareAlertDialog
 import com.syncbudget.app.ui.theme.AdAwareDialog
 import com.syncbudget.app.ui.theme.DialogDangerButton
+import com.syncbudget.app.ui.theme.DialogPrimaryButton
 import com.syncbudget.app.ui.theme.DialogFooter
 import com.syncbudget.app.ui.theme.DialogHeader
 import com.syncbudget.app.ui.theme.DialogStyle
@@ -235,6 +236,7 @@ class MainActivity : ComponentActivity() {
             var showBackupPasswordDialog by remember { mutableStateOf(false) }
             var showDisableBackupDialog by remember { mutableStateOf(false) }
             var showRestoreDialog by remember { mutableStateOf(false) }
+            var showSavePhotosDialog by remember { mutableStateOf(false) }
 
             // Matching configuration
             var matchDays by remember { mutableIntStateOf(prefs.getInt("matchDays", 7)) }
@@ -569,6 +571,11 @@ class MainActivity : ComponentActivity() {
 
                 recomputeCash()
 
+                // Ensure BudgeTrak directory tree exists so users can find it for backup recovery
+                BackupManager.getBudgetrakDir()  // creates Download/BudgeTrak/
+                BackupManager.getSupportDir()     // creates Download/BudgeTrak/support/
+                BackupManager.getBackupDir()      // creates Download/BudgeTrak/backups/
+
                 // Dump receipt file inventory to support dir
                 try {
                     val receiptDir = java.io.File(context.filesDir, "receipts")
@@ -591,7 +598,51 @@ class MainActivity : ComponentActivity() {
                         val kb = "%.1f".format(f.length() / 1024.0)
                         sb.appendLine("  ${f.name}  ${opts.outWidth}x${opts.outHeight}  ${kb} KB")
                     }
+                    // Check for orphaned receiptIds (transaction references a file that doesn't exist)
+                    // Only clean these for solo users — in a sync group, missing files will be
+                    // recovered via the photo ledger re-upload process.
+                    if (!isSyncConfigured) {
+                        var orphansCleaned = 0
+                        transactions.forEachIndexed { idx, txn ->
+                            var changed = false
+                            var t = txn
+                            val receiptDir2 = java.io.File(context.filesDir, "receipts")
+                            fun fileExists(rid: String?) = rid != null && java.io.File(receiptDir2, "$rid.jpg").exists()
+                            if (t.receiptId1 != null && !fileExists(t.receiptId1)) { t = t.copy(receiptId1 = null); changed = true }
+                            if (t.receiptId2 != null && !fileExists(t.receiptId2)) { t = t.copy(receiptId2 = null); changed = true }
+                            if (t.receiptId3 != null && !fileExists(t.receiptId3)) { t = t.copy(receiptId3 = null); changed = true }
+                            if (t.receiptId4 != null && !fileExists(t.receiptId4)) { t = t.copy(receiptId4 = null); changed = true }
+                            if (t.receiptId5 != null && !fileExists(t.receiptId5)) { t = t.copy(receiptId5 = null); changed = true }
+                            if (changed) {
+                                transactions[idx] = t
+                                orphansCleaned++
+                            }
+                        }
+                        if (orphansCleaned > 0) {
+                            sb.appendLine("Cleaned $orphansCleaned transactions with orphaned receiptIds (solo device)")
+                            saveTransactions()
+                        }
+                    }
+
+                    // Clean orphaned files (on disk but not referenced by any transaction)
+                    val allReceiptIds = com.syncbudget.app.data.sync.ReceiptManager.collectAllReceiptIds(transactions)
+                    com.syncbudget.app.data.sync.ReceiptManager.cleanOrphans(context, allReceiptIds)
+
                     java.io.File(BackupManager.getSupportDir(), "receipts.txt").writeText(sb.toString())
+
+                    // Photo ledger: which transactions reference which receiptIds
+                    val ledger = StringBuilder()
+                    ledger.appendLine("=== Photo Ledger ${java.time.LocalDateTime.now()} ===")
+                    val linkedTxns = mutableListOf<String>()
+                    for (txn in transactions) {
+                        val rids = listOfNotNull(txn.receiptId1, txn.receiptId2, txn.receiptId3, txn.receiptId4, txn.receiptId5)
+                        if (rids.isNotEmpty()) {
+                            linkedTxns.add("  txn#${txn.id} ${txn.date} ${txn.source.take(25)}: ${rids.joinToString(", ") { it.take(8) }}")
+                        }
+                    }
+                    ledger.appendLine("Transactions with photos: ${linkedTxns.size}")
+                    linkedTxns.forEach { ledger.appendLine(it) }
+                    java.io.File(BackupManager.getSupportDir(), "photo_ledger.txt").writeText(ledger.toString())
                 } catch (_: Exception) {}
 
                 // Receipt local storage pruning
@@ -2316,7 +2367,7 @@ class MainActivity : ComponentActivity() {
                             dateFormatPattern = it
                             prefs.edit().putString("dateFormatPattern", it).apply()
                         },
-                        isPaidUser = isPaidUser,
+                        isPaidUser = isPaidUser || isSubscriber,
                         onPaidUserChange = { newValue ->
                             isPaidUser = newValue
                             prefs.edit().putBoolean("isPaidUser", newValue).apply()
@@ -2474,6 +2525,7 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         onRestoreBackup = { showRestoreDialog = true },
+                        onSavePhotos = { showSavePhotosDialog = true },
                         onBack = { currentScreen = "main" },
                         onHelpClick = { currentScreen = "settings_help" }
                     )
@@ -2482,7 +2534,7 @@ class MainActivity : ComponentActivity() {
                         currencySymbol = currencySymbol,
                         dateFormatPattern = dateFormatPattern,
                         categories = activeCategories,
-                        isPaidUser = isPaidUser,
+                        isPaidUser = isPaidUser || isSubscriber,
                         isSubscriber = isSubscriber,
                         recurringExpenses = activeRecurringExpenses,
                         amortizationEntries = activeAmortizationEntries,
@@ -3833,6 +3885,7 @@ class MainActivity : ComponentActivity() {
                         savingsGoals = activeSavingsGoals,
                         pastSources = activeTransactions.groupingBy { it.source }.eachCount().entries.sortedByDescending { it.value }.map { it.key },
                         budgetPeriod = budgetPeriod,
+                        isPaidUser = isPaidUser || isSubscriber,
                         onDismiss = { dashboardShowAddIncome = false },
                         onSave = { txn ->
                             runMatchingChain(txn)
@@ -3877,6 +3930,7 @@ class MainActivity : ComponentActivity() {
                         savingsGoals = activeSavingsGoals,
                         pastSources = activeTransactions.groupingBy { it.source }.eachCount().entries.sortedByDescending { it.value }.map { it.key },
                         budgetPeriod = budgetPeriod,
+                        isPaidUser = isPaidUser || isSubscriber,
                         onDismiss = { dashboardShowAddExpense = false },
                         onSave = { txn ->
                             runMatchingChain(txn)
@@ -4208,6 +4262,49 @@ class MainActivity : ComponentActivity() {
                                     showDisableBackupDialog = false
                                 }
                             }) { Text(if (confirmDelete) strings.common.back else strings.settings.keepFilesBtn) }
+                        }
+                    )
+                }
+
+                // Save Photos dialog
+                if (showSavePhotosDialog) {
+                    AdAwareAlertDialog(
+                        onDismissRequest = { showSavePhotosDialog = false },
+                        title = { Text("Save Photos") },
+                        style = DialogStyle.DEFAULT,
+                        text = {
+                            Text("Photos are already backed up in encrypted backups if Automatic Backups is enabled below. This will save unencrypted copies of all receipt photos to Download/BudgeTrak/photos/ on your device if you need them for other purposes.")
+                        },
+                        confirmButton = {
+                            DialogPrimaryButton(onClick = {
+                                showSavePhotosDialog = false
+                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                    try {
+                                        val photosDir = java.io.File(com.syncbudget.app.data.BackupManager.getBudgetrakDir(), "photos")
+                                        photosDir.mkdirs()
+                                        val receiptDir = java.io.File(context.filesDir, "receipts")
+                                        val files = receiptDir.listFiles() ?: emptyArray()
+                                        var count = 0
+                                        for (f in files) {
+                                            f.copyTo(java.io.File(photosDir, f.name), overwrite = true)
+                                            count++
+                                        }
+                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                            toastState.show("Saved $count photos to Download/BudgeTrak/photos/")
+                                        }
+                                    } catch (e: Exception) {
+                                        android.util.Log.w("SavePhotos", "Failed: ${e.message}")
+                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                            toastState.show("Failed to save photos: ${e.message}")
+                                        }
+                                    }
+                                }
+                            }) { Text(strings.common.save) }
+                        },
+                        dismissButton = {
+                            DialogSecondaryButton(onClick = { showSavePhotosDialog = false }) {
+                                Text(strings.common.cancel)
+                            }
                         }
                     )
                 }

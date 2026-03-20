@@ -14,7 +14,10 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -163,6 +166,7 @@ import com.syncbudget.app.data.parseGenericCsv
 import com.syncbudget.app.data.parseUsBank
 import com.syncbudget.app.data.FullBackupSerializer
 import com.syncbudget.app.data.serializeTransactionsCsv
+import com.syncbudget.app.data.ExpenseReportGenerator
 import com.syncbudget.app.data.serializeTransactionsXlsx
 import androidx.compose.foundation.ScrollState
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -188,7 +192,8 @@ import kotlinx.coroutines.launch
 
 private enum class SaveFormat(val label: String) {
     CSV("CSV"),
-    XLS("Excel (.xlsx)")
+    XLS("Excel (.xlsx)"),
+    PDF("PDF Expense Report")
 }
 
 private enum class ImportStage {
@@ -275,6 +280,7 @@ fun TransactionsScreen(
     }
 
     val toastState = LocalAppToast.current
+    var photoThumbRefreshKey by remember { mutableIntStateOf(0) }
     var viewFilter by remember { mutableStateOf(ViewFilter.ALL) }
     var showAddIncome by remember { mutableStateOf(false) }
     var showAddExpense by remember { mutableStateOf(false) }
@@ -379,6 +385,7 @@ fun TransactionsScreen(
     var showSaveDialog by remember { mutableStateOf(false) }
     var selectedSaveFormat by remember { mutableStateOf(SaveFormat.CSV) }
     var saveError by remember { mutableStateOf<String?>(null) }
+    val saveScope = rememberCoroutineScope()
 
     // Full backup state
     var includeAllData by remember { mutableStateOf(false) }
@@ -970,7 +977,7 @@ fun TransactionsScreen(
                     val txnContext = LocalContext.current
                     val photoScope = rememberCoroutineScope()
                     if (isPaidUser) {
-                        val thumbnails = remember(transaction.receiptId1, transaction.receiptId2, transaction.receiptId3, transaction.receiptId4, transaction.receiptId5) {
+                        val thumbnails = remember(transaction.receiptId1, transaction.receiptId2, transaction.receiptId3, transaction.receiptId4, transaction.receiptId5, photoThumbRefreshKey) {
                             listOf(transaction.receiptId1, transaction.receiptId2, transaction.receiptId3, transaction.receiptId4, transaction.receiptId5)
                                 .map { id -> id?.let { ReceiptManager.loadThumbnail(txnContext, it) } }
                         }
@@ -1010,20 +1017,24 @@ fun TransactionsScreen(
                             onPhotoDelete = { slotIndex ->
                                 val receiptIds = listOf(transaction.receiptId1, transaction.receiptId2, transaction.receiptId3, transaction.receiptId4, transaction.receiptId5)
                                 val rid = receiptIds.getOrNull(slotIndex) ?: return@SwipeablePhotoRow
+                                // Update transaction immediately on main thread, delete file in background
+                                val updated = when (slotIndex) {
+                                    0 -> transaction.copy(receiptId1 = null)
+                                    1 -> transaction.copy(receiptId2 = null)
+                                    2 -> transaction.copy(receiptId3 = null)
+                                    3 -> transaction.copy(receiptId4 = null)
+                                    4 -> transaction.copy(receiptId5 = null)
+                                    else -> transaction
+                                }
+                                onUpdateTransaction(updated)
+                                photoThumbRefreshKey++
                                 photoScope.launch(Dispatchers.IO) {
                                     ReceiptManager.deleteLocalReceipt(txnContext, rid)
-                                    val updated = when (slotIndex) {
-                                        0 -> transaction.copy(receiptId1 = null)
-                                        1 -> transaction.copy(receiptId2 = null)
-                                        2 -> transaction.copy(receiptId3 = null)
-                                        3 -> transaction.copy(receiptId4 = null)
-                                        4 -> transaction.copy(receiptId5 = null)
-                                        else -> transaction
-                                    }
-                                    withContext(Dispatchers.Main) { onUpdateTransaction(updated) }
                                 }
                             },
-                            onSwipeOpen = { expandedIds[transaction.id] = false }
+                            onPhotoRotated = { photoThumbRefreshKey++ },
+                            onSwipeOpen = { expandedIds[transaction.id] = false },
+                            enabled = !selectionMode
                         ) {
                             TransactionRow(
                                 transaction = transaction, currencySymbol = currencySymbol,
@@ -1042,6 +1053,7 @@ fun TransactionsScreen(
                                 linkedRecurringAmount = linkedRecurringAmount, linkedAmortizationApplied = linkedAmortizationApplied,
                                 linkedIncomeAmount = linkedIncomeAmount, incomeMode = incomeMode,
                                 isLinkedSavingsGoal = isLinkedSavingsGoal,
+                                hasPhotos = transaction.receiptId1 != null || transaction.receiptId2 != null || transaction.receiptId3 != null || transaction.receiptId4 != null || transaction.receiptId5 != null,
                                 onEffectTap = { effectExplanationTransaction = transaction }
                             )
                         }
@@ -1063,6 +1075,7 @@ fun TransactionsScreen(
                             linkedRecurringAmount = linkedRecurringAmount, linkedAmortizationApplied = linkedAmortizationApplied,
                             linkedIncomeAmount = linkedIncomeAmount, incomeMode = incomeMode,
                             isLinkedSavingsGoal = isLinkedSavingsGoal,
+                            hasPhotos = transaction.receiptId1 != null || transaction.receiptId2 != null || transaction.receiptId3 != null || transaction.receiptId4 != null || transaction.receiptId5 != null,
                             onEffectTap = { effectExplanationTransaction = transaction }
                         )
                     }
@@ -1211,6 +1224,12 @@ fun TransactionsScreen(
             budgetPeriod = budgetPeriod,
             isPaidUser = isPaidUser,
             onDismiss = { editingTransaction = null },
+            onUpdatePhoto = { updated ->
+                // Update transaction (photo add/delete) without closing dialog
+                onUpdateTransaction(updated)
+                editingTransaction = updated
+                photoThumbRefreshKey++
+            },
             onSave = { updated ->
                 // Only run duplicate/matching checks if merchant, date, or amount changed
                 val orig = txn
@@ -1430,6 +1449,7 @@ fun TransactionsScreen(
                 showBulkCategoryChange = false
             },
             title = { Text(S.transactions.changeCategory) },
+            scrollable = false,  // content has LazyColumn
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     val count = selectedIds.count { it.value }
@@ -1605,7 +1625,6 @@ fun TransactionsScreen(
                                     .clip(RoundedCornerShape(8.dp))
                                     .clickable {
                                         selectedSaveFormat = format
-                                        if (format == SaveFormat.XLS) includeAllData = false
                                         saveError = null
                                     }
                                     .padding(vertical = 4.dp, horizontal = 4.dp)
@@ -1614,7 +1633,6 @@ fun TransactionsScreen(
                                     selected = selectedSaveFormat == format,
                                     onClick = {
                                         selectedSaveFormat = format
-                                        if (format == SaveFormat.XLS) includeAllData = false
                                         saveError = null
                                     }
                                 )
@@ -1622,37 +1640,16 @@ fun TransactionsScreen(
                                 Text(when (format) {
                                     SaveFormat.CSV -> S.transactions.csv
                                     SaveFormat.XLS -> S.transactions.xls
+                                    SaveFormat.PDF -> format.label
                                 }, style = MaterialTheme.typography.bodyLarge)
                             }
                         }
 
-                        val backupEnabled = selectedSaveFormat != SaveFormat.XLS
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .then(if (backupEnabled) Modifier.clickable { includeAllData = !includeAllData } else Modifier)
-                                .let { if (!backupEnabled) it.alpha(0.4f) else it }
-                        ) {
-                            Checkbox(
-                                checked = includeAllData,
-                                onCheckedChange = if (backupEnabled) ({ includeAllData = it }) else null,
-                                enabled = backupEnabled
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(S.transactions.includeAllData, style = MaterialTheme.typography.bodyMedium)
-                        }
-                        if (includeAllData) {
-                            Text(S.transactions.fullBackupNote,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
-                        } else {
-                            val transactionsToSave = if (selectionMode && selectedIds.any { it.value })
-                                transactions.filter { selectedIds[it.id] == true } else transactions
-                            Text(S.transactions.selectedCount(transactionsToSave.size),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
-                        }
+                        val transactionsToSave = if (selectionMode && selectedIds.any { it.value })
+                            transactions.filter { selectedIds[it.id] == true } else transactions
+                        Text(S.transactions.selectedCount(transactionsToSave.size),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
 
                     }
 
@@ -1668,18 +1665,32 @@ fun TransactionsScreen(
                             }) { Text(S.common.cancel) }
                             Spacer(modifier = Modifier.width(8.dp))
                             DialogPrimaryButton(onClick = {
-                                when {
-                                    includeAllData && selectedSaveFormat == SaveFormat.CSV -> {
-                                        showSaveDialog = false
-                                        jsonSaveLauncher.launch("budgetrak_backup.json")
-                                    }
-                                    selectedSaveFormat == SaveFormat.CSV -> {
+                                when (selectedSaveFormat) {
+                                    SaveFormat.CSV -> {
                                         showSaveDialog = false
                                         csvSaveLauncher.launch("budgetrak_transactions.csv")
                                     }
-                                    selectedSaveFormat == SaveFormat.XLS -> {
+                                    SaveFormat.XLS -> {
                                         showSaveDialog = false
                                         xlsSaveLauncher.launch("budgetrak_transactions.xlsx")
+                                    }
+                                    SaveFormat.PDF -> {
+                                        showSaveDialog = false
+                                        val toSave = if (selectionMode && selectedIds.any { it.value }) {
+                                            transactions.filter { selectedIds[it.id] == true }
+                                        } else { transactions }
+                                        saveScope.launch(Dispatchers.IO) {
+                                            try {
+                                                val files = ExpenseReportGenerator.generateReports(context, toSave, categories, currencySymbol)
+                                                withContext(Dispatchers.Main) {
+                                                    toastState.show("${files.size} expense report(s) saved to Download/BudgeTrak/PDF", durationMs = 7500L)
+                                                }
+                                            } catch (e: Exception) {
+                                                withContext(Dispatchers.Main) {
+                                                    toastState.show("PDF generation failed: ${e.message}")
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }) { Text(S.common.save) }
@@ -2658,6 +2669,7 @@ private fun TransactionRow(
     linkedAmortizationApplied: Double? = null,
     linkedIncomeAmount: Double? = null,
     incomeMode: IncomeMode = IncomeMode.FIXED,
+    hasPhotos: Boolean = false,
     onEffectTap: (() -> Unit)? = null
 ) {
     val S = LocalStrings.current
@@ -2819,47 +2831,53 @@ private fun TransactionRow(
                             .padding(4.dp)
                     else Modifier
                 ) {
-                    if (isLinkedRecurring) {
-                        Icon(
-                            imageVector = Icons.Filled.Sync,
-                            contentDescription = null,
-                            tint = Color(0xFF4CAF50),
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(Modifier.width(3.dp))
-                    } else if (isLinkedAmortization) {
-                        Icon(
-                            imageVector = Icons.Filled.Schedule,
-                            contentDescription = null,
-                            tint = if (isAmortComplete) Color(0xFF4CAF50) else Color(0xFFF44336),
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(Modifier.width(3.dp))
-                    } else if (isLinkedIncome) {
-                        Icon(
-                            imageVector = Icons.Filled.AccountBalance,
-                            contentDescription = null,
-                            tint = Color(0xFF2196F3),
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(Modifier.width(3.dp))
-                    } else if (isLinkedSavingsGoal) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_coins),
-                            contentDescription = null,
-                            tint = Color(0xFFFF9800),
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(Modifier.width(3.dp))
-                    } else if (transaction.excludeFromBudget) {
-                        Icon(
-                            imageVector = Icons.Filled.Block,
-                            contentDescription = null,
-                            tint = Color(0xFF9E9E9E),
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(Modifier.width(3.dp))
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        if (hasPhotos) {
+                            Icon(
+                                imageVector = Icons.Filled.CameraAlt,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+                                modifier = Modifier.size(12.dp)
+                            )
+                        }
+                        if (isLinkedRecurring) {
+                            Icon(
+                                imageVector = Icons.Filled.Sync,
+                                contentDescription = null,
+                                tint = Color(0xFF4CAF50),
+                                modifier = Modifier.size(14.dp)
+                            )
+                        } else if (isLinkedAmortization) {
+                            Icon(
+                                imageVector = Icons.Filled.Schedule,
+                                contentDescription = null,
+                                tint = if (isAmortComplete) Color(0xFF4CAF50) else Color(0xFFF44336),
+                                modifier = Modifier.size(14.dp)
+                            )
+                        } else if (isLinkedIncome) {
+                            Icon(
+                                imageVector = Icons.Filled.AccountBalance,
+                                contentDescription = null,
+                                tint = Color(0xFF2196F3),
+                                modifier = Modifier.size(14.dp)
+                            )
+                        } else if (isLinkedSavingsGoal) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_coins),
+                                contentDescription = null,
+                                tint = Color(0xFFFF9800),
+                                modifier = Modifier.size(14.dp)
+                            )
+                        } else if (transaction.excludeFromBudget) {
+                            Icon(
+                                imageVector = Icons.Filled.Block,
+                                contentDescription = null,
+                                tint = Color(0xFF9E9E9E),
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
                     }
+                    Spacer(Modifier.width(3.dp))
                     Column(horizontalAlignment = Alignment.End) {
                         Text(
                             text = formattedActualAmount,
@@ -3002,6 +3020,7 @@ fun TransactionDialog(
     isPaidUser: Boolean = false,
     onDismiss: () -> Unit,
     onSave: (Transaction) -> Unit,
+    onUpdatePhoto: ((Transaction) -> Unit)? = null,  // update transaction without closing dialog
     onDelete: (() -> Unit)? = null,
     onAddAmortization: ((AmortizationEntry) -> Unit)? = null,
     onDeleteAmortization: ((AmortizationEntry) -> Unit)? = null
@@ -3036,52 +3055,93 @@ fun TransactionDialog(
     var showCreateAmortizationDialog by remember { mutableStateOf(false) }
     var provisionalAmortizationEntry by remember { mutableStateOf<AmortizationEntry?>(null) }
 
+    // Track photos added during this dialog session (for add mode orphan cleanup)
+    val addedPhotoIds = remember { mutableStateListOf<String>() }
+    var addModeReceiptId1 by remember { mutableStateOf<String?>(null) }
+    var addModeReceiptId2 by remember { mutableStateOf<String?>(null) }
+    var addModeReceiptId3 by remember { mutableStateOf<String?>(null) }
+    var addModeReceiptId4 by remember { mutableStateOf<String?>(null) }
+    var addModeReceiptId5 by remember { mutableStateOf<String?>(null) }
+
     // Dialog camera state (for header camera icon)
     var dialogTempPhotoUri by remember { mutableStateOf<Uri?>(null) }
     val dialogPhotoScope = rememberCoroutineScope()
     val dialogCameraLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture()
     ) { success ->
-        if (success && dialogTempPhotoUri != null && editTransaction != null) {
+        if (success && dialogTempPhotoUri != null) {
             dialogPhotoScope.launch(Dispatchers.IO) {
                 val rid = ReceiptManager.processAndSaveFromCamera(context, dialogTempPhotoUri!!)
                 if (rid != null) {
                     ReceiptManager.addToPendingQueue(context, rid)
-                    val slot = ReceiptManager.nextEmptySlot(editTransaction)
-                    if (slot != null) {
-                        val updated = when (slot) {
-                            1 -> editTransaction.copy(receiptId1 = rid)
-                            2 -> editTransaction.copy(receiptId2 = rid)
-                            3 -> editTransaction.copy(receiptId3 = rid)
-                            4 -> editTransaction.copy(receiptId4 = rid)
-                            5 -> editTransaction.copy(receiptId5 = rid)
-                            else -> editTransaction
+                    withContext(Dispatchers.Main) {
+                        if (isEdit && editTransaction != null) {
+                            val slot = ReceiptManager.nextEmptySlot(editTransaction)
+                            if (slot != null) {
+                                val updated = when (slot) {
+                                    1 -> editTransaction.copy(receiptId1 = rid)
+                                    2 -> editTransaction.copy(receiptId2 = rid)
+                                    3 -> editTransaction.copy(receiptId3 = rid)
+                                    4 -> editTransaction.copy(receiptId4 = rid)
+                                    5 -> editTransaction.copy(receiptId5 = rid)
+                                    else -> editTransaction
+                                }
+                                onUpdatePhoto?.invoke(updated)
+                            }
+                        } else {
+                            // Add mode — track locally
+                            when {
+                                addModeReceiptId1 == null -> addModeReceiptId1 = rid
+                                addModeReceiptId2 == null -> addModeReceiptId2 = rid
+                                addModeReceiptId3 == null -> addModeReceiptId3 = rid
+                                addModeReceiptId4 == null -> addModeReceiptId4 = rid
+                                addModeReceiptId5 == null -> addModeReceiptId5 = rid
+                            }
+                            addedPhotoIds.add(rid)
                         }
-                        withContext(Dispatchers.Main) { onSave(updated) }
                     }
                 }
             }
         }
     }
     val dialogGalleryLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri ->
-        if (uri != null && editTransaction != null) {
+        ActivityResultContracts.PickMultipleVisualMedia(maxItems = 5)
+    ) { uris ->
+        val remaining = if (isEdit && editTransaction != null) {
+            5 - listOfNotNull(editTransaction.receiptId1, editTransaction.receiptId2, editTransaction.receiptId3, editTransaction.receiptId4, editTransaction.receiptId5).size
+        } else {
+            5 - listOfNotNull(addModeReceiptId1, addModeReceiptId2, addModeReceiptId3, addModeReceiptId4, addModeReceiptId5).size
+        }
+        val toProcess = uris.take(remaining)
+        if (toProcess.isNotEmpty()) {
             dialogPhotoScope.launch(Dispatchers.IO) {
-                val rid = ReceiptManager.processAndSavePhoto(context, uri)
-                if (rid != null) {
+                for (uri in toProcess) {
+                    val rid = ReceiptManager.processAndSavePhoto(context, uri) ?: continue
                     ReceiptManager.addToPendingQueue(context, rid)
-                    val slot = ReceiptManager.nextEmptySlot(editTransaction)
-                    if (slot != null) {
-                        val updated = when (slot) {
-                            1 -> editTransaction.copy(receiptId1 = rid)
-                            2 -> editTransaction.copy(receiptId2 = rid)
-                            3 -> editTransaction.copy(receiptId3 = rid)
-                            4 -> editTransaction.copy(receiptId4 = rid)
-                            5 -> editTransaction.copy(receiptId5 = rid)
-                            else -> editTransaction
+                    withContext(Dispatchers.Main) {
+                        if (isEdit && editTransaction != null) {
+                            val slot = ReceiptManager.nextEmptySlot(editTransaction)
+                            if (slot != null) {
+                                val updated = when (slot) {
+                                    1 -> editTransaction.copy(receiptId1 = rid)
+                                    2 -> editTransaction.copy(receiptId2 = rid)
+                                    3 -> editTransaction.copy(receiptId3 = rid)
+                                    4 -> editTransaction.copy(receiptId4 = rid)
+                                    5 -> editTransaction.copy(receiptId5 = rid)
+                                    else -> editTransaction
+                                }
+                                onUpdatePhoto?.invoke(updated)
+                            }
+                        } else {
+                            when {
+                                addModeReceiptId1 == null -> addModeReceiptId1 = rid
+                                addModeReceiptId2 == null -> addModeReceiptId2 = rid
+                                addModeReceiptId3 == null -> addModeReceiptId3 = rid
+                                addModeReceiptId4 == null -> addModeReceiptId4 = rid
+                                addModeReceiptId5 == null -> addModeReceiptId5 = rid
+                            }
+                            addedPhotoIds.add(rid)
                         }
-                        withContext(Dispatchers.Main) { onSave(updated) }
                     }
                 }
             }
@@ -3227,11 +3287,57 @@ fun TransactionDialog(
     val focusManager = LocalFocusManager.current
     val scrollScope = rememberCoroutineScope()
 
+    var showDiscardConfirm by remember { mutableStateOf(false) }
+
+    val hasUnsavedContent = !isEdit && (
+        source.isNotBlank() || description.isNotBlank() || addedPhotoIds.isNotEmpty() ||
+        selectedCategoryIds.any { it.value }
+    )
+
     val dismissWithCleanup: () -> Unit = {
-        provisionalAmortizationEntry?.let { entry ->
-            onDeleteAmortization?.invoke(entry)
+        if (hasUnsavedContent) {
+            showDiscardConfirm = true
+        } else {
+            // Clean up add-mode photos
+            if (!isEdit && addedPhotoIds.isNotEmpty()) {
+                for (rid in addedPhotoIds) {
+                    ReceiptManager.deleteLocalReceipt(context, rid)
+                    ReceiptManager.removeFromPendingQueue(context, rid)
+                }
+            }
+            provisionalAmortizationEntry?.let { entry ->
+                onDeleteAmortization?.invoke(entry)
+            }
+            onDismiss()
         }
-        onDismiss()
+    }
+
+    if (showDiscardConfirm) {
+        AdAwareAlertDialog(
+            onDismissRequest = { showDiscardConfirm = false },
+            title = { Text("Discard Changes?") },  // TODO: i18n
+            style = DialogStyle.WARNING,
+            text = { Text("You have unsaved changes. Discard them?") },  // TODO: i18n
+            confirmButton = {
+                DialogWarningButton(onClick = {
+                    showDiscardConfirm = false
+                    // Clean up add-mode photos
+                    for (rid in addedPhotoIds) {
+                        ReceiptManager.deleteLocalReceipt(context, rid)
+                        ReceiptManager.removeFromPendingQueue(context, rid)
+                    }
+                    provisionalAmortizationEntry?.let { entry ->
+                        onDeleteAmortization?.invoke(entry)
+                    }
+                    onDismiss()
+                }) { Text("Discard") }  // TODO: i18n
+            },
+            dismissButton = {
+                DialogSecondaryButton(onClick = { showDiscardConfirm = false }) {
+                    Text("Keep Editing")  // TODO: i18n
+                }
+            }
+        )
     }
 
     AdAwareDialog(
@@ -3264,7 +3370,7 @@ fun TransactionDialog(
                         .padding(horizontal = 20.dp, vertical = 14.dp)
                 ) {
                     Text(title, style = MaterialTheme.typography.titleMedium, color = headerTxt)
-                    if (isEdit && !isPaidUser) {
+                    if (!isPaidUser) {
                         Icon(
                             imageVector = Icons.Filled.CameraAlt,
                             contentDescription = "Photos (paid feature)",
@@ -3273,7 +3379,7 @@ fun TransactionDialog(
                                 .clickable { toastState.show(S.settings.upgradeForPhotos) }
                         )
                     }
-                    if (isEdit && isPaidUser) {
+                    if (isPaidUser) {
                         Box(modifier = Modifier.align(Alignment.CenterEnd)) {
                             Icon(
                                 imageVector = Icons.Filled.CameraAlt,
@@ -3304,9 +3410,147 @@ fun TransactionDialog(
                                     leadingIcon = { Icon(Icons.Filled.Collections, null) },
                                     onClick = {
                                         showDialogCameraPicker = false
-                                        dialogGalleryLauncher.launch("image/*")
+                                        dialogGalleryLauncher.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                                     }
                                 )
+                            }
+                        }
+                    }
+                }
+
+                // Photo thumbnail bar (paid users, add or edit mode)
+                if (isPaidUser) {
+                    val dialogReceiptIds = if (isEdit && editTransaction != null) {
+                        listOf(editTransaction.receiptId1, editTransaction.receiptId2, editTransaction.receiptId3, editTransaction.receiptId4, editTransaction.receiptId5)
+                    } else {
+                        listOf(addModeReceiptId1, addModeReceiptId2, addModeReceiptId3, addModeReceiptId4, addModeReceiptId5)
+                    }
+                    val hasPhotos = dialogReceiptIds.any { it != null }
+                    if (hasPhotos) {
+                        var dialogThumbRefresh by remember { mutableIntStateOf(0) }
+                        val dialogThumbnails = remember(dialogReceiptIds[0], dialogReceiptIds[1], dialogReceiptIds[2], dialogReceiptIds[3], dialogReceiptIds[4], dialogThumbRefresh) {
+                            dialogReceiptIds.map { id -> id?.let { ReceiptManager.loadThumbnail(context, it) } }
+                        }
+                        var dialogFullScreenSlot by remember { mutableIntStateOf(-1) }
+                        var dialogDeleteConfirmSlot by remember { mutableIntStateOf(-1) }
+                        val dialogPhotoFrameSize = 48.dp
+
+                        // Delete confirmation
+                        if (dialogDeleteConfirmSlot >= 0) {
+                            AdAwareAlertDialog(
+                                onDismissRequest = { dialogDeleteConfirmSlot = -1 },
+                                title = { Text(S.settings.deletePhotoTitle) },
+                                style = DialogStyle.DANGER,
+                                text = { Text(S.settings.deletePhotoConfirm) },
+                                confirmButton = {
+                                    DialogDangerButton(onClick = {
+                                        val rid = dialogReceiptIds.getOrNull(dialogDeleteConfirmSlot)
+                                        if (rid != null) {
+                                            if (isEdit && editTransaction != null) {
+                                                val updated = when (dialogDeleteConfirmSlot) {
+                                                    0 -> editTransaction.copy(receiptId1 = null)
+                                                    1 -> editTransaction.copy(receiptId2 = null)
+                                                    2 -> editTransaction.copy(receiptId3 = null)
+                                                    3 -> editTransaction.copy(receiptId4 = null)
+                                                    4 -> editTransaction.copy(receiptId5 = null)
+                                                    else -> editTransaction
+                                                }
+                                                onUpdatePhoto?.invoke(updated)
+                                            } else {
+                                                // Add mode — update local state
+                                                when (dialogDeleteConfirmSlot) {
+                                                    0 -> addModeReceiptId1 = null
+                                                    1 -> addModeReceiptId2 = null
+                                                    2 -> addModeReceiptId3 = null
+                                                    3 -> addModeReceiptId4 = null
+                                                    4 -> addModeReceiptId5 = null
+                                                }
+                                                addedPhotoIds.remove(rid)
+                                            }
+                                            dialogThumbRefresh++
+                                            kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+                                                ReceiptManager.deleteLocalReceipt(context, rid)
+                                                ReceiptManager.removeFromPendingQueue(context, rid)
+                                            }
+                                        }
+                                        dialogDeleteConfirmSlot = -1
+                                    }) { Text(S.common.delete) }
+                                },
+                                dismissButton = {
+                                    DialogSecondaryButton(onClick = { dialogDeleteConfirmSlot = -1 }) { Text(S.common.cancel) }
+                                }
+                            )
+                        }
+
+                        // Full-screen viewer
+                        if (dialogFullScreenSlot >= 0) {
+                            val viewRid = dialogReceiptIds.getOrNull(dialogFullScreenSlot)
+                            val viewBmp = remember(viewRid) {
+                                viewRid?.let { ReceiptManager.loadFullImage(context, it) }
+                                    ?: dialogThumbnails.getOrNull(dialogFullScreenSlot)
+                            }
+                            if (viewBmp != null) {
+                                com.syncbudget.app.ui.components.FullScreenPhotoViewer(
+                                    bitmap = viewBmp,
+                                    receiptId = viewRid,
+                                    onDismiss = { dialogFullScreenSlot = -1 },
+                                    onDelete = {
+                                        val slot = dialogFullScreenSlot
+                                        dialogFullScreenSlot = -1
+                                        dialogDeleteConfirmSlot = slot
+                                    },
+                                    onRotated = { dialogThumbRefresh++ }
+                                )
+                            } else {
+                                dialogFullScreenSlot = -1
+                            }
+                        }
+
+                        // Thumbnail row
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            for (i in 0 until 5) {
+                                val thumb = dialogThumbnails.getOrNull(i)
+                                val rid = dialogReceiptIds.getOrNull(i)
+                                if (thumb == null && rid == null) continue
+                                Box(
+                                    modifier = Modifier
+                                        .size(dialogPhotoFrameSize)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(if (thumb != null) Color.Transparent else MaterialTheme.colorScheme.surface)
+                                        .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f), RoundedCornerShape(6.dp))
+                                        .then(
+                                            if (thumb != null) {
+                                                @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+                                                Modifier.combinedClickable(
+                                                    onClick = { dialogFullScreenSlot = i },
+                                                    onLongClick = { dialogDeleteConfirmSlot = i }
+                                                )
+                                            } else Modifier
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (thumb != null) {
+                                        Image(
+                                            bitmap = thumb.asImageBitmap(),
+                                            contentDescription = "Receipt photo ${i + 1}",
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(6.dp))
+                                        )
+                                    } else {
+                                        Icon(
+                                            Icons.Filled.CameraAlt, contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -4101,7 +4345,12 @@ fun TransactionDialog(
                                     linkedRecurringExpenseAmount = reAmount,
                                     linkedIncomeSourceAmount = isAmount,
                                     linkedSavingsGoalAmount = sgAmount,
-                                    excludeFromBudget = excludeFromBudget
+                                    excludeFromBudget = excludeFromBudget,
+                                    receiptId1 = addModeReceiptId1,
+                                    receiptId2 = addModeReceiptId2,
+                                    receiptId3 = addModeReceiptId3,
+                                    receiptId4 = addModeReceiptId4,
+                                    receiptId5 = addModeReceiptId5
                                 )
                             }
                             onSave(txn)
@@ -4128,6 +4377,8 @@ fun TransactionDialog(
         AdAwareAlertDialog(
             onDismissRequest = { showCategoryPicker = false },
             title = { Text(S.transactions.category) },
+            scrollable = false,  // content has its own verticalScroll
+            scrollState = catPickerScrollState,  // for PulsingScrollArrow
             text = {
                 Column(
                     modifier = Modifier.verticalScroll(catPickerScrollState),
@@ -4216,8 +4467,7 @@ fun TransactionDialog(
                 DialogPrimaryButton(onClick = { showCategoryPicker = false }) {
                     Text(S.common.ok)
                 }
-            },
-            scrollState = catPickerScrollState
+            }
         )
     }
 
@@ -4281,6 +4531,7 @@ fun TransactionDialog(
                 moveTargetCatId = null
             },
             title = { Text(S.transactions.moveCategoryValue) },
+            scrollable = false,  // content has LazyColumn
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
@@ -4490,6 +4741,7 @@ fun TransactionDialog(
         AdAwareAlertDialog(
             onDismissRequest = { showLinkRecurringPicker = false },
             title = { Text(S.transactions.linkToRecurring) },
+            scrollable = false,
             text = {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     recurringExpenses.sortedByDescending { it.amount }.forEach { re ->
@@ -4536,6 +4788,7 @@ fun TransactionDialog(
         AdAwareAlertDialog(
             onDismissRequest = { showLinkAmortizationPicker = false },
             title = { Text(S.transactions.linkToAmortization) },
+            scrollable = false,
             text = {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     amortizationEntries.sortedByDescending { it.amount }.forEach { ae ->
@@ -4629,6 +4882,7 @@ fun TransactionDialog(
         AdAwareAlertDialog(
             onDismissRequest = { showLinkIncomePicker = false },
             title = { Text(S.transactions.linkToIncome) },
+            scrollable = false,
             text = {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     incomeSources.sortedByDescending { it.amount }.forEach { src ->
@@ -4673,6 +4927,7 @@ fun TransactionDialog(
         AdAwareAlertDialog(
             onDismissRequest = { showLinkSavingsGoalPicker = false },
             title = { Text(S.transactions.linkToSavingsGoal) },
+            scrollable = false,
             text = {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     // Only fixed-contribution goals can be linked to transactions.

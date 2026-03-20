@@ -172,8 +172,8 @@ class SyncEngine(
             progressCallback = onProgress
             syncLog("=== Sync started (device=$deviceId, syncVer=$lastSyncVersion, pushClock=$lastPushedClock) ===")
 
-            val isPaidUser = context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
-                .getBoolean("isPaidUser", false)
+            val appPrefs = context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+            val isPaidUser = appPrefs.getBoolean("isPaidUser", false) || appPrefs.getBoolean("isSubscriber", false)
 
             // Step 0: Stale check — block sync if too many days without success
             val lastSync = prefs.getLong("lastSuccessfulSync", 0L)

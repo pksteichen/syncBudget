@@ -193,11 +193,14 @@ class AppToastState {
         private set
     var counter by mutableIntStateOf(0)
         private set
+    var durationMs by mutableStateOf(2500L)
+        private set
 
     /** Show a toast near the tap that triggered it. [windowYPx] from positionInWindow(). */
-    fun show(msg: String, windowYPx: Int = -1) {
+    fun show(msg: String, windowYPx: Int = -1, durationMs: Long = 2500L) {
         message = msg
         tapYPx = windowYPx
+        this.durationMs = durationMs
         counter++
     }
 
@@ -216,7 +219,7 @@ fun AppToast(state: AppToastState) {
 
     LaunchedEffect(state.counter) {
         if (state.message != null) {
-            kotlinx.coroutines.delay(2500)
+            kotlinx.coroutines.delay(state.durationMs)
             state.dismiss()
         }
     }
@@ -506,12 +509,14 @@ fun AdAwareAlertDialog(
     text: @Composable (() -> Unit)? = null,
     scrollState: ScrollState? = null,
     style: DialogStyle = DialogStyle.DEFAULT,
+    scrollable: Boolean = true,  // set false if text content has its own scrollable (LazyColumn etc.)
 ) {
     val headerBg = dialogHeaderColor(style)
     val headerTxt = dialogHeaderTextColor(style)
     val footerBg = dialogFooterColor()
 
-    val bodyScrollState = scrollState ?: rememberScrollState()
+    val bodyScrollState = if (scrollable) (scrollState ?: rememberScrollState()) else null
+    val arrowScrollState = bodyScrollState ?: scrollState  // for PulsingScrollArrow when content manages own scroll
 
     AdAwareDialog(onDismissRequest = onDismissRequest) {
         Surface(
@@ -547,7 +552,7 @@ fun AdAwareAlertDialog(
                         Box(
                             modifier = Modifier
                                 .weight(1f, fill = false)
-                                .verticalScroll(bodyScrollState)
+                                .then(if (bodyScrollState != null) Modifier.verticalScroll(bodyScrollState) else Modifier)
                                 .padding(20.dp)
                         ) {
                             text()
@@ -574,12 +579,14 @@ fun AdAwareAlertDialog(
                         }
                     }
                 }
-                PulsingScrollArrow(
-                    scrollState = bodyScrollState,
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(start = 12.dp, bottom = 50.dp)
-                )
+                if (arrowScrollState != null) {
+                    PulsingScrollArrow(
+                        scrollState = arrowScrollState,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 12.dp, bottom = 50.dp)
+                    )
+                }
             }
         }
     }
