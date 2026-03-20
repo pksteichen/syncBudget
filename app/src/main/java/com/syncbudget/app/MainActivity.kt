@@ -1896,8 +1896,6 @@ class MainActivity : ComponentActivity() {
                     dump.appendLine("── Transactions (active, in current period) ──")
                     val activeTxns = transactions.filter { !it.deleted }
                     val periodTxns = if (budgetStartDate != null) activeTxns.filter { !it.date.isBefore(budgetStartDate) } else activeTxns
-                    var totalExpense = 0.0
-                    var totalIncome = 0.0
                     for (txn in periodTxns.sortedBy { it.date }) {
                         val budgetAccounted = if (txn.type == TransactionType.EXPENSE) isBudgetAccountedExpense(txn) else false
                         val catDesc = if (txn.categoryAmounts.isEmpty()) "cats=NONE"
@@ -1916,14 +1914,29 @@ class MainActivity : ComponentActivity() {
                             if (txn.isBudgetIncome) "bi=true" else null
                         ).joinToString(" ").let { if (it.isNotEmpty()) "$it " else "" }
                         dump.appendLine("  ${txn.date} ${txn.type} ${txn.amount} '${txn.source}' dev=${txn.deviceId.take(8)}… ba=$budgetAccounted ${flagDesc}aClk=${txn.amount_clock} cClk=${txn.categoryAmounts_clock} dIdClk=${txn.deviceId_clock} $linkDesc $catDesc")
-                        if (txn.type == TransactionType.EXPENSE && !budgetAccounted && !txn.excludeFromBudget) totalExpense += txn.amount
-                        else if (txn.type == TransactionType.INCOME && !txn.isBudgetIncome && !txn.excludeFromBudget) totalIncome += txn.amount
                     }
-                    dump.appendLine("Period expense total (non-budget-accounted): $totalExpense")
-                    dump.appendLine("Period extra income total: $totalIncome")
-                    dump.appendLine("Expected cash = budgetAmount($budgetAmount) - expenses($totalExpense) + income($totalIncome) = ${budgetAmount - totalExpense + totalIncome}")
-                    dump.appendLine("Actual cash = $availableCash")
-                    dump.appendLine("Difference = ${availableCash - (budgetAmount - totalExpense + totalIncome)}")
+                    // Recompute cash using the ACTUAL BudgetCalculator logic for verification
+                    val verifyLedger = periodLedger.toList()
+                    val verifyTxns = activeTransactions
+                    val verifyRe = activeRecurringExpenses
+                    val verifyIs = activeIncomeSources
+                    val verifyCash = BudgetCalculator.recomputeAvailableCash(
+                        budgetStartDate ?: java.time.LocalDate.now(),
+                        verifyLedger, verifyTxns, verifyRe, incomeMode, verifyIs
+                    )
+                    // Breakdown: sum period ledger credits
+                    val ledgerCredits = if (budgetStartDate != null) {
+                        verifyLedger
+                            .filter { !it.periodStartDate.toLocalDate().isBefore(budgetStartDate) }
+                            .groupBy { it.periodStartDate.toLocalDate() }
+                            .values.map { entries -> entries.maxByOrNull { it.clock } ?: entries.first() }
+                            .sumOf { it.appliedAmount }
+                    } else 0.0
+                    dump.appendLine("── Cash Verification ──")
+                    dump.appendLine("Ledger credits (sum of ${verifyLedger.size} entries): $ledgerCredits")
+                    dump.appendLine("Recomputed cash (BudgetCalculator): $verifyCash")
+                    dump.appendLine("Stored cash (prefs): $availableCash")
+                    dump.appendLine("Match: ${kotlin.math.abs(verifyCash - availableCash) < 0.01}")
                     dump.appendLine()
                     dump.appendLine("── Period Ledger ──")
                     for (entry in periodLedger) {
