@@ -692,10 +692,24 @@ object FirestoreService {
                 DebugFileSet(
                     deviceName = doc.getString("deviceName") ?: doc.id.take(8),
                     syncLog = doc.getString("syncLog") ?: "",
-                    syncDiag = doc.getString("syncDiag") ?: ""
+                    syncDiag = doc.getString("syncDiag") ?: "",
+                    updatedAt = doc.getLong("updatedAt") ?: 0L
                 )
             }
     }
+
+    /** Read the debug request timestamp from the group document. */
+    suspend fun getDebugRequestTime(groupId: String): Long = withTimeout(OP_TIMEOUT_MS) {
+        val doc = db.collection("groups").document(groupId).get().await()
+        doc.getLong("debugRequestedAt") ?: 0L
+    }
+
+    /** Admin sets a timestamp so all devices upload fresh debug files on next sync. */
+    suspend fun requestDebugDump(groupId: String) = withTimeout(OP_TIMEOUT_MS) {
+        db.collection("groups").document(groupId)
+            .set(mapOf("debugRequestedAt" to System.currentTimeMillis()), SetOptions.merge())
+            .await()
+    }
 }
 
-data class DebugFileSet(val deviceName: String, val syncLog: String, val syncDiag: String)
+data class DebugFileSet(val deviceName: String, val syncLog: String, val syncDiag: String, val updatedAt: Long = 0L)

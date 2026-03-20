@@ -865,24 +865,25 @@ class SyncEngine(
             prefs.edit().putLong("lastSuccessfulSync", System.currentTimeMillis()).apply()
             FirestoreService.updateGroupActivity(groupId)
 
-            // Step 9b: Auto-upload debug files every 30 minutes so admin can
-            // pull any device's logs with one button tap.
+            // Step 9b: Check if admin requested debug files. If so, upload
+            // fresh logs immediately so admin gets current data within ~60s.
             try {
-                val lastDebugUpload = prefs.getLong("lastDebugUploadTime", 0L)
-                if (now - lastDebugUpload > 30 * 60 * 1000L) {
+                val requestedAt = FirestoreService.getDebugRequestTime(groupId)
+                val lastUploaded = prefs.getLong("lastDebugUploadTime", 0L)
+                if (requestedAt > lastUploaded) {
                     val deviceName = context.getSharedPreferences("sync_device", Context.MODE_PRIVATE)
                         .getString("deviceName", null) ?: android.os.Build.MODEL
                     val logText = try { syncLogFile.readText() } catch (_: Exception) { "" }
-                    // Read diag from support dir (may not exist if never exported)
                     val diagFile = java.io.File(BackupManager.getSupportDir(), "sync_diag.txt")
                     val diagText = try { if (diagFile.exists()) diagFile.readText() else "" } catch (_: Exception) { "" }
                     if (logText.isNotEmpty() || diagText.isNotEmpty()) {
                         FirestoreService.uploadDebugFiles(groupId, deviceId, deviceName, logText, diagText)
                         prefs.edit().putLong("lastDebugUploadTime", now).apply()
+                        syncLog("Debug files uploaded (admin requested)")
                     }
                 }
             } catch (e: Exception) {
-                syncLog("Debug file auto-upload failed (non-fatal): ${e.message}")
+                syncLog("Debug file upload check failed (non-fatal): ${e.message}")
             }
 
             // Step 10: Check admin claim status

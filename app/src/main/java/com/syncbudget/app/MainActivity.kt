@@ -2600,49 +2600,63 @@ class MainActivity : ComponentActivity() {
                                     val sanitized = sanitizeDeviceName(devName)
                                     val supportDir = BackupManager.getSupportDir()
 
-                                    // 1. Build fresh diag dump
+                                    // 1. Build fresh diag dump and save locally
                                     val diagText = buildDiagDump()
                                     writeDiagToMediaStore("sync_diag.txt", diagText)
                                     if (sanitized.isNotEmpty()) {
                                         writeDiagToMediaStore("sync_diag_${sanitized}.txt", diagText)
                                     }
 
-                                    // 2. Read sync_log.txt and copy with device name
+                                    // 2. Read sync_log and save with device name
                                     val syncLogFile = java.io.File(supportDir, "sync_log.txt")
                                     val syncLogText = if (syncLogFile.exists()) syncLogFile.readText() else ""
                                     if (sanitized.isNotEmpty() && syncLogText.isNotEmpty()) {
                                         writeDiagToMediaStore("sync_log_${sanitized}.txt", syncLogText)
                                     }
 
-                                    // 3. Upload to Firestore if sync is configured
                                     val gId = syncGroupId
                                     if (gId != null) {
+                                        // 3. Upload own files
                                         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                            toastState.show("Syncing debug files\u2026")
+                                            toastState.show("Uploading local debug files\u2026")
                                         }
-                                        FirestoreService.uploadDebugFiles(
-                                            groupId = gId,
-                                            deviceId = localDeviceId,
-                                            deviceName = devName,
-                                            syncLog = syncLogText,
-                                            syncDiag = diagText
-                                        )
+                                        FirestoreService.uploadDebugFiles(gId, localDeviceId, devName, syncLogText, diagText)
 
-                                        // 4. Download remote debug files
-                                        val remoteFiles = FirestoreService.downloadDebugFiles(gId, localDeviceId)
-                                        for (remote in remoteFiles) {
-                                            val rName = sanitizeDeviceName(remote.deviceName)
-                                            if (remote.syncLog.isNotEmpty()) {
-                                                writeDiagToMediaStore("sync_log_${rName}.txt", remote.syncLog)
-                                            }
-                                            if (remote.syncDiag.isNotEmpty()) {
-                                                writeDiagToMediaStore("sync_diag_${rName}.txt", remote.syncDiag)
+                                        // 4. Request all devices upload fresh files
+                                        FirestoreService.requestDebugDump(gId)
+
+                                        // 5. Poll for remote files (wait up to 90s for other devices)
+                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                            toastState.show("Waiting for remote device\u2026")
+                                        }
+                                        val requestTime = System.currentTimeMillis()
+                                        var gotFreshRemote = false
+                                        for (attempt in 1..18) { // 18 × 5s = 90s max
+                                            kotlinx.coroutines.delay(5_000)
+                                            val remoteFiles = FirestoreService.downloadDebugFiles(gId, localDeviceId)
+                                            // Check if any remote file was updated AFTER our request
+                                            val fresh = remoteFiles.filter { it.updatedAt > requestTime - 5000 }
+                                            if (fresh.isNotEmpty()) {
+                                                for (remote in remoteFiles) {
+                                                    val rName = sanitizeDeviceName(remote.deviceName)
+                                                    if (remote.syncLog.isNotEmpty()) writeDiagToMediaStore("sync_log_${rName}.txt", remote.syncLog)
+                                                    if (remote.syncDiag.isNotEmpty()) writeDiagToMediaStore("sync_diag_${rName}.txt", remote.syncDiag)
+                                                }
+                                                gotFreshRemote = true
+                                                break
                                             }
                                         }
-                                    }
-
-                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                        toastState.show("Debug files synced")
+                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                            if (gotFreshRemote) {
+                                                toastState.show("Debug files synced")
+                                            } else {
+                                                toastState.show("Local files saved. Remote device didn\u2019t respond in 90s.")
+                                            }
+                                        }
+                                    } else {
+                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                            toastState.show("Debug files saved locally")
+                                        }
                                     }
                                 } catch (e: Exception) {
                                     android.util.Log.e("DumpDebug", "Debug sync failed: ${e.message}", e)
