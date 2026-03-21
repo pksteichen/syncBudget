@@ -132,6 +132,7 @@ object TranslationContext {
     val settings = mapOf(
         "title" to "Screen title for the Settings/Preferences page.",
         "configureYourBudget" to "Button label that navigates to the Budget Configuration screen. Imperative phrase.",
+        "quickStartGuide" to "Button label that opens the quick start onboarding guide for new users. Noun phrase.",
         "currency" to "Settings label for choosing the monetary currency symbol (\$, €, £, etc.). Noun.",
         "showDecimalPlaces" to "Checkbox label to toggle whether cents/fractional amounts are shown (e.g., \$42.50 vs \$42).",
         "dateFormat" to "Settings label for choosing how dates are displayed throughout the app (ISO, US, EU, etc.).",
@@ -149,6 +150,10 @@ object TranslationContext {
         "matchChars" to "Settings label for configuring the minimum shared substring length for merchant name matching.",
         "matchingConfiguration" to "Section header for the group of settings that control duplicate detection and transaction matching.",
         "paidUser" to "Checkbox label to enable premium/paid features. Noun phrase describing the user's subscription status.",
+        "subscriber" to "Label identifying a user with an active subscription. Noun, used as a role/status label alongside 'Admin'.",
+        "upgradeToAccess" to "Gating message shown to free users when they try to use a paid-only feature. Full sentence instructing the user to upgrade.",
+        "subscribeToAccess" to "Gating message shown to non-subscribed users in a sync group when they try to use a subscriber-only feature. Full sentence instructing the user to subscribe.",
+        "administratorOnly" to "Gating label shown on features restricted to the sync group administrator. Short phrase indicating permission restriction.",
         "showWidgetLogo" to "Checkbox label to toggle whether the app logo is visible on the home screen widget.",
         "categories" to "Section header for the list of transaction categories (like Food, Transport, etc.). Noun, plural.",
         "charted" to "Column header in the categories table. Means 'included in the spending chart/graph'. Past participle of 'to chart' (to plot on a graph) — not navigation charts.",
@@ -379,6 +384,7 @@ object TranslationContext {
         "requiredMerchantExample" to "Placeholder text in the merchant name field showing an example.",
         "moveCategoryValue" to "Button/label for redistributing a category's monetary split value to another category in a multi-category transaction.",
         "sumMismatch" to "Error message when the sum of category splits doesn't equal the transaction total. Noun phrase.",
+        "maxCategoriesReached" to "Validation message shown when the user tries to add more than 7 categories to a single multi-category transaction. Informational toast.",
         "maxAmount2" to "Label showing the maximum allowed amount for a category split. Lambda: 'max' is a formatted currency value.",
         "includeAllData" to "Checkbox label to include all app data (not just transactions) in an export file. Creates a full backup.",
         "fullBackupNote" to "Informational text explaining what a full backup includes (settings, categories, recurring expenses, savings goals, amortization).",
@@ -397,6 +403,7 @@ object TranslationContext {
         "linkToAmortization" to "Button label to link/associate a transaction with an amortization entry.",
         "createNewAmortization" to "Button label in the amortization linking picker to create a brand-new amortization entry from the current transaction details.",
         "linkToIncome" to "Button label to link/associate a transaction with a budget income source.",
+        "linkToSavingsGoal" to "Button label to link/associate a transaction with a savings goal. The transaction amount is funded from the savings goal balance instead of reducing available cash.",
         "linkMismatchTitle" to "Dialog title when the transaction amount differs from the linked entry's expected amount.",
         "linkMismatchBody" to "Dialog body showing the mismatched amounts. Lambda: 'txnAmt' is the transaction amount, 'entryAmt' is the expected entry amount.",
         "linkAnyway" to "Button label to proceed with linking despite the amount mismatch.",
@@ -404,6 +411,7 @@ object TranslationContext {
         "linkedToRecurring" to "Badge/label on a transaction indicating it is linked to a recurring expense. Lambda: 'name' is the recurring expense name.",
         "linkedToAmortization" to "Badge/label on a transaction indicating it is linked to an amortization entry. Lambda: 'name' is the amortization entry name.",
         "linkedToIncome" to "Badge/label on a transaction indicating it is linked to a budget income source. Lambda: 'name' is the income source name.",
+        "linkedToSavingsGoal" to "Badge/label on a transaction indicating it is linked to a savings goal. Lambda: 'name' is the savings goal name. Displayed as 'Savings Goal: [name]'.",
         "unmodifiedBankTransactions" to "Filter/label for transactions imported from a bank that haven't been manually reviewed or modified by the user yet.",
         "formatGenericCsv" to "Radio button label in the import dialog for a generic CSV parser that auto-detects column layout. Works with any bank's CSV export.",
         "formatUsBank" to "Radio button label in the import dialog for US Bank's specific CSV format. 'US Bank' is a brand name — do not translate.",
@@ -449,7 +457,12 @@ object TranslationContext {
         "exampleTargetAmount" to "Placeholder text in the target amount field showing an example value.",
         "exampleContribution" to "Placeholder text in the fixed contribution field showing an example value.",
         "mustBeLessThanTarget" to "Validation error message when the starting saved amount is greater than or equal to the target amount.",
-        "payoffDate" to "Label showing the estimated date when a fixed-contribution goal will be fully saved. Lambda: 'date' is a formatted date."
+        "payoffDate" to "Label showing the estimated date when a fixed-contribution goal will be fully saved. Lambda: 'date' is a formatted date.",
+        "calculateWithTargetDate" to "Toggle/checkbox label to switch a savings goal from fixed-contribution mode to target-date mode, where the app auto-calculates per-period deductions based on the deadline.",
+        "acceleratedMode" to "Toggle label for the accelerated set-aside feature on a savings goal. When enabled, the app front-loads larger contributions in earlier periods. Noun phrase used as a setting name.",
+        "acceleratedModeEnabled" to "Toast notification confirming accelerated set-aside mode was turned on for a savings goal.",
+        "acceleratedModeDisabled" to "Toast notification confirming accelerated set-aside mode was turned off for a savings goal.",
+        "setAsideProgress" to "Progress label showing how much has been set aside toward a savings goal. Lambda: 'saved' is the amount already set aside, 'total' is the goal target. Displayed as '[saved] / [total] set aside'."
     )
 
     // ── Amortization Strings ──
@@ -600,6 +613,11 @@ object TranslationContext {
         "enterNickname" to "Form field label/placeholder for entering the user's display name in the sync group.",
         "createGroupTitle" to "Dialog title for the create-group form.",
         "renameDevice" to "Button label to change a device's display name in the sync group.",
+        "removeDeviceTitle" to "Confirmation dialog title when the admin removes a device from the sync group.",
+        "removeDeviceMessage" to "Confirmation dialog body explaining that the named device will be disconnected from family sync. Lambda: 'name' is the device's display name.",
+        "removeDeviceConfirm" to "Button label to confirm removing a device from the sync group. Destructive action verb.",
+        "subscriptionExpiredNotice" to "Warning banner shown to all group members when the admin's subscription has expired. Explains the group will be dissolved soon and instructs users to subscribe and claim admin to keep it active.",
+        "updateRequiredNotice" to "Warning banner shown when a family member is running a newer version of the app. Instructs the user to update from the Play Store to continue syncing.",
         "copy" to "Button label and accessibility description for copying a pairing code to the clipboard. Action verb meaning to duplicate text — not a physical copy."
     )
 
@@ -1283,7 +1301,9 @@ object TranslationContext {
         "leavingTitle" to "Help section title about leaving or dissolving a group.",
         "leavingBody" to "Help text: non-admins can leave (local data kept); admin can dissolve (deletes sync data).",
         "privacyTitle" to "Help section title about Family Sync privacy and security.",
-        "privacyBody" to "Help text: 256-bit E2E encryption; server stores only encrypted blobs; cannot read financial data."
+        "privacyBody" to "Help text: 256-bit E2E encryption; server stores only encrypted blobs; cannot read financial data.",
+        "subscriptionTitle" to "Help section title about how subscriptions affect sync group lifecycle.",
+        "subscriptionBody" to "Help text: admin subscription keeps the group active; 7-day grace period if expired; any subscriber can claim admin during grace period; group auto-dissolves after 7 days without active subscription."
     )
 
     // ── Widget Transaction Strings ──
