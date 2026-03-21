@@ -440,7 +440,7 @@ class MainActivity : ComponentActivity() {
             var syncProgressMessage by remember { mutableStateOf<String?>(null) }
             var pendingAdminClaim by remember { mutableStateOf<AdminClaim?>(null) }
             var syncRepairAlert by remember { mutableStateOf(
-                com.syncbudget.app.BuildConfig.DEBUG && prefs.getBoolean("syncRepairAlert", false)
+                prefs.getBoolean("syncRepairAlert", false)
             ) }
             // availableCash may go negative (= overspent). Guard against NaN/Infinity.
             fun persistAvailableCash() {
@@ -1426,6 +1426,10 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             syncStatus = "synced"
+                            if (result.repairAttempted) {
+                                syncRepairAlert = true
+                                prefs.edit().putBoolean("syncRepairAlert", true).apply()
+                            }
                             syncErrorMessage = null
                             syncProgressMessage = null
                             syncPrefs.edit().putBoolean("syncDirty", false).apply()
