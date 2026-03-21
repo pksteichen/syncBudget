@@ -799,6 +799,15 @@ class SyncEngine(
             }
             lastSyncVersion = newSyncVersion
             val now = System.currentTimeMillis()
+            // One-time cooldown reset after rescue gating fix (v3).
+            // Previous continuous rescue caused clock divergences that put
+            // repair into permanent cooldown. Reset so repair can try again.
+            if (!prefs.getBoolean("repair_cooldown_reset_v3", false)) {
+                consecutiveRepairCount = 0
+                lastRepairSignature = ""
+                prefs.edit().putBoolean("repair_cooldown_reset_v3", true).apply()
+                syncLog("Repair cooldown reset (post-rescue-gating)")
+            }
             val runIntegrityCheck = now - lastIntegrityCheckTime > INTEGRITY_CHECK_INTERVAL_MS &&
                 localDeltas.isEmpty() && packets.isEmpty()
             val fpJson = if (runIntegrityCheck) {
@@ -1059,6 +1068,11 @@ class SyncEngine(
                                 syncLog("  REPAIR push complete")
                                 deltasPushed += capped.size
                                 didRepair = true
+                                // Skip the next integrity check to give remote device
+                                // time to merge repair deltas and update fingerprint.
+                                // Without this, the same stale fingerprint triggers
+                                // cooldown before repair has a chance to converge.
+                                lastIntegrityCheckTime = now + INTEGRITY_CHECK_INTERVAL_MS
 
                                 // Advance lastPushedClock after repair (same as normal push)
                                 val maxRepairClock = capped
