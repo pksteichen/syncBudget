@@ -330,6 +330,11 @@ class SyncWorker(
         )
 
         if (result.success) {
+            // Persist repair alert so foreground UI shows flashing magenta
+            if (result.repairAttempted) {
+                applicationContext.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+                    .edit().putBoolean("syncRepairAlert", true).apply()
+            }
             // Save merged data back to JSON files
             result.mergedTransactions?.let { TransactionRepository.save(applicationContext, it) }
             result.mergedRecurringExpenses?.let { RecurringExpenseRepository.save(applicationContext, it) }
