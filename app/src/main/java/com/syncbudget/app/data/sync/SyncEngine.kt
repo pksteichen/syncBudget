@@ -1050,8 +1050,10 @@ class SyncEngine(
                                 }
                             }
                             if (repairDeltas.isNotEmpty()) {
-                                // Safety cap: don't push more than 200 records in a single repair
-                                val capped = repairDeltas.take(200)
+                                // Safety cap: limit repair to 500 records (uses same
+                                // adaptive chunking as normal pushes, so large repairs
+                                // are split into 200-record chunks automatically).
+                                val capped = repairDeltas.take(500)
                                 if (capped.size < repairDeltas.size) {
                                     syncLog("  REPAIR capped to ${capped.size}/${repairDeltas.size} records")
                                 }
