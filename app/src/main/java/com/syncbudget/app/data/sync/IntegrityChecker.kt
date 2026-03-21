@@ -288,10 +288,13 @@ object IntegrityChecker {
                     repairs.add(RepairAction(key, setOf(-seg - 1),
                         "seg$seg: same count but different IDs"))
                 }
-                // Case 4: same count, same IDs, different clocks → re-push if our clocks are higher
-                else if (ls.clockSum > rs.clockSum) {
+                // Case 4: same count, same IDs, different clocks → BOTH sides
+                // must re-push.  Different fields may be higher on each device,
+                // and only pushing from the "higher sum" side doesn't converge
+                // when the divergence is spread across different fields.
+                else if (ls.clockSum != rs.clockSum) {
                     repairs.add(RepairAction(key, setOf(-seg - 1),
-                        "seg$seg: local has newer clocks (${ls.clockSum} > ${rs.clockSum})"))
+                        "seg$seg: clock mismatch (local=${ls.clockSum}, remote=${rs.clockSum})"))
                 }
             }
         }

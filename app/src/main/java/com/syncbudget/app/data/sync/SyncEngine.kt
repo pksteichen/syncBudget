@@ -802,10 +802,10 @@ class SyncEngine(
             // One-time cooldown reset after rescue gating fix (v3).
             // Previous continuous rescue caused clock divergences that put
             // repair into permanent cooldown. Reset so repair can try again.
-            if (!prefs.getBoolean("repair_cooldown_reset_v4", false)) {
+            if (!prefs.getBoolean("repair_cooldown_reset_v5", false)) {
                 consecutiveRepairCount = 0
                 lastRepairSignature = ""
-                prefs.edit().putBoolean("repair_cooldown_reset_v4", true).apply()
+                prefs.edit().putBoolean("repair_cooldown_reset_v5", true).apply()
                 syncLog("Repair cooldown reset (post-rescue-gating)")
             }
             val runIntegrityCheck = now - lastIntegrityCheckTime > INTEGRITY_CHECK_INTERVAL_MS &&
