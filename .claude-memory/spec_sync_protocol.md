@@ -89,6 +89,26 @@ Properties: commutative, associative, idempotent, convergent.
 
 **CRITICAL RULE:** Never run rescue continuously. Step 5e advances lastPushedClock past received clocks, which makes locally-owned records appear "stranded" even though they were already pushed. A continuous rescue would re-stamp them every cycle → push loop → overwrite remote edits.
 
+## Integrity Check (Fast Mode)
+
+- Runs **every sync cycle** (no 30-minute gate)
+- Skips if: we just pushed deltas this cycle, OR waiting for remote to process our last repair
+- Fingerprint always published every cycle (not just during checks)
+- **syncVersion tolerance**: compare if versions within 10 (not strict equality)
+- **Dedup**: fingerprint computation dedups by record ID (prevents phantom divergence from in-memory duplicates)
+- **clock=0 exclusion**: `maxClock()` filters out 0-valued clocks (unset fields can't cause divergence)
+- After repair push: saves remote fingerprint signature, skips checks until it changes (proves remote synced)
+- Both sides repair on clock mismatch (`!=` not just `>`)
+
+## Duplicate Prevention
+
+All transaction add paths must check for existing ID:
+- `addTransactionWithBudgetEffect()`: `transactions.none { it.id == stamped.id }`
+- Widget disk merge: `memTxnIds` is mutableSet, updated in loop
+- `WidgetTransactionActivity.saveTransaction()`: ID check before disk add
+- `saveTransactions()`: dedup by ID before writing to disk (safety net)
+- `IntegrityChecker.fingerprint()`: dedup by ID before computing (prevents phantom divergence)
+
 ## Key Invariants
 
 1. lamportClock.value >= max(all field clocks, lastPushedClock)
@@ -97,3 +117,5 @@ Properties: commutative, associative, idempotent, convergent.
 4. Tombstone deletion: deleted=true with clock, never remove from list
 5. Push threshold: only field_clock > lastPushedClock gets pushed
 6. Rescue is ONE-TIME per app version, never continuous
+7. No duplicate record IDs in any in-memory list or on-disk file
+8. Fingerprint excludes clock=0 fields and dedups by ID
