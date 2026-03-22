@@ -852,11 +852,16 @@ class SyncEngine(
             // Always publish fingerprint so other devices see current state
             // after merging repair deltas.  The 30min gate only controls
             // whether we COMPARE fingerprints, not whether we publish ours.
+            // Exclude remapped categories from fingerprint — they're duplicates
+            // that will differ by ID between devices until fully converged.
+            val fpCategories = if (catIdRemap.isNotEmpty()) {
+                mergedCat.filter { it.id !in catIdRemap }
+            } else mergedCat
             val fpJson = try {
                 val fp = IntegrityChecker.computeFingerprint(
                     deviceId, newSyncVersion,
                     mergedTxns, mergedRe, mergedIs, mergedSg,
-                    mergedAe, mergedCat, mergedPl, mergedSettings
+                    mergedAe, fpCategories, mergedPl, mergedSettings
                 )
                 IntegrityChecker.toJson(fp).toString()
             } catch (_: Exception) { null }
