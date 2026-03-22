@@ -92,5 +92,4 @@ Singleton synced via CRDT. Key fields:
 
 ## Skeleton Records
 
-Records with clock==0 or empty source/name are "skeletons" (incomplete CRDT records).
-Filtered from `.active` extension. Kept in storage for CRDT delivery guarantee.
+Skeletons are incomplete CRDT records received via sync with missing critical field VALUES (empty source, empty name). Identified by **data content**, NOT by clock values — solo users who never synced have clock=0 on all records but their data is valid. Filtered from `.active` extension by `!deleted && source/name.isNotEmpty()`. Kept in storage for CRDT delivery guarantee.
