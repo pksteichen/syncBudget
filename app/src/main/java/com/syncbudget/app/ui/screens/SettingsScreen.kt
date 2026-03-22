@@ -1007,17 +1007,20 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.weight(1f)
                     )
-                    Text(
-                        text = S.settings.charted,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                    Text(
-                        text = S.settings.widget,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                    )
+                    Box(modifier = Modifier.width(48.dp), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = S.settings.charted,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                        )
+                    }
+                    Box(modifier = Modifier.width(48.dp), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = S.settings.widget,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                        )
+                    }
                 }
             }
 
@@ -1047,23 +1050,27 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.weight(1f)
                     )
-                    Checkbox(
-                        checked = category.charted,
-                        onCheckedChange = { onToggleCharted(category) },
-                        colors = CheckboxDefaults.colors(
-                            checkedColor = MaterialTheme.colorScheme.primary,
-                            uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                    Box(modifier = Modifier.width(48.dp), contentAlignment = Alignment.Center) {
+                        Checkbox(
+                            checked = category.charted,
+                            onCheckedChange = { onToggleCharted(category) },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = MaterialTheme.colorScheme.primary,
+                                uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                            )
                         )
-                    )
-                    Checkbox(
-                        checked = if (category.tag == "supercharge") false else category.widgetVisible,
-                        onCheckedChange = if (category.tag == "supercharge") null else ({ onToggleWidgetVisible(category) }),
-                        enabled = category.tag != "supercharge",
-                        colors = CheckboxDefaults.colors(
-                            checkedColor = MaterialTheme.colorScheme.primary,
-                            uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                    }
+                    Box(modifier = Modifier.width(48.dp), contentAlignment = Alignment.Center) {
+                        Checkbox(
+                            checked = if (category.tag == "supercharge") false else category.widgetVisible,
+                            onCheckedChange = if (category.tag == "supercharge") null else ({ onToggleWidgetVisible(category) }),
+                            enabled = category.tag != "supercharge",
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = MaterialTheme.colorScheme.primary,
+                                uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                            )
                         )
-                    )
+                    }
                 }
             }
 
