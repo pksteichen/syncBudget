@@ -58,10 +58,12 @@ val List<AmortizationEntry>.active: List<AmortizationEntry>
         it.source.isNotEmpty()
     }
 
+// Categories are created locally, never received as skeletons.
+// Only filter on deleted + non-empty name (no clock check).
+// Solo users who never synced have name_clock=0 on all categories.
 @get:JvmName("activeCategories")
 val List<Category>.active: List<Category>
     get() = filter {
         !it.deleted &&
-        it.name_clock != 0L &&
         it.name.isNotEmpty()
     }
