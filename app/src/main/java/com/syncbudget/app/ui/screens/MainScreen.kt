@@ -1,7 +1,9 @@
 package com.syncbudget.app.ui.screens
 
 import androidx.compose.animation.animateColor
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.infiniteRepeatable
@@ -731,6 +733,14 @@ private fun SpendingPieChart(
         .filter { it.value > 0 }
         .sortedByDescending { it.value }
 
+    // Pie chart: limit small categories (<4%) to the top 12 by amount.
+    // Categories beyond 12 are excluded (NOT grouped into "Other").
+    val pieEntries = run {
+        val large = sortedEntries.filter { totalSpending > 0 && it.value / totalSpending >= 0.04 }
+        val small = sortedEntries.filter { totalSpending > 0 && it.value / totalSpending < 0.04 }.take(12)
+        large + small
+    }
+
     // Select color palette based on theme and user preference
     val isDark = isSystemInDarkTheme()
     val chartColors = when (chartPalette) {
@@ -740,14 +750,17 @@ private fun SpendingPieChart(
     }
 
     // Build wedge data with rotation so small wedges center at 9:00 (180°)
+    // Use pieEntries for pie chart (capped small categories), sortedEntries for bar chart
     val wedges = run {
+        val entries = if (showBarChart) sortedEntries else pieEntries
+        val entryTotal = entries.sumOf { it.value }
         // First pass: compute sweeps and identify small wedges
-        val sweeps = sortedEntries.map { (_, amount) ->
-            if (totalSpending > 0) (amount / totalSpending * 360f).toFloat() else 0f
+        val sweeps = entries.map { (_, amount) ->
+            if (entryTotal > 0) (amount / entryTotal * 360f).toFloat() else 0f
         }
         val smallThreshold = 0.04
-        val smallIndices = sortedEntries.mapIndexedNotNull { i, (_, amount) ->
-            if (totalSpending > 0 && amount / totalSpending < smallThreshold) i else null
+        val smallIndices = entries.mapIndexedNotNull { i, (_, amount) ->
+            if (entryTotal > 0 && amount / entryTotal < smallThreshold) i else null
         }
 
         // Calculate rotation offset so small wedges are centered at 9:00 (180°)
@@ -767,7 +780,7 @@ private fun SpendingPieChart(
 
         val result = mutableListOf<PieWedge>()
         var angle = startAngle
-        sortedEntries.forEachIndexed { index, (catId, amount) ->
+        entries.forEachIndexed { index, (catId, amount) ->
             val sweep = sweeps[index]
             val cat = categoryMap[catId]
             result.add(
@@ -795,12 +808,16 @@ private fun SpendingPieChart(
                 modifier = Modifier.align(Alignment.Center)
             )
         } else if (showBarChart) {
-            // Bar chart view
+            // Bar chart view — max 60dp per bar, left-aligned, scrollable if >12
+            val maxBarWidth = 60.dp
+            val scrollable = wedges.size > 12
+            val scrollState = rememberScrollState()
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(top = 28.dp, bottom = 4.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                    .padding(top = 28.dp, bottom = 4.dp)
+                    .then(if (scrollable) Modifier.horizontalScroll(scrollState) else Modifier),
+                horizontalArrangement = Arrangement.Start,
                 verticalAlignment = Alignment.Bottom
             ) {
                 val maxAmount = wedges.maxOfOrNull { it.amount } ?: 0.0
@@ -809,7 +826,7 @@ private fun SpendingPieChart(
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
-                            .weight(1f)
+                            .width(maxBarWidth)
                             .fillMaxHeight()
                     ) {
                         // Bar area
@@ -903,13 +920,13 @@ private fun SpendingPieChart(
                     )
                 }
 
-                // Stack small-wedge icons along the left margin, each in its own colored box
+                // Stack small-wedge icons in two columns along the left margin
                 if (smallWedges.isNotEmpty()) {
                     val boxPadding = 4.dp
                     val boxSpacing = 4.dp
                     val boxSize = iconSize + boxPadding * 2
-                    val maxPerColumn = ((maxHeight.value) / (boxSize.value + boxSpacing.value)).toInt().coerceAtLeast(1)
-                    val columns = smallWedges.reversed().chunked(maxPerColumn)
+                    val maxPerColumn = ((maxHeight.value) / (boxSize.value + boxSpacing.value)).toInt().coerceAtLeast(1).coerceAtMost(6)
+                    val columns = smallWedges.reversed().chunked(maxPerColumn).take(2)
 
                     Row(
                         modifier = Modifier
