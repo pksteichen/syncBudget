@@ -46,7 +46,13 @@ object IntegrityChecker {
 
     // ── Per-record max field clock ────────────────────────────────
 
-    fun maxClock(t: Transaction): Long = maxOf(
+    // Only include non-zero clocks in fingerprint.  Clock=0 means "field
+    // never set on this device" — including it would cause permanent
+    // divergence when one device's rescue stamped a field the other didn't.
+    // DeltaBuilder can't send clock=0 fields, so they can never converge
+    // via repair.  Excluding them makes the fingerprint compare only fields
+    // that were actually written.
+    fun maxClock(t: Transaction): Long = listOf(
         t.source_clock, t.description_clock, t.amount_clock, t.date_clock,
         t.type_clock, t.categoryAmounts_clock, t.isUserCategorized_clock,
         t.excludeFromBudget_clock, t.isBudgetIncome_clock,
@@ -57,7 +63,7 @@ object IntegrityChecker {
         t.receiptId1_clock, t.receiptId2_clock, t.receiptId3_clock,
         t.receiptId4_clock, t.receiptId5_clock,
         t.deleted_clock, t.deviceId_clock
-    )
+    ).filter { it > 0L }.maxOrNull() ?: 0L
 
     fun maxClock(r: RecurringExpense): Long = maxOf(
         r.source_clock, r.description_clock, r.amount_clock,

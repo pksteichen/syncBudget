@@ -802,18 +802,15 @@ class SyncEngine(
             // One-time cooldown reset after rescue gating fix (v3).
             // Previous continuous rescue caused clock divergences that put
             // repair into permanent cooldown. Reset so repair can try again.
-            if (!prefs.getBoolean("repair_cooldown_reset_v7", false)) {
-                consecutiveRepairCount = 0
-                lastRepairSignature = ""
-                // Force full re-push by resetting lastPushedClock.
-                // Both devices will push ALL records with current clocks.
-                // After both merge each other's full push, maxOf converges.
-                lastPushedClock = 0L
+            // Clear any saved repair-wait state on first run of this build
+            // so the new fingerprint logic (excluding clock=0 fields) gets
+            // a fresh comparison immediately.
+            if (!prefs.getBoolean("repair_structural_fix_v8", false)) {
                 prefs.edit()
-                    .putBoolean("repair_cooldown_reset_v7", true)
-                    .putLong("lastPushedClock", 0L)
+                    .putString("lastRemoteFpSignature", "")
+                    .putBoolean("repair_structural_fix_v8", true)
                     .apply()
-                syncLog("Full re-sync: lastPushedClock reset to 0 + cooldown cleared (v7)")
+                syncLog("Structural integrity fix applied (v8: clock=0 excluded from fingerprint)")
             }
             // Run integrity check every cycle UNLESS:
             // 1. We just pushed normal deltas (other device hasn't merged)
@@ -975,16 +972,14 @@ class SyncEngine(
                         // Build a signature of this device's remote fingerprint
                         // to detect when they've synced since our last repair.
                         val remoteFpSig = "${device.deviceId}:${device.fingerprintSyncVersion}:${device.fingerprintData.hashCode()}"
-                        if (device.fingerprintSyncVersion != newSyncVersion) {
-                            // Remote is at a different sync version — check if
-                            // their fingerprint changed since our last repair.
-                            // If unchanged, they haven't synced yet — skip.
-                            if (lastRemoteFpSig.isNotEmpty() && remoteFpSig == lastRemoteFpSig) {
-                                syncLog("Integrity wait $name: fingerprint unchanged since last repair")
-                                continue
-                            }
-                            syncLog("Integrity skip $name: syncVer mismatch " +
-                                "(local=$newSyncVersion, remote=${device.fingerprintSyncVersion})")
+                        // Allow comparison if versions are close (within 10).
+                        // Strict equality almost never holds when both devices
+                        // are actively syncing.  The fingerprint reflects post-merge
+                        // state regardless of exact version number.
+                        val versionGap = kotlin.math.abs(newSyncVersion - device.fingerprintSyncVersion)
+                        if (versionGap > 10) {
+                            syncLog("Integrity skip $name: syncVer too far apart " +
+                                "(local=$newSyncVersion, remote=${device.fingerprintSyncVersion}, gap=$versionGap)")
                             continue
                         }
                         val remoteFp = IntegrityChecker.fromJson(JSONObject(device.fingerprintData))
