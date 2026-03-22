@@ -802,11 +802,18 @@ class SyncEngine(
             // One-time cooldown reset after rescue gating fix (v3).
             // Previous continuous rescue caused clock divergences that put
             // repair into permanent cooldown. Reset so repair can try again.
-            if (!prefs.getBoolean("repair_cooldown_reset_v6", false)) {
+            if (!prefs.getBoolean("repair_cooldown_reset_v7", false)) {
                 consecutiveRepairCount = 0
                 lastRepairSignature = ""
-                prefs.edit().putBoolean("repair_cooldown_reset_v6", true).apply()
-                syncLog("Repair cooldown reset (post-rescue-gating)")
+                // Force full re-push by resetting lastPushedClock.
+                // Both devices will push ALL records with current clocks.
+                // After both merge each other's full push, maxOf converges.
+                lastPushedClock = 0L
+                prefs.edit()
+                    .putBoolean("repair_cooldown_reset_v7", true)
+                    .putLong("lastPushedClock", 0L)
+                    .apply()
+                syncLog("Full re-sync: lastPushedClock reset to 0 + cooldown cleared (v7)")
             }
             val runIntegrityCheck = now - lastIntegrityCheckTime > INTEGRITY_CHECK_INTERVAL_MS &&
                 localDeltas.isEmpty() && packets.isEmpty()
