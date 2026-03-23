@@ -315,7 +315,7 @@ fun TransactionsScreen(
     var showDateSearchStart by remember { mutableStateOf(false) }
     var showDateSearchEnd by remember { mutableStateOf(false) }
     var dateSearchStart by remember { mutableStateOf<LocalDate?>(null) }
-    var bankFilterOnly by remember { mutableStateOf(false) }
+    // bankFilterOnly removed — use Not Verified filter toggle instead
 
     // Edit state
     var editingTransaction by remember { mutableStateOf<Transaction?>(null) }
@@ -850,7 +850,6 @@ fun TransactionsScreen(
                             text = { Text(S.transactions.dateSearch) },
                             onClick = {
                                 showSearchMenu = false
-                                bankFilterOnly = false
                                 showDateSearchStart = true
                             }
                         )
@@ -1384,10 +1383,7 @@ fun TransactionsScreen(
                 dateSearchStart = date
                 showDateSearchStart = false
                 showDateSearchEnd = true
-            },
-            bankFilterChecked = bankFilterOnly,
-            onBankFilterChanged = { bankFilterOnly = it },
-            showBankFilter = isSubscriber
+            }
         )
     }
 
@@ -1401,14 +1397,9 @@ fun TransactionsScreen(
             onDateSelected = { endDate ->
                 val start = dateSearchStart
                 if (start != null) {
-                    val bankOnly = bankFilterOnly
-                    searchPredicate = if (bankOnly) {
-                        { t -> !t.date.isBefore(start) && !t.date.isAfter(endDate) && !t.isUserCategorized }
-                    } else {
-                        { t -> !t.date.isBefore(start) && !t.date.isAfter(endDate) }
-                    }
+                    searchPredicate = { t -> !t.date.isBefore(start) && !t.date.isAfter(endDate) }
                     searchActive = true
-                viewFilter = ViewFilter.ALL
+                    viewFilter = ViewFilter.ALL
                 }
                 showDateSearchEnd = false
                 dateSearchStart = null
@@ -1417,9 +1408,6 @@ fun TransactionsScreen(
                 showDateSearchEnd = false
                 showDateSearchStart = true
             },
-            bankFilterChecked = bankFilterOnly,
-            onBankFilterChanged = { bankFilterOnly = it },
-            showBankFilter = isSubscriber
         )
     }
 
@@ -5252,9 +5240,6 @@ private fun SearchDatePickerDialog(
     onDismiss: () -> Unit,
     onDateSelected: (LocalDate) -> Unit,
     onBack: (() -> Unit)? = null,
-    bankFilterChecked: Boolean = false,
-    onBankFilterChanged: (Boolean) -> Unit = {},
-    showBankFilter: Boolean = false
 ) {
     val S = LocalStrings.current
     val datePickerState = rememberDatePickerState()
@@ -5283,26 +5268,6 @@ private fun SearchDatePickerDialog(
         }
     ) {
         Column {
-            if (showBankFilter) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .padding(start = 24.dp, bottom = 4.dp)
-                        .clickable { onBankFilterChanged(!bankFilterChecked) }
-                ) {
-                    Checkbox(
-                        checked = bankFilterChecked,
-                        onCheckedChange = onBankFilterChanged,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = S.transactions.unmodifiedBankTransactions,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-            }
             DatePicker(
                 state = datePickerState,
                 title = null,
