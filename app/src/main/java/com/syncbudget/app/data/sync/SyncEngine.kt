@@ -1054,19 +1054,36 @@ class SyncEngine(
                     val lastDivSig = prefs.getString("lastDivergenceSignature", "") ?: ""
                     val isNewDivergence = divergenceSig != lastDivSig
 
-                    // Only set mismatch flags for NEW divergences (not frozen residuals)
-                    if (isNewDivergence) {
-                        cashMismatchDetected = allReports.any { it.cashMismatch }
-                        valueMismatchDetected = allReports.any { it.valueMismatch }
-                        if (valueMismatchDetected) {
-                            syncLog("VALUE CORRUPTION detected — repair will push authoritative data")
-                        }
-                        if (cashMismatchDetected) {
-                            syncLog("CASH MISMATCH detected — will trigger recompute")
-                        }
+                    // Check for real data mismatches (always, regardless of frozen status)
+                    cashMismatchDetected = allReports.any { it.cashMismatch }
+                    valueMismatchDetected = allReports.any { it.valueMismatch }
+
+                    // Determine if repair should execute:
+                    // - New divergence: always repair
+                    // - Same divergence BUT has value/count mismatch: keep repairing
+                    //   (real data gap, not just frozen clocks)
+                    // - Same divergence, clock-only: suppress (frozen residual)
+                    val hasRealDataGap = merged.any { action ->
+                        action.reason.contains("VALUE CORRUPTION") ||
+                        action.reason.contains("extra record") ||
+                        action.reason.contains("different IDs") ||
+                        action.reason.contains("clock+value")
+                    }
+                    val shouldRepair = isNewDivergence || hasRealDataGap
+
+                    if (shouldRepair && valueMismatchDetected) {
+                        syncLog("VALUE CORRUPTION detected — repair will push authoritative data")
+                    }
+                    if (shouldRepair && cashMismatchDetected) {
+                        syncLog("CASH MISMATCH detected — will trigger recompute")
+                    }
+                    // Suppress flash for frozen clock-only residuals
+                    if (!shouldRepair) {
+                        cashMismatchDetected = false
+                        valueMismatchDetected = false
                     }
 
-                    if (merged.isNotEmpty() && isNewDivergence) {
+                    if (merged.isNotEmpty() && shouldRepair) {
                             val repairDeltas = mutableListOf<RecordDelta>()
                             for (action in merged) {
                                 when (action.collection) {
