@@ -3929,7 +3929,7 @@ fun TransactionDialog(
                             singleAmountText = ""
                         }
                     }
-                    val singleAmountInvalid = showValidation && (singleAmountText.toDoubleOrNull()?.let { it <= 0 } != false)
+                    val singleAmountInvalid = showValidation && (singleAmountText.toDoubleOrNull()?.let { it < 0 } != false)
                     OutlinedTextField(
                         value = singleAmountText,
                         onValueChange = { if (isValidAmountInput(it, maxDecimals)) singleAmountText = it },
@@ -3951,7 +3951,7 @@ fun TransactionDialog(
                     // Multi-category mode
 
                     // Entry mode icons: Pie chart | Calculator (amounts) | % (percentage)
-                    val totalFilled = totalAmountText.toDoubleOrNull()?.let { it > 0 } == true
+                    val totalFilled = totalAmountText.toDoubleOrNull()?.let { it >= 0 } == true
                     val modeIconSize = 36.dp
                     val activeColor = MaterialTheme.colorScheme.primary
                     val inactiveColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.35f)

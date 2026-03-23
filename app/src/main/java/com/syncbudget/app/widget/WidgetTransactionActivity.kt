@@ -181,7 +181,7 @@ class WidgetTransactionActivity : ComponentActivity() {
                 }
                 val remaining = (parsedAmount ?: 0.0) - totalCatAmounts
                 val isSingleCategory = selectedIds.size == 1
-                val canSave = parsedAmount != null && parsedAmount > 0 && source.isNotBlank() &&
+                val canSave = parsedAmount != null && parsedAmount >= 0 && source.isNotBlank() &&
                     selectedIds.isNotEmpty() && (isSingleCategory || abs(remaining) < 0.005)
 
                 // Check for recurring/amortization/income linking (no duplicate check)
