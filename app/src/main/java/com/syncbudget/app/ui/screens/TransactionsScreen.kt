@@ -139,6 +139,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.syncbudget.app.data.BankFormat
 import com.syncbudget.app.data.BudgetPeriod
 import com.syncbudget.app.data.IncomeMode
@@ -770,18 +771,24 @@ fun TransactionsScreen(
                     },
                     colors = ButtonDefaults.outlinedButtonColors(
                         contentColor = MaterialTheme.colorScheme.onBackground
-                    )
+                    ),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                 ) {
-                    Text(when (viewFilter) {
-                        ViewFilter.ALL -> S.transactions.all
-                        ViewFilter.EXPENSES -> S.transactions.expensesFilter
-                        ViewFilter.INCOME -> S.transactions.incomeFilter
-                        ViewFilter.RECURRING -> S.transactions.recurringFilter
-                        ViewFilter.EXCLUDED -> S.transactions.excludedFilter
-                        ViewFilter.NOT_VERIFIED -> S.transactions.notVerifiedFilter
-                        ViewFilter.PHOTOS -> S.transactions.photosFilter
-                    })
+                    Text(
+                        text = when (viewFilter) {
+                            ViewFilter.ALL -> S.transactions.all
+                            ViewFilter.EXPENSES -> S.transactions.expensesFilter
+                            ViewFilter.INCOME -> S.transactions.incomeFilter
+                            ViewFilter.RECURRING -> S.transactions.recurringFilter
+                            ViewFilter.EXCLUDED -> S.transactions.excludedFilter
+                            ViewFilter.NOT_VERIFIED -> S.transactions.notVerifiedFilter
+                            ViewFilter.PHOTOS -> S.transactions.photosFilter
+                        },
+                        fontSize = 13.sp
+                    )
                 }
+
+                Spacer(modifier = Modifier.width(6.dp))
 
                 OutlinedButton(
                     onClick = {
@@ -795,15 +802,19 @@ fun TransactionsScreen(
                     },
                     colors = ButtonDefaults.outlinedButtonColors(
                         contentColor = MaterialTheme.colorScheme.onBackground
-                    )
+                    ),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                 ) {
-                    Text(when (sortMode) {
-                        SortMode.DATE_DESC -> S.transactions.sortDateDesc
-                        SortMode.DATE_ASC -> S.transactions.sortDateAsc
-                        SortMode.AMOUNT_DESC -> S.transactions.sortAmountDesc
-                        SortMode.AMOUNT_ASC -> S.transactions.sortAmountAsc
-                        SortMode.CATEGORY -> S.transactions.sortCategory
-                    })
+                    Text(
+                        text = when (sortMode) {
+                            SortMode.DATE_DESC -> S.transactions.sortDateDesc
+                            SortMode.DATE_ASC -> S.transactions.sortDateAsc
+                            SortMode.AMOUNT_DESC -> S.transactions.sortAmountDesc
+                            SortMode.AMOUNT_ASC -> S.transactions.sortAmountAsc
+                            SortMode.CATEGORY -> S.transactions.sortCategory
+                        },
+                        fontSize = 13.sp
+                    )
                 }
 
                 IconButton(
