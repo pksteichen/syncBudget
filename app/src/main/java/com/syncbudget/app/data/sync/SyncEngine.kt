@@ -191,6 +191,12 @@ class SyncEngine(
 
             // Step 0b: Version compatibility check — block sync if any device
             // in the group requires a higher sync version than we support.
+            // First, publish OUR version so stale higher values from test builds
+            // or rollbacks get corrected.
+            try {
+                FirestoreService.updateDeviceMetadata(groupId, deviceId, lastSyncVersion,
+                    appSyncVersion = APP_SYNC_VERSION, minSyncVersion = MIN_SYNC_VERSION)
+            } catch (_: Exception) {}
             try {
                 val maxMinVersion = FirestoreService.getMaxMinSyncVersion(groupId)
                 if (maxMinVersion > APP_SYNC_VERSION) {
