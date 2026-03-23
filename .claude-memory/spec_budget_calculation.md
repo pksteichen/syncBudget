@@ -88,7 +88,7 @@ For each active transaction where date >= budgetStartDate AND !excludeFromBudget
    - FIXED mode: **no effect**
    - ACTUAL mode: `cash += (amount - linkedIncomeSourceAmount)` (or live lookup)
    - ACTUAL_ADJUST mode: **no effect**
-2. `linkedIncomeSourceAmount > 0` (deleted source): `cash += (amount - linkedIncomeSourceAmount)`
+2. `linkedIncomeSourceAmount > 0` (deleted source): ACTUAL mode: `cash += (amount - linkedIncomeSourceAmount)`. FIXED/ADJUST mode: **no effect** (transaction continues to behave as it did while linked).
 3. `isBudgetIncome == true`: **no effect** (already budgeted)
 4. Non-budget income: `cash += amount`
 
