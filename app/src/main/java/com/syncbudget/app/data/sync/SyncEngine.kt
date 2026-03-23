@@ -852,18 +852,21 @@ class SyncEngine(
             // Always publish fingerprint so other devices see current state
             // after merging repair deltas.  The 30min gate only controls
             // whether we COMPARE fingerprints, not whether we publish ours.
-            // For category fingerprint: exclude remapped duplicates and use
-            // tag hash as stable ID for tagged categories.  This ensures both
-            // devices produce the same fingerprint even if they assigned
-            // different random IDs to the same tagged category.
-            val fpCategories = mergedCat.filter { it.id !in catIdRemap }
-                .map { cat ->
-                    if (cat.tag.isNotEmpty()) {
-                        // Replace random ID with deterministic tag hash so both
-                        // devices use the same ID for the same tagged category
-                        cat.copy(id = cat.tag.hashCode() and 0x7FFFFFFF)
-                    } else cat
-                }
+            // For category fingerprint: dedup by tag (keep one per tag,
+            // highest name_clock wins) and use tag hash as stable ID.
+            // This is independent of catIdRemap — both devices produce
+            // the same fingerprint regardless of which random IDs they
+            // assigned or which remap direction they have.
+            val fpCategories = run {
+                val tagged = mergedCat.filter { it.tag.isNotEmpty() && !it.deleted }
+                    .groupBy { it.tag }
+                    .map { (tag, group) ->
+                        val best = group.maxByOrNull { it.name_clock } ?: group.first()
+                        best.copy(id = tag.hashCode() and 0x7FFFFFFF)
+                    }
+                val untagged = mergedCat.filter { it.tag.isEmpty() && !it.deleted }
+                tagged + untagged
+            }
             val fpJson = try {
                 val fp = IntegrityChecker.computeFingerprint(
                     deviceId, newSyncVersion,
