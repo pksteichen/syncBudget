@@ -111,12 +111,13 @@ All transaction add paths must check for existing ID:
 
 ## Category Fingerprinting
 
-Tagged categories (e.g., "supercharge", "other") may have different random numeric IDs on each device. Before computing the fingerprint:
-1. Exclude categories whose IDs are in `catIdRemap` (remapped duplicates)
-2. Replace tagged category IDs with `tag.hashCode()` — deterministic, same on all devices
-3. Untagged categories keep their original IDs
+Tagged categories (e.g., "supercharge", "other") may have different random numeric IDs on each device. The fingerprint computation is **independent of catIdRemap** (which differs per device):
+1. Group ALL tagged categories by tag, keep one per tag (highest name_clock)
+2. Replace ID with `tag.hashCode() and 0x7FFFFFFF` — deterministic, same on all devices
+3. Exclude deleted categories
+4. Untagged categories keep their original IDs
 
-This ensures both devices produce identical fingerprints regardless of local ID assignment.
+This ensures both devices produce identical fingerprints regardless of local ID assignment or remap direction. Do NOT filter by catIdRemap — it differs between devices and produces asymmetric results.
 
 ## Key Invariants
 
