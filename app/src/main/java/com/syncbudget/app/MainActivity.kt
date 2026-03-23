@@ -1885,7 +1885,9 @@ class MainActivity : ComponentActivity() {
                             // Update savings goals totalSavedSoFar for non-paused, non-complete items.
                             // Use the correct date for each catch-up period so periodsLeft
                             // decreases properly (instead of using today for all iterations).
-                            val savingsClk = lamportClock.tick()
+                            // NO lamportClock.tick() — savings goal accrual is deterministic.
+                            // Both devices compute the same value from the same data, so
+                            // clock advancement would create unnecessary divergence.
                             for (period in 0 until missedPeriods) {
                                 val periodsBack = (missedPeriods - 1 - period).toLong()
                                 val periodDate = when (budgetPeriod) {
@@ -1907,8 +1909,7 @@ class MainActivity : ComponentActivity() {
                                                     if (periods > 0) {
                                                         val deduction = BudgetCalculator.roundCents(minOf(remaining / periods.toDouble(), remaining))
                                                         savingsGoals[idx] = goal.copy(
-                                                            totalSavedSoFar = goal.totalSavedSoFar + deduction,
-                                                            totalSavedSoFar_clock = savingsClk
+                                                            totalSavedSoFar = goal.totalSavedSoFar + deduction
                                                         )
                                                     }
                                                 }
@@ -1919,8 +1920,7 @@ class MainActivity : ComponentActivity() {
                                                 ))
                                                 if (contribution > 0) {
                                                     savingsGoals[idx] = goal.copy(
-                                                        totalSavedSoFar = goal.totalSavedSoFar + contribution,
-                                                        totalSavedSoFar_clock = savingsClk
+                                                        totalSavedSoFar = goal.totalSavedSoFar + contribution
                                                     )
                                                 }
                                             }
@@ -1930,8 +1930,9 @@ class MainActivity : ComponentActivity() {
                             }
                             saveSavingsGoals()
 
-                            // Update RE set-aside tracking for each catch-up period
-                            val reClk = lamportClock.tick()
+                            // Update RE set-aside tracking for each catch-up period.
+                            // NO lamportClock.tick() — set-aside accrual is deterministic.
+                            // Both devices compute the same value from the same RE data.
                             var reChanged = false
                             for (period in 0 until missedPeriods) {
                                 val periodsBack = (missedPeriods - 1 - period).toLong()
@@ -1955,9 +1956,7 @@ class MainActivity : ComponentActivity() {
                                         // Due date reached: reset set-aside, deactivate accelerated
                                         recurringExpenses[idx] = re.copy(
                                             setAsideSoFar = 0.0,
-                                            setAsideSoFar_clock = reClk,
-                                            isAccelerated = if (re.isAccelerated) false else re.isAccelerated,
-                                            isAccelerated_clock = if (re.isAccelerated) reClk else re.isAccelerated_clock
+                                            isAccelerated = if (re.isAccelerated) false else re.isAccelerated
                                         )
                                         reChanged = true
                                     } else {
@@ -1971,8 +1970,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                         if (increment > 0) {
                                             recurringExpenses[idx] = re.copy(
-                                                setAsideSoFar = minOf(re.setAsideSoFar + increment, re.amount),
-                                                setAsideSoFar_clock = reClk
+                                                setAsideSoFar = minOf(re.setAsideSoFar + increment, re.amount)
                                             )
                                             reChanged = true
                                         }
