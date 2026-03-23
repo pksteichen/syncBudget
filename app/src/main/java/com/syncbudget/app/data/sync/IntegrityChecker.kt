@@ -97,7 +97,12 @@ object IntegrityChecker {
         c.deleted_clock, c.deviceId_clock
     )
 
-    fun maxClock(p: PeriodLedgerEntry): Long = p.clock
+    // Use value hash instead of clock — both devices independently create
+    // ledger entries with different Lamport ticks but identical appliedAmount.
+    // Comparing clocks would show permanent divergence; comparing values
+    // catches real data differences.
+    fun maxClock(p: PeriodLedgerEntry): Long =
+        (p.appliedAmount.toBits() xor p.periodStartDate.toLocalDate().toEpochDay())
 
     fun maxClock(s: SharedSettings): Long = maxOf(
         s.currency_clock, s.budgetPeriod_clock, s.budgetStartDate_clock,

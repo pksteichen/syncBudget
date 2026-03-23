@@ -1048,9 +1048,15 @@ class SyncEngine(
                         syncLog("CASH MISMATCH detected — will trigger recompute")
                     }
 
-                    // Execute surgical repair if any divergence was found
+                    // Execute surgical repair if any divergence was found.
+                    // But if the divergence signature hasn't changed since last
+                    // repair, the repair is ineffective (frozen clock residual).
+                    // Don't repair or flash — just log it.
                     val merged = IntegrityChecker.mergeRepairs(allReports)
-                    if (merged.isNotEmpty()) {
+                    val divergenceSig = allReports.flatMap { it.details }.sorted().joinToString("|")
+                    val lastDivSig = prefs.getString("lastDivergenceSignature", "") ?: ""
+                    val isNewDivergence = divergenceSig != lastDivSig
+                    if (merged.isNotEmpty() && isNewDivergence) {
                             val repairDeltas = mutableListOf<RecordDelta>()
                             for (action in merged) {
                                 when (action.collection) {
@@ -1160,12 +1166,21 @@ class SyncEngine(
                                 if (maxRepairClock > lamportClock.value) {
                                     lamportClock.merge(maxRepairClock)
                                 }
+                                // Save divergence signature to detect ineffective repairs
+                                prefs.edit().putString("lastDivergenceSignature", divergenceSig).apply()
                             }
+                    } else if (merged.isNotEmpty() && !isNewDivergence) {
+                        // Same divergence as last repair — repair is ineffective
+                        // (frozen clock residual). Don't repair or flash.
+                        syncLog("  Divergence unchanged after repair — suppressing (frozen clock residual)")
                     } else {
-                        // No divergence — clear saved fingerprint signature
-                        if (lastRemoteFpSig.isNotEmpty()) {
+                        // No divergence — clear saved signatures
+                        if (lastRemoteFpSig.isNotEmpty() || lastDivSig.isNotEmpty()) {
                             syncLog("  Divergence resolved")
-                            prefs.edit().putString("lastRemoteFpSignature", "").apply()
+                            prefs.edit()
+                                .putString("lastRemoteFpSignature", "")
+                                .putString("lastDivergenceSignature", "")
+                                .apply()
                         }
                     }
                 } catch (e: Exception) {
