@@ -200,10 +200,14 @@ private enum class ImportStage {
     FORMAT_SELECTION, PARSING, PARSE_ERROR, DUPLICATE_CHECK, COMPLETE
 }
 
-private enum class ViewFilter(val label: String) {
-    EXPENSES("Expenses"),
-    INCOME("Income"),
-    ALL("All")
+private enum class ViewFilter {
+    ALL,
+    EXPENSES,
+    INCOME,
+    RECURRING,
+    EXCLUDED,
+    NOT_VERIFIED,
+    PHOTOS
 }
 
 private fun isValidAmountInput(text: String, maxDecimals: Int): Boolean {
@@ -624,6 +628,10 @@ fun TransactionsScreen(
         list = when (viewFilter) {
             ViewFilter.EXPENSES -> list.filter { it.type == TransactionType.EXPENSE }
             ViewFilter.INCOME -> list.filter { it.type == TransactionType.INCOME }
+            ViewFilter.RECURRING -> list.filter { it.linkedRecurringExpenseId != null || it.linkedRecurringExpenseAmount > 0.0 }
+            ViewFilter.EXCLUDED -> list.filter { it.excludeFromBudget }
+            ViewFilter.NOT_VERIFIED -> list.filter { !it.isUserCategorized }
+            ViewFilter.PHOTOS -> list.filter { it.receiptId1 != null || it.receiptId2 != null || it.receiptId3 != null || it.receiptId4 != null || it.receiptId5 != null }
             ViewFilter.ALL -> list
         }
         if (searchActive && searchPredicate != null) {
@@ -727,7 +735,11 @@ fun TransactionsScreen(
                         viewFilter = when (viewFilter) {
                             ViewFilter.ALL -> ViewFilter.EXPENSES
                             ViewFilter.EXPENSES -> ViewFilter.INCOME
-                            ViewFilter.INCOME -> ViewFilter.ALL
+                            ViewFilter.INCOME -> ViewFilter.RECURRING
+                            ViewFilter.RECURRING -> ViewFilter.EXCLUDED
+                            ViewFilter.EXCLUDED -> ViewFilter.NOT_VERIFIED
+                            ViewFilter.NOT_VERIFIED -> ViewFilter.PHOTOS
+                            ViewFilter.PHOTOS -> ViewFilter.ALL
                         }
                     },
                     colors = ButtonDefaults.outlinedButtonColors(
@@ -738,6 +750,10 @@ fun TransactionsScreen(
                         ViewFilter.ALL -> S.transactions.all
                         ViewFilter.EXPENSES -> S.transactions.expensesFilter
                         ViewFilter.INCOME -> S.transactions.incomeFilter
+                        ViewFilter.RECURRING -> S.transactions.recurringFilter
+                        ViewFilter.EXCLUDED -> S.transactions.excludedFilter
+                        ViewFilter.NOT_VERIFIED -> S.transactions.notVerifiedFilter
+                        ViewFilter.PHOTOS -> S.transactions.photosFilter
                     })
                 }
 
