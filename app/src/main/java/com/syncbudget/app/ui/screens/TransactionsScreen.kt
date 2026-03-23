@@ -768,6 +768,7 @@ fun TransactionsScreen(
                             ViewFilter.NOT_VERIFIED -> ViewFilter.PHOTOS
                             ViewFilter.PHOTOS -> ViewFilter.ALL
                         }
+                        scrollToTopTrigger++
                     },
                     colors = ButtonDefaults.outlinedButtonColors(
                         contentColor = MaterialTheme.colorScheme.onBackground
@@ -799,6 +800,7 @@ fun TransactionsScreen(
                             SortMode.AMOUNT_ASC -> SortMode.CATEGORY
                             SortMode.CATEGORY -> SortMode.DATE_DESC
                         }
+                        scrollToTopTrigger++
                     },
                     colors = ButtonDefaults.outlinedButtonColors(
                         contentColor = MaterialTheme.colorScheme.onBackground
