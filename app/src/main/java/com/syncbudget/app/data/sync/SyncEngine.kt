@@ -42,7 +42,8 @@ data class SyncResult(
     val catIdRemap: Map<Int, Int>? = null,
     val error: String? = null,
     val repairAttempted: Boolean = false,
-    val cashMismatch: Boolean = false
+    val cashMismatch: Boolean = false,
+    val valueMismatch: Boolean = false
 )
 
 class SyncEngine(
@@ -1005,6 +1006,7 @@ class SyncEngine(
             // they synced) before re-checking — replaces the old cooldown timer.
             var didRepair = false
             var cashMismatchDetected = false
+            var valueMismatchDetected = false
             if (runIntegrityCheck && fpJson != null) {
                 try {
                     val localFp = IntegrityChecker.fromJson(JSONObject(fpJson))
@@ -1046,6 +1048,12 @@ class SyncEngine(
                     cashMismatchDetected = allReports.any { it.cashMismatch }
                     if (cashMismatchDetected) {
                         syncLog("CASH MISMATCH detected — will trigger recompute")
+                    }
+
+                    // Check for value hash mismatch (data corruption)
+                    valueMismatchDetected = allReports.any { it.valueMismatch }
+                    if (valueMismatchDetected) {
+                        syncLog("VALUE CORRUPTION detected — repair will push authoritative data")
                     }
 
                     // Execute surgical repair if any divergence was found.
@@ -1257,7 +1265,8 @@ class SyncEngine(
                 pendingAdminClaim = adminClaim,
                 catIdRemap = catIdRemap,
                 repairAttempted = didRepair,
-                cashMismatch = cashMismatchDetected
+                cashMismatch = cashMismatchDetected,
+                valueMismatch = valueMismatchDetected
             )
         } catch (e: Exception) {
             // Don't infer removal from Firestore exceptions — only explicit

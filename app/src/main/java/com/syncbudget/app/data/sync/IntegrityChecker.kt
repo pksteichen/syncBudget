@@ -13,14 +13,16 @@ object IntegrityChecker {
     data class SegmentFingerprint(
         val count: Int,
         val idXor: Int,
-        val clockSum: Long
+        val clockSum: Long,
+        val valueHash: Long = 0L
     )
 
     data class CollectionFingerprint(
         val count: Int,
         val idXor: Int,
         val clockSum: Long,
-        val segments: List<SegmentFingerprint>  // SEGMENT_COUNT buckets, keyed by id % SEGMENT_COUNT
+        val segments: List<SegmentFingerprint>,  // SEGMENT_COUNT buckets, keyed by id % SEGMENT_COUNT
+        val totalValueHash: Long = 0L
     )
 
     data class IntegrityFingerprint(
@@ -43,7 +45,8 @@ object IntegrityChecker {
         val diverged: Boolean,
         val details: List<String>,
         val repairs: List<RepairAction>,
-        val cashMismatch: Boolean = false
+        val cashMismatch: Boolean = false,
+        val valueMismatch: Boolean = false
     )
 
     // ── Per-record max field clock ────────────────────────────────
@@ -114,14 +117,80 @@ object IntegrityChecker {
         s.deviceRoster_clock, s.receiptPruneAgeDays_clock
     )
 
+    // ── Per-record value hash (critical field values, NOT clocks) ──
+
+    fun valueHash(t: Transaction): Long {
+        var h = t.amount.toBits()
+        h = h xor (t.source.hashCode().toLong())
+        h = h xor (t.date.toEpochDay() * 31)
+        h = h xor (t.type.ordinal.toLong() * 127)
+        h = h xor (if (t.excludeFromBudget) 1L else 0L)
+        h = h xor (if (t.isBudgetIncome) 2L else 0L)
+        h = h xor (t.linkedRecurringExpenseId?.toLong() ?: 0L) * 17
+        h = h xor (t.linkedIncomeSourceId?.toLong() ?: 0L) * 19
+        h = h xor (t.linkedAmortizationEntryId?.toLong() ?: 0L) * 23
+        h = h xor (t.linkedSavingsGoalId?.toLong() ?: 0L) * 29
+        h = h xor t.linkedRecurringExpenseAmount.toBits()
+        h = h xor t.linkedIncomeSourceAmount.toBits()
+        h = h xor t.amortizationAppliedAmount.toBits()
+        h = h xor t.linkedSavingsGoalAmount.toBits()
+        h = h xor (if (t.deleted) 256L else 0L)
+        return h
+    }
+
+    fun valueHash(r: RecurringExpense): Long {
+        var h = r.amount.toBits()
+        h = h xor (r.source.hashCode().toLong())
+        h = h xor (r.repeatType.ordinal.toLong() * 31)
+        h = h xor (r.repeatInterval.toLong() * 127)
+        h = h xor (if (r.deleted) 256L else 0L)
+        return h
+    }
+
+    fun valueHash(s: IncomeSource): Long {
+        var h = s.amount.toBits()
+        h = h xor (s.source.hashCode().toLong())
+        h = h xor (s.repeatType.ordinal.toLong() * 31)
+        h = h xor (s.repeatInterval.toLong() * 127)
+        h = h xor (if (s.deleted) 256L else 0L)
+        return h
+    }
+
+    fun valueHash(g: SavingsGoal): Long {
+        var h = g.name.hashCode().toLong()
+        h = h xor g.targetAmount.toBits()
+        h = h xor g.contributionPerPeriod.toBits()
+        h = h xor (if (g.isPaused) 1L else 0L)
+        h = h xor (if (g.deleted) 256L else 0L)
+        return h
+    }
+
+    fun valueHash(e: AmortizationEntry): Long {
+        var h = e.amount.toBits()
+        h = h xor (e.source.hashCode().toLong())
+        h = h xor (e.totalPeriods.toLong() * 31)
+        h = h xor (if (e.deleted) 256L else 0L)
+        return h
+    }
+
+    fun valueHash(c: Category): Long {
+        var h = c.name.hashCode().toLong()
+        h = h xor (c.iconName.hashCode().toLong() * 31)
+        h = h xor (c.tag.hashCode().toLong() * 127)
+        h = h xor (if (c.deleted) 256L else 0L)
+        return h
+    }
+
     // ── Segmented collection fingerprint ─────────────────────────
 
-    private fun <T> fingerprint(list: List<T>, getId: (T) -> Int, getMaxClock: (T) -> Long): CollectionFingerprint {
+    private fun <T> fingerprint(list: List<T>, getId: (T) -> Int, getMaxClock: (T) -> Long, getValueHash: (T) -> Long = { 0L }): CollectionFingerprint {
         val segCounts = IntArray(SEGMENT_COUNT)
         val segIdXor = IntArray(SEGMENT_COUNT)
         val segClockSum = LongArray(SEGMENT_COUNT)
+        val segValueHash = LongArray(SEGMENT_COUNT)
         var totalIdXor = 0
         var totalClockSum = 0L
+        var totalValueHash = 0L
 
         // Dedup by ID — keep the entry with the highest maxClock.
         // Duplicates in the in-memory list (from widget merge or
@@ -133,20 +202,24 @@ object IntegrityChecker {
         for (item in deduped) {
             val id = getId(item)
             val clk = getMaxClock(item)
+            val vh = getValueHash(item)
             val seg = (id and 0x7FFFFFFF) % SEGMENT_COUNT  // non-negative modulo
             segCounts[seg]++
             segIdXor[seg] = segIdXor[seg] xor id
             segClockSum[seg] += clk
+            segValueHash[seg] = segValueHash[seg] xor vh
             totalIdXor = totalIdXor xor id
             totalClockSum += clk
+            totalValueHash = totalValueHash xor vh
         }
 
         val segments = (0 until SEGMENT_COUNT).map { i ->
-            SegmentFingerprint(segCounts[i], segIdXor[i], segClockSum[i])
+            SegmentFingerprint(segCounts[i], segIdXor[i], segClockSum[i], segValueHash[i])
         }
         return CollectionFingerprint(
             count = deduped.size, idXor = totalIdXor,
-            clockSum = totalClockSum, segments = segments
+            clockSum = totalClockSum, segments = segments,
+            totalValueHash = totalValueHash
         )
     }
 
@@ -166,13 +239,13 @@ object IntegrityChecker {
         availableCash: Double = 0.0
     ): IntegrityFingerprint {
         val collections = mapOf(
-            "transactions" to fingerprint(transactions, { it.id }, ::maxClock),
-            "recurringExpenses" to fingerprint(recurringExpenses, { it.id }, ::maxClock),
-            "incomeSources" to fingerprint(incomeSources, { it.id }, ::maxClock),
-            "savingsGoals" to fingerprint(savingsGoals, { it.id }, ::maxClock),
-            "amortizationEntries" to fingerprint(amortizationEntries, { it.id }, ::maxClock),
-            "categories" to fingerprint(categories, { it.id }, ::maxClock),
-            "periodLedger" to fingerprint(periodLedgerEntries, { it.id }, ::maxClock)
+            "transactions" to fingerprint(transactions, { it.id }, ::maxClock, ::valueHash),
+            "recurringExpenses" to fingerprint(recurringExpenses, { it.id }, ::maxClock, ::valueHash),
+            "incomeSources" to fingerprint(incomeSources, { it.id }, ::maxClock, ::valueHash),
+            "savingsGoals" to fingerprint(savingsGoals, { it.id }, ::maxClock, ::valueHash),
+            "amortizationEntries" to fingerprint(amortizationEntries, { it.id }, ::maxClock, ::valueHash),
+            "categories" to fingerprint(categories, { it.id }, ::maxClock, ::valueHash),
+            "periodLedger" to fingerprint(periodLedgerEntries, { it.id }, ::maxClock, { 0L })
         )
         return IntegrityFingerprint(
             deviceId = deviceId,
@@ -199,12 +272,14 @@ object IntegrityChecker {
             c.put("count", cfp.count)
             c.put("idXor", cfp.idXor)
             c.put("clockSum", cfp.clockSum)
+            c.put("totalValueHash", cfp.totalValueHash)
             val segs = JSONArray()
             for (seg in cfp.segments) {
                 val s = JSONObject()
                 s.put("c", seg.count)
                 s.put("x", seg.idXor)
                 s.put("s", seg.clockSum)
+                s.put("v", seg.valueHash)
                 segs.put(s)
             }
             c.put("seg", segs)
@@ -223,7 +298,7 @@ object IntegrityChecker {
             val segments = if (segsArr != null) {
                 (0 until segsArr.length()).map { i ->
                     val s = segsArr.getJSONObject(i)
-                    SegmentFingerprint(s.getInt("c"), s.getInt("x"), s.getLong("s"))
+                    SegmentFingerprint(s.getInt("c"), s.getInt("x"), s.getLong("s"), s.optLong("v", 0L))
                 }
             } else {
                 // Backward compat: old fingerprints without segments
@@ -233,7 +308,8 @@ object IntegrityChecker {
                 count = c.getInt("count"),
                 idXor = c.getInt("idXor"),
                 clockSum = c.getLong("clockSum"),
-                segments = segments
+                segments = segments,
+                totalValueHash = c.optLong("totalValueHash", 0L)
             )
         }
         return IntegrityFingerprint(
@@ -258,6 +334,7 @@ object IntegrityChecker {
     fun compare(local: IntegrityFingerprint, remote: IntegrityFingerprint): DivergenceReport {
         val details = mutableListOf<String>()
         val repairs = mutableListOf<RepairAction>()
+        var valueMismatchFound = false
 
         val allKeys = (local.collections.keys + remote.collections.keys).distinct()
         for (key in allKeys) {
@@ -266,17 +343,19 @@ object IntegrityChecker {
             if (l == null) { details.add("$key: missing locally"); continue }
             if (r == null) { details.add("$key: missing on remote"); continue }
 
-            // Top-level match → skip segment analysis
-            if (l.count == r.count && l.idXor == r.idXor && l.clockSum == r.clockSum) continue
+            // Top-level match → skip segment analysis (check clocks AND value hashes)
+            if (l.count == r.count && l.idXor == r.idXor && l.clockSum == r.clockSum
+                && l.totalValueHash == r.totalValueHash) continue
 
-            details.add("$key: diverged (local=${l.count}/${l.idXor}/${l.clockSum}, " +
-                "remote=${r.count}/${r.idXor}/${r.clockSum})")
+            details.add("$key: diverged (local=${l.count}/${l.idXor}/${l.clockSum}/vh=${l.totalValueHash}, " +
+                "remote=${r.count}/${r.idXor}/${r.clockSum}/vh=${r.totalValueHash})")
 
             // Walk segments to pinpoint divergent records
             for (seg in 0 until minOf(l.segments.size, r.segments.size)) {
                 val ls = l.segments[seg]
                 val rs = r.segments[seg]
-                if (ls.count == rs.count && ls.idXor == rs.idXor && ls.clockSum == rs.clockSum) continue
+                if (ls.count == rs.count && ls.idXor == rs.idXor
+                    && ls.clockSum == rs.clockSum && ls.valueHash == rs.valueHash) continue
 
                 // Case 1: local has MORE records in this segment → re-push extras
                 if (ls.count > rs.count) {
@@ -311,13 +390,24 @@ object IntegrityChecker {
                     repairs.add(RepairAction(key, setOf(-seg - 1),
                         "seg$seg: same count but different IDs"))
                 }
-                // Case 4: same count, same IDs, different clocks → BOTH sides
-                // must re-push.  Different fields may be higher on each device,
-                // and only pushing from the "higher sum" side doesn't converge
-                // when the divergence is spread across different fields.
+                // Case 4: same count, same IDs, different clocks
                 else if (ls.clockSum != rs.clockSum) {
+                    if (ls.valueHash == rs.valueHash) {
+                        // Clock-only difference, values match — frozen residual, skip repair
+                        details.add("$key seg$seg: clock-only mismatch (values identical)")
+                    } else {
+                        // Both clocks and values differ — need repair
+                        repairs.add(RepairAction(key, setOf(-seg - 1),
+                            "seg$seg: clock+value mismatch (local=${ls.clockSum}, remote=${rs.clockSum})"))
+                        valueMismatchFound = true
+                    }
+                }
+                // Case 5: same count, same IDs, same clocks, different value hashes
+                // → VALUE CORRUPTION (data changed without clock advancing)
+                else if (ls.valueHash != rs.valueHash) {
                     repairs.add(RepairAction(key, setOf(-seg - 1),
-                        "seg$seg: clock mismatch (local=${ls.clockSum}, remote=${rs.clockSum})"))
+                        "seg$seg: VALUE CORRUPTION (clocks match but data differs)"))
+                    valueMismatchFound = true
                 }
             }
         }
@@ -335,7 +425,8 @@ object IntegrityChecker {
             diverged = details.isNotEmpty(),
             details = details,
             repairs = repairs,
-            cashMismatch = cashDiverged
+            cashMismatch = cashDiverged,
+            valueMismatch = valueMismatchFound
         )
     }
 
