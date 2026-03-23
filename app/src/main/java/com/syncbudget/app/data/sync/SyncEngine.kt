@@ -2,6 +2,7 @@ package com.syncbudget.app.data.sync
 
 import android.content.Context
 import android.util.Base64
+import kotlinx.coroutines.tasks.await
 import com.syncbudget.app.data.AmortizationEntry
 import com.syncbudget.app.data.Category
 import com.syncbudget.app.data.CryptoHelper
@@ -1231,10 +1232,20 @@ class SyncEngine(
             // and NOT_FOUND are treated as transient/config errors.
             val errorCode = when {
                 e is javax.crypto.AEADBadTagException -> "encryption_error"
-                // PERMISSION_DENIED from Firestore means the app lacks Firebase
-                // Auth (old version) — map to update_required so the UI shows
-                // a helpful message instead of a raw error.
-                e is FirebaseFirestoreException && e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED -> "update_required"
+                e is FirebaseFirestoreException && e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED -> {
+                    // Could be: (a) old app without auth, or (b) transient auth token expiry.
+                    // Try re-authenticating — if we CAN auth but Firestore still denies,
+                    // it's a rules mismatch (old app). If auth fails, it's transient.
+                    val hasAuth = try {
+                        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                        if (user == null) {
+                            com.google.firebase.auth.FirebaseAuth.getInstance()
+                                .signInAnonymously().await()
+                        }
+                        true
+                    } catch (_: Exception) { false }
+                    if (hasAuth) "update_required" else e.message
+                }
                 else -> e.message
             }
             syncLog("=== Sync FAILED: $errorCode — ${e.javaClass.simpleName}: ${e.message} ===")
