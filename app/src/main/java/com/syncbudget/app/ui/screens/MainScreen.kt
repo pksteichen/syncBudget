@@ -295,8 +295,6 @@ fun MainScreen(
     dateFormatPattern: String = "yyyy-MM-dd",
     budgetPeriod: BudgetPeriod = BudgetPeriod.DAILY,
     syncStatus: String = "off",
-    showUpdateBanner: Boolean = false,
-    staleDays: Int = 0,
     syncDevices: List<DeviceInfo> = emptyList(),
     localDeviceId: String = "",
     syncRepairAlert: Boolean = false,
@@ -404,21 +402,6 @@ fun MainScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Update required banner — overlaid at top
-            if (showUpdateBanner) {
-                val S = LocalStrings.current
-                androidx.compose.material3.Surface(
-                    color = Color(0xFFF44336),
-                    modifier = Modifier.fillMaxWidth().zIndex(10f)
-                ) {
-                    Text(
-                        text = S.sync.updateRequiredNotice,
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                    )
-                }
-            }
             // Bottom bars: nav icons ~72dp + tx buttons ~56dp = ~128dp
             val contentSpace = maxHeight - 128.dp
             val showChart = contentSpace >= 180.dp
@@ -530,27 +513,6 @@ fun MainScreen(
                             }
                         }
 
-                        // Stale device warning banner
-                        if (staleDays >= 60) {
-                            val (staleBannerColor, staleBannerText) = when {
-                                staleDays >= 90 -> Color(0xFFB71C1C) to S.sync.staleBlocked
-                                staleDays >= 85 -> Color(0xFFF44336) to S.sync.staleWarning85
-                                staleDays >= 75 -> Color(0xFFFF5722) to S.sync.staleWarning75
-                                else -> Color(0xFFFF9800) to S.sync.staleWarning60
-                            }
-                            Surface(
-                                color = staleBannerColor.copy(alpha = 0.15f),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    text = staleBannerText,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = staleBannerColor,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                        }
                     }
 
                     // Chart title bar

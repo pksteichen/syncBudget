@@ -135,7 +135,6 @@ fun FamilySyncScreen(
     deviceRoster: Map<String, String> = emptyMap(),
     onSaveDeviceRoster: (Map<String, String>) -> Unit = {},
     onPurgeStaleRoster: () -> Unit = {},
-    @Suppress("UNUSED_PARAMETER") staleDays: Int = 0,  // deprecated — Firestore-native sync has no stale limit
     pendingAdminClaim: AdminClaim? = null,
     onClaimAdmin: () -> Unit = {},
     onObjectClaim: () -> Unit = {},

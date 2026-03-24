@@ -79,9 +79,6 @@ class SyncWorker(
     companion object {
         private const val WORK_NAME = "sync_budget_background_sync"
 
-        /** Create a file-based lock for preventing concurrent syncs. */
-        fun createSyncLock(context: Context): SyncFileLock = SyncFileLock(context)
-
         fun schedule(context: Context) {
             val request = PeriodicWorkRequestBuilder<SyncWorker>(
                 15, TimeUnit.MINUTES

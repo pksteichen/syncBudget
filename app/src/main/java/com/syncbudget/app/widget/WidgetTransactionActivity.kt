@@ -980,10 +980,6 @@ class WidgetTransactionActivity : ComponentActivity() {
             prefs.edit().putString("availableCash", newCash.toString()).apply()
         }
 
-        // Mark sync dirty
-        val syncPrefs = context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
-        syncPrefs.edit().putBoolean("syncDirty", true).apply()
-
         BudgetWidgetProvider.updateAllWidgets(context)
     }
 }

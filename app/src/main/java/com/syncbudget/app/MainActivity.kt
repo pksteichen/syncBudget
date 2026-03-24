@@ -476,7 +476,6 @@ class MainActivity : ComponentActivity() {
             var generatedPairingCode by remember { mutableStateOf<String?>(null) }
             val localDeviceId = remember { SyncIdGenerator.getOrCreateDeviceId(context) }
             val coroutineScope = rememberCoroutineScope()
-            val staleDays = 0  // deprecated — Firestore-native sync has no stale limit
             var syncErrorMessage by remember { mutableStateOf<String?>(null) }
             var syncProgressMessage by remember { mutableStateOf<String?>(null) }
             var pendingAdminClaim by remember { mutableStateOf<AdminClaim?>(null) }
@@ -1977,8 +1976,6 @@ class MainActivity : ComponentActivity() {
                         dateFormatPattern = dateFormatPattern,
                         budgetPeriod = budgetPeriod,
                         syncStatus = syncStatus,
-                        showUpdateBanner = syncErrorMessage == strings.sync.updateRequiredNotice,
-                        staleDays = staleDays,
                         syncDevices = syncDevices,
                         localDeviceId = localDeviceId,
                         syncRepairAlert = syncRepairAlert,
@@ -3123,7 +3120,6 @@ class MainActivity : ComponentActivity() {
                                 lastSyncActivity = System.currentTimeMillis()
                             }
                         },
-                        staleDays = staleDays,
                         pendingAdminClaim = pendingAdminClaim,
                         onClaimAdmin = {
                             coroutineScope.launch {
