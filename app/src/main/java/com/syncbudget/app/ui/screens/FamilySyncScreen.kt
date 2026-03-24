@@ -132,7 +132,7 @@ fun FamilySyncScreen(
     deviceRoster: Map<String, String> = emptyMap(),
     onSaveDeviceRoster: (Map<String, String>) -> Unit = {},
     onPurgeStaleRoster: () -> Unit = {},
-    staleDays: Int = 0,
+    @Suppress("UNUSED_PARAMETER") staleDays: Int = 0,  // deprecated — Firestore-native sync has no stale limit
     pendingAdminClaim: AdminClaim? = null,
     onClaimAdmin: () -> Unit = {},
     onObjectClaim: () -> Unit = {},
@@ -335,25 +335,8 @@ fun FamilySyncScreen(
                                         color = Color(0xFFF44336)
                                     )
                                 }
-                                if (staleDays >= 60) {
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    val staleText = when {
-                                        staleDays >= 90 -> S.sync.staleBlocked
-                                        staleDays >= 85 -> S.sync.staleWarning85
-                                        staleDays >= 75 -> S.sync.staleWarning75
-                                        else -> S.sync.staleWarning60
-                                    }
-                                    val staleColor = when {
-                                        staleDays >= 85 -> Color(0xFFF44336)
-                                        staleDays >= 75 -> Color(0xFFFF5722)
-                                        else -> Color(0xFFFF9800)
-                                    }
-                                    Text(
-                                        text = staleText,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = staleColor
-                                    )
-                                }
+                                // Stale device warning removed — Firestore-native sync
+                                // brings any device up to speed instantly via listeners.
                             }
                         }
                     }

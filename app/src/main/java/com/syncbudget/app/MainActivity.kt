@@ -467,7 +467,7 @@ class MainActivity : ComponentActivity() {
             var generatedPairingCode by remember { mutableStateOf<String?>(null) }
             val localDeviceId = remember { SyncIdGenerator.getOrCreateDeviceId(context) }
             val coroutineScope = rememberCoroutineScope()
-            var staleDays by remember { mutableIntStateOf(0) }
+            val staleDays = 0  // deprecated — Firestore-native sync has no stale limit
             var syncErrorMessage by remember { mutableStateOf<String?>(null) }
             var syncProgressMessage by remember { mutableStateOf<String?>(null) }
             var pendingAdminClaim by remember { mutableStateOf<AdminClaim?>(null) }
@@ -529,6 +529,23 @@ class MainActivity : ComponentActivity() {
             // in one migration doesn't block subsequent migrations or crash
             // the LaunchedEffect.  Flags are set AFTER success.
             LaunchedEffect(Unit) {
+                // Strip legacy clock fields from local JSON files.
+                // Old CRDT data had _clock fields on every record; the
+                // data classes no longer have them so the next save drops
+                // them.  This forces a re-save of everything at once.
+                try {
+                    if (!prefs.getBoolean("migration_strip_clock_fields", false)) {
+                        TransactionRepository.save(context, transactions.toList())
+                        RecurringExpenseRepository.save(context, recurringExpenses.toList())
+                        IncomeSourceRepository.save(context, incomeSources.toList())
+                        SavingsGoalRepository.save(context, savingsGoals.toList())
+                        AmortizationRepository.save(context, amortizationEntries.toList())
+                        CategoryRepository.save(context, categories.toList())
+                        PeriodLedgerRepository.save(context, periodLedger.toList())
+                        SharedSettingsRepository.save(context, sharedSettings)
+                        prefs.edit().putBoolean("migration_strip_clock_fields", true).apply()
+                    }
+                } catch (e: Exception) { android.util.Log.e("Migration", "strip_clock_fields failed", e) }
                 try {
                     if (!syncPrefs.getBoolean("migration_fix_stale_budgetstart_ledger_ui", false)) {
                         val bsd = budgetStartDate
@@ -3033,7 +3050,6 @@ class MainActivity : ComponentActivity() {
                                 lastSyncTime = null
                                 syncDevices = emptyList()
                                 pendingAdminClaim = null
-                                staleDays = 0
                                 syncErrorMessage = null
                             }
                         },
@@ -3059,7 +3075,6 @@ class MainActivity : ComponentActivity() {
                                         lastSyncTime = null
                                         syncDevices = emptyList()
                                         pendingAdminClaim = null
-                                        staleDays = 0
                                         syncErrorMessage = null
                                         syncProgressMessage = null
                                     } catch (e: Exception) {
