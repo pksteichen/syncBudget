@@ -188,7 +188,7 @@ object ImageLedgerService {
         allDeviceIds: Set<String>
     ): Boolean {
         return try {
-            withTimeout(TIMEOUT_MS) {
+            val allHaveIt = withTimeout(TIMEOUT_MS) {
                 firestore.runTransaction { tx ->
                     val snap = tx.get(ledgerRef(groupId).document(receiptId))
                     @Suppress("UNCHECKED_CAST")
@@ -201,6 +201,11 @@ object ImageLedgerService {
                     }
                 }.await()
             }
+            // All devices have the photo — also delete from Cloud Storage
+            if (allHaveIt) {
+                deleteFromCloud(groupId, receiptId)
+            }
+            allHaveIt
         } catch (e: Exception) {
             Log.w(TAG, "Prune check failed for $receiptId: ${e.message}")
             false
