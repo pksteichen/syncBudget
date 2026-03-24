@@ -306,7 +306,6 @@ object EncryptedDocSerializer {
         val json = JSONObject().apply {
             put("periodStartDate", ple.periodStartDate.toString())
             put("appliedAmount", ple.appliedAmount)
-            put("clockAtReset", ple.clockAtReset)
         }
         return buildDocNoDeleted(encrypt(json, key), deviceId)
     }
@@ -316,7 +315,6 @@ object EncryptedDocSerializer {
         return PeriodLedgerEntry(
             periodStartDate = try { LocalDateTime.parse(json.getString("periodStartDate")) } catch (_: Exception) { LocalDateTime.now() },
             appliedAmount = SafeIO.safeDouble(json.getDouble("appliedAmount")),
-            clockAtReset = json.optLong("clockAtReset", 0L),
             deviceId = doc.getString("deviceId") ?: ""
         )
     }

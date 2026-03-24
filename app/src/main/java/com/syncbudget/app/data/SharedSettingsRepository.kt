@@ -31,26 +31,6 @@ object SharedSettingsRepository {
         json.put("deviceRoster", settings.deviceRoster)
         json.put("receiptPruneAgeDays", settings.receiptPruneAgeDays ?: JSONObject.NULL)
         json.put("lastChangedBy", settings.lastChangedBy)
-        // Clocks
-        json.put("currency_clock", settings.currency_clock)
-        json.put("budgetPeriod_clock", settings.budgetPeriod_clock)
-        json.put("budgetStartDate_clock", settings.budgetStartDate_clock)
-        json.put("isManualBudgetEnabled_clock", settings.isManualBudgetEnabled_clock)
-        json.put("manualBudgetAmount_clock", settings.manualBudgetAmount_clock)
-        json.put("weekStartSunday_clock", settings.weekStartSunday_clock)
-        json.put("resetDayOfWeek_clock", settings.resetDayOfWeek_clock)
-        json.put("resetDayOfMonth_clock", settings.resetDayOfMonth_clock)
-        json.put("resetHour_clock", settings.resetHour_clock)
-        json.put("familyTimezone_clock", settings.familyTimezone_clock)
-        json.put("matchDays_clock", settings.matchDays_clock)
-        json.put("matchPercent_clock", settings.matchPercent_clock)
-        json.put("matchDollar_clock", settings.matchDollar_clock)
-        json.put("matchChars_clock", settings.matchChars_clock)
-        json.put("showAttribution_clock", settings.showAttribution_clock)
-        json.put("availableCash_clock", settings.availableCash_clock)
-        json.put("incomeMode_clock", settings.incomeMode_clock)
-        json.put("deviceRoster_clock", settings.deviceRoster_clock)
-        json.put("receiptPruneAgeDays_clock", settings.receiptPruneAgeDays_clock)
 
         SafeIO.atomicWriteJson(context, FILE_NAME, json)
     }
@@ -78,26 +58,7 @@ object SharedSettingsRepository {
                 incomeMode = json.optString("incomeMode", "FIXED"),
                 deviceRoster = json.optString("deviceRoster", "{}"),
                 receiptPruneAgeDays = if (json.has("receiptPruneAgeDays") && !json.isNull("receiptPruneAgeDays")) json.getInt("receiptPruneAgeDays") else null,
-                lastChangedBy = json.optString("lastChangedBy", ""),
-                currency_clock = json.optLong("currency_clock", 0L),
-                budgetPeriod_clock = json.optLong("budgetPeriod_clock", 0L),
-                budgetStartDate_clock = json.optLong("budgetStartDate_clock", 0L),
-                isManualBudgetEnabled_clock = json.optLong("isManualBudgetEnabled_clock", 0L),
-                manualBudgetAmount_clock = json.optLong("manualBudgetAmount_clock", 0L),
-                weekStartSunday_clock = json.optLong("weekStartSunday_clock", 0L),
-                resetDayOfWeek_clock = json.optLong("resetDayOfWeek_clock", 0L),
-                resetDayOfMonth_clock = json.optLong("resetDayOfMonth_clock", 0L),
-                resetHour_clock = json.optLong("resetHour_clock", 0L),
-                familyTimezone_clock = json.optLong("familyTimezone_clock", 0L),
-                matchDays_clock = json.optLong("matchDays_clock", 0L),
-                matchPercent_clock = json.optLong("matchPercent_clock", 0L),
-                matchDollar_clock = json.optLong("matchDollar_clock", 0L),
-                matchChars_clock = json.optLong("matchChars_clock", 0L),
-                showAttribution_clock = json.optLong("showAttribution_clock", 0L),
-                availableCash_clock = json.optLong("availableCash_clock", 0L),
-                incomeMode_clock = json.optLong("incomeMode_clock", 0L),
-                deviceRoster_clock = json.optLong("deviceRoster_clock", 0L),
-                receiptPruneAgeDays_clock = json.optLong("receiptPruneAgeDays_clock", 0L)
+                lastChangedBy = json.optString("lastChangedBy", "")
             )
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse shared settings: ${e.message}")
@@ -127,25 +88,6 @@ object SharedSettingsRepository {
         json.put("deviceRoster", settings.deviceRoster)
         json.put("receiptPruneAgeDays", settings.receiptPruneAgeDays ?: JSONObject.NULL)
         json.put("lastChangedBy", settings.lastChangedBy)
-        json.put("currency_clock", settings.currency_clock)
-        json.put("budgetPeriod_clock", settings.budgetPeriod_clock)
-        json.put("budgetStartDate_clock", settings.budgetStartDate_clock)
-        json.put("isManualBudgetEnabled_clock", settings.isManualBudgetEnabled_clock)
-        json.put("manualBudgetAmount_clock", settings.manualBudgetAmount_clock)
-        json.put("weekStartSunday_clock", settings.weekStartSunday_clock)
-        json.put("resetDayOfWeek_clock", settings.resetDayOfWeek_clock)
-        json.put("resetDayOfMonth_clock", settings.resetDayOfMonth_clock)
-        json.put("resetHour_clock", settings.resetHour_clock)
-        json.put("familyTimezone_clock", settings.familyTimezone_clock)
-        json.put("matchDays_clock", settings.matchDays_clock)
-        json.put("matchPercent_clock", settings.matchPercent_clock)
-        json.put("matchDollar_clock", settings.matchDollar_clock)
-        json.put("matchChars_clock", settings.matchChars_clock)
-        json.put("showAttribution_clock", settings.showAttribution_clock)
-        json.put("availableCash_clock", settings.availableCash_clock)
-        json.put("incomeMode_clock", settings.incomeMode_clock)
-        json.put("deviceRoster_clock", settings.deviceRoster_clock)
-        json.put("receiptPruneAgeDays_clock", settings.receiptPruneAgeDays_clock)
         return json
     }
 
@@ -170,26 +112,7 @@ object SharedSettingsRepository {
             incomeMode = json.optString("incomeMode", "FIXED"),
             deviceRoster = json.optString("deviceRoster", "{}"),
             receiptPruneAgeDays = if (json.has("receiptPruneAgeDays") && !json.isNull("receiptPruneAgeDays")) json.getInt("receiptPruneAgeDays") else null,
-            lastChangedBy = json.optString("lastChangedBy", ""),
-            currency_clock = json.optLong("currency_clock", 0L),
-            budgetPeriod_clock = json.optLong("budgetPeriod_clock", 0L),
-            budgetStartDate_clock = json.optLong("budgetStartDate_clock", 0L),
-            isManualBudgetEnabled_clock = json.optLong("isManualBudgetEnabled_clock", 0L),
-            manualBudgetAmount_clock = json.optLong("manualBudgetAmount_clock", 0L),
-            weekStartSunday_clock = json.optLong("weekStartSunday_clock", 0L),
-            resetDayOfWeek_clock = json.optLong("resetDayOfWeek_clock", 0L),
-            resetDayOfMonth_clock = json.optLong("resetDayOfMonth_clock", 0L),
-            resetHour_clock = json.optLong("resetHour_clock", 0L),
-            familyTimezone_clock = json.optLong("familyTimezone_clock", 0L),
-            matchDays_clock = json.optLong("matchDays_clock", 0L),
-            matchPercent_clock = json.optLong("matchPercent_clock", 0L),
-            matchDollar_clock = json.optLong("matchDollar_clock", 0L),
-            matchChars_clock = json.optLong("matchChars_clock", 0L),
-            showAttribution_clock = json.optLong("showAttribution_clock", 0L),
-            availableCash_clock = json.optLong("availableCash_clock", 0L),
-            incomeMode_clock = json.optLong("incomeMode_clock", 0L),
-            deviceRoster_clock = json.optLong("deviceRoster_clock", 0L),
-            receiptPruneAgeDays_clock = json.optLong("receiptPruneAgeDays_clock", 0L)
+            lastChangedBy = json.optString("lastChangedBy", "")
         )
     }
 }

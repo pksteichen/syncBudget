@@ -12,15 +12,7 @@ data class AmortizationEntry(
     // Sync fields
     val deviceId: String = "",
     val deleted: Boolean = false,
-    val source_clock: Long = 0L,
-    val description_clock: Long = 0L,
-    val amount_clock: Long = 0L,
-    val totalPeriods_clock: Long = 0L,
-    val startDate_clock: Long = 0L,
-    val deleted_clock: Long = 0L,
-    val isPaused: Boolean = false,
-    val isPaused_clock: Long = 0L,
-    val deviceId_clock: Long = 0L
+    val isPaused: Boolean = false
 )
 
 fun generateAmortizationEntryId(existingIds: Set<Int>): Int {

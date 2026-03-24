@@ -36,31 +36,7 @@ data class Transaction(
     val receiptId5: String? = null,
     // Sync fields
     val deviceId: String = "",
-    val deleted: Boolean = false,
-    val source_clock: Long = 0L,
-    val description_clock: Long = 0L,
-    val amount_clock: Long = 0L,
-    val date_clock: Long = 0L,
-    val type_clock: Long = 0L,
-    val categoryAmounts_clock: Long = 0L,
-    val isUserCategorized_clock: Long = 0L,
-    val excludeFromBudget_clock: Long = 0L,
-    val isBudgetIncome_clock: Long = 0L,
-    val linkedRecurringExpenseId_clock: Long = 0L,
-    val linkedAmortizationEntryId_clock: Long = 0L,
-    val linkedIncomeSourceId_clock: Long = 0L,
-    val amortizationAppliedAmount_clock: Long = 0L,
-    val linkedRecurringExpenseAmount_clock: Long = 0L,
-    val linkedIncomeSourceAmount_clock: Long = 0L,
-    val linkedSavingsGoalId_clock: Long = 0L,
-    val linkedSavingsGoalAmount_clock: Long = 0L,
-    val receiptId1_clock: Long = 0L,
-    val receiptId2_clock: Long = 0L,
-    val receiptId3_clock: Long = 0L,
-    val receiptId4_clock: Long = 0L,
-    val receiptId5_clock: Long = 0L,
-    val deleted_clock: Long = 0L,
-    val deviceId_clock: Long = 0L
+    val deleted: Boolean = false
 )
 
 fun generateTransactionId(existingIds: Set<Int>): Int {

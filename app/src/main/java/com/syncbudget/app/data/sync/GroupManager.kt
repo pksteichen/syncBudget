@@ -137,8 +137,6 @@ object GroupManager {
             .remove("groupId")
             .remove("encryptionKey")
             .remove("isAdmin")
-            .remove("lastSyncVersion")
-            .remove("lastPushedClock")
             .remove("lastSnapshotVersion")
             .remove("lastSuccessfulSync")
             .remove("lastIntegrityCheckTime")

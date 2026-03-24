@@ -8,10 +8,9 @@ import com.syncbudget.app.data.RecurringExpense
 import com.syncbudget.app.data.SavingsGoal
 import com.syncbudget.app.data.Transaction
 
-// Skeleton records are incomplete CRDT records received via sync with
-// missing critical field VALUES (empty source, empty name).  We filter
-// on data content, NOT on clock values — solo users who never synced
-// have clock=0 on all records, but their data is valid.
+// Skeleton records are incomplete records received via sync with
+// missing critical field values (empty source, empty name).
+// We filter on data content — records with valid data are always kept.
 
 @get:JvmName("activeTransactions")
 val List<Transaction>.active: List<Transaction>

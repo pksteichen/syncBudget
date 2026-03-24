@@ -23,13 +23,6 @@ object CategoryRepository {
             // Sync fields
             obj.put("deviceId", c.deviceId)
             obj.put("deleted", c.deleted)
-            obj.put("name_clock", c.name_clock)
-            obj.put("iconName_clock", c.iconName_clock)
-            obj.put("tag_clock", c.tag_clock)
-            obj.put("charted_clock", c.charted_clock)
-            obj.put("widgetVisible_clock", c.widgetVisible_clock)
-            obj.put("deleted_clock", c.deleted_clock)
-            obj.put("deviceId_clock", c.deviceId_clock)
             jsonArray.put(obj)
         }
         SafeIO.atomicWriteJson(context, FILE_NAME, jsonArray)
@@ -50,14 +43,7 @@ object CategoryRepository {
                         charted = obj.optBoolean("charted", true),
                         widgetVisible = obj.optBoolean("widgetVisible", true),
                         deviceId = obj.optString("deviceId", ""),
-                        deleted = obj.optBoolean("deleted", false),
-                        name_clock = obj.optLong("name_clock", 0L),
-                        iconName_clock = obj.optLong("iconName_clock", 0L),
-                        tag_clock = obj.optLong("tag_clock", 0L),
-                        charted_clock = obj.optLong("charted_clock", 0L),
-                        widgetVisible_clock = obj.optLong("widgetVisible_clock", 0L),
-                        deleted_clock = obj.optLong("deleted_clock", 0L),
-                        deviceId_clock = obj.optLong("deviceId_clock", 0L)
+                        deleted = obj.optBoolean("deleted", false)
                     )
                 )
             } catch (e: Exception) {

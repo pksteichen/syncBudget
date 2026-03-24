@@ -40,40 +40,16 @@ object TransactionRepository {
             // Sync fields
             obj.put("deviceId", t.deviceId)
             obj.put("deleted", t.deleted)
-            obj.put("source_clock", t.source_clock)
-            obj.put("description_clock", t.description_clock)
-            obj.put("amount_clock", t.amount_clock)
-            obj.put("date_clock", t.date_clock)
-            obj.put("type_clock", t.type_clock)
-            obj.put("categoryAmounts_clock", t.categoryAmounts_clock)
-            obj.put("isUserCategorized_clock", t.isUserCategorized_clock)
-            obj.put("excludeFromBudget_clock", t.excludeFromBudget_clock)
-            obj.put("isBudgetIncome_clock", t.isBudgetIncome_clock)
-            obj.put("linkedRecurringExpenseId_clock", t.linkedRecurringExpenseId_clock)
-            obj.put("linkedAmortizationEntryId_clock", t.linkedAmortizationEntryId_clock)
-            obj.put("linkedIncomeSourceId_clock", t.linkedIncomeSourceId_clock)
             obj.put("amortizationAppliedAmount", t.amortizationAppliedAmount)
-            obj.put("amortizationAppliedAmount_clock", t.amortizationAppliedAmount_clock)
             obj.put("linkedRecurringExpenseAmount", t.linkedRecurringExpenseAmount)
-            obj.put("linkedRecurringExpenseAmount_clock", t.linkedRecurringExpenseAmount_clock)
             obj.put("linkedIncomeSourceAmount", t.linkedIncomeSourceAmount)
-            obj.put("linkedIncomeSourceAmount_clock", t.linkedIncomeSourceAmount_clock)
             obj.put("linkedSavingsGoalId", t.linkedSavingsGoalId ?: JSONObject.NULL)
-            obj.put("linkedSavingsGoalId_clock", t.linkedSavingsGoalId_clock)
             obj.put("linkedSavingsGoalAmount", t.linkedSavingsGoalAmount)
-            obj.put("linkedSavingsGoalAmount_clock", t.linkedSavingsGoalAmount_clock)
             obj.put("receiptId1", t.receiptId1 ?: JSONObject.NULL)
-            obj.put("receiptId1_clock", t.receiptId1_clock)
             obj.put("receiptId2", t.receiptId2 ?: JSONObject.NULL)
-            obj.put("receiptId2_clock", t.receiptId2_clock)
             obj.put("receiptId3", t.receiptId3 ?: JSONObject.NULL)
-            obj.put("receiptId3_clock", t.receiptId3_clock)
             obj.put("receiptId4", t.receiptId4 ?: JSONObject.NULL)
-            obj.put("receiptId4_clock", t.receiptId4_clock)
             obj.put("receiptId5", t.receiptId5 ?: JSONObject.NULL)
-            obj.put("receiptId5_clock", t.receiptId5_clock)
-            obj.put("deleted_clock", t.deleted_clock)
-            obj.put("deviceId_clock", t.deviceId_clock)
             jsonArray.put(obj)
         }
         SafeIO.atomicWriteJson(context, FILE_NAME, jsonArray)
@@ -134,31 +110,7 @@ object TransactionRepository {
                         receiptId4 = if (obj.has("receiptId4") && !obj.isNull("receiptId4")) obj.getString("receiptId4") else null,
                         receiptId5 = if (obj.has("receiptId5") && !obj.isNull("receiptId5")) obj.getString("receiptId5") else null,
                         deviceId = obj.optString("deviceId", ""),
-                        deleted = obj.optBoolean("deleted", false),
-                        source_clock = obj.optLong("source_clock", 0L),
-                        description_clock = obj.optLong("description_clock", 0L),
-                        amount_clock = obj.optLong("amount_clock", 0L),
-                        date_clock = obj.optLong("date_clock", 0L),
-                        type_clock = obj.optLong("type_clock", 0L),
-                        categoryAmounts_clock = obj.optLong("categoryAmounts_clock", 0L),
-                        isUserCategorized_clock = obj.optLong("isUserCategorized_clock", 0L),
-                        excludeFromBudget_clock = obj.optLong("excludeFromBudget_clock", 0L),
-                        isBudgetIncome_clock = obj.optLong("isBudgetIncome_clock", 0L),
-                        linkedRecurringExpenseId_clock = obj.optLong("linkedRecurringExpenseId_clock", 0L),
-                        linkedAmortizationEntryId_clock = obj.optLong("linkedAmortizationEntryId_clock", 0L),
-                        linkedIncomeSourceId_clock = obj.optLong("linkedIncomeSourceId_clock", 0L),
-                        amortizationAppliedAmount_clock = obj.optLong("amortizationAppliedAmount_clock", 0L),
-                        linkedRecurringExpenseAmount_clock = obj.optLong("linkedRecurringExpenseAmount_clock", 0L),
-                        linkedIncomeSourceAmount_clock = obj.optLong("linkedIncomeSourceAmount_clock", 0L),
-                        linkedSavingsGoalId_clock = obj.optLong("linkedSavingsGoalId_clock", 0L),
-                        linkedSavingsGoalAmount_clock = obj.optLong("linkedSavingsGoalAmount_clock", 0L),
-                        receiptId1_clock = obj.optLong("receiptId1_clock", 0L),
-                        receiptId2_clock = obj.optLong("receiptId2_clock", 0L),
-                        receiptId3_clock = obj.optLong("receiptId3_clock", 0L),
-                        receiptId4_clock = obj.optLong("receiptId4_clock", 0L),
-                        receiptId5_clock = obj.optLong("receiptId5_clock", 0L),
-                        deleted_clock = obj.optLong("deleted_clock", 0L),
-                        deviceId_clock = obj.optLong("deviceId_clock", 0L)
+                        deleted = obj.optBoolean("deleted", false)
                     )
                 )
             } catch (e: Exception) {

@@ -10,13 +10,11 @@ import java.time.LocalDateTime
 data class PeriodLedgerEntry(
     val periodStartDate: LocalDateTime,
     val appliedAmount: Double,
-    val clockAtReset: Long = 0L,
     val corrected: Boolean = false,  // unused — kept for JSON backward compatibility
-    // CRDT sync fields
-    val deviceId: String = "",
-    val clock: Long = 0L  // single creation clock (entries are immutable)
+    // Sync fields
+    val deviceId: String = ""
 ) {
-    /** Deterministic ID from date — used for CRDT dedup (same date = same entry) */
+    /** Deterministic ID from date — used for dedup (same date = same entry) */
     val id: Int get() = periodStartDate.toLocalDate().toEpochDay().toInt()
 }
 
@@ -25,10 +23,10 @@ object PeriodLedgerRepository {
     private const val FILE_NAME = "period_ledger.json"
     private const val TAG = "PeriodLedgerRepo"
 
-    /** Dedup by epoch day: keep highest-clock entry per date. */
+    /** Dedup by epoch day: keep first entry per date. */
     fun dedup(entries: List<PeriodLedgerEntry>): List<PeriodLedgerEntry> =
         entries.groupBy { it.id }
-            .map { (_, group) -> group.maxByOrNull { it.clock } ?: group.first() }
+            .map { (_, group) -> group.maxByOrNull { it.periodStartDate } ?: group.first() }
 
     fun save(context: Context, entries: List<PeriodLedgerEntry>) {
         // Always dedup before writing — prevents any caller from persisting duplicates
@@ -38,10 +36,8 @@ object PeriodLedgerRepository {
             val obj = JSONObject()
             obj.put("periodStartDate", e.periodStartDate.toString())
             obj.put("appliedAmount", e.appliedAmount)
-            obj.put("clockAtReset", e.clockAtReset)
             obj.put("corrected", e.corrected)
             obj.put("deviceId", e.deviceId)
-            obj.put("clock", e.clock)
             jsonArray.put(obj)
         }
         SafeIO.atomicWriteJson(context, FILE_NAME, jsonArray)
@@ -58,10 +54,8 @@ object PeriodLedgerRepository {
                     PeriodLedgerEntry(
                         periodStartDate = periodStartDate,
                         appliedAmount = SafeIO.safeDouble(obj.getDouble("appliedAmount")),
-                        clockAtReset = obj.optLong("clockAtReset", 0L),
                         corrected = obj.optBoolean("corrected", false),
-                        deviceId = obj.optString("deviceId", ""),
-                        clock = obj.optLong("clock", 0L)
+                        deviceId = obj.optString("deviceId", "")
                     )
                 )
             } catch (e: Exception) {
@@ -69,7 +63,6 @@ object PeriodLedgerRepository {
             }
         }
         // Dedup by date: old code could create multiple entries for the same day
-        // (e.g. multiple budget resets). Keep highest-clock entry per epoch day.
         val deduped = dedup(list)
         // Persist deduped list to clean up the file if duplicates were found
         if (deduped.size < list.size) {

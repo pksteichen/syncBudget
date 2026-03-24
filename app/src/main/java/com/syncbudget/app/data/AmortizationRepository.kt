@@ -24,15 +24,7 @@ object AmortizationRepository {
             // Sync fields
             obj.put("deviceId", e.deviceId)
             obj.put("deleted", e.deleted)
-            obj.put("source_clock", e.source_clock)
-            obj.put("description_clock", e.description_clock)
-            obj.put("amount_clock", e.amount_clock)
-            obj.put("totalPeriods_clock", e.totalPeriods_clock)
-            obj.put("startDate_clock", e.startDate_clock)
-            obj.put("deleted_clock", e.deleted_clock)
             obj.put("isPaused", e.isPaused)
-            obj.put("isPaused_clock", e.isPaused_clock)
-            obj.put("deviceId_clock", e.deviceId_clock)
             jsonArray.put(obj)
         }
         SafeIO.atomicWriteJson(context, FILE_NAME, jsonArray)
@@ -56,15 +48,7 @@ object AmortizationRepository {
                         startDate = startDate,
                         deviceId = obj.optString("deviceId", ""),
                         deleted = obj.optBoolean("deleted", false),
-                        source_clock = obj.optLong("source_clock", 0L),
-                        description_clock = obj.optLong("description_clock", 0L),
-                        amount_clock = obj.optLong("amount_clock", 0L),
-                        totalPeriods_clock = obj.optLong("totalPeriods_clock", 0L),
-                        startDate_clock = obj.optLong("startDate_clock", 0L),
-                        deleted_clock = obj.optLong("deleted_clock", 0L),
-                        isPaused = obj.optBoolean("isPaused", false),
-                        isPaused_clock = obj.optLong("isPaused_clock", 0L),
-                        deviceId_clock = obj.optLong("deviceId_clock", 0L)
+                        isPaused = obj.optBoolean("isPaused", false)
                     )
                 )
             } catch (e: Exception) {

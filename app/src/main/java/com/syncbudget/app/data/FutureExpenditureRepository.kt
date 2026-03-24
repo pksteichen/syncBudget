@@ -27,14 +27,6 @@ object SavingsGoalRepository {
             // Sync fields
             obj.put("deviceId", g.deviceId)
             obj.put("deleted", g.deleted)
-            obj.put("name_clock", g.name_clock)
-            obj.put("targetAmount_clock", g.targetAmount_clock)
-            obj.put("targetDate_clock", g.targetDate_clock)
-            obj.put("totalSavedSoFar_clock", g.totalSavedSoFar_clock)
-            obj.put("contributionPerPeriod_clock", g.contributionPerPeriod_clock)
-            obj.put("isPaused_clock", g.isPaused_clock)
-            obj.put("deleted_clock", g.deleted_clock)
-            obj.put("deviceId_clock", g.deviceId_clock)
             jsonArray.put(obj)
         }
         SafeIO.atomicWriteJson(context, FILE_NAME, jsonArray)
@@ -61,15 +53,7 @@ object SavingsGoalRepository {
                         contributionPerPeriod = SafeIO.safeDouble(if (obj.has("contributionPerPeriod")) obj.getDouble("contributionPerPeriod") else 0.0),
                         isPaused = if (obj.has("isPaused")) obj.getBoolean("isPaused") else false,
                         deviceId = obj.optString("deviceId", ""),
-                        deleted = obj.optBoolean("deleted", false),
-                        name_clock = obj.optLong("name_clock", 0L),
-                        targetAmount_clock = obj.optLong("targetAmount_clock", 0L),
-                        targetDate_clock = obj.optLong("targetDate_clock", 0L),
-                        totalSavedSoFar_clock = obj.optLong("totalSavedSoFar_clock", 0L),
-                        contributionPerPeriod_clock = obj.optLong("contributionPerPeriod_clock", 0L),
-                        isPaused_clock = obj.optLong("isPaused_clock", 0L),
-                        deleted_clock = obj.optLong("deleted_clock", 0L),
-                        deviceId_clock = obj.optLong("deviceId_clock", 0L)
+                        deleted = obj.optBoolean("deleted", false)
                     )
                 )
             } catch (e: Exception) {

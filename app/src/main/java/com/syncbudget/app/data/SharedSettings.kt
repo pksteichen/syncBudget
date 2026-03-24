@@ -20,25 +20,5 @@ data class SharedSettings(
     val incomeMode: String = "FIXED",
     val deviceRoster: String = "{}",   // JSON map: deviceId → nickname
     val receiptPruneAgeDays: Int? = null,  // null = no pruning (admin-only)
-    val lastChangedBy: String = "",
-    // Per-field clocks
-    val currency_clock: Long = 0L,
-    val budgetPeriod_clock: Long = 0L,
-    val budgetStartDate_clock: Long = 0L,
-    val isManualBudgetEnabled_clock: Long = 0L,
-    val manualBudgetAmount_clock: Long = 0L,
-    val weekStartSunday_clock: Long = 0L,
-    val resetDayOfWeek_clock: Long = 0L,
-    val resetDayOfMonth_clock: Long = 0L,
-    val resetHour_clock: Long = 0L,
-    val familyTimezone_clock: Long = 0L,
-    val matchDays_clock: Long = 0L,
-    val matchPercent_clock: Long = 0L,
-    val matchDollar_clock: Long = 0L,
-    val matchChars_clock: Long = 0L,
-    val showAttribution_clock: Long = 0L,
-    val availableCash_clock: Long = 0L,
-    val incomeMode_clock: Long = 0L,
-    val deviceRoster_clock: Long = 0L,
-    val receiptPruneAgeDays_clock: Long = 0L
+    val lastChangedBy: String = ""
 )

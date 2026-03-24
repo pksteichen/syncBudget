@@ -15,21 +15,9 @@ data class RecurringExpense(
     // Sync fields
     val deviceId: String = "",
     val deleted: Boolean = false,
-    val source_clock: Long = 0L,
-    val description_clock: Long = 0L,
-    val amount_clock: Long = 0L,
-    val repeatType_clock: Long = 0L,
-    val repeatInterval_clock: Long = 0L,
-    val startDate_clock: Long = 0L,
-    val monthDay1_clock: Long = 0L,
-    val monthDay2_clock: Long = 0L,
-    val deleted_clock: Long = 0L,
-    val deviceId_clock: Long = 0L,
     // Set-aside tracking
     val setAsideSoFar: Double = 0.0,
-    val isAccelerated: Boolean = false,
-    val setAsideSoFar_clock: Long = 0L,
-    val isAccelerated_clock: Long = 0L
+    val isAccelerated: Boolean = false
 )
 
 fun generateRecurringExpenseId(existingIds: Set<Int>): Int {

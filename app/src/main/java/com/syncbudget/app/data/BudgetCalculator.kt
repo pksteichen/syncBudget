@@ -406,12 +406,12 @@ object BudgetCalculator {
         incomeMode: IncomeMode = IncomeMode.FIXED,
         activeIncomeSources: List<IncomeSource> = emptyList()
     ): Double {
-        // Sum period credits from synced ledger (dedup by date — keep highest clock)
+        // Sum period credits from synced ledger (dedup by date)
         var cash = 0.0
         val dedupedLedger = periodLedgerEntries
             .filter { !it.periodStartDate.toLocalDate().isBefore(budgetStartDate) }
             .groupBy { it.periodStartDate.toLocalDate() }
-            .values.map { entries -> entries.maxByOrNull { it.clock } ?: entries.first() }
+            .values.map { entries -> entries.maxByOrNull { it.periodStartDate } ?: entries.first() }
         for (entry in dedupedLedger) {
             cash += entry.appliedAmount
         }
