@@ -3329,48 +3329,33 @@ class MainActivity : ComponentActivity() {
                                     GroupManager.setDeviceName(context, nickname)
                                     val success = GroupManager.joinGroup(context, code)
                                     if (success) {
+                                        // Clear local data — the group's data will arrive
+                                        // via Firestore listeners once they start.
+                                        transactions.clear()
+                                        recurringExpenses.clear()
+                                        incomeSources.clear()
+                                        savingsGoals.clear()
+                                        amortizationEntries.clear()
+                                        categories.clear()
+                                        periodLedger.clear()
+                                        TransactionRepository.save(context, emptyList())
+                                        RecurringExpenseRepository.save(context, emptyList())
+                                        IncomeSourceRepository.save(context, emptyList())
+                                        SavingsGoalRepository.save(context, emptyList())
+                                        AmortizationRepository.save(context, emptyList())
+                                        CategoryRepository.save(context, emptyList())
+                                        PeriodLedgerRepository.save(context, emptyList())
+
+                                        // Mark migrations as done so we don't push empty data
+                                        syncPrefs.edit()
+                                            .putBoolean("migration_native_docs_done", true)
+                                            .putBoolean("migration_per_field_enc_done", true)
+                                            .apply()
+
                                         syncGroupId = GroupManager.getGroupId(context)
                                         isSyncAdmin = false
                                         isSyncConfigured = true
                                         syncStatus = "synced"
-
-                                        // Stamp existing records with deviceId so they push on first sync.
-                                        categories.forEachIndexed { i, c ->
-                                            if (c.deviceId.isEmpty()) {
-                                                categories[i] = c.copy(deviceId = localDeviceId)
-                                            }
-                                        }
-                                        saveCategories()
-                                        transactions.forEachIndexed { i, t ->
-                                            if (t.deviceId.isEmpty()) {
-                                                transactions[i] = t.copy(deviceId = localDeviceId)
-                                            }
-                                        }
-                                        saveTransactions()
-                                        recurringExpenses.forEachIndexed { i, r ->
-                                            if (r.deviceId.isEmpty()) {
-                                                recurringExpenses[i] = r.copy(deviceId = localDeviceId)
-                                            }
-                                        }
-                                        saveRecurringExpenses()
-                                        incomeSources.forEachIndexed { i, s ->
-                                            if (s.deviceId.isEmpty()) {
-                                                incomeSources[i] = s.copy(deviceId = localDeviceId)
-                                            }
-                                        }
-                                        saveIncomeSources()
-                                        savingsGoals.forEachIndexed { i, g ->
-                                            if (g.deviceId.isEmpty()) {
-                                                savingsGoals[i] = g.copy(deviceId = localDeviceId)
-                                            }
-                                        }
-                                        saveSavingsGoals()
-                                        amortizationEntries.forEachIndexed { i, e ->
-                                            if (e.deviceId.isEmpty()) {
-                                                amortizationEntries[i] = e.copy(deviceId = localDeviceId)
-                                            }
-                                        }
-                                        saveAmortizationEntries()
                                     } else {
                                         syncErrorMessage = "Invalid or expired pairing code"
                                     }
