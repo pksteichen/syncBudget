@@ -1408,9 +1408,46 @@ class MainActivity : ComponentActivity() {
                                     !isDeleted && !isRemapped
                                 }
                                 if (localCount != firestoreCount) {
-                                    android.util.Log.w("Integrity",
-                                        "$collection: local=$localCount firestore=$firestoreCount — reattaching")
-                                    docSync?.reattachListener(collection)
+                                    if (localCount > firestoreCount) {
+                                        // Local has records Firestore doesn't — push missing ones
+                                        android.util.Log.w("Integrity",
+                                            "$collection: local=$localCount firestore=$firestoreCount — pushing missing records")
+                                        val firestoreIds = firestoreDocs.map { it.id }.toSet()
+                                        val missingRecords = when (collection) {
+                                            EncryptedDocSerializer.COLLECTION_TRANSACTIONS ->
+                                                transactions.filter { !it.deleted && it.id.toString() !in firestoreIds }
+                                            EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES ->
+                                                recurringExpenses.filter { !it.deleted && it.id.toString() !in firestoreIds }
+                                            EncryptedDocSerializer.COLLECTION_INCOME_SOURCES ->
+                                                incomeSources.filter { !it.deleted && it.id.toString() !in firestoreIds }
+                                            EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS ->
+                                                savingsGoals.filter { !it.deleted && it.id.toString() !in firestoreIds }
+                                            EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES ->
+                                                amortizationEntries.filter { !it.deleted && it.id.toString() !in firestoreIds }
+                                            EncryptedDocSerializer.COLLECTION_CATEGORIES ->
+                                                categories.filter { !it.deleted && it.id.toString() !in firestoreIds }
+                                            EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER ->
+                                                periodLedger.filter { it.id.toString() !in firestoreIds }
+                                            else -> emptyList()
+                                        }
+                                        for (record in missingRecords) {
+                                            when (record) {
+                                                is Transaction -> SyncWriteHelper.pushTransaction(record)
+                                                is RecurringExpense -> SyncWriteHelper.pushRecurringExpense(record)
+                                                is IncomeSource -> SyncWriteHelper.pushIncomeSource(record)
+                                                is SavingsGoal -> SyncWriteHelper.pushSavingsGoal(record)
+                                                is AmortizationEntry -> SyncWriteHelper.pushAmortizationEntry(record)
+                                                is Category -> SyncWriteHelper.pushCategory(record)
+                                                is PeriodLedgerEntry -> SyncWriteHelper.pushPeriodLedgerEntry(record)
+                                            }
+                                        }
+                                        android.util.Log.i("Integrity", "Pushed ${missingRecords.size} missing records for $collection")
+                                    } else {
+                                        // Firestore has records we don't — reattach to receive them
+                                        android.util.Log.w("Integrity",
+                                            "$collection: local=$localCount firestore=$firestoreCount — reattaching")
+                                        docSync?.reattachListener(collection)
+                                    }
                                     divergent.add(collection)
                                 }
                             }
