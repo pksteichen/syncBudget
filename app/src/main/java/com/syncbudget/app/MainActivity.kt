@@ -1396,13 +1396,37 @@ class MainActivity : ComponentActivity() {
                                 recomputeCash()
                             }
 
-                            // Update device metadata (lastSeen for online status + tombstone cleanup)
+                            // Log cash for cross-device comparison in diagnostic dumps
+                            android.util.Log.i("Integrity", "Cash: $availableCash")
+
+                            // Update device metadata (lastSeen + cash for diagnostic comparison)
+                            val cashJson = org.json.JSONObject().apply {
+                                put("cash", availableCash)
+                            }.toString()
                             FirestoreService.updateDeviceMetadata(
                                 groupId, localDeviceId,
                                 syncVersion = 0L,
+                                fingerprintJson = cashJson,
                                 appSyncVersion = 2,
                                 minSyncVersion = 2
                             )
+
+                            // Diagnostic: compare cash with other devices (log only, no repair)
+                            try {
+                                val allDevices = FirestoreService.getDevices(groupId)
+                                for (device in allDevices) {
+                                    if (device.deviceId == localDeviceId) continue
+                                    val fp = device.fingerprintData ?: continue
+                                    val remoteCash = org.json.JSONObject(fp).optDouble("cash", Double.NaN)
+                                    if (!remoteCash.isNaN()) {
+                                        val diff = kotlin.math.abs(availableCash - remoteCash)
+                                        if (diff > 0.01) {
+                                            android.util.Log.w("Integrity",
+                                                "Cash differs from ${device.deviceId.take(8)}: local=$availableCash remote=$remoteCash (diff=${"%.2f".format(diff)})")
+                                        }
+                                    }
+                                }
+                            } catch (_: Exception) {}
                         } catch (e: Exception) {
                             android.util.Log.w("SyncLoop", "Health check failed", e)
                         }
