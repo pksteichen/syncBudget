@@ -90,23 +90,54 @@ class FirestoreDocSync(
 
         // Collection listeners for the 7 standard types
         for (collection in EncryptedDocSerializer.ALL_COLLECTIONS) {
-            val reg = FirestoreDocService.listenToCollection(
-                groupId, collection,
-                onDocumentChange = { changes -> handleCollectionChanges(collection, changes) },
-                onError = { e -> syncLog("Listener error: $collection — ${e.message}") }
-            )
-            listeners.add(reg)
+            attachCollectionListener(collection)
         }
 
         // Singleton listener for SharedSettings
-        val ssReg = FirestoreDocService.listenToDocument(
+        attachSettingsListener()
+    }
+
+    private fun attachCollectionListener(collection: String) {
+        val reg = FirestoreDocService.listenToCollection(
+            groupId, collection,
+            onDocumentChange = { changes -> handleCollectionChanges(collection, changes) },
+            onError = { e ->
+                syncLog("Listener error: $collection — ${e.message}")
+                // Auto-reconnect after a delay
+                deserializeScope.launch {
+                    kotlinx.coroutines.delay(5_000)
+                    if (isListening) {
+                        syncLog("Reconnecting listener: $collection")
+                        kotlinx.coroutines.withContext(Dispatchers.Main) {
+                            attachCollectionListener(collection)
+                        }
+                    }
+                }
+            }
+        )
+        listeners.add(reg)
+    }
+
+    private fun attachSettingsListener() {
+        val reg = FirestoreDocService.listenToDocument(
             groupId,
             EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS,
             EncryptedDocSerializer.SHARED_SETTINGS_DOC_ID,
             onChange = { doc -> handleSharedSettingsChange(doc) },
-            onError = { e -> Log.e(TAG, "Listener error: sharedSettings", e) }
+            onError = { e ->
+                syncLog("Listener error: sharedSettings — ${e.message}")
+                deserializeScope.launch {
+                    kotlinx.coroutines.delay(5_000)
+                    if (isListening) {
+                        syncLog("Reconnecting listener: sharedSettings")
+                        kotlinx.coroutines.withContext(Dispatchers.Main) {
+                            attachSettingsListener()
+                        }
+                    }
+                }
+            }
         )
-        listeners.add(ssReg)
+        listeners.add(reg)
     }
 
     /**
