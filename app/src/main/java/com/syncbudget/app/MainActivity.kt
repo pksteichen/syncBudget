@@ -1363,116 +1363,46 @@ class MainActivity : ComponentActivity() {
                             // Update group activity timestamp
                             FirestoreService.updateGroupActivity(groupId)
 
-                            // ── Integrity check: publish counts + compare with peers ──
-                            val integrityData = org.json.JSONObject().apply {
-                                put("txnCount", transactions.count { !it.deleted })
-                                put("reCount", recurringExpenses.count { !it.deleted })
-                                put("isCount", incomeSources.count { !it.deleted })
-                                put("sgCount", savingsGoals.count { !it.deleted })
-                                put("aeCount", amortizationEntries.count { !it.deleted })
-                                put("catCount", categories.count { !it.deleted })
-                                put("pleCount", periodLedger.size)
-                                put("cash", availableCash)
-                            }.toString()
+                            // ── Integrity check: compare local counts against Firestore ──
+                            // Firestore is the source of truth. Each device independently
+                            // checks if its local state matches. No peer comparison needed.
+                            val localCounts = mapOf(
+                                EncryptedDocSerializer.COLLECTION_TRANSACTIONS to transactions.count { !it.deleted },
+                                EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES to recurringExpenses.count { !it.deleted },
+                                EncryptedDocSerializer.COLLECTION_INCOME_SOURCES to incomeSources.count { !it.deleted },
+                                EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS to savingsGoals.count { !it.deleted },
+                                EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES to amortizationEntries.count { !it.deleted },
+                                EncryptedDocSerializer.COLLECTION_CATEGORIES to categories.count { !it.deleted },
+                                EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER to periodLedger.size
+                            )
 
-                            // Publish integrity fingerprint to device metadata
+                            val divergent = mutableListOf<String>()
+                            for ((collection, localCount) in localCounts) {
+                                val firestoreDocs = FirestoreDocService.readAllDocs(groupId, collection)
+                                val firestoreCount = firestoreDocs.count { doc ->
+                                    doc.getBoolean("deleted") != true
+                                }
+                                if (localCount != firestoreCount) {
+                                    android.util.Log.w("Integrity",
+                                        "$collection: local=$localCount firestore=$firestoreCount — reattaching")
+                                    docSync?.reattachListener(collection)
+                                    divergent.add(collection)
+                                }
+                            }
+                            if (divergent.isEmpty()) {
+                                android.util.Log.i("Integrity", "All collections match Firestore")
+                            } else {
+                                // Recompute cash after reattach settles
+                                recomputeCash()
+                            }
+
+                            // Update device metadata (lastSeen for online status + tombstone cleanup)
                             FirestoreService.updateDeviceMetadata(
                                 groupId, localDeviceId,
                                 syncVersion = 0L,
-                                fingerprintJson = integrityData,
                                 appSyncVersion = 2,
                                 minSyncVersion = 2
                             )
-
-                            android.util.Log.i("Integrity",
-                                "Published: txn=${transactions.count { !it.deleted }} " +
-                                "re=${recurringExpenses.count { !it.deleted }} " +
-                                "is=${incomeSources.count { !it.deleted }} " +
-                                "sg=${savingsGoals.count { !it.deleted }} " +
-                                "ae=${amortizationEntries.count { !it.deleted }} " +
-                                "cat=${categories.count { !it.deleted }} " +
-                                "ple=${periodLedger.size} " +
-                                "cash=$availableCash")
-
-                            // Compare with other devices (skip stale fingerprints —
-                            // SyncWorker updates every 15min, Android may delay to 30min+)
-                            val allDeviceRecords = FirestoreService.getDevices(groupId)
-                            val myData = org.json.JSONObject(integrityData)
-                            val maxFingerprintAge = 35 * 60 * 1000L // 35 min — allows for Android delays
-                            for (device in allDeviceRecords) {
-                                if (device.deviceId == localDeviceId) continue
-                                val remoteFp = device.fingerprintData ?: continue
-                                // Skip devices with stale fingerprints — likely just haven't checked in yet
-                                val fpAge = System.currentTimeMillis() - device.lastSeen
-                                if (fpAge > maxFingerprintAge) {
-                                    android.util.Log.i("Integrity", "Skipping ${device.deviceId.take(8)}: lastSeen ${fpAge / 60000}m ago (stale)")
-                                    continue
-                                }
-                                try {
-                                    val remote = org.json.JSONObject(remoteFp)
-
-                                    // Check record counts per collection
-                                    val divergentCollections = mutableListOf<String>()
-                                    if (remote.optInt("txnCount") != myData.optInt("txnCount"))
-                                        divergentCollections.add(EncryptedDocSerializer.COLLECTION_TRANSACTIONS)
-                                    if (remote.optInt("reCount") != myData.optInt("reCount"))
-                                        divergentCollections.add(EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES)
-                                    if (remote.optInt("isCount") != myData.optInt("isCount"))
-                                        divergentCollections.add(EncryptedDocSerializer.COLLECTION_INCOME_SOURCES)
-                                    if (remote.optInt("sgCount") != myData.optInt("sgCount"))
-                                        divergentCollections.add(EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS)
-                                    if (remote.optInt("aeCount") != myData.optInt("aeCount"))
-                                        divergentCollections.add(EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES)
-                                    if (remote.optInt("catCount") != myData.optInt("catCount"))
-                                        divergentCollections.add(EncryptedDocSerializer.COLLECTION_CATEGORIES)
-                                    if (remote.optInt("pleCount") != myData.optInt("pleCount"))
-                                        divergentCollections.add(EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER)
-
-                                    if (divergentCollections.isNotEmpty()) {
-                                        android.util.Log.w("Integrity",
-                                            "Divergence with ${device.deviceId}: ${divergentCollections.joinToString()}")
-                                        for (coll in divergentCollections) {
-                                            android.util.Log.w("Integrity",
-                                                "  $coll: local=${myData.optInt(
-                                                    when (coll) {
-                                                        EncryptedDocSerializer.COLLECTION_TRANSACTIONS -> "txnCount"
-                                                        EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES -> "reCount"
-                                                        EncryptedDocSerializer.COLLECTION_INCOME_SOURCES -> "isCount"
-                                                        EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS -> "sgCount"
-                                                        EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES -> "aeCount"
-                                                        EncryptedDocSerializer.COLLECTION_CATEGORIES -> "catCount"
-                                                        EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER -> "pleCount"
-                                                        else -> ""
-                                                    }
-                                                )} remote=${remote.optInt(
-                                                    when (coll) {
-                                                        EncryptedDocSerializer.COLLECTION_TRANSACTIONS -> "txnCount"
-                                                        EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES -> "reCount"
-                                                        EncryptedDocSerializer.COLLECTION_INCOME_SOURCES -> "isCount"
-                                                        EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS -> "sgCount"
-                                                        EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES -> "aeCount"
-                                                        EncryptedDocSerializer.COLLECTION_CATEGORIES -> "catCount"
-                                                        EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER -> "pleCount"
-                                                        else -> ""
-                                                    }
-                                                )} — reattaching")
-                                            docSync?.reattachListener(coll)
-                                        }
-                                    }
-
-                                    // Check cash divergence
-                                    val remoteCash = remote.optDouble("cash", 0.0)
-                                    val myCash = myData.optDouble("cash", 0.0)
-                                    if (kotlin.math.abs(remoteCash - myCash) > 0.01) {
-                                        android.util.Log.w("Integrity",
-                                            "Cash divergence: local=$myCash remote=$remoteCash — recomputing")
-                                        recomputeCash()
-                                    }
-                                } catch (e: Exception) {
-                                    android.util.Log.w("Integrity",
-                                        "Failed to parse fingerprint from ${device.deviceId}: ${e.message}")
-                                }
-                            }
                         } catch (e: Exception) {
                             android.util.Log.w("SyncLoop", "Health check failed", e)
                         }
