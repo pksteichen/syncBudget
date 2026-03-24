@@ -1233,6 +1233,13 @@ class MainActivity : ComponentActivity() {
                     } catch (e: Exception) {
                         android.util.Log.w("SyncLoop", "Tombstone cleanup failed: ${e.message}")
                     }
+
+                    // Clean up orphaned Cloud Storage receipt files (no matching ledger entry)
+                    try {
+                        com.syncbudget.app.data.sync.ImageLedgerService.purgeOrphanedCloudFiles(groupId)
+                    } catch (e: Exception) {
+                        android.util.Log.w("SyncLoop", "Orphan cloud cleanup failed: ${e.message}")
+                    }
                 }
 
                 syncStatus = "synced"

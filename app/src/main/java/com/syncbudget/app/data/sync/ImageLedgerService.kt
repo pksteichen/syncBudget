@@ -92,6 +92,44 @@ object ImageLedgerService {
         }
     }
 
+    /**
+     * Delete orphaned Cloud Storage files that have no matching ledger entry.
+     * Run by admin on app startup to clean up files left behind when
+     * ledger deletion succeeded but cloud deletion failed.
+     */
+    suspend fun purgeOrphanedCloudFiles(groupId: String): Int {
+        return try {
+            val storageRef = storage.reference.child("groups/$groupId/receipts")
+            val cloudFiles = withTimeout(TIMEOUT_MS) {
+                storageRef.listAll().await()
+            }
+            if (cloudFiles.items.isEmpty()) return 0
+
+            // Get all receipt IDs currently in the ledger
+            val ledger = getFullLedger(groupId)
+            val ledgerIds = ledger.map { it.receiptId }.toSet()
+
+            var purged = 0
+            for (item in cloudFiles.items) {
+                // File name is "{receiptId}.enc"
+                val receiptId = item.name.removeSuffix(".enc")
+                if (receiptId !in ledgerIds) {
+                    try {
+                        item.delete().await()
+                        purged++
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to delete orphaned file ${item.name}: ${e.message}")
+                    }
+                }
+            }
+            if (purged > 0) Log.i(TAG, "Purged $purged orphaned Cloud Storage files")
+            purged
+        } catch (e: Exception) {
+            Log.w(TAG, "Orphan scan failed: ${e.message}")
+            0
+        }
+    }
+
     // ── Image Ledger CRUD ───────────────────────────────────────
 
     private fun ledgerRef(groupId: String) =
