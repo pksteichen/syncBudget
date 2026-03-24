@@ -2558,7 +2558,16 @@ class MainActivity : ComponentActivity() {
                                 transactions[idx] = t.copy(
                                     deleted = true
                                 )
-                                saveTransactions()
+                                saveTransactions(listOf(transactions[idx]))
+                                // Clean up receipt photos (local + cloud)
+                                val receiptIds = listOfNotNull(t.receiptId1, t.receiptId2, t.receiptId3, t.receiptId4, t.receiptId5)
+                                if (receiptIds.isNotEmpty()) {
+                                    coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                        for (rid in receiptIds) {
+                                            com.syncbudget.app.data.sync.ReceiptManager.deleteReceiptFull(context, rid)
+                                        }
+                                    }
+                                }
                             }
                             recomputeCash()
                         },
@@ -2585,6 +2594,18 @@ class MainActivity : ComponentActivity() {
                             if (goalsChanged) saveSavingsGoals()
                             saveTransactions()
                             recomputeCash()
+                            // Clean up receipt photos for all deleted transactions
+                            val deletedReceiptIds = ids.flatMap { id ->
+                                val txn = transactions.find { it.id == id } ?: return@flatMap emptyList()
+                                listOfNotNull(txn.receiptId1, txn.receiptId2, txn.receiptId3, txn.receiptId4, txn.receiptId5)
+                            }
+                            if (deletedReceiptIds.isNotEmpty()) {
+                                coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                    for (rid in deletedReceiptIds) {
+                                        com.syncbudget.app.data.sync.ReceiptManager.deleteReceiptFull(context, rid)
+                                    }
+                                }
+                            }
                         },
                         onSerializeFullBackup = {
                             FullBackupSerializer.serialize(context)

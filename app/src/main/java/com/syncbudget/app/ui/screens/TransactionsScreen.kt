@@ -1106,7 +1106,7 @@ fun TransactionsScreen(
                                 onUpdateTransaction(updated)
                                 photoThumbRefreshKey++
                                 photoScope.launch(Dispatchers.IO) {
-                                    ReceiptManager.deleteLocalReceipt(txnContext, rid)
+                                    ReceiptManager.deleteReceiptFull(txnContext, rid)
                                 }
                             },
                             onPhotoRotated = { photoThumbRefreshKey++ },
@@ -3538,8 +3538,7 @@ fun TransactionDialog(
                                             }
                                             dialogThumbRefresh++
                                             kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
-                                                ReceiptManager.deleteLocalReceipt(context, rid)
-                                                ReceiptManager.removeFromPendingQueue(context, rid)
+                                                ReceiptManager.deleteReceiptFull(context, rid)
                                             }
                                         }
                                         dialogDeleteConfirmSlot = -1

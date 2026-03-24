@@ -199,6 +199,25 @@ object ReceiptManager {
         getThumbFile(context, receiptId).delete()
     }
 
+    /**
+     * Full receipt cleanup: local file + thumbnail + Cloud Storage + ledger entry.
+     * Call when a user explicitly removes a receipt from a transaction.
+     */
+    suspend fun deleteReceiptFull(context: Context, receiptId: String) {
+        // Local cleanup
+        deleteLocalReceipt(context, receiptId)
+        removeFromPendingQueue(context, receiptId)
+        // Cloud cleanup (groupId from prefs)
+        val groupId = context.getSharedPreferences("sync_engine", android.content.Context.MODE_PRIVATE)
+            .getString("groupId", null) ?: return
+        try {
+            ImageLedgerService.deleteFromCloud(groupId, receiptId)
+        } catch (_: Exception) {}
+        try {
+            ImageLedgerService.deleteLedgerEntry(groupId, receiptId)
+        } catch (_: Exception) {}
+    }
+
     // ── Encryption for Cloud Upload ─────────────────────────────
 
     /**
