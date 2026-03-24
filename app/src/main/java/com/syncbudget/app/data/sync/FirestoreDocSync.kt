@@ -276,6 +276,7 @@ class FirestoreDocSync(
                 }
                 val data = EncryptedDocSerializer.fieldUpdate(record, changedFields, encryptionKey, deviceId)
                 FirestoreDocService.updateFields(groupId, collection, docId, data)
+                recentPushes[stateKey] = System.currentTimeMillis()  // refresh after write
                 syncLog("Updated $stateKey: ${changedFields.size} fields [${changedFields.joinToString()}]")
             } else if (record is PeriodLedgerEntry) {
                 // Period ledger: create-if-absent (first writer wins).
@@ -294,6 +295,7 @@ class FirestoreDocSync(
                 // New record — use set() with all fields
                 val data = EncryptedDocSerializer.toFieldMap(record, encryptionKey, deviceId)
                 FirestoreDocService.writeDoc(groupId, collection, docId, data)
+                recentPushes[stateKey] = System.currentTimeMillis()  // refresh after write
                 syncLog("Set (new) $stateKey")
             }
             localPendingEdits[stateKey] = System.currentTimeMillis()
@@ -307,6 +309,7 @@ class FirestoreDocSync(
                 try {
                     val data = EncryptedDocSerializer.toFieldMap(record, encryptionKey, deviceId)
                     FirestoreDocService.writeDoc(groupId, collection, docId, data)
+                    recentPushes[stateKey] = System.currentTimeMillis()  // refresh after write
                     lastKnownState[stateKey] = record
                     localPendingEdits[stateKey] = System.currentTimeMillis()
                     persistPendingEdits()

@@ -126,9 +126,20 @@ object FullBackupSerializer {
                             categoryAmounts = categoryAmounts,
                             isUserCategorized = obj.optBoolean("isUserCategorized", false),
                             excludeFromBudget = obj.optBoolean("excludeFromBudget", false),
+                            isBudgetIncome = obj.optBoolean("isBudgetIncome", false),
                             linkedRecurringExpenseId = if (obj.has("linkedRecurringExpenseId") && !obj.isNull("linkedRecurringExpenseId")) obj.getInt("linkedRecurringExpenseId") else null,
                             linkedAmortizationEntryId = if (obj.has("linkedAmortizationEntryId") && !obj.isNull("linkedAmortizationEntryId")) obj.getInt("linkedAmortizationEntryId") else null,
-                            linkedIncomeSourceId = if (obj.has("linkedIncomeSourceId") && !obj.isNull("linkedIncomeSourceId")) obj.getInt("linkedIncomeSourceId") else null
+                            linkedIncomeSourceId = if (obj.has("linkedIncomeSourceId") && !obj.isNull("linkedIncomeSourceId")) obj.getInt("linkedIncomeSourceId") else null,
+                            linkedRecurringExpenseAmount = obj.optDouble("linkedRecurringExpenseAmount", 0.0).let { if (it.isNaN()) 0.0 else it },
+                            linkedIncomeSourceAmount = obj.optDouble("linkedIncomeSourceAmount", 0.0).let { if (it.isNaN()) 0.0 else it },
+                            amortizationAppliedAmount = obj.optDouble("amortizationAppliedAmount", 0.0).let { if (it.isNaN()) 0.0 else it },
+                            linkedSavingsGoalId = if (obj.has("linkedSavingsGoalId") && !obj.isNull("linkedSavingsGoalId")) obj.getInt("linkedSavingsGoalId") else null,
+                            linkedSavingsGoalAmount = obj.optDouble("linkedSavingsGoalAmount", 0.0).let { if (it.isNaN()) 0.0 else it },
+                            receiptId1 = if (obj.has("receiptId1") && !obj.isNull("receiptId1")) obj.getString("receiptId1") else null,
+                            receiptId2 = if (obj.has("receiptId2") && !obj.isNull("receiptId2")) obj.getString("receiptId2") else null,
+                            receiptId3 = if (obj.has("receiptId3") && !obj.isNull("receiptId3")) obj.getString("receiptId3") else null,
+                            receiptId4 = if (obj.has("receiptId4") && !obj.isNull("receiptId4")) obj.getString("receiptId4") else null,
+                            receiptId5 = if (obj.has("receiptId5") && !obj.isNull("receiptId5")) obj.getString("receiptId5") else null
                         )
                     )
                 } catch (e: Exception) {

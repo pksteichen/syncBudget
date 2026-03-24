@@ -3332,6 +3332,7 @@ class MainActivity : ComponentActivity() {
                                         matchPercent = matchPercent,
                                         matchDollar = matchDollar,
                                         matchChars = matchChars,
+                                        incomeMode = incomeMode.name,
                                         lastChangedBy = localDeviceId,
                                     )
                                     SharedSettingsRepository.save(context, sharedSettings)

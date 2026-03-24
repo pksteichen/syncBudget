@@ -269,7 +269,7 @@ fun serializeTransactionsXlsx(
 
 fun serializeTransactionsCsv(transactions: List<Transaction>): String {
     val sb = StringBuilder()
-    sb.appendLine("id,type,date,source,description,amount,categoryAmounts,isUserCategorized,isBudgetIncome,deviceId,deleted,linkedRecurringExpenseId,linkedAmortizationEntryId,linkedIncomeSourceId,excludeFromBudget")
+    sb.appendLine("id,type,date,source,description,amount,categoryAmounts,isUserCategorized,isBudgetIncome,deviceId,deleted,linkedRecurringExpenseId,linkedAmortizationEntryId,linkedIncomeSourceId,excludeFromBudget,linkedRecurringExpenseAmount,linkedIncomeSourceAmount,amortizationAppliedAmount,linkedSavingsGoalId,linkedSavingsGoalAmount,receiptId1,receiptId2,receiptId3,receiptId4,receiptId5")
     for (t in transactions) {
         val categoryAmountsStr = t.categoryAmounts.joinToString(";") { "${it.categoryId}:${it.amount}" }
         val escapedSource = "\"${t.source.replace("\"", "\"\"")}\""
@@ -278,7 +278,13 @@ fun serializeTransactionsCsv(transactions: List<Transaction>): String {
         val linkedRecStr = t.linkedRecurringExpenseId?.toString() ?: ""
         val linkedAmortStr = t.linkedAmortizationEntryId?.toString() ?: ""
         val linkedIncomeStr = t.linkedIncomeSourceId?.toString() ?: ""
-        sb.appendLine("${t.id},${t.type.name},${t.date},$escapedSource,$escapedDescription,${t.amount},\"$categoryAmountsStr\",${t.isUserCategorized},${t.isBudgetIncome},$escapedDeviceId,${t.deleted},$linkedRecStr,$linkedAmortStr,$linkedIncomeStr,${t.excludeFromBudget}")
+        val linkedSgStr = t.linkedSavingsGoalId?.toString() ?: ""
+        val r1 = t.receiptId1?.let { "\"${it.replace("\"", "\"\"")}\"" } ?: ""
+        val r2 = t.receiptId2?.let { "\"${it.replace("\"", "\"\"")}\"" } ?: ""
+        val r3 = t.receiptId3?.let { "\"${it.replace("\"", "\"\"")}\"" } ?: ""
+        val r4 = t.receiptId4?.let { "\"${it.replace("\"", "\"\"")}\"" } ?: ""
+        val r5 = t.receiptId5?.let { "\"${it.replace("\"", "\"\"")}\"" } ?: ""
+        sb.appendLine("${t.id},${t.type.name},${t.date},$escapedSource,$escapedDescription,${t.amount},\"$categoryAmountsStr\",${t.isUserCategorized},${t.isBudgetIncome},$escapedDeviceId,${t.deleted},$linkedRecStr,$linkedAmortStr,$linkedIncomeStr,${t.excludeFromBudget},${t.linkedRecurringExpenseAmount},${t.linkedIncomeSourceAmount},${t.amortizationAppliedAmount},$linkedSgStr,${t.linkedSavingsGoalAmount},$r1,$r2,$r3,$r4,$r5")
     }
     return sb.toString()
 }
@@ -938,6 +944,16 @@ fun parseSyncBudgetCsv(reader: BufferedReader, existingIds: Set<Int>): CsvParseR
                 val linkedAmortizationEntryId = if (fields.size > linkBase + 1) fields[linkBase + 1].trim().toIntOrNull() else null
                 val linkedIncomeSourceId = if (fields.size > linkBase + 2) fields[linkBase + 2].trim().toIntOrNull() else null
                 val excludeFromBudget = if (fields.size > linkBase + 3) fields[linkBase + 3].trim().toBooleanStrictOrNull() ?: false else false
+                val linkedRecurringExpenseAmount = if (fields.size > linkBase + 4) fields[linkBase + 4].trim().toDoubleOrNull() ?: 0.0 else 0.0
+                val linkedIncomeSourceAmount = if (fields.size > linkBase + 5) fields[linkBase + 5].trim().toDoubleOrNull() ?: 0.0 else 0.0
+                val amortizationAppliedAmount = if (fields.size > linkBase + 6) fields[linkBase + 6].trim().toDoubleOrNull() ?: 0.0 else 0.0
+                val linkedSavingsGoalId = if (fields.size > linkBase + 7) fields[linkBase + 7].trim().toIntOrNull() else null
+                val linkedSavingsGoalAmount = if (fields.size > linkBase + 8) fields[linkBase + 8].trim().toDoubleOrNull() ?: 0.0 else 0.0
+                val receiptId1 = if (fields.size > linkBase + 9) fields[linkBase + 9].trim().ifEmpty { null } else null
+                val receiptId2 = if (fields.size > linkBase + 10) fields[linkBase + 10].trim().ifEmpty { null } else null
+                val receiptId3 = if (fields.size > linkBase + 11) fields[linkBase + 11].trim().ifEmpty { null } else null
+                val receiptId4 = if (fields.size > linkBase + 12) fields[linkBase + 12].trim().ifEmpty { null } else null
+                val receiptId5 = if (fields.size > linkBase + 13) fields[linkBase + 13].trim().ifEmpty { null } else null
 
                 transactions.add(
                     Transaction(
@@ -954,6 +970,16 @@ fun parseSyncBudgetCsv(reader: BufferedReader, existingIds: Set<Int>): CsvParseR
                         linkedRecurringExpenseId = linkedRecurringExpenseId,
                         linkedAmortizationEntryId = linkedAmortizationEntryId,
                         linkedIncomeSourceId = linkedIncomeSourceId,
+                        linkedRecurringExpenseAmount = linkedRecurringExpenseAmount,
+                        linkedIncomeSourceAmount = linkedIncomeSourceAmount,
+                        amortizationAppliedAmount = amortizationAppliedAmount,
+                        linkedSavingsGoalId = linkedSavingsGoalId,
+                        linkedSavingsGoalAmount = linkedSavingsGoalAmount,
+                        receiptId1 = receiptId1,
+                        receiptId2 = receiptId2,
+                        receiptId3 = receiptId3,
+                        receiptId4 = receiptId4,
+                        receiptId5 = receiptId5,
                         deviceId = deviceId,
                         deleted = deleted
                     )

@@ -4,6 +4,8 @@ import android.util.Log
 import com.syncbudget.app.data.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.launch
 
 /**
@@ -25,6 +27,7 @@ object SyncWriteHelper {
     }
 
     fun dispose() {
+        scope.coroutineContext[Job]?.cancelChildren()
         docSync = null
         Log.i(TAG, "Disposed")
     }
