@@ -1978,28 +1978,35 @@ class MainActivity : ComponentActivity() {
                         val key = GroupManager.getEncryptionKey(context) ?: return@launch
                         syncStatus = "syncing"
                         try {
-                            val docSync = FirestoreDocSync(context, gId, localDeviceId, key)
-                            docSync.pushAllRecords(
-                                transactions.toList(),
-                                recurringExpenses.toList(),
-                                incomeSources.toList(),
-                                savingsGoals.toList(),
-                                amortizationEntries.toList(),
-                                categories.toList(),
-                                periodLedger.toList(),
-                                sharedSettings
-                            )
+                            // Ensure listeners are alive
+                            if (docSync != null && !docSync.isListening) {
+                                docSync.startListeners()
+                            }
+                            // Refresh device list
+                            syncDevices = GroupManager.getDevices(gId)
+                            isSyncAdmin = GroupManager.isAdmin(context)
+                            // Trigger receipt photo sync (paid users only)
+                            if (isPaidUser || isSubscriber) {
+                                try {
+                                    val deviceRecords = FirestoreService.getDevices(gId)
+                                    val receiptSync = com.syncbudget.app.data.sync.ReceiptSyncManager(
+                                        context, gId, localDeviceId, key
+                                    )
+                                    val updatedTxns = receiptSync.syncReceipts(transactions.toList(), deviceRecords)
+                                    if (updatedTxns != transactions.toList()) {
+                                        transactions.clear()
+                                        transactions.addAll(updatedTxns)
+                                        TransactionRepository.save(context, updatedTxns)
+                                    }
+                                } catch (e: Exception) {
+                                    android.util.Log.w("SyncNow", "Receipt sync failed: ${e.message}")
+                                }
+                            }
                             syncStatus = "synced"
                             syncErrorMessage = null
-                            syncProgressMessage = null
                             lastSyncActivity = System.currentTimeMillis()
-                            try {
-                                syncDevices = GroupManager.getDevices(gId)
-                                isSyncAdmin = GroupManager.isAdmin(context)
-                            } catch (_: Exception) {}
                         } catch (_: Exception) {
                             syncStatus = "error"
-                            syncProgressMessage = null
                         }
                     }
                 }
