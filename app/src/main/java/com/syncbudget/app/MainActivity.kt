@@ -58,6 +58,7 @@ import com.syncbudget.app.data.sync.SyncIdGenerator
 import com.syncbudget.app.data.sync.FirestoreDocSync
 import com.syncbudget.app.data.sync.SyncWriteHelper
 import com.syncbudget.app.data.sync.EncryptedDocSerializer
+import com.syncbudget.app.data.sync.FirestoreDocService
 import kotlinx.coroutines.awaitCancellation
 import com.syncbudget.app.data.sync.SubscriptionReminderReceiver
 import com.syncbudget.app.data.sync.SyncWorker
@@ -1198,6 +1199,39 @@ class MainActivity : ComponentActivity() {
                     } catch (e: Exception) {
                         android.util.Log.e("SyncLoop", "Per-field encryption migration failed", e)
                         syncProgressMessage = null
+                    }
+                }
+
+                // Admin: clean up Firestore tombstones that all devices have seen.
+                // Finds the oldest lastSeen across all devices, then deletes
+                // tombstoned docs whose updatedAt is older than that minus 1 day buffer.
+                if (isSyncAdmin) {
+                    try {
+                        val deviceRecords = FirestoreService.getDevices(groupId)
+                        if (deviceRecords.size >= 2) {
+                            val oldestLastSeen = deviceRecords.minOf { it.lastSeen }
+                            val cutoff = oldestLastSeen - 24 * 60 * 60 * 1000L // 1-day buffer
+                            if (cutoff > 0) {
+                                var totalPurged = 0
+                                for (collection in EncryptedDocSerializer.ALL_COLLECTIONS) {
+                                    val docs = FirestoreDocService.readAllDocs(groupId, collection)
+                                    for (doc in docs) {
+                                        val deleted = doc.getBoolean("deleted") ?: false
+                                        if (!deleted) continue
+                                        val updatedAt = doc.getTimestamp("updatedAt")?.toDate()?.time ?: continue
+                                        if (updatedAt < cutoff) {
+                                            FirestoreDocService.deleteDoc(groupId, collection, doc.id)
+                                            totalPurged++
+                                        }
+                                    }
+                                }
+                                if (totalPurged > 0) {
+                                    android.util.Log.i("SyncLoop", "Purged $totalPurged old tombstones from Firestore")
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.w("SyncLoop", "Tombstone cleanup failed: ${e.message}")
                     }
                 }
 
