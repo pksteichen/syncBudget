@@ -2,6 +2,7 @@ package com.syncbudget.app.widget
 
 import android.content.Context
 import android.os.Bundle
+import com.syncbudget.app.data.sync.SyncWriteHelper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.core.RepeatMode
@@ -921,6 +922,7 @@ class WidgetTransactionActivity : ComponentActivity() {
             transactions.add(txn)
         }
         TransactionRepository.save(context, transactions)
+        SyncWriteHelper.pushTransaction(txn)
 
         // Update available cash — mirror BudgetCalculator.recomputeAvailableCash logic
         val incomeMode = try {

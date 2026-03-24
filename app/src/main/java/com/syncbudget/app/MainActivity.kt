@@ -2077,6 +2077,8 @@ class MainActivity : ComponentActivity() {
                             if (isSyncConfigured) {
                                 sharedSettings = sharedSettings.copy(matchDays = it, lastChangedBy = localDeviceId)
                                 SharedSettingsRepository.save(context, sharedSettings)
+                                SyncWriteHelper.pushSharedSettings(sharedSettings)
+                                lastSyncActivity = System.currentTimeMillis()
                             }
                         },
                         matchPercent = matchPercent,
@@ -2085,6 +2087,8 @@ class MainActivity : ComponentActivity() {
                             if (isSyncConfigured) {
                                 sharedSettings = sharedSettings.copy(matchPercent = it, lastChangedBy = localDeviceId)
                                 SharedSettingsRepository.save(context, sharedSettings)
+                                SyncWriteHelper.pushSharedSettings(sharedSettings)
+                                lastSyncActivity = System.currentTimeMillis()
                             }
                         },
                         matchDollar = matchDollar,
@@ -2093,6 +2097,8 @@ class MainActivity : ComponentActivity() {
                             if (isSyncConfigured) {
                                 sharedSettings = sharedSettings.copy(matchDollar = it, lastChangedBy = localDeviceId)
                                 SharedSettingsRepository.save(context, sharedSettings)
+                                SyncWriteHelper.pushSharedSettings(sharedSettings)
+                                lastSyncActivity = System.currentTimeMillis()
                             }
                         },
                         matchChars = matchChars,
@@ -2101,6 +2107,8 @@ class MainActivity : ComponentActivity() {
                             if (isSyncConfigured) {
                                 sharedSettings = sharedSettings.copy(matchChars = it, lastChangedBy = localDeviceId)
                                 SharedSettingsRepository.save(context, sharedSettings)
+                                SyncWriteHelper.pushSharedSettings(sharedSettings)
+                                lastSyncActivity = System.currentTimeMillis()
                             }
                         },
                         chartPalette = chartPalette,
@@ -2112,6 +2120,8 @@ class MainActivity : ComponentActivity() {
                             if (isSyncConfigured) {
                                 sharedSettings = sharedSettings.copy(weekStartSunday = it, lastChangedBy = localDeviceId)
                                 SharedSettingsRepository.save(context, sharedSettings)
+                                SyncWriteHelper.pushSharedSettings(sharedSettings)
+                                lastSyncActivity = System.currentTimeMillis()
                             }
                         },
                         onCurrencyChange = {
@@ -2120,6 +2130,8 @@ class MainActivity : ComponentActivity() {
                             if (isSyncConfigured) {
                                 sharedSettings = sharedSettings.copy(currency = it, lastChangedBy = localDeviceId)
                                 SharedSettingsRepository.save(context, sharedSettings)
+                                SyncWriteHelper.pushSharedSettings(sharedSettings)
+                                lastSyncActivity = System.currentTimeMillis()
                             }
                         },
                         isSyncConfigured = isSyncConfigured,
@@ -2233,6 +2245,8 @@ class MainActivity : ComponentActivity() {
                                 lastChangedBy = localDeviceId
                             )
                             SharedSettingsRepository.save(context, sharedSettings)
+                            SyncWriteHelper.pushSharedSettings(sharedSettings)
+                            lastSyncActivity = System.currentTimeMillis()
                         },
                         receiptCacheSize = remember(isPaidUser) {
                             com.syncbudget.app.data.sync.ReceiptManager.getTotalStorageBytes(context)
@@ -2901,6 +2915,8 @@ class MainActivity : ComponentActivity() {
                             if (isSyncConfigured) {
                                 sharedSettings = sharedSettings.copy(budgetPeriod = it.name, lastChangedBy = localDeviceId)
                                 SharedSettingsRepository.save(context, sharedSettings)
+                                SyncWriteHelper.pushSharedSettings(sharedSettings)
+                                lastSyncActivity = System.currentTimeMillis()
                             }
                         },
                         resetHour = resetHour,
@@ -2909,6 +2925,8 @@ class MainActivity : ComponentActivity() {
                             if (isSyncConfigured) {
                                 sharedSettings = sharedSettings.copy(resetHour = it, lastChangedBy = localDeviceId)
                                 SharedSettingsRepository.save(context, sharedSettings)
+                                SyncWriteHelper.pushSharedSettings(sharedSettings)
+                                lastSyncActivity = System.currentTimeMillis()
                             }
                         },
                         resetDayOfWeek = resetDayOfWeek,
@@ -2927,6 +2945,8 @@ class MainActivity : ComponentActivity() {
                                     lastChangedBy = localDeviceId
                                 )
                                 SharedSettingsRepository.save(context, sharedSettings)
+                                SyncWriteHelper.pushSharedSettings(sharedSettings)
+                                lastSyncActivity = System.currentTimeMillis()
                             }
                         },
                         resetDayOfMonth = resetDayOfMonth,
@@ -2935,6 +2955,8 @@ class MainActivity : ComponentActivity() {
                             if (isSyncConfigured) {
                                 sharedSettings = sharedSettings.copy(resetDayOfMonth = it, lastChangedBy = localDeviceId)
                                 SharedSettingsRepository.save(context, sharedSettings)
+                                SyncWriteHelper.pushSharedSettings(sharedSettings)
+                                lastSyncActivity = System.currentTimeMillis()
                             }
                         },
                         safeBudgetAmount = safeBudgetAmount,
@@ -2954,6 +2976,8 @@ class MainActivity : ComponentActivity() {
                             if (isSyncConfigured) {
                                 sharedSettings = sharedSettings.copy(isManualBudgetEnabled = enabled, lastChangedBy = localDeviceId)
                                 SharedSettingsRepository.save(context, sharedSettings)
+                                SyncWriteHelper.pushSharedSettings(sharedSettings)
+                                lastSyncActivity = System.currentTimeMillis()
                             }
                         },
                         onManualBudgetAmountChange = { amount ->
@@ -2962,6 +2986,8 @@ class MainActivity : ComponentActivity() {
                             if (isSyncConfigured) {
                                 sharedSettings = sharedSettings.copy(manualBudgetAmount = amount, lastChangedBy = localDeviceId)
                                 SharedSettingsRepository.save(context, sharedSettings)
+                                SyncWriteHelper.pushSharedSettings(sharedSettings)
+                                lastSyncActivity = System.currentTimeMillis()
                             }
                         },
                         budgetStartDate = budgetStartDate?.format(DateTimeFormatter.ofPattern(dateFormatPattern)),
@@ -2991,6 +3017,8 @@ class MainActivity : ComponentActivity() {
                                     lastChangedBy = localDeviceId
                                 )
                                 SharedSettingsRepository.save(context, sharedSettings)
+                                SyncWriteHelper.pushSharedSettings(sharedSettings)
+                                lastSyncActivity = System.currentTimeMillis()
                             }
                             recomputeCash()
                             prefs.edit()
@@ -3008,6 +3036,8 @@ class MainActivity : ComponentActivity() {
                             if (isSyncConfigured) {
                                 sharedSettings = sharedSettings.copy(incomeMode = modeName, lastChangedBy = localDeviceId)
                                 SharedSettingsRepository.save(context, sharedSettings)
+                                SyncWriteHelper.pushSharedSettings(sharedSettings)
+                                lastSyncActivity = System.currentTimeMillis()
                             }
                             recomputeCash()
                         },
@@ -3031,6 +3061,8 @@ class MainActivity : ComponentActivity() {
                                 lastChangedBy = localDeviceId
                             )
                             SharedSettingsRepository.save(context, sharedSettings)
+                            SyncWriteHelper.pushSharedSettings(sharedSettings)
+                            lastSyncActivity = System.currentTimeMillis()
                         },
                         showAttribution = sharedSettings.showAttribution,
                         onShowAttributionChange = { enabled ->
@@ -3039,6 +3071,8 @@ class MainActivity : ComponentActivity() {
                                 lastChangedBy = localDeviceId
                             )
                             SharedSettingsRepository.save(context, sharedSettings)
+                            SyncWriteHelper.pushSharedSettings(sharedSettings)
+                            lastSyncActivity = System.currentTimeMillis()
                         },
                         orphanedDeviceIds = remember(transactions.toList(), syncDevices, localDeviceId, sharedSettings.deviceRoster) {
                             val roster = try {
@@ -3064,6 +3098,8 @@ class MainActivity : ComponentActivity() {
                                 lastChangedBy = localDeviceId
                             )
                             SharedSettingsRepository.save(context, sharedSettings)
+                            SyncWriteHelper.pushSharedSettings(sharedSettings)
+                            lastSyncActivity = System.currentTimeMillis()
                         },
                         onPurgeStaleRoster = {
                             val txnDeviceIds = transactions.toList()
@@ -3083,6 +3119,8 @@ class MainActivity : ComponentActivity() {
                                     lastChangedBy = localDeviceId
                                 )
                                 SharedSettingsRepository.save(context, sharedSettings)
+                                SyncWriteHelper.pushSharedSettings(sharedSettings)
+                                lastSyncActivity = System.currentTimeMillis()
                             }
                         },
                         staleDays = staleDays,
@@ -3370,6 +3408,8 @@ class MainActivity : ComponentActivity() {
                                         lastChangedBy = localDeviceId
                                     )
                                     SharedSettingsRepository.save(context, sharedSettings)
+                                    SyncWriteHelper.pushSharedSettings(sharedSettings)
+                                    lastSyncActivity = System.currentTimeMillis()
                                 } catch (_: Exception) {}
                             }
                         },
