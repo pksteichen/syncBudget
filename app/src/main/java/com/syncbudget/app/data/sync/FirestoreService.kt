@@ -285,13 +285,32 @@ object FirestoreService {
         onProgress?.invoke("Notifying devices…")
         groupRef.set(mapOf("status" to "dissolved"), SetOptions.merge()).await()
 
-        // Delete subcollections in paginated batches to avoid downloading
-        // huge payloads (e.g. 600+ encrypted delta documents).
-        val labels = mapOf("deltas" to "sync history", "devices" to "devices", "snapshots" to "snapshots")
-        for (subCollection in listOf("deltas", "devices", "snapshots")) {
-            onProgress?.invoke("Removing ${labels[subCollection]}…")
+        // Delete all subcollections in paginated batches
+        val allSubCollections = listOf(
+            // Firestore-native sync collections
+            "transactions", "recurringExpenses", "incomeSources",
+            "savingsGoals", "amortizationEntries", "categories",
+            "periodLedger", "sharedSettings",
+            // Group management
+            "devices", "imageLedger", "adminClaim",
+            // Legacy CRDT (may still exist from old groups)
+            "deltas", "snapshots"
+        )
+        for (subCollection in allSubCollections) {
+            onProgress?.invoke("Removing $subCollection…")
             deleteSubcollection(groupRef.collection(subCollection), onProgress = onProgress)
         }
+
+        // Delete Cloud Storage receipt files
+        try {
+            onProgress?.invoke("Removing receipt photos…")
+            val storageRef = com.google.firebase.storage.FirebaseStorage.getInstance()
+                .reference.child("groups/$groupId/receipts")
+            val items = storageRef.listAll().await()
+            for (item in items.items) {
+                try { item.delete().await() } catch (_: Exception) {}
+            }
+        } catch (_: Exception) {}
 
         // Delete the group document itself
         onProgress?.invoke("Finalizing…")
