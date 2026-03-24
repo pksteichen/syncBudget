@@ -66,6 +66,45 @@ class SyncWorker(
                 fcmPrefs.edit().putBoolean("fcm_debug_requested", false).apply()
             }
 
+            // Update device metadata + integrity fingerprint (even when app is backgrounded)
+            val groupId = syncPrefs.getString("groupId", null)
+            val deviceId = SyncIdGenerator.getOrCreateDeviceId(applicationContext)
+            if (groupId != null) {
+                try {
+                    // Load current data for record counts
+                    val txnCount = com.syncbudget.app.data.TransactionRepository.load(applicationContext).count { !it.deleted }
+                    val reCount = com.syncbudget.app.data.RecurringExpenseRepository.load(applicationContext).count { !it.deleted }
+                    val isCount = com.syncbudget.app.data.IncomeSourceRepository.load(applicationContext).count { !it.deleted }
+                    val sgCount = com.syncbudget.app.data.SavingsGoalRepository.load(applicationContext).count { !it.deleted }
+                    val aeCount = com.syncbudget.app.data.AmortizationRepository.load(applicationContext).count { !it.deleted }
+                    val catCount = com.syncbudget.app.data.CategoryRepository.load(applicationContext).count { !it.deleted }
+                    val pleCount = PeriodLedgerRepository.load(applicationContext).size
+                    val cash = applicationContext.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+                        .let { p -> p.getString("availableCash", null)?.toDoubleOrNull() ?: 0.0 }
+
+                    val fingerprint = org.json.JSONObject().apply {
+                        put("txnCount", txnCount)
+                        put("reCount", reCount)
+                        put("isCount", isCount)
+                        put("sgCount", sgCount)
+                        put("aeCount", aeCount)
+                        put("catCount", catCount)
+                        put("pleCount", pleCount)
+                        put("cash", cash)
+                    }.toString()
+
+                    FirestoreService.updateDeviceMetadata(
+                        groupId, deviceId,
+                        syncVersion = 0L,
+                        fingerprintJson = fingerprint,
+                        appSyncVersion = 2,
+                        minSyncVersion = 2
+                    )
+                } catch (e: Exception) {
+                    android.util.Log.w("SyncWorker", "Metadata update failed: ${e.message}")
+                }
+            }
+
             // Update widget
             com.syncbudget.app.widget.BudgetWidgetProvider.updateAllWidgets(applicationContext)
 

@@ -773,7 +773,7 @@ fun TransactionsScreen(
                     colors = ButtonDefaults.outlinedButtonColors(
                         contentColor = MaterialTheme.colorScheme.onBackground
                     ),
-                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 3.dp)
+                    contentPadding = PaddingValues(horizontal = 7.dp, vertical = 3.dp)
                 ) {
                     Text(
                         text = when (viewFilter) {
@@ -785,7 +785,7 @@ fun TransactionsScreen(
                             ViewFilter.NOT_VERIFIED -> S.transactions.notVerifiedFilter
                             ViewFilter.PHOTOS -> S.transactions.photosFilter
                         },
-                        fontSize = 20.sp
+                        fontSize = 18.sp
                     )
                 }
 
@@ -805,7 +805,7 @@ fun TransactionsScreen(
                     colors = ButtonDefaults.outlinedButtonColors(
                         contentColor = MaterialTheme.colorScheme.onBackground
                     ),
-                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 3.dp)
+                    contentPadding = PaddingValues(horizontal = 7.dp, vertical = 3.dp)
                 ) {
                     Text(
                         text = when (sortMode) {
@@ -815,7 +815,7 @@ fun TransactionsScreen(
                             SortMode.AMOUNT_ASC -> S.transactions.sortAmountAsc
                             SortMode.CATEGORY -> S.transactions.sortCategory
                         },
-                        fontSize = 20.sp
+                        fontSize = 18.sp
                     )
                 }
 
@@ -4323,13 +4323,13 @@ fun TransactionDialog(
 
                                 if (selectedCats.size == 1) {
                                     val amt = singleAmountText.toDoubleOrNull()
-                                    if (amt == null || amt <= 0) { showValidation = true; return@DialogPrimaryButton }
+                                    if (amt == null || amt < 0) { showValidation = true; return@DialogPrimaryButton }
                                     totalAmount = amt
                                     catAmounts = listOf(CategoryAmount(selectedCats[0].id, amt))
                                 } else {
                                     if (usePercentage) {
                                         val total = totalAmountText.toDoubleOrNull() ?: return@DialogPrimaryButton
-                                        if (total <= 0) return@DialogPrimaryButton
+                                        if (total < 0) return@DialogPrimaryButton
                                         catAmounts = selectedCats.mapNotNull { cat ->
                                             val pct = (categoryAmountTexts[cat.id] ?: "").toIntOrNull()
                                             if (pct != null && pct > 0) CategoryAmount(cat.id, total * pct / 100.0)
