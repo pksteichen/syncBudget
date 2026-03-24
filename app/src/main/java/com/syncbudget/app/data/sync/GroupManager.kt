@@ -140,8 +140,11 @@ object GroupManager {
             .remove("lastSnapshotVersion")
             .remove("lastSuccessfulSync")
             .remove("lastIntegrityCheckTime")
+            .remove("lastPushedClock")
+            .remove("lastSyncVersion")
             .remove("catIdRemap")
             .remove("syncDirty")
+            .remove("migration_native_docs_done")
             .apply()
         // Also clear from encrypted prefs
         try { SecurePrefs.get(context).edit().remove("encryptionKey").commit() } catch (_: Exception) {}

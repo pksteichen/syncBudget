@@ -2395,14 +2395,16 @@ class MainActivity : ComponentActivity() {
                                             GroupManager.dissolveGroup(context, oldGroupId)
                                         } catch (_: Exception) {}
                                         val newGroup = GroupManager.createGroup(context)
-                                        // Register admin device and initialize group doc
+                                        // Initialize group doc BEFORE registering device
+                                        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                        db.collection("groups").document(newGroup.groupId)
+                                            .set(mapOf("nextDeltaVersion" to 0L, "createdAt" to System.currentTimeMillis(), "lastActivity" to System.currentTimeMillis()))
+                                            .await()
+                                        // Register admin device
                                         FirestoreService.registerDevice(
                                             newGroup.groupId, localDeviceId,
                                             GroupManager.getDeviceName(context), isAdmin = true
                                         )
-                                        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                                        db.collection("groups").document(newGroup.groupId)
-                                            .set(mapOf("nextDeltaVersion" to 1L, "createdAt" to System.currentTimeMillis(), "lastActivity" to System.currentTimeMillis()))
                                         isSyncConfigured = true
                                         syncGroupId = newGroup.groupId
                                         isSyncAdmin = true
@@ -2903,6 +2905,11 @@ class MainActivity : ComponentActivity() {
                                     isSyncConfigured = true
                                     syncStatus = "syncing"
 
+                                    // Initialize group doc BEFORE registering device
+                                    val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                    db.collection("groups").document(info.groupId)
+                                        .set(mapOf("nextDeltaVersion" to 0L, "createdAt" to System.currentTimeMillis(), "lastActivity" to System.currentTimeMillis()))
+                                        .await()
                                     // Register this device as admin
                                     FirestoreService.registerDevice(
                                         info.groupId,
@@ -2910,10 +2917,6 @@ class MainActivity : ComponentActivity() {
                                         nickname,
                                         isAdmin = true
                                     )
-                                    // Initialize group doc with nextDeltaVersion and lastActivity for TTL
-                                    val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                                    db.collection("groups").document(info.groupId)
-                                        .set(mapOf("nextDeltaVersion" to 1L, "createdAt" to System.currentTimeMillis(), "lastActivity" to System.currentTimeMillis()))
                                     // Initialize SharedSettings from current app_prefs
                                     sharedSettings = SharedSettings(
                                         currency = currencySymbol,

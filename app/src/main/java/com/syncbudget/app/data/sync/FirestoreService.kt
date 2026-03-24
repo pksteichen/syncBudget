@@ -148,7 +148,10 @@ object FirestoreService {
 
     suspend fun updateGroupActivity(groupId: String) = withTimeout(OP_TIMEOUT_MS) {
         db.collection("groups").document(groupId)
-            .set(mapOf("lastActivity" to FieldValue.serverTimestamp()), SetOptions.merge())
+            .set(mapOf(
+                "lastActivity" to FieldValue.serverTimestamp(),
+                "nextDeltaVersion" to 0L  // required by Firestore rules for create
+            ), SetOptions.merge())
             .await()
     }
 
