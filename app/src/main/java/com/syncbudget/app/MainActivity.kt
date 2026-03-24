@@ -1166,6 +1166,16 @@ class MainActivity : ComponentActivity() {
                         syncPrefs.edit().putBoolean("syncDirty", false).apply()
                     }
 
+                    // Ensure listeners are alive — restart if they died
+                    if (docSync != null && !docSync.isListening) {
+                        try {
+                            docSync.startListeners()
+                            android.util.Log.i("SyncLoop", "Restarted dead listeners")
+                        } catch (e: Exception) {
+                            android.util.Log.w("SyncLoop", "Failed to restart listeners: ${e.message}")
+                        }
+                    }
+
                     // Light health check every ~60 seconds (12 * 5s):
                     // update device metadata, refresh device list, receipt sync
                     if (healthCheckCounter % 12 == 0) {
