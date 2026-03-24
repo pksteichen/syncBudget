@@ -1138,10 +1138,27 @@ class MainActivity : ComponentActivity() {
                         }
 
                         // Light health check every ~60 seconds (12 * 5s):
-                        // update device metadata + refresh device list
+                        // update device metadata, refresh device list, receipt sync
                         if (healthCheckCounter % 12 == 0) {
                             try {
                                 syncDevices = GroupManager.getDevices(groupId)
+                                // Receipt photo sync (paid users only)
+                                if (isPaidUser || isSubscriber) {
+                                    try {
+                                        val deviceRecords = FirestoreService.getDevices(groupId)
+                                        val receiptSync = com.syncbudget.app.data.sync.ReceiptSyncManager(
+                                            context, groupId, localDeviceId, key
+                                        )
+                                        val updatedTxns = receiptSync.syncReceipts(transactions.toList(), deviceRecords)
+                                        if (updatedTxns != transactions.toList()) {
+                                            transactions.clear()
+                                            transactions.addAll(updatedTxns)
+                                            TransactionRepository.save(context, updatedTxns)
+                                        }
+                                    } catch (e: Exception) {
+                                        android.util.Log.w("SyncLoop", "Receipt sync failed: ${e.message}")
+                                    }
+                                }
                                 isSyncAdmin = GroupManager.isAdmin(context)
                                 // Update device metadata — keep appSyncVersion=2
                                 // to avoid triggering "update_required" in old
