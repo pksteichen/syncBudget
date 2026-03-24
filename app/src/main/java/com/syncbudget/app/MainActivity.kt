@@ -854,13 +854,199 @@ class MainActivity : ComponentActivity() {
                 onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
             }
 
-            // Firestore-native sync — real-time listeners replace polling loop.
+            // Persistent Firestore-native sync — listener lifecycle is tied to
+            // the sync group identity (syncGroupId), NOT to isSyncConfigured.
+            // This prevents listener stop/restart when isSyncConfigured toggles
+            // briefly (e.g. recomposition), avoiding Firestore re-delivering
+            // all cached documents and the associated decryption cost.
+
+            // Create docSync instance keyed on group identity. Survives across
+            // isSyncConfigured toggles as long as the group stays the same.
+            val docSync = remember(syncGroupId) {
+                val gid = syncGroupId ?: return@remember null
+                val key = GroupManager.getEncryptionKey(context) ?: return@remember null
+                FirestoreDocSync(context, gid, localDeviceId, key)
+            }
+
+            // Listener lifecycle: starts when docSync is created (group joined),
+            // stops only when docSync changes (group left/dissolved) or activity destroyed.
+            DisposableEffect(docSync) {
+                if (docSync != null) {
+                    SyncWriteHelper.initialize(docSync)
+
+                    // Listener callback: update in-memory state when remote changes arrive.
+                    // Events arrive batched per collection — apply all, then save once.
+                    // All referenced variables are Compose mutable state holders (stable
+                    // references), so this callback always reads current values.
+                    docSync.onBatchChanged = { events ->
+                        try {
+                            val changedCollections = mutableSetOf<String>()
+                            for (event in events) {
+                                changedCollections.add(event.collection)
+                                when (event.collection) {
+                                    EncryptedDocSerializer.COLLECTION_TRANSACTIONS -> {
+                                        val txn = event.record as Transaction
+                                        val idx = transactions.indexOfFirst { it.id == txn.id }
+                                        if (idx >= 0) transactions[idx] = txn else transactions.add(txn)
+                                    }
+                                    EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES -> {
+                                        val re = event.record as RecurringExpense
+                                        val idx = recurringExpenses.indexOfFirst { it.id == re.id }
+                                        if (idx >= 0) recurringExpenses[idx] = re else recurringExpenses.add(re)
+                                    }
+                                    EncryptedDocSerializer.COLLECTION_INCOME_SOURCES -> {
+                                        val src = event.record as IncomeSource
+                                        val idx = incomeSources.indexOfFirst { it.id == src.id }
+                                        if (idx >= 0) incomeSources[idx] = src else incomeSources.add(src)
+                                    }
+                                    EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS -> {
+                                        val sg = event.record as SavingsGoal
+                                        val idx = savingsGoals.indexOfFirst { it.id == sg.id }
+                                        if (idx >= 0) savingsGoals[idx] = sg else savingsGoals.add(sg)
+                                    }
+                                    EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES -> {
+                                        val ae = event.record as AmortizationEntry
+                                        val idx = amortizationEntries.indexOfFirst { it.id == ae.id }
+                                        if (idx >= 0) amortizationEntries[idx] = ae else amortizationEntries.add(ae)
+                                    }
+                                EncryptedDocSerializer.COLLECTION_CATEGORIES -> {
+                                    val cat = event.record as Category
+                                    // Tag-based dedup
+                                    val localMatch = if (cat.tag.isNotEmpty()) {
+                                        categories.firstOrNull {
+                                            it.tag == cat.tag && it.id != cat.id && !it.deleted
+                                        }
+                                    } else null
+                                    if (localMatch != null) {
+                                        val remapJson = syncPrefs.getString("catIdRemap", null)
+                                        val remap = if (remapJson != null) {
+                                            try {
+                                                val json = org.json.JSONObject(remapJson)
+                                                json.keys().asSequence().associate { it.toInt() to json.getInt(it) }.toMutableMap()
+                                            } catch (_: Exception) { mutableMapOf() }
+                                        } else mutableMapOf()
+                                        remap[cat.id] = localMatch.id
+                                        syncPrefs.edit().putString("catIdRemap",
+                                            org.json.JSONObject(remap.mapKeys { it.key.toString() }).toString()
+                                        ).apply()
+                                        for (i in transactions.indices) {
+                                            val t = transactions[i]
+                                            val newCats = t.categoryAmounts.map { ca ->
+                                                if (ca.categoryId == cat.id) ca.copy(categoryId = localMatch.id) else ca
+                                            }
+                                            if (newCats != t.categoryAmounts) {
+                                                transactions[i] = t.copy(categoryAmounts = newCats)
+                                                changedCollections.add(EncryptedDocSerializer.COLLECTION_TRANSACTIONS)
+                                            }
+                                        }
+                                    } else {
+                                        val idx = categories.indexOfFirst { it.id == cat.id }
+                                        if (idx >= 0) categories[idx] = cat else categories.add(cat)
+                                    }
+                                }
+                                EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER -> {
+                                    val ple = event.record as PeriodLedgerEntry
+                                    val idx = periodLedger.indexOfFirst { it.id == ple.id }
+                                    if (idx >= 0) periodLedger[idx] = ple else periodLedger.add(ple)
+                                }
+                                EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS -> {
+                                    val merged = event.record as SharedSettings
+                                    sharedSettings = merged
+                                    currencySymbol = merged.currency
+                                    budgetPeriod = try { BudgetPeriod.valueOf(merged.budgetPeriod) } catch (_: Exception) { budgetPeriod }
+                                    resetHour = merged.resetHour
+                                    resetDayOfWeek = merged.resetDayOfWeek
+                                    resetDayOfMonth = merged.resetDayOfMonth
+                                    isManualBudgetEnabled = merged.isManualBudgetEnabled
+                                    manualBudgetAmount = merged.manualBudgetAmount
+                                    incomeMode = try { IncomeMode.valueOf(merged.incomeMode) } catch (_: Exception) { IncomeMode.FIXED }
+                                    weekStartSunday = merged.weekStartSunday
+                                    matchDays = merged.matchDays
+                                    matchPercent = merged.matchPercent
+                                    matchDollar = merged.matchDollar
+                                    matchChars = merged.matchChars
+                                    val syncedStartDate = merged.budgetStartDate?.let {
+                                        try { java.time.LocalDate.parse(it) } catch (_: Exception) { null }
+                                    }
+                                    if (syncedStartDate != null && syncedStartDate != budgetStartDate) {
+                                        budgetStartDate = syncedStartDate
+                                        lastRefreshDate = java.time.LocalDate.now()
+                                        prefs.edit()
+                                            .putString("budgetStartDate", budgetStartDate.toString())
+                                            .putString("lastRefreshDate", lastRefreshDate.toString())
+                                            .apply()
+                                    }
+                                    prefs.edit()
+                                        .putString("currencySymbol", merged.currency)
+                                        .putString("budgetPeriod", merged.budgetPeriod)
+                                        .putInt("resetHour", merged.resetHour)
+                                        .putInt("resetDayOfWeek", merged.resetDayOfWeek)
+                                        .putInt("resetDayOfMonth", merged.resetDayOfMonth)
+                                        .putBoolean("isManualBudgetEnabled", merged.isManualBudgetEnabled)
+                                        .putString("manualBudgetAmount", merged.manualBudgetAmount.toString())
+                                        .putBoolean("weekStartSunday", merged.weekStartSunday)
+                                        .putInt("matchDays", merged.matchDays)
+                                        .putString("matchPercent", merged.matchPercent.toString())
+                                        .putInt("matchDollar", merged.matchDollar)
+                                        .putInt("matchChars", merged.matchChars)
+                                        .putString("incomeMode", merged.incomeMode)
+                                        .apply()
+                                }
+                            }
+                            }
+                            // Recompute cash on main thread (reads derivedState)
+                            if (changedCollections.any { it != EncryptedDocSerializer.COLLECTION_CATEGORIES })
+                                recomputeCash()
+                            // Save changed collections to JSON on background thread
+                            val txnSnapshot = if (EncryptedDocSerializer.COLLECTION_TRANSACTIONS in changedCollections) transactions.toList() else null
+                            val reSnapshot = if (EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES in changedCollections) recurringExpenses.toList() else null
+                            val isSnapshot = if (EncryptedDocSerializer.COLLECTION_INCOME_SOURCES in changedCollections) incomeSources.toList() else null
+                            val sgSnapshot = if (EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS in changedCollections) savingsGoals.toList() else null
+                            val aeSnapshot = if (EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES in changedCollections) amortizationEntries.toList() else null
+                            val catSnapshot = if (EncryptedDocSerializer.COLLECTION_CATEGORIES in changedCollections) categories.toList() else null
+                            val pleSnapshot = if (EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER in changedCollections) periodLedger.toList() else null
+                            val ssSnapshot = if (EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS in changedCollections) sharedSettings else null
+                            coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                txnSnapshot?.let { TransactionRepository.save(context, it) }
+                                reSnapshot?.let { RecurringExpenseRepository.save(context, it) }
+                                isSnapshot?.let { IncomeSourceRepository.save(context, it) }
+                                sgSnapshot?.let { SavingsGoalRepository.save(context, it) }
+                                aeSnapshot?.let { AmortizationRepository.save(context, it) }
+                                catSnapshot?.let { CategoryRepository.save(context, it) }
+                                pleSnapshot?.let { PeriodLedgerRepository.save(context, it) }
+                                ssSnapshot?.let { SharedSettingsRepository.save(context, it) }
+                            }
+                            com.syncbudget.app.widget.BudgetWidgetProvider.updateAllWidgets(context)
+                            lastSyncActivity = System.currentTimeMillis()
+                        } catch (e: Exception) {
+                            android.util.Log.e("SyncListener", "Failed to handle batch", e)
+                        }
+                    }
+
+                    // Start real-time listeners
+                    try {
+                        docSync.startListeners()
+                        android.util.Log.i("SyncLoop", "Persistent listeners started for group ${syncGroupId}")
+                    } catch (e: Exception) {
+                        android.util.Log.e("SyncLoop", "Failed to start listeners", e)
+                    }
+                }
+                onDispose {
+                    // Only runs when syncGroupId changes (group left/dissolved)
+                    // or activity is destroyed — NOT on isSyncConfigured toggles.
+                    docSync?.stopListeners()
+                    SyncWriteHelper.dispose()
+                }
+            }
+
+            // Sync setup: migrations, one-time pushes, and health check loop.
+            // This LaunchedEffect restarts on isSyncConfigured changes, but
+            // listeners are managed by the DisposableEffect above and persist.
             LaunchedEffect(isSyncConfigured) {
                 if (!isSyncConfigured) return@LaunchedEffect
                 val groupId = GroupManager.getGroupId(context) ?: return@LaunchedEffect
                 val key = GroupManager.getEncryptionKey(context) ?: return@LaunchedEffect
-                val docSync = FirestoreDocSync(context, groupId, localDeviceId, key)
-                SyncWriteHelper.initialize(docSync)
+                if (docSync == null) return@LaunchedEffect
 
                 // Initial device list fetch
                 try {
@@ -930,7 +1116,7 @@ class MainActivity : ComponentActivity() {
                             val accrued = BudgetCalculator.roundCents((daysSince / totalDays) * re.amount)
                             if (accrued > 0.0) {
                                 recurringExpenses[idx] = re.copy(
-                                    setAsideSoFar = accrued, 
+                                    setAsideSoFar = accrued,
                                 )
                                 reChanged = true
                             }
@@ -938,163 +1124,6 @@ class MainActivity : ComponentActivity() {
                     }
                     if (reChanged) saveRecurringExpenses()
                     prefs.edit().putBoolean("migration_add_re_setaside_fields", true).apply()
-                }
-
-                // ── Firestore-native listener setup ──
-
-                // Listener callback: update in-memory state when remote changes arrive.
-                // Events arrive batched per collection — apply all, then save once.
-                docSync.onBatchChanged = { events ->
-                    try {
-                        val changedCollections = mutableSetOf<String>()
-                        for (event in events) {
-                            changedCollections.add(event.collection)
-                            when (event.collection) {
-                                EncryptedDocSerializer.COLLECTION_TRANSACTIONS -> {
-                                    val txn = event.record as Transaction
-                                    val idx = transactions.indexOfFirst { it.id == txn.id }
-                                    if (idx >= 0) transactions[idx] = txn else transactions.add(txn)
-                                }
-                                EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES -> {
-                                    val re = event.record as RecurringExpense
-                                    val idx = recurringExpenses.indexOfFirst { it.id == re.id }
-                                    if (idx >= 0) recurringExpenses[idx] = re else recurringExpenses.add(re)
-                                }
-                                EncryptedDocSerializer.COLLECTION_INCOME_SOURCES -> {
-                                    val src = event.record as IncomeSource
-                                    val idx = incomeSources.indexOfFirst { it.id == src.id }
-                                    if (idx >= 0) incomeSources[idx] = src else incomeSources.add(src)
-                                }
-                                EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS -> {
-                                    val sg = event.record as SavingsGoal
-                                    val idx = savingsGoals.indexOfFirst { it.id == sg.id }
-                                    if (idx >= 0) savingsGoals[idx] = sg else savingsGoals.add(sg)
-                                }
-                                EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES -> {
-                                    val ae = event.record as AmortizationEntry
-                                    val idx = amortizationEntries.indexOfFirst { it.id == ae.id }
-                                    if (idx >= 0) amortizationEntries[idx] = ae else amortizationEntries.add(ae)
-                                }
-                            EncryptedDocSerializer.COLLECTION_CATEGORIES -> {
-                                val cat = event.record as Category
-                                // Tag-based dedup
-                                val localMatch = if (cat.tag.isNotEmpty()) {
-                                    categories.firstOrNull {
-                                        it.tag == cat.tag && it.id != cat.id && !it.deleted
-                                    }
-                                } else null
-                                if (localMatch != null) {
-                                    val remapJson = syncPrefs.getString("catIdRemap", null)
-                                    val remap = if (remapJson != null) {
-                                        try {
-                                            val json = org.json.JSONObject(remapJson)
-                                            json.keys().asSequence().associate { it.toInt() to json.getInt(it) }.toMutableMap()
-                                        } catch (_: Exception) { mutableMapOf() }
-                                    } else mutableMapOf()
-                                    remap[cat.id] = localMatch.id
-                                    syncPrefs.edit().putString("catIdRemap",
-                                        org.json.JSONObject(remap.mapKeys { it.key.toString() }).toString()
-                                    ).apply()
-                                    for (i in transactions.indices) {
-                                        val t = transactions[i]
-                                        val newCats = t.categoryAmounts.map { ca ->
-                                            if (ca.categoryId == cat.id) ca.copy(categoryId = localMatch.id) else ca
-                                        }
-                                        if (newCats != t.categoryAmounts) {
-                                            transactions[i] = t.copy(categoryAmounts = newCats)
-                                            changedCollections.add(EncryptedDocSerializer.COLLECTION_TRANSACTIONS)
-                                        }
-                                    }
-                                } else {
-                                    val idx = categories.indexOfFirst { it.id == cat.id }
-                                    if (idx >= 0) categories[idx] = cat else categories.add(cat)
-                                }
-                            }
-                            EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER -> {
-                                val ple = event.record as PeriodLedgerEntry
-                                val idx = periodLedger.indexOfFirst { it.id == ple.id }
-                                if (idx >= 0) periodLedger[idx] = ple else periodLedger.add(ple)
-                            }
-                            EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS -> {
-                                val merged = event.record as SharedSettings
-                                sharedSettings = merged
-                                currencySymbol = merged.currency
-                                budgetPeriod = try { BudgetPeriod.valueOf(merged.budgetPeriod) } catch (_: Exception) { budgetPeriod }
-                                resetHour = merged.resetHour
-                                resetDayOfWeek = merged.resetDayOfWeek
-                                resetDayOfMonth = merged.resetDayOfMonth
-                                isManualBudgetEnabled = merged.isManualBudgetEnabled
-                                manualBudgetAmount = merged.manualBudgetAmount
-                                incomeMode = try { IncomeMode.valueOf(merged.incomeMode) } catch (_: Exception) { IncomeMode.FIXED }
-                                weekStartSunday = merged.weekStartSunday
-                                matchDays = merged.matchDays
-                                matchPercent = merged.matchPercent
-                                matchDollar = merged.matchDollar
-                                matchChars = merged.matchChars
-                                val syncedStartDate = merged.budgetStartDate?.let {
-                                    try { java.time.LocalDate.parse(it) } catch (_: Exception) { null }
-                                }
-                                if (syncedStartDate != null && syncedStartDate != budgetStartDate) {
-                                    budgetStartDate = syncedStartDate
-                                    lastRefreshDate = java.time.LocalDate.now()
-                                    prefs.edit()
-                                        .putString("budgetStartDate", budgetStartDate.toString())
-                                        .putString("lastRefreshDate", lastRefreshDate.toString())
-                                        .apply()
-                                }
-                                prefs.edit()
-                                    .putString("currencySymbol", merged.currency)
-                                    .putString("budgetPeriod", merged.budgetPeriod)
-                                    .putInt("resetHour", merged.resetHour)
-                                    .putInt("resetDayOfWeek", merged.resetDayOfWeek)
-                                    .putInt("resetDayOfMonth", merged.resetDayOfMonth)
-                                    .putBoolean("isManualBudgetEnabled", merged.isManualBudgetEnabled)
-                                    .putString("manualBudgetAmount", merged.manualBudgetAmount.toString())
-                                    .putBoolean("weekStartSunday", merged.weekStartSunday)
-                                    .putInt("matchDays", merged.matchDays)
-                                    .putString("matchPercent", merged.matchPercent.toString())
-                                    .putInt("matchDollar", merged.matchDollar)
-                                    .putInt("matchChars", merged.matchChars)
-                                    .putString("incomeMode", merged.incomeMode)
-                                    .apply()
-                            }
-                        }
-                        }
-                        // Recompute cash on main thread (reads derivedState)
-                        if (changedCollections.any { it != EncryptedDocSerializer.COLLECTION_CATEGORIES })
-                            recomputeCash()
-                        // Save changed collections to JSON on background thread
-                        val txnSnapshot = if (EncryptedDocSerializer.COLLECTION_TRANSACTIONS in changedCollections) transactions.toList() else null
-                        val reSnapshot = if (EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES in changedCollections) recurringExpenses.toList() else null
-                        val isSnapshot = if (EncryptedDocSerializer.COLLECTION_INCOME_SOURCES in changedCollections) incomeSources.toList() else null
-                        val sgSnapshot = if (EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS in changedCollections) savingsGoals.toList() else null
-                        val aeSnapshot = if (EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES in changedCollections) amortizationEntries.toList() else null
-                        val catSnapshot = if (EncryptedDocSerializer.COLLECTION_CATEGORIES in changedCollections) categories.toList() else null
-                        val pleSnapshot = if (EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER in changedCollections) periodLedger.toList() else null
-                        val ssSnapshot = if (EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS in changedCollections) sharedSettings else null
-                        coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                            txnSnapshot?.let { TransactionRepository.save(context, it) }
-                            reSnapshot?.let { RecurringExpenseRepository.save(context, it) }
-                            isSnapshot?.let { IncomeSourceRepository.save(context, it) }
-                            sgSnapshot?.let { SavingsGoalRepository.save(context, it) }
-                            aeSnapshot?.let { AmortizationRepository.save(context, it) }
-                            catSnapshot?.let { CategoryRepository.save(context, it) }
-                            pleSnapshot?.let { PeriodLedgerRepository.save(context, it) }
-                            ssSnapshot?.let { SharedSettingsRepository.save(context, it) }
-                        }
-                        com.syncbudget.app.widget.BudgetWidgetProvider.updateAllWidgets(context)
-                        lastSyncActivity = System.currentTimeMillis()
-                    } catch (e: Exception) {
-                        android.util.Log.e("SyncListener", "Failed to handle batch", e)
-                    }
-                }
-
-                // Start real-time listeners
-                try {
-                    docSync.startListeners()
-                    android.util.Log.i("SyncLoop", "Firestore-native listeners started for group $groupId")
-                } catch (e: Exception) {
-                    android.util.Log.e("SyncLoop", "Failed to start listeners", e)
                 }
 
                 // One-time migration: push all local data to Firestore native docs
@@ -1124,118 +1153,114 @@ class MainActivity : ComponentActivity() {
                 lastSyncActivity = System.currentTimeMillis()
                 var healthCheckCounter = 0
 
-                try {
-                    // Periodic loop: push dirty changes + health checks
-                    while (true) {
-                        delay(5_000) // 5 seconds between checks
-                        healthCheckCounter++
+                // Periodic loop: push dirty changes + health checks
+                // No finally block needed — listener cleanup is in DisposableEffect above.
+                while (true) {
+                    delay(5_000) // 5 seconds between checks
+                    healthCheckCounter++
 
-                        // Per-record pushes replaced the dirty-push-all loop.
-                        // Save functions now push individual changed records via
-                        // SyncWriteHelper. Clear stale dirty flag if set.
-                        if (syncPrefs.getBoolean("syncDirty", false)) {
-                            syncPrefs.edit().putBoolean("syncDirty", false).apply()
-                        }
+                    // Per-record pushes replaced the dirty-push-all loop.
+                    // Save functions now push individual changed records via
+                    // SyncWriteHelper. Clear stale dirty flag if set.
+                    if (syncPrefs.getBoolean("syncDirty", false)) {
+                        syncPrefs.edit().putBoolean("syncDirty", false).apply()
+                    }
 
-                        // Light health check every ~60 seconds (12 * 5s):
-                        // update device metadata, refresh device list, receipt sync
-                        if (healthCheckCounter % 12 == 0) {
-                            try {
-                                syncDevices = GroupManager.getDevices(groupId)
-                                // Receipt photo sync (paid users only)
-                                if (isPaidUser || isSubscriber) {
-                                    try {
-                                        val deviceRecords = FirestoreService.getDevices(groupId)
-                                        val receiptSync = com.syncbudget.app.data.sync.ReceiptSyncManager(
-                                            context, groupId, localDeviceId, key
-                                        )
-                                        val updatedTxns = receiptSync.syncReceipts(transactions.toList(), deviceRecords)
-                                        if (updatedTxns != transactions.toList()) {
-                                            transactions.clear()
-                                            transactions.addAll(updatedTxns)
-                                            TransactionRepository.save(context, updatedTxns)
-                                        }
-                                    } catch (e: Exception) {
-                                        android.util.Log.w("SyncLoop", "Receipt sync failed: ${e.message}")
+                    // Light health check every ~60 seconds (12 * 5s):
+                    // update device metadata, refresh device list, receipt sync
+                    if (healthCheckCounter % 12 == 0) {
+                        try {
+                            syncDevices = GroupManager.getDevices(groupId)
+                            // Receipt photo sync (paid users only)
+                            if (isPaidUser || isSubscriber) {
+                                try {
+                                    val deviceRecords = FirestoreService.getDevices(groupId)
+                                    val receiptSync = com.syncbudget.app.data.sync.ReceiptSyncManager(
+                                        context, groupId, localDeviceId, key
+                                    )
+                                    val updatedTxns = receiptSync.syncReceipts(transactions.toList(), deviceRecords)
+                                    if (updatedTxns != transactions.toList()) {
+                                        transactions.clear()
+                                        transactions.addAll(updatedTxns)
+                                        TransactionRepository.save(context, updatedTxns)
                                     }
+                                } catch (e: Exception) {
+                                    android.util.Log.w("SyncLoop", "Receipt sync failed: ${e.message}")
                                 }
-                                isSyncAdmin = GroupManager.isAdmin(context)
-                                // Update device metadata — keep appSyncVersion=2
-                                // to avoid triggering "update_required" in old
-                                // SyncWorker until it's fully replaced.
-                                FirestoreService.updateDeviceMetadata(
-                                    groupId, localDeviceId,
-                                    syncVersion = 0L,
-                                    appSyncVersion = 2,
-                                    minSyncVersion = 2
-                                )
-                            } catch (e: Exception) {
-                                android.util.Log.w("SyncLoop", "Light health check failed", e)
                             }
-                        }
-
-                        // Heavy health checks every ~5 minutes (60 * 5s = 300s):
-                        // dissolution, removal, subscription, group activity
-                        if (healthCheckCounter % 60 == 0) {
-                            try {
-                                // Check group dissolution
-                                if (FirestoreService.isGroupDissolved(groupId)) {
-                                    GroupManager.leaveGroup(context, localOnly = true)
-                                    isSyncConfigured = false
-                                    syncGroupId = null
-                                    isSyncAdmin = false
-                                    syncStatus = "off"
-                                    syncDevices = emptyList()
-                                    return@LaunchedEffect
-                                }
-                                // Check device removal
-                                if (FirestoreService.isDeviceRemoved(groupId, localDeviceId)) {
-                                    GroupManager.leaveGroup(context, localOnly = true)
-                                    isSyncConfigured = false
-                                    syncGroupId = null
-                                    isSyncAdmin = false
-                                    syncStatus = "off"
-                                    syncDevices = emptyList()
-                                    return@LaunchedEffect
-                                }
-                                // Subscription expiry check
-                                val expiry = FirestoreService.getSubscriptionExpiry(groupId)
-                                if (expiry > 0L) {
-                                    val gracePeriodMs = 7L * 24 * 60 * 60 * 1000
-                                    val elapsed = System.currentTimeMillis() - expiry
-                                    if (elapsed > gracePeriodMs) {
-                                        if (!FirestoreService.isGroupDissolved(groupId)) {
-                                            GroupManager.dissolveGroup(context, groupId)
-                                        }
-                                        isSyncConfigured = false
-                                        syncGroupId = null
-                                        isSyncAdmin = false
-                                        syncStatus = "off"
-                                        syncDevices = emptyList()
-                                        return@LaunchedEffect
-                                    } else if (elapsed > 0) {
-                                        syncErrorMessage = strings.sync.subscriptionExpiredNotice
-                                        SubscriptionReminderReceiver.scheduleNextReminder(context)
-                                    } else {
-                                        SubscriptionReminderReceiver.cancelReminder(context)
-                                    }
-                                }
-                                // Admin: post subscription expiry
-                                if (isSyncAdmin) {
-                                    if (isSubscriber) {
-                                        FirestoreService.updateSubscriptionExpiry(groupId, subscriptionExpiry)
-                                    }
-                                }
-                                // Update group activity timestamp
-                                FirestoreService.updateGroupActivity(groupId)
-                            } catch (e: Exception) {
-                                android.util.Log.w("SyncLoop", "Health check failed", e)
-                            }
+                            isSyncAdmin = GroupManager.isAdmin(context)
+                            // Update device metadata — keep appSyncVersion=2
+                            // to avoid triggering "update_required" in old
+                            // SyncWorker until it's fully replaced.
+                            FirestoreService.updateDeviceMetadata(
+                                groupId, localDeviceId,
+                                syncVersion = 0L,
+                                appSyncVersion = 2,
+                                minSyncVersion = 2
+                            )
+                        } catch (e: Exception) {
+                            android.util.Log.w("SyncLoop", "Light health check failed", e)
                         }
                     }
-                } finally {
-                    docSync.stopListeners()
-                    SyncWriteHelper.dispose()
+
+                    // Heavy health checks every ~5 minutes (60 * 5s = 300s):
+                    // dissolution, removal, subscription, group activity
+                    if (healthCheckCounter % 60 == 0) {
+                        try {
+                            // Check group dissolution
+                            if (FirestoreService.isGroupDissolved(groupId)) {
+                                GroupManager.leaveGroup(context, localOnly = true)
+                                isSyncConfigured = false
+                                syncGroupId = null
+                                isSyncAdmin = false
+                                syncStatus = "off"
+                                syncDevices = emptyList()
+                                return@LaunchedEffect
+                            }
+                            // Check device removal
+                            if (FirestoreService.isDeviceRemoved(groupId, localDeviceId)) {
+                                GroupManager.leaveGroup(context, localOnly = true)
+                                isSyncConfigured = false
+                                syncGroupId = null
+                                isSyncAdmin = false
+                                syncStatus = "off"
+                                syncDevices = emptyList()
+                                return@LaunchedEffect
+                            }
+                            // Subscription expiry check
+                            val expiry = FirestoreService.getSubscriptionExpiry(groupId)
+                            if (expiry > 0L) {
+                                val gracePeriodMs = 7L * 24 * 60 * 60 * 1000
+                                val elapsed = System.currentTimeMillis() - expiry
+                                if (elapsed > gracePeriodMs) {
+                                    if (!FirestoreService.isGroupDissolved(groupId)) {
+                                        GroupManager.dissolveGroup(context, groupId)
+                                    }
+                                    isSyncConfigured = false
+                                    syncGroupId = null
+                                    isSyncAdmin = false
+                                    syncStatus = "off"
+                                    syncDevices = emptyList()
+                                    return@LaunchedEffect
+                                } else if (elapsed > 0) {
+                                    syncErrorMessage = strings.sync.subscriptionExpiredNotice
+                                    SubscriptionReminderReceiver.scheduleNextReminder(context)
+                                } else {
+                                    SubscriptionReminderReceiver.cancelReminder(context)
+                                }
+                            }
+                            // Admin: post subscription expiry
+                            if (isSyncAdmin) {
+                                if (isSubscriber) {
+                                    FirestoreService.updateSubscriptionExpiry(groupId, subscriptionExpiry)
+                                }
+                            }
+                            // Update group activity timestamp
+                            FirestoreService.updateGroupActivity(groupId)
+                        } catch (e: Exception) {
+                            android.util.Log.w("SyncLoop", "Health check failed", e)
+                        }
+                    }
                 }
             }
 

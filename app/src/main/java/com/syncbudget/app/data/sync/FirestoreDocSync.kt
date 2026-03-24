@@ -59,6 +59,11 @@ class FirestoreDocSync(
     // Value = timestamp when pushed
     private val recentPushes = ConcurrentHashMap<String, Long>()
 
+    // Enc hash skip: track the last-seen enc blob per document.
+    // If unchanged since last callback, skip expensive decryption.
+    // Key = "collection:docId", Value = enc string.
+    private val lastSeenEnc = ConcurrentHashMap<String, String>()
+
     // Background scope for heavy deserialization (decrypt + JSON parse)
     // so the main thread stays responsive during large syncs.
     private val deserializeScope = CoroutineScope(Dispatchers.Default + kotlinx.coroutines.SupervisorJob())
@@ -114,6 +119,7 @@ class FirestoreDocSync(
         }
         listeners.clear()
         recentPushes.clear()
+        lastSeenEnc.clear()
         deserializeScope.coroutineContext[kotlinx.coroutines.Job]?.cancelChildren()
         isListening = false
     }
@@ -210,10 +216,24 @@ class FirestoreDocSync(
         // Heavy work (decrypt + JSON parse) on background thread,
         // then deliver batch to UI on main thread.
         deserializeScope.launch {
+            var skippedUnchanged = 0
             val events = mutableListOf<DataChangeEvent>()
             for (change in toProcess) {
                 val docId = change.document.id
                 try {
+                    // Enc hash skip: if the enc blob hasn't changed, skip decryption
+                    val encKey = "$collection:$docId"
+                    val enc = change.document.getString("enc")
+                    if (change.type != DocumentChange.Type.REMOVED) {
+                        if (enc != null && lastSeenEnc[encKey] == enc) {
+                            skippedUnchanged++
+                            continue
+                        }
+                    } else {
+                        // Document removed — clear from cache
+                        lastSeenEnc.remove(encKey)
+                    }
+
                     val record = deserializeDoc(collection, change.document) ?: continue
                     val action = when (change.type) {
                         DocumentChange.Type.ADDED -> "added"
@@ -221,15 +241,23 @@ class FirestoreDocSync(
                         DocumentChange.Type.REMOVED -> "removed"
                     }
                     events.add(DataChangeEvent(collection, action, record, docId))
+
+                    // Update enc cache after successful decryption
+                    if (enc != null && change.type != DocumentChange.Type.REMOVED) {
+                        lastSeenEnc[encKey] = enc
+                    }
                 } catch (e: Exception) {
                     syncLog("Failed to deserialize $collection/$docId: ${e.message}")
                 }
             }
             if (events.isNotEmpty()) {
-                syncLog("Received ${events.size} changes in $collection")
+                syncLog("Received ${events.size} changes in $collection" +
+                    if (skippedUnchanged > 0) " (skipped $skippedUnchanged unchanged)" else "")
                 kotlinx.coroutines.withContext(Dispatchers.Main) {
                     onBatchChanged?.invoke(events)
                 }
+            } else if (skippedUnchanged > 0) {
+                syncLog("Skipped $skippedUnchanged unchanged docs in $collection")
             }
         }
     }
@@ -240,9 +268,18 @@ class FirestoreDocSync(
         val echoKey = "${EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS}:${EncryptedDocSerializer.SHARED_SETTINGS_DOC_ID}"
         if (recentPushes.containsKey(echoKey)) return
 
+        // Enc hash skip: if the enc blob hasn't changed, skip decryption
+        val enc = doc.getString("enc")
+        if (enc != null && lastSeenEnc[echoKey] == enc) {
+            syncLog("Skipped 1 unchanged doc in sharedSettings")
+            return
+        }
+
         deserializeScope.launch {
             try {
                 val settings = EncryptedDocSerializer.sharedSettingsFromDoc(doc, encryptionKey)
+                // Update enc cache after successful decryption
+                if (enc != null) lastSeenEnc[echoKey] = enc
                 syncLog("Received 1 changes in sharedSettings")
                 kotlinx.coroutines.withContext(Dispatchers.Main) {
                     onBatchChanged?.invoke(listOf(
