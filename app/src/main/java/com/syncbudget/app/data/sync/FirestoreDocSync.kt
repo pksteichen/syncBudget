@@ -201,10 +201,9 @@ class FirestoreDocSync(
     private fun handleCollectionChanges(collection: String, changes: List<DocumentChange>) {
         pruneExpiredEchoKeys()
 
-        // Filter to only non-echo, server-confirmed changes (lightweight, main thread OK)
+        // Filter out echoes from our own recent writes (lightweight, main thread OK)
         val toProcess = changes.filter { change ->
-            val echoKey = "$collection:${change.document.id}"
-            !recentPushes.containsKey(echoKey) && !change.document.metadata.hasPendingWrites()
+            !recentPushes.containsKey("$collection:${change.document.id}")
         }
         if (toProcess.isEmpty()) return
 
@@ -240,7 +239,6 @@ class FirestoreDocSync(
 
         val echoKey = "${EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS}:${EncryptedDocSerializer.SHARED_SETTINGS_DOC_ID}"
         if (recentPushes.containsKey(echoKey)) return
-        if (doc.metadata.hasPendingWrites()) return
 
         deserializeScope.launch {
             try {

@@ -5,7 +5,6 @@ import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
-import com.google.firebase.firestore.MetadataChanges
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeout
 
@@ -90,10 +89,8 @@ object FirestoreDocService {
 
     /**
      * Listen for changes in a collection (transactions, categories, etc.).
-     * Fires immediately with current state, then on every change.
-     *
-     * [includeMetadataChanges] is true so we can distinguish local-echo
-     * writes (hasPendingWrites=true) from confirmed server writes.
+     * Fires immediately with current state, then on every data change.
+     * Echo prevention is handled by FirestoreDocSync's recentPushes set.
      */
     fun listenToCollection(
         groupId: String,
@@ -102,7 +99,7 @@ object FirestoreDocService {
         onError: (Exception) -> Unit
     ): ListenerRegistration {
         return collectionRef(groupId, collection)
-            .addSnapshotListener(MetadataChanges.INCLUDE) { snapshot, error ->
+            .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     Log.e(TAG, "Listener error on $collection", error)
                     onError(error)
@@ -125,7 +122,7 @@ object FirestoreDocService {
         onError: (Exception) -> Unit
     ): ListenerRegistration {
         return docRef(groupId, collection, docId)
-            .addSnapshotListener(MetadataChanges.INCLUDE) { snapshot, error ->
+            .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     Log.e(TAG, "Listener error on $collection/$docId", error)
                     onError(error)
