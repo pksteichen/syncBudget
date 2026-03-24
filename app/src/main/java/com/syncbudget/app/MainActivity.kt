@@ -1394,12 +1394,20 @@ class MainActivity : ComponentActivity() {
                                 "ple=${periodLedger.size} " +
                                 "cash=$availableCash")
 
-                            // Compare with other devices
+                            // Compare with other devices (skip stale fingerprints —
+                            // SyncWorker updates every 15min, Android may delay to 30min+)
                             val allDeviceRecords = FirestoreService.getDevices(groupId)
                             val myData = org.json.JSONObject(integrityData)
+                            val maxFingerprintAge = 35 * 60 * 1000L // 35 min — allows for Android delays
                             for (device in allDeviceRecords) {
                                 if (device.deviceId == localDeviceId) continue
                                 val remoteFp = device.fingerprintData ?: continue
+                                // Skip devices with stale fingerprints — likely just haven't checked in yet
+                                val fpAge = System.currentTimeMillis() - device.lastSeen
+                                if (fpAge > maxFingerprintAge) {
+                                    android.util.Log.i("Integrity", "Skipping ${device.deviceId.take(8)}: lastSeen ${fpAge / 60000}m ago (stale)")
+                                    continue
+                                }
                                 try {
                                     val remote = org.json.JSONObject(remoteFp)
 
