@@ -2716,7 +2716,7 @@ class MainActivity : ComponentActivity() {
                                         // Initialize group doc BEFORE registering device
                                         val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
                                         db.collection("groups").document(newGroup.groupId)
-                                            .set(mapOf("nextDeltaVersion" to 0L, "createdAt" to System.currentTimeMillis(), "lastActivity" to System.currentTimeMillis()))
+                                            .set(mapOf("createdAt" to System.currentTimeMillis(), "lastActivity" to System.currentTimeMillis()))
                                             .await()
                                         // Register admin device
                                         FirestoreService.registerDevice(
@@ -3249,7 +3249,7 @@ class MainActivity : ComponentActivity() {
                                     // Initialize group doc BEFORE registering device
                                     val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
                                     db.collection("groups").document(info.groupId)
-                                        .set(mapOf("nextDeltaVersion" to 0L, "createdAt" to System.currentTimeMillis(), "lastActivity" to System.currentTimeMillis()))
+                                        .set(mapOf("createdAt" to System.currentTimeMillis(), "lastActivity" to System.currentTimeMillis()))
                                         .await()
                                     // Register this device as admin
                                     FirestoreService.registerDevice(
