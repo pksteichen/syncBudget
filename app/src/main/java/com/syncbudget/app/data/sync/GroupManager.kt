@@ -24,6 +24,10 @@ object GroupManager {
 
     private const val PREFS_NAME = "sync_engine"
 
+    /** Normalize pairing code for consistent encrypt/decrypt. */
+    private fun normalizeCode(code: String): CharArray =
+        code.uppercase().trim().toCharArray()
+
     fun isConfigured(context: Context): Boolean {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         return prefs.getString("groupId", null) != null
@@ -96,7 +100,7 @@ object GroupManager {
         // Decrypt the sync encryption key using the pairing code as password
         val encryptedKeyBytes = Base64.decode(pairingData.encryptedKey, Base64.NO_WRAP)
         val decryptedKey = try {
-            com.syncbudget.app.data.CryptoHelper.decrypt(encryptedKeyBytes, pairingCode.uppercase().trim().toCharArray())
+            com.syncbudget.app.data.CryptoHelper.decrypt(encryptedKeyBytes, normalizeCode(pairingCode))
         } catch (e: Exception) {
             android.util.Log.w("GroupManager", "Pairing code decrypt failed: ${e.message}")
             return false
@@ -165,7 +169,7 @@ object GroupManager {
         // Encrypt the sync key with the pairing code as password.
         // The code is never stored in Firestore — only the encrypted key is.
         // The joining device must know the code to decrypt the key.
-        val encryptedKeyBytes = com.syncbudget.app.data.CryptoHelper.encrypt(encryptionKey, code.toCharArray())
+        val encryptedKeyBytes = com.syncbudget.app.data.CryptoHelper.encrypt(encryptionKey, normalizeCode(code))
         val encryptedKeyBase64 = Base64.encodeToString(encryptedKeyBytes, Base64.NO_WRAP)
         val expiresAt = System.currentTimeMillis() + 10 * 60 * 1000 // 10 minutes
 

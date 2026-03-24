@@ -412,7 +412,9 @@ class FirestoreDocSync(
                     }
                     lastKnownState[stateKey] = record
                 } catch (e: Exception) {
-                    syncLog("Failed to deserialize $collection/$docId: ${e.message}")
+                    val hint = if (e.message?.contains("Tag mismatch") == true || e.message?.contains("AEADBadTag") == true)
+                        " (possible wrong encryption key)" else ""
+                    syncLog("Failed to deserialize $collection/$docId: ${e.message}$hint")
                 }
             }
             if (events.isNotEmpty()) {
@@ -465,7 +467,9 @@ class FirestoreDocSync(
                     ))
                 }
             } catch (e: Exception) {
-                syncLog("Failed to deserialize sharedSettings: ${e.message}")
+                val hint = if (e.message?.contains("Tag mismatch") == true || e.message?.contains("AEADBadTag") == true)
+                    " (possible wrong encryption key)" else ""
+                syncLog("Failed to deserialize sharedSettings: ${e.message}$hint")
             }
         }
     }
