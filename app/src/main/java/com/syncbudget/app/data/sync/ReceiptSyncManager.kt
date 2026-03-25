@@ -506,15 +506,16 @@ class ReceiptSyncManager(
 
             archiveFile.inputStream().buffered().use { inp ->
                 // Read header
+                val dis = java.io.DataInputStream(inp)
                 val magic = ByteArray(4)
-                inp.read(magic)
+                dis.readFully(magic)
                 if (!magic.contentEquals(SNAPSHOT_MAGIC)) {
                     throw IllegalStateException("Invalid snapshot magic")
                 }
                 val version = readInt(inp)
                 val manifestLen = readInt(inp)
                 val manifestEncrypted = ByteArray(manifestLen)
-                inp.read(manifestEncrypted)
+                dis.readFully(manifestEncrypted)
                 val manifestJson = String(
                     CryptoHelper.decryptWithKey(manifestEncrypted, encryptionKey),
                     Charsets.UTF_8
@@ -532,7 +533,9 @@ class ReceiptSyncManager(
                         // Skip — already have this file. Must still read past it.
                         var skipped = 0L
                         while (skipped < length) {
-                            skipped += inp.skip((length - skipped).toLong())
+                            val n = inp.skip((length - skipped).toLong())
+                            if (n <= 0) { inp.read(); skipped++ } // fallback: read-and-discard
+                            else skipped += n
                         }
                         continue
                     }
