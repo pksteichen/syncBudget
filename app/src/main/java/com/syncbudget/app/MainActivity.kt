@@ -565,10 +565,31 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            // Gate for sync-dependent code: true immediately for solo users,
+            // set to true after initial Firestore listener snapshot for synced users.
+            // Shared by migrations and period refresh to ensure lastKnownState is
+            // populated before any save function fires (enables diffs, not full writes).
+            var initialSyncReceived by remember { mutableStateOf(!isSyncConfigured) }
+
             // One-time migrations — each wrapped in try-catch so a failure
             // in one migration doesn't block subsequent migrations or crash
             // the LaunchedEffect.  Flags are set AFTER success.
             LaunchedEffect(Unit) {
+                // Wait for initial listener snapshot so lastKnownState is populated.
+                // lastSyncActivity updates when the listener delivers data.
+                if (isSyncConfigured && !initialSyncReceived) {
+                    val start = System.currentTimeMillis()
+                    while (!initialSyncReceived && System.currentTimeMillis() - start < 5_000L) {
+                        delay(200)
+                        if (lastSyncActivity > start) {
+                            initialSyncReceived = true
+                        }
+                    }
+                    if (!initialSyncReceived) {
+                        initialSyncReceived = true
+                        android.util.Log.w("Migration", "Timed out waiting for initial sync — proceeding with local data")
+                    }
+                }
                 // Purge tombstoned records (deleted=true) from local JSON.
                 // These are leftover from old groups and serve no purpose locally.
                 // Also strips any legacy clock fields from JSON on re-save.
@@ -1646,28 +1667,10 @@ class MainActivity : ComponentActivity() {
 
             // Period refresh — checks every 30s while the app is open so the
             // UI updates when a period boundary passes without needing a restart.
-            // When sync is configured, waits for the initial Firestore listener
-            // snapshot before creating ledger entries (ensures budget amounts
-            // reflect the latest RE/IS/settings from other devices).
-            var initialSyncReceived by remember { mutableStateOf(!isSyncConfigured) } // true immediately for solo users
+            // Uses shared initialSyncReceived gate (declared above migrations).
             LaunchedEffect(Unit) {
-                // If syncing, wait for initial listener snapshot before first refresh.
-                // Listeners deliver cached data within ~1s of attaching.
-                if (isSyncConfigured && !initialSyncReceived) {
-                    val maxWait = 5_000L // 5 seconds max
-                    val start = System.currentTimeMillis()
-                    while (!initialSyncReceived && System.currentTimeMillis() - start < maxWait) {
-                        delay(200)
-                        // Check if listeners have delivered any data
-                        if (docSync?.isListening == true && lastSyncActivity > start) {
-                            initialSyncReceived = true
-                        }
-                    }
-                    if (!initialSyncReceived) {
-                        initialSyncReceived = true // proceed anyway after timeout
-                        android.util.Log.w("PeriodRefresh", "Timed out waiting for initial sync — proceeding with local data")
-                    }
-                }
+                // Wait for initial sync if needed (shared gate set by migrations block)
+                while (!initialSyncReceived) { delay(200) }
                 while (true) {
                     if (budgetStartDate != null && lastRefreshDate != null) {
                         // For DAILY periods, respect resetHour: the budget "day" starts
