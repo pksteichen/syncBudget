@@ -1,56 +1,45 @@
 ================================================================================
-  SecureSync Budget — Outstanding Tasks
+  BudgeTrak — Outstanding Tasks (v2.3)
 ================================================================================
 
-[ ] TTL Policies (requires Blaze plan)
-    ─────────────────────────────────────
-    The Spark (free) plan does not support TTL policies. When you upgrade to
-    the Blaze (pay-as-you-go) plan, create the following TTL policies in the
-    Google Cloud Console:
+[x] TTL Policies
+    ─────────────
+    TTL policy configured for pairing_codes/expiresAt.
+    Groups use lastActivity for TTL — already set up.
 
-    Navigate to: https://console.cloud.google.com/firestore/databases/-default-/ttl
-
-    1. Collection group: groups       | Timestamp field: lastActivity
-    2. Collection group: pairing_codes | Timestamp field: expiresAt
-
-    The app code is already updated to write Firestore server timestamps for
-    lastActivity (FieldValue.serverTimestamp() in FirestoreService.kt), so
-    TTL will work correctly once enabled.
-
-    See firebase-setup.txt sections 5 and 8 for full details.
-
-[ ] Cloud Function for Subcollection Cleanup (requires Blaze plan)
+[ ] Cloud Function for Subcollection Cleanup (optional, requires Blaze plan)
     ─────────────────────────────────────────────────────────────────
-    When a group document is deleted (by TTL or dissolveGroup), its
-    subcollections (deltas, devices, snapshots, adminClaim) are NOT
-    auto-deleted. Deploy a Cloud Function to clean these up automatically.
+    When a group document is deleted by TTL, its subcollections are
+    NOT auto-deleted. The app's dissolveGroup() now deletes all 13
+    subcollections + Cloud Storage receipts, but TTL-triggered
+    deletion doesn't run app code.
 
-    This is optional — orphaned subcollections are encrypted and cost
-    very little storage. But for a cleaner setup, deploy the function
-    described in firebase-setup.txt section 7.
+    Deploy a Cloud Function to clean up orphaned subcollections.
+    Optional — orphaned subcollections are encrypted and cost little.
 
     Requires: Blaze plan + Firebase CLI (npm install -g firebase-tools)
 
-[ ] Expired Pairing Code Cleanup (requires Blaze plan)
+[x] Expired Pairing Code Cleanup
+    ─────────────────────────────
+    TTL policy on pairing_codes/expiresAt handles this automatically.
+
+[x] Migrate Encryption Key to EncryptedSharedPreferences
     ─────────────────────────────────────────────────────
-    Pairing codes expire after 10 minutes but unredeemed codes stay in
-    Firestore. Two cleanup options:
+    Done — SecurePrefs.kt wraps EncryptedSharedPreferences.
+    GroupManager reads key from SecurePrefs with plain prefs fallback.
 
-    a) TTL policy on pairing_codes (covered above in TTL Policies task)
-    b) Scheduled Cloud Function to delete expired codes daily
+[ ] Remaining Audit Items (LOW priority)
+    ─────────────────────────────────────
+    21 LOW + 5 INFO items from v2.3 audits. See audit files in
+    /Download/BudgeTrak/support/AUDIT_*.txt for details.
+    Key items:
+    - budgetToday derivedStateOf won't re-trigger on midnight rollover
+    - Integrity check reads ALL Firestore docs every 5 min (cost at scale)
+    - Duplicate backfill_linked_amounts v1/v2 migrations
+    - Unstructured CoroutineScope in dialog photo delete
 
-    See firebase-setup.txt section 8 for full details.
-
-[ ] Migrate Encryption Key to EncryptedSharedPreferences (Audit #8)
-    ─────────────────────────────────────────────────────────────────
-    The sync encryption key is currently stored as Base64 in plain
-    SharedPreferences. While only accessible to the app itself
-    (MODE_PRIVATE), it is exposed on rooted devices or via backups.
-
-    Migration plan:
-    1. Add dependency: androidx.security:security-crypto:1.1.0-alpha06
-    2. Create SecureKeyStore helper using EncryptedSharedPreferences
-    3. On first access, migrate key from old prefs to encrypted prefs
-    4. Update GroupManager.kt, SyncWorker.kt, SyncEngine.kt
-
-    Affected files marked with TODO(security) comments.
+[ ] Update Firestore Security Rules
+    ────────────────────────────────
+    Deploy updated rules from /Download/firestore_rules.txt:
+    - Removed nextDeltaVersion requirement from group create
+    - Added all 8 sync collections (transactions, categories, etc.)
