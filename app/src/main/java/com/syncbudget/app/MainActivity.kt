@@ -3736,10 +3736,26 @@ class MainActivity : ComponentActivity() {
                             dashShowRecurringDialog = false
                         },
                         onNotRecurring = {
-                            addTransactionWithBudgetEffect(dashPendingRecurringTxn!!)
+                            val txn = dashPendingRecurringTxn!!
                             dashPendingRecurringTxn = null
                             dashPendingRecurringMatch = null
                             dashShowRecurringDialog = false
+                            // Continue linking chain: check amortization, then budget income
+                            val amortizationMatch = findAmortizationMatch(txn, activeAmortizationEntries, percentTolerance, matchDollar, matchChars)
+                            if (amortizationMatch != null) {
+                                dashPendingAmortizationTxn = txn
+                                dashPendingAmortizationMatch = amortizationMatch
+                                dashShowAmortizationDialog = true
+                            } else {
+                                val budgetMatch = findBudgetIncomeMatch(txn, activeIncomeSources, matchChars, matchDays)
+                                if (budgetMatch != null) {
+                                    dashPendingBudgetIncomeTxn = txn
+                                    dashPendingBudgetIncomeMatch = budgetMatch
+                                    dashShowBudgetIncomeDialog = true
+                                } else {
+                                    addTransactionWithBudgetEffect(txn)
+                                }
+                            }
                         }
                     )
                 }

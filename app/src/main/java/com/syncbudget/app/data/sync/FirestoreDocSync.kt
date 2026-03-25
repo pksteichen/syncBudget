@@ -53,7 +53,7 @@ class FirestoreDocSync(
     }
 
     // Active snapshot listeners — keyed by collection name, detached on stop
-    private val listeners = mutableMapOf<String, ListenerRegistration>()
+    private val listeners = ConcurrentHashMap<String, ListenerRegistration>()
 
     // Echo prevention: track recently-pushed doc keys ("collection:docId")
     // Value = timestamp when pushed
@@ -102,13 +102,15 @@ class FirestoreDocSync(
     }
 
     private fun persistEncCache() {
-        try {
-            val json = org.json.JSONObject()
-            for ((key, value) in lastSeenEnc) {
-                json.put(key, value)
-            }
-            encCacheFile.writeText(json.toString())
-        } catch (_: Exception) {}
+        synchronized(lastSeenEnc) {
+            try {
+                val json = org.json.JSONObject()
+                for ((key, value) in lastSeenEnc) {
+                    json.put(key, value)
+                }
+                encCacheFile.writeText(json.toString())
+            } catch (_: Exception) {}
+        }
     }
 
     private fun persistPendingEdits() {
@@ -130,7 +132,7 @@ class FirestoreDocSync(
     var onBatchChanged: ((List<DataChangeEvent>) -> Unit)? = null
 
     /** Whether listeners are currently active. */
-    var isListening: Boolean = false
+    @Volatile var isListening: Boolean = false
         private set
 
     // ── public API ──────────────────────────────────────────────────────
@@ -381,6 +383,16 @@ class FirestoreDocSync(
             ssData
         )
 
+        // Populate lastKnownState so subsequent pushRecord() calls use diffs
+        for (t in liveTxns) lastKnownState["${EncryptedDocSerializer.COLLECTION_TRANSACTIONS}:${t.id}"] = t
+        for (re in liveRe) lastKnownState["${EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES}:${re.id}"] = re
+        for (src in liveIs) lastKnownState["${EncryptedDocSerializer.COLLECTION_INCOME_SOURCES}:${src.id}"] = src
+        for (sg in liveSg) lastKnownState["${EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS}:${sg.id}"] = sg
+        for (ae in liveAe) lastKnownState["${EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES}:${ae.id}"] = ae
+        for (cat in liveCats) lastKnownState["${EncryptedDocSerializer.COLLECTION_CATEGORIES}:${cat.id}"] = cat
+        for (ple in periodLedgerEntries) lastKnownState["${EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER}:${ple.id}"] = ple
+        lastKnownState["${EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS}:${EncryptedDocSerializer.SHARED_SETTINGS_DOC_ID}"] = sharedSettings
+
         syncLog("Migration complete: pushed ${liveTxns.size} txns, " +
                 "${liveRe.size} RE, ${liveIs.size} IS, " +
                 "${liveSg.size} SG, ${liveAe.size} AE, " +
@@ -401,6 +413,11 @@ class FirestoreDocSync(
         // Heavy work (decrypt + JSON parse) on background thread,
         // then deliver batch to UI on main thread.
         deserializeScope.launch {
+            // Expire stale pending edits (>1 hour old — device was offline too long for reliable conflict detection)
+            val expiryMs = 60 * 60 * 1000L
+            val now = System.currentTimeMillis()
+            localPendingEdits.entries.removeAll { now - it.value > expiryMs }
+
             var skippedUnchanged = 0
             val events = mutableListOf<DataChangeEvent>()
             for (change in toProcess) {

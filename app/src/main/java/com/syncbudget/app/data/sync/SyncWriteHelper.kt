@@ -19,7 +19,7 @@ object SyncWriteHelper {
 
     private const val TAG = "SyncWriteHelper"
     private var docSync: FirestoreDocSync? = null
-    private val scope = CoroutineScope(Dispatchers.IO)
+    private val scope = CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
 
     fun initialize(docSync: FirestoreDocSync) {
         this.docSync = docSync

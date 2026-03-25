@@ -76,7 +76,16 @@ class BudgetWidgetProvider : AppWidgetProvider() {
             val resetDayOfWeek = prefs.getInt("resetDayOfWeek", 7)
             val resetDayOfMonth = prefs.getInt("resetDayOfMonth", 1)
 
-            val cal = Calendar.getInstance()
+            val syncPrefs = context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
+            val isSynced = syncPrefs.getString("groupId", null) != null
+            val familyTz = if (isSynced) {
+                // Read familyTimezone from shared_settings.json
+                try {
+                    com.syncbudget.app.data.SharedSettingsRepository.load(context).familyTimezone
+                } catch (_: Exception) { "" }
+            } else ""
+            val tz = if (familyTz.isNotEmpty()) java.util.TimeZone.getTimeZone(familyTz) else java.util.TimeZone.getDefault()
+            val cal = Calendar.getInstance(tz)
             when (budgetPeriod) {
                 BudgetPeriod.DAILY -> {
                     cal.set(Calendar.HOUR_OF_DAY, resetHour)
