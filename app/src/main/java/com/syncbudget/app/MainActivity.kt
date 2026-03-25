@@ -363,59 +363,71 @@ class MainActivity : ComponentActivity() {
             val lastSavedCat = remember { mutableMapOf<Int, Category>() }
             val lastSavedPle = remember { mutableMapOf<Int, PeriodLedgerEntry>() }
 
-            fun saveIncomeSources() {
+            fun saveIncomeSources(hint: List<IncomeSource>? = null) {
                 val current = incomeSources.toList()
                 IncomeSourceRepository.save(context, current)
                 if (SyncWriteHelper.isInitialized()) {
-                    var pushed = false
-                    for (src in current) {
-                        if (lastSavedIs[src.id] != src) { SyncWriteHelper.pushIncomeSource(src); pushed = true }
+                    if (hint != null) {
+                        hint.forEach { SyncWriteHelper.pushIncomeSource(it) }
+                    } else {
+                        for (src in current) {
+                            if (lastSavedIs[src.id] != src) SyncWriteHelper.pushIncomeSource(src)
+                        }
                     }
                     current.associateByTo(lastSavedIs) { it.id }
-                    if (pushed) lastSyncActivity = System.currentTimeMillis()
+                    if (hint == null || hint.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
                 }
             }
 
-            fun saveRecurringExpenses() {
+            fun saveRecurringExpenses(hint: List<RecurringExpense>? = null) {
                 val current = recurringExpenses.toList()
                 RecurringExpenseRepository.save(context, current)
                 if (SyncWriteHelper.isInitialized()) {
-                    var pushed = false
-                    for (re in current) {
-                        if (lastSavedRe[re.id] != re) { SyncWriteHelper.pushRecurringExpense(re); pushed = true }
+                    if (hint != null) {
+                        hint.forEach { SyncWriteHelper.pushRecurringExpense(it) }
+                    } else {
+                        for (re in current) {
+                            if (lastSavedRe[re.id] != re) SyncWriteHelper.pushRecurringExpense(re)
+                        }
                     }
                     current.associateByTo(lastSavedRe) { it.id }
-                    if (pushed) lastSyncActivity = System.currentTimeMillis()
+                    if (hint == null || hint.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
                 }
             }
 
-            fun saveAmortizationEntries() {
+            fun saveAmortizationEntries(hint: List<AmortizationEntry>? = null) {
                 val current = amortizationEntries.toList()
                 AmortizationRepository.save(context, current)
                 if (SyncWriteHelper.isInitialized()) {
-                    var pushed = false
-                    for (ae in current) {
-                        if (lastSavedAe[ae.id] != ae) { SyncWriteHelper.pushAmortizationEntry(ae); pushed = true }
+                    if (hint != null) {
+                        hint.forEach { SyncWriteHelper.pushAmortizationEntry(it) }
+                    } else {
+                        for (ae in current) {
+                            if (lastSavedAe[ae.id] != ae) SyncWriteHelper.pushAmortizationEntry(ae)
+                        }
                     }
                     current.associateByTo(lastSavedAe) { it.id }
-                    if (pushed) lastSyncActivity = System.currentTimeMillis()
+                    if (hint == null || hint.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
                 }
             }
 
-            fun saveSavingsGoals() {
+            fun saveSavingsGoals(hint: List<SavingsGoal>? = null) {
                 val current = savingsGoals.toList()
                 SavingsGoalRepository.save(context, current)
                 if (SyncWriteHelper.isInitialized()) {
-                    var pushed = false
-                    for (sg in current) {
-                        if (lastSavedSg[sg.id] != sg) { SyncWriteHelper.pushSavingsGoal(sg); pushed = true }
+                    if (hint != null) {
+                        hint.forEach { SyncWriteHelper.pushSavingsGoal(it) }
+                    } else {
+                        for (sg in current) {
+                            if (lastSavedSg[sg.id] != sg) SyncWriteHelper.pushSavingsGoal(sg)
+                        }
                     }
                     current.associateByTo(lastSavedSg) { it.id }
-                    if (pushed) lastSyncActivity = System.currentTimeMillis()
+                    if (hint == null || hint.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
                 }
             }
 
-            fun saveTransactions() {
+            fun saveTransactions(hint: List<Transaction>? = null) {
                 // Dedup by ID before saving
                 val deduped = transactions.groupBy { it.id }
                     .values.map { group -> group.first() }
@@ -427,25 +439,31 @@ class MainActivity : ComponentActivity() {
                 val current = transactions.toList()
                 TransactionRepository.save(context, current)
                 if (SyncWriteHelper.isInitialized()) {
-                    var pushed = false
-                    for (txn in current) {
-                        if (lastSavedTxns[txn.id] != txn) { SyncWriteHelper.pushTransaction(txn); pushed = true }
+                    if (hint != null) {
+                        hint.forEach { SyncWriteHelper.pushTransaction(it) }
+                    } else {
+                        for (txn in current) {
+                            if (lastSavedTxns[txn.id] != txn) SyncWriteHelper.pushTransaction(txn)
+                        }
                     }
                     current.associateByTo(lastSavedTxns) { it.id }
-                    if (pushed) lastSyncActivity = System.currentTimeMillis()
+                    if (hint == null || hint.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
                 }
             }
 
-            fun saveCategories() {
+            fun saveCategories(hint: List<Category>? = null) {
                 val current = categories.toList()
                 CategoryRepository.save(context, current)
                 if (SyncWriteHelper.isInitialized()) {
-                    var pushed = false
-                    for (cat in current) {
-                        if (lastSavedCat[cat.id] != cat) { SyncWriteHelper.pushCategory(cat); pushed = true }
+                    if (hint != null) {
+                        hint.forEach { SyncWriteHelper.pushCategory(it) }
+                    } else {
+                        for (cat in current) {
+                            if (lastSavedCat[cat.id] != cat) SyncWriteHelper.pushCategory(cat)
+                        }
                     }
                     current.associateByTo(lastSavedCat) { it.id }
-                    if (pushed) lastSyncActivity = System.currentTimeMillis()
+                    if (hint == null || hint.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
                 }
             }
 
@@ -507,16 +525,19 @@ class MainActivity : ComponentActivity() {
                 mutableStateListOf(*PeriodLedgerRepository.load(context).toTypedArray())
             }
 
-            fun savePeriodLedger() {
+            fun savePeriodLedger(hint: List<PeriodLedgerEntry>? = null) {
                 val current = periodLedger.toList()
                 PeriodLedgerRepository.save(context, current)
                 if (SyncWriteHelper.isInitialized()) {
-                    var pushed = false
-                    for (ple in current) {
-                        if (lastSavedPle[ple.id] != ple) { SyncWriteHelper.pushPeriodLedgerEntry(ple); pushed = true }
+                    if (hint != null) {
+                        hint.forEach { SyncWriteHelper.pushPeriodLedgerEntry(it) }
+                    } else {
+                        for (ple in current) {
+                            if (lastSavedPle[ple.id] != ple) SyncWriteHelper.pushPeriodLedgerEntry(ple)
+                        }
                     }
                     current.associateByTo(lastSavedPle) { it.id }
-                    if (pushed) lastSyncActivity = System.currentTimeMillis()
+                    if (hint == null || hint.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
                 }
             }
 
@@ -679,7 +700,7 @@ class MainActivity : ComponentActivity() {
                                         appliedAmount = correctAmount,
                                         deviceId = localDeviceId
                                     )
-                                    savePeriodLedger()
+                                    savePeriodLedger(listOf(periodLedger[idx]))
                                 }
                             }
                         }
@@ -1605,14 +1626,14 @@ class MainActivity : ComponentActivity() {
                         savingsGoals[gIdx] = g.copy(
                             totalSavedSoFar = maxOf(0.0, g.totalSavedSoFar - stamped.amount),
                         )
-                        saveSavingsGoals()
+                        saveSavingsGoals(listOf(savingsGoals[gIdx]))
                     }
                 }
                 // Guard against duplicate IDs (e.g., double-tap or recomposition replay)
                 if (transactions.none { it.id == stamped.id }) {
                     transactions.add(stamped)
                 }
-                saveTransactions()
+                saveTransactions(listOf(stamped))
                 recomputeCash()
             }
 
@@ -1734,6 +1755,7 @@ class MainActivity : ComponentActivity() {
                             lastRefreshDate = currentPeriod
 
                             // Create one ledger entry per missed period using aligned dates
+                            val addedLedgerEntries = mutableListOf<PeriodLedgerEntry>()
                             for (period in 0 until missedPeriods) {
                                 val periodsBack = (missedPeriods - 1 - period).toLong()
                                 val periodDate = when (budgetPeriod) {
@@ -1745,16 +1767,16 @@ class MainActivity : ComponentActivity() {
                                     it.periodStartDate.toLocalDate() == periodDate
                                 }
                                 if (!alreadyRecorded) {
-                                    periodLedger.add(
-                                        PeriodLedgerEntry(
-                                            periodStartDate = periodDate.atStartOfDay(),
-                                            appliedAmount = budgetAmount,
-                                            deviceId = localDeviceId
-                                        )
+                                    val entry = PeriodLedgerEntry(
+                                        periodStartDate = periodDate.atStartOfDay(),
+                                        appliedAmount = budgetAmount,
+                                        deviceId = localDeviceId
                                     )
+                                    periodLedger.add(entry)
+                                    addedLedgerEntries.add(entry)
                                 }
                             }
-                            savePeriodLedger()
+                            savePeriodLedger(addedLedgerEntries)
 
                             // Update savings goals totalSavedSoFar for non-paused, non-complete items.
                             // Use the correct date for each catch-up period so periodsLeft
@@ -2161,6 +2183,7 @@ class MainActivity : ComponentActivity() {
                         onSyncNow = doSyncNow,
                         onSupercharge = { allocations, modes ->
                             val deposits = mutableListOf<Pair<String, Double>>() // goalName to capped amount
+                            val changedGoals = mutableListOf<SavingsGoal>()
                             for ((goalId, amount) in allocations) {
                                 val idx = savingsGoals.indexOfFirst { it.id == goalId }
                                 if (idx >= 0) {
@@ -2190,12 +2213,13 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
                                         savingsGoals[idx] = updatedGoal
+                                        changedGoals.add(updatedGoal)
                                         deposits.add(goal.name to capped)
                                     }
                                 }
                             }
                             if (deposits.isNotEmpty()) {
-                                saveSavingsGoals()
+                                saveSavingsGoals(changedGoals)
                                 // Create internal expense transactions so recomputeAvailableCash
                                 // reflects the immediate cash outflow. Categorized as "supercharge"
                                 // so they are visible via the category but hidden from the category picker.
@@ -2222,7 +2246,7 @@ class MainActivity : ComponentActivity() {
                             appLanguage = lang
                             prefs.edit().putString("appLanguage", lang).apply()
                             val newStrings: AppStrings = if (lang == "es") SpanishStrings else EnglishStrings
-                            var catChanged = false
+                            val changedCats = mutableListOf<Category>()
                             categories.forEachIndexed { idx, cat ->
                                 if (cat.tag.isNotEmpty()) {
                                     val allKnown = getAllKnownNamesForTag(cat.tag)
@@ -2230,12 +2254,12 @@ class MainActivity : ComponentActivity() {
                                         val newName = getDefaultCategoryName(cat.tag, newStrings)
                                         if (newName != null && newName != cat.name) {
                                             categories[idx] = cat.copy(name = newName)
-                                            catChanged = true
+                                            changedCats.add(categories[idx])
                                         }
                                     }
                                 }
                             }
-                            if (catChanged) saveCategories()
+                            if (changedCats.isNotEmpty()) saveCategories(changedCats)
                         },
                         onNavigateToBudgetConfig = { currentScreen = "budget_config" },
                         onNavigateToFamilySync = { currentScreen = "family_sync" },
@@ -2343,10 +2367,11 @@ class MainActivity : ComponentActivity() {
                         categories = activeCategories,
                         transactions = activeTransactions,
                         onAddCategory = { cat ->
-                            categories.add(cat.copy(
+                            val added = cat.copy(
                                 deviceId = localDeviceId,
-                            ))
-                            saveCategories()
+                            )
+                            categories.add(added)
+                            saveCategories(listOf(added))
                         },
                         onUpdateCategory = { updated ->
                             val idx = categories.indexOfFirst { it.id == updated.id }
@@ -2357,14 +2382,14 @@ class MainActivity : ComponentActivity() {
                                     deviceId = old.deviceId,
                                     deleted = old.deleted,
                                 )
-                                saveCategories()
+                                saveCategories(listOf(categories[idx]))
                             }
                         },
                         onDeleteCategory = { cat ->
                             val idx = categories.indexOfFirst { it.id == cat.id }
                             if (idx >= 0) {
                                 categories[idx] = categories[idx].copy(deleted = true)
-                                saveCategories()
+                                saveCategories(listOf(categories[idx]))
                             }
                         },
                         onToggleCharted = { cat ->
@@ -2373,7 +2398,7 @@ class MainActivity : ComponentActivity() {
                                 categories[idx] = categories[idx].copy(
                                     charted = !categories[idx].charted,
                                 )
-                                saveCategories()
+                                saveCategories(listOf(categories[idx]))
                             }
                         },
                         onToggleWidgetVisible = { cat ->
@@ -2382,10 +2407,11 @@ class MainActivity : ComponentActivity() {
                                 categories[idx] = categories[idx].copy(
                                     widgetVisible = !categories[idx].widgetVisible,
                                 )
-                                saveCategories()
+                                saveCategories(listOf(categories[idx]))
                             }
                         },
                         onReassignCategory = { fromId, toId ->
+                            val changedTxns = mutableListOf<Transaction>()
                             transactions.forEachIndexed { index, txn ->
                                 val updated = txn.categoryAmounts.map { ca ->
                                     if (ca.categoryId == fromId) {
@@ -2406,9 +2432,10 @@ class MainActivity : ComponentActivity() {
                                     transactions[index] = txn.copy(
                                         categoryAmounts = finalAmounts,
                                     )
+                                    changedTxns.add(transactions[index])
                                 }
                             }
-                            saveTransactions()
+                            saveTransactions(changedTxns)
                         },
                         receiptPruneAgeDays = sharedSettings.receiptPruneAgeDays,
                         onReceiptPruneChange = { days ->
@@ -2642,7 +2669,7 @@ class MainActivity : ComponentActivity() {
                                         savingsGoals[gIdx] = g.copy(
                                             totalSavedSoFar = g.totalSavedSoFar + prev.linkedSavingsGoalAmount,
                                         )
-                                        saveSavingsGoals()
+                                        saveSavingsGoals(listOf(savingsGoals[gIdx]))
                                     }
                                 } else if (wasLinkedToGoal == null && nowLinkedToGoal != null) {
                                     // Newly linked: deduct from goal
@@ -2652,10 +2679,10 @@ class MainActivity : ComponentActivity() {
                                         savingsGoals[gIdx] = g.copy(
                                             totalSavedSoFar = maxOf(0.0, g.totalSavedSoFar - updated.amount),
                                         )
-                                        saveSavingsGoals()
+                                        saveSavingsGoals(listOf(savingsGoals[gIdx]))
                                     }
                                 }
-                                saveTransactions()
+                                saveTransactions(listOf(transactions[index]))
                             }
                             recomputeCash()
                         },
@@ -2671,13 +2698,13 @@ class MainActivity : ComponentActivity() {
                                         savingsGoals[gIdx] = g.copy(
                                             totalSavedSoFar = g.totalSavedSoFar + t.linkedSavingsGoalAmount,
                                         )
-                                        saveSavingsGoals()
+                                        saveSavingsGoals(listOf(savingsGoals[gIdx]))
                                     }
                                 }
                                 transactions[idx] = t.copy(
                                     deleted = true
                                 )
-                                saveTransactions()
+                                saveTransactions(listOf(transactions[idx]))
                                 // Clean up receipt photos (local + cloud)
                                 val receiptIds = listOfNotNull(t.receiptId1, t.receiptId2, t.receiptId3, t.receiptId4, t.receiptId5)
                                 if (receiptIds.isNotEmpty()) {
@@ -2691,7 +2718,8 @@ class MainActivity : ComponentActivity() {
                             recomputeCash()
                         },
                         onDeleteTransactions = { ids ->
-                            var goalsChanged = false
+                            val changedGoals = mutableListOf<SavingsGoal>()
+                            val changedTxns = mutableListOf<Transaction>()
                             transactions.forEachIndexed { index, txn ->
                                 if (txn.id in ids && !txn.deleted) {
                                     // Restore savings goal funds for linked transactions
@@ -2702,16 +2730,17 @@ class MainActivity : ComponentActivity() {
                                             savingsGoals[gIdx] = g.copy(
                                                 totalSavedSoFar = g.totalSavedSoFar + txn.linkedSavingsGoalAmount,
                                             )
-                                            goalsChanged = true
+                                            changedGoals.add(savingsGoals[gIdx])
                                         }
                                     }
                                     transactions[index] = txn.copy(
                                         deleted = true,
                                     )
+                                    changedTxns.add(transactions[index])
                                 }
                             }
-                            if (goalsChanged) saveSavingsGoals()
-                            saveTransactions()
+                            if (changedGoals.isNotEmpty()) saveSavingsGoals(changedGoals)
+                            saveTransactions(changedTxns)
                             recomputeCash()
                             // Clean up receipt photos for all deleted transactions
                             val deletedReceiptIds = ids.flatMap { id ->
@@ -2854,22 +2883,23 @@ class MainActivity : ComponentActivity() {
                                 incomeSources[idx] = incomeSources[idx].copy(
                                     amount = newAmount,
                                 )
-                                saveIncomeSources()
+                                saveIncomeSources(listOf(incomeSources[idx]))
                             }
                         },
                         onAddAmortization = { entry ->
-                            amortizationEntries.add(entry.copy(
+                            val added = entry.copy(
                                 deviceId = localDeviceId,
-                            ))
-                            saveAmortizationEntries()
+                            )
+                            amortizationEntries.add(added)
+                            saveAmortizationEntries(listOf(added))
                         },
                         onDeleteAmortization = { entry ->
                             val idx = amortizationEntries.indexOfFirst { it.id == entry.id }
                             if (idx >= 0) {
                                 amortizationEntries[idx] = amortizationEntries[idx].copy(
-                                    deleted = true, 
+                                    deleted = true,
                                 )
-                                saveAmortizationEntries()
+                                saveAmortizationEntries(listOf(amortizationEntries[idx]))
                             }
                         },
                         onBack = { currentScreen = "main" },
@@ -2898,10 +2928,11 @@ class MainActivity : ComponentActivity() {
                             BudgetPeriod.MONTHLY -> strings.futureExpenditures.savingsPeriodMonthly
                         },
                         onAddGoal = { goal ->
-                            savingsGoals.add(goal.copy(
+                            val added = goal.copy(
                                 deviceId = localDeviceId,
-                            ))
-                            saveSavingsGoals()
+                            )
+                            savingsGoals.add(added)
+                            saveSavingsGoals(listOf(added))
                         },
                         onUpdateGoal = { updated ->
                             val idx = savingsGoals.indexOfFirst { it.id == updated.id }
@@ -2911,27 +2942,29 @@ class MainActivity : ComponentActivity() {
                                     deviceId = old.deviceId,
                                     deleted = old.deleted,
                                 )
-                                saveSavingsGoals()
+                                saveSavingsGoals(listOf(savingsGoals[idx]))
                             }
                         },
                         onDeleteGoal = { goal ->
                             val idx = savingsGoals.indexOfFirst { it.id == goal.id }
                             if (idx >= 0) {
                                 savingsGoals[idx] = savingsGoals[idx].copy(deleted = true)
-                                saveSavingsGoals()
+                                saveSavingsGoals(listOf(savingsGoals[idx]))
                                 // Unlink any transactions linked to this goal.
                                 // PRESERVE linkedSavingsGoalAmount — those expenses were
                                 // already paid from savings.  Clearing it would cause
                                 // availableCash to drop (double-counting the expense).
                                 // Manual unlink (linked-in-error) clears amount separately.
+                                val unlinkedTxns = mutableListOf<Transaction>()
                                 transactions.forEachIndexed { i, txn ->
                                     if (txn.linkedSavingsGoalId == goal.id) {
                                         transactions[i] = txn.copy(
                                             linkedSavingsGoalId = null,
                                         )
+                                        unlinkedTxns.add(transactions[i])
                                     }
                                 }
-                                saveTransactions()
+                                saveTransactions(unlinkedTxns)
                                 recomputeCash()
                             }
                         },
@@ -2961,10 +2994,11 @@ class MainActivity : ComponentActivity() {
                         dateFormatPattern = dateFormatPattern,
                         transactions = activeTransactions,
                         onAddEntry = { entry ->
-                            amortizationEntries.add(entry.copy(
+                            val added = entry.copy(
                                 deviceId = localDeviceId,
-                            ))
-                            saveAmortizationEntries()
+                            )
+                            amortizationEntries.add(added)
+                            saveAmortizationEntries(listOf(added))
                         },
                         onUpdateEntry = { updated ->
                             val idx = amortizationEntries.indexOfFirst { it.id == updated.id }
@@ -2974,7 +3008,7 @@ class MainActivity : ComponentActivity() {
                                     deviceId = old.deviceId,
                                     deleted = old.deleted,
                                 )
-                                saveAmortizationEntries()
+                                saveAmortizationEntries(listOf(amortizationEntries[idx]))
                             }
                         },
                         onDeleteEntry = { entry ->
@@ -2991,17 +3025,19 @@ class MainActivity : ComponentActivity() {
                                 val appliedAmount = BudgetCalculator.roundCents(perPeriod * elapsed)
 
                                 amortizationEntries[idx] = amortizationEntries[idx].copy(deleted = true)
-                                saveAmortizationEntries()
+                                saveAmortizationEntries(listOf(amortizationEntries[idx]))
                                 // Unlink transactions and record the already-applied portion
+                                val unlinkedTxns = mutableListOf<Transaction>()
                                 transactions.forEachIndexed { i, txn ->
                                     if (txn.linkedAmortizationEntryId == entry.id) {
                                         transactions[i] = txn.copy(
                                             linkedAmortizationEntryId = null,
                                             amortizationAppliedAmount = appliedAmount,
                                         )
+                                        unlinkedTxns.add(transactions[i])
                                     }
                                 }
-                                saveTransactions()
+                                saveTransactions(unlinkedTxns)
                                 recomputeCash()
                             }
                         },
@@ -3014,10 +3050,11 @@ class MainActivity : ComponentActivity() {
                         currencySymbol = currencySymbol,
                         dateFormatPattern = dateFormatPattern,
                         onAddRecurringExpense = { expense ->
-                            recurringExpenses.add(expense.copy(
+                            val added = expense.copy(
                                 deviceId = localDeviceId,
-                            ))
-                            saveRecurringExpenses()
+                            )
+                            recurringExpenses.add(added)
+                            saveRecurringExpenses(listOf(added))
                         },
                         onUpdateRecurringExpense = { updated ->
                             val idx = recurringExpenses.indexOfFirst { it.id == updated.id }
@@ -3031,7 +3068,7 @@ class MainActivity : ComponentActivity() {
                                     deviceId = old.deviceId,
                                     deleted = old.deleted,
                                 )
-                                saveRecurringExpenses()
+                                saveRecurringExpenses(listOf(recurringExpenses[idx]))
                                 if (hasLinkedTxns) {
                                     pendingREAmountUpdate = Pair(updated, old.amount)
                                 }
@@ -3041,16 +3078,18 @@ class MainActivity : ComponentActivity() {
                             val idx = recurringExpenses.indexOfFirst { it.id == expense.id }
                             if (idx >= 0) {
                                 recurringExpenses[idx] = recurringExpenses[idx].copy(deleted = true)
-                                saveRecurringExpenses()
+                                saveRecurringExpenses(listOf(recurringExpenses[idx]))
                                 // Unlink any transactions linked to this expense
+                                val unlinkedTxns = mutableListOf<Transaction>()
                                 transactions.forEachIndexed { i, txn ->
                                     if (txn.linkedRecurringExpenseId == expense.id) {
                                         transactions[i] = txn.copy(
                                             linkedRecurringExpenseId = null,
                                         )
+                                        unlinkedTxns.add(transactions[i])
                                     }
                                 }
-                                saveTransactions()
+                                saveTransactions(unlinkedTxns)
                                 recomputeCash()
                             }
                         },
@@ -3062,10 +3101,11 @@ class MainActivity : ComponentActivity() {
                         currencySymbol = currencySymbol,
                         dateFormatPattern = dateFormatPattern,
                         onAddIncomeSource = { src ->
-                            incomeSources.add(src.copy(
+                            val added = src.copy(
                                 deviceId = localDeviceId,
-                            ))
-                            saveIncomeSources()
+                            )
+                            incomeSources.add(added)
+                            saveIncomeSources(listOf(added))
                         },
                         onUpdateIncomeSource = { updated ->
                             val idx = incomeSources.indexOfFirst { it.id == updated.id }
@@ -3079,7 +3119,7 @@ class MainActivity : ComponentActivity() {
                                     deviceId = old.deviceId,
                                     deleted = old.deleted,
                                 )
-                                saveIncomeSources()
+                                saveIncomeSources(listOf(incomeSources[idx]))
                                 if (hasLinkedTxns) {
                                     pendingISAmountUpdate = Pair(updated, old.amount)
                                 }
@@ -3089,16 +3129,18 @@ class MainActivity : ComponentActivity() {
                             val idx = incomeSources.indexOfFirst { it.id == src.id }
                             if (idx >= 0) {
                                 incomeSources[idx] = incomeSources[idx].copy(deleted = true)
-                                saveIncomeSources()
+                                saveIncomeSources(listOf(incomeSources[idx]))
                                 // Unlink any transactions linked to this income source
+                                val unlinkedTxns = mutableListOf<Transaction>()
                                 transactions.forEachIndexed { i, txn ->
                                     if (txn.linkedIncomeSourceId == src.id) {
                                         transactions[i] = txn.copy(
                                             linkedIncomeSourceId = null,
                                         )
+                                        unlinkedTxns.add(transactions[i])
                                     }
                                 }
-                                saveTransactions()
+                                saveTransactions(unlinkedTxns)
                                 recomputeCash()
                             }
                         },
@@ -3194,16 +3236,16 @@ class MainActivity : ComponentActivity() {
                             val alreadyRecorded = periodLedger.any {
                                 it.periodStartDate.toLocalDate() == budgetStartDate
                             }
-                            if (!alreadyRecorded) {
-                                periodLedger.add(
-                                    PeriodLedgerEntry(
-                                        periodStartDate = entryDate,
-                                        appliedAmount = budgetAmount,
-                                        deviceId = localDeviceId
-                                    )
+                            val newLedgerEntry = if (!alreadyRecorded) {
+                                val entry = PeriodLedgerEntry(
+                                    periodStartDate = entryDate,
+                                    appliedAmount = budgetAmount,
+                                    deviceId = localDeviceId
                                 )
-                            }
-                            savePeriodLedger()
+                                periodLedger.add(entry)
+                                entry
+                            } else null
+                            savePeriodLedger(listOfNotNull(newLedgerEntry))
                             if (isSyncConfigured) {
                                 sharedSettings = sharedSettings.copy(
                                     budgetStartDate = budgetStartDate?.toString(),
@@ -3663,10 +3705,11 @@ class MainActivity : ComponentActivity() {
                             dashboardShowAddIncome = false
                         },
                         onAddAmortization = { entry ->
-                            amortizationEntries.add(entry.copy(
+                            val added = entry.copy(
                                 deviceId = localDeviceId,
-                            ))
-                            saveAmortizationEntries()
+                            )
+                            amortizationEntries.add(added)
+                            saveAmortizationEntries(listOf(added))
                         },
                         onDeleteAmortization = { entry ->
                             val idx = amortizationEntries.indexOfFirst { it.id == entry.id }
@@ -3674,7 +3717,7 @@ class MainActivity : ComponentActivity() {
                                 amortizationEntries[idx] = amortizationEntries[idx].copy(
                                     deleted = true
                                 )
-                                saveAmortizationEntries()
+                                saveAmortizationEntries(listOf(amortizationEntries[idx]))
                             }
                         }
                     )
@@ -3703,10 +3746,11 @@ class MainActivity : ComponentActivity() {
                             dashboardShowAddExpense = false
                         },
                         onAddAmortization = { entry ->
-                            amortizationEntries.add(entry.copy(
+                            val added = entry.copy(
                                 deviceId = localDeviceId,
-                            ))
-                            saveAmortizationEntries()
+                            )
+                            amortizationEntries.add(added)
+                            saveAmortizationEntries(listOf(added))
                         },
                         onDeleteAmortization = { entry ->
                             val idx = amortizationEntries.indexOfFirst { it.id == entry.id }
@@ -3714,7 +3758,7 @@ class MainActivity : ComponentActivity() {
                                 amortizationEntries[idx] = amortizationEntries[idx].copy(
                                     deleted = true
                                 )
-                                saveAmortizationEntries()
+                                saveAmortizationEntries(listOf(amortizationEntries[idx]))
                             }
                         }
                     )
@@ -3744,7 +3788,7 @@ class MainActivity : ComponentActivity() {
                                     deleted = true
                                 )
                             }
-                            saveTransactions()
+                            saveTransactions(if (dupIdx >= 0) listOf(transactions[dupIdx]) else emptyList())
                             val txn = dashPendingManualSave!!
                             dashPendingManualSave = null
                             dashManualDuplicateMatch = null
@@ -3857,7 +3901,7 @@ class MainActivity : ComponentActivity() {
                                     incomeSources[idx] = incomeSources[idx].copy(
                                         amount = baseTxn.amount,
                                     )
-                                    saveIncomeSources()
+                                    saveIncomeSources(listOf(incomeSources[idx]))
                                 }
                             }
                             addTransactionWithBudgetEffect(txn)
@@ -3886,14 +3930,16 @@ class MainActivity : ComponentActivity() {
                         style = DialogStyle.WARNING,
                         confirmButton = {
                             DialogWarningButton(onClick = {
+                                val changedTxns = mutableListOf<Transaction>()
                                 transactions.forEachIndexed { i, txn ->
                                     if (txn.linkedRecurringExpenseId == updated.id && !txn.deleted) {
                                         transactions[i] = txn.copy(
                                             linkedRecurringExpenseAmount = updated.amount,
                                         )
+                                        changedTxns.add(transactions[i])
                                     }
                                 }
-                                saveTransactions()
+                                saveTransactions(changedTxns)
                                 pendingREAmountUpdate = null
                                 recomputeCash()
                             }) { Text(strings.common.applyToPastConfirm) }
@@ -3919,14 +3965,16 @@ class MainActivity : ComponentActivity() {
                         style = DialogStyle.WARNING,
                         confirmButton = {
                             DialogWarningButton(onClick = {
+                                val changedTxns = mutableListOf<Transaction>()
                                 transactions.forEachIndexed { i, txn ->
                                     if (txn.linkedIncomeSourceId == updated.id && !txn.deleted) {
                                         transactions[i] = txn.copy(
                                             linkedIncomeSourceAmount = updated.amount,
                                         )
+                                        changedTxns.add(transactions[i])
                                     }
                                 }
-                                saveTransactions()
+                                saveTransactions(changedTxns)
                                 pendingISAmountUpdate = null
                                 recomputeCash()
                             }) { Text(strings.common.applyToPastConfirm) }
