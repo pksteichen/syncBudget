@@ -432,7 +432,11 @@ object TranslationContext {
         "moveCategoryBody" to "Dialog body when a category is deselected and its allocated amount must be moved elsewhere. Lambda: 'valueLabel' is a formatted currency amount, 'catName' is the category name being removed.",
         "sumMismatchBody" to "Dialog body warning that category subtotals don't add up to the transaction total. Lambda: 'catTotal' is the sum of categories, 'txnTotal' is the transaction total. Both are formatted currency.",
         "selectFieldToAdjust" to "Dialog instruction text asking the user to choose which field (category amount or total) to adjust to resolve a sum mismatch.",
-        "rowsSkippedWarning" to "Informational message shown when CSV parsing skipped some rows. Lambda: 'skipped' is count of failed rows, 'total' is total rows in the file."
+        "rowsSkippedWarning" to "Informational message shown when CSV parsing skipped some rows. Lambda: 'skipped' is count of failed rows, 'total' is total rows in the file.",
+        "discardChangesTitle" to "Title for confirmation dialog when user tries to close a transaction form with unsaved changes.",
+        "discardChangesBody" to "Body text for the discard-changes confirmation dialog, asking if the user wants to discard unsaved edits.",
+        "discard" to "Button label to confirm discarding unsaved changes in the transaction form.",
+        "keepEditing" to "Button label to cancel the discard action and continue editing the transaction form."
     )
 
     // ── Savings Goals (Future Expenditures) Strings ──

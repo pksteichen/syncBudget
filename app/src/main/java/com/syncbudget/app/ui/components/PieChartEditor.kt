@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.isSystemInDarkTheme
+import com.syncbudget.app.data.BudgetCalculator
 import com.syncbudget.app.data.Category
 import com.syncbudget.app.ui.components.CURRENCY_SUFFIX_SYMBOLS
 import kotlin.math.abs
@@ -244,7 +245,7 @@ fun PieChartEditor(
         val amounts = mutableMapOf<Int, Double>()
         for (i in 0 until n) {
             val sweep = sweepBetween(handleAngles[i], handleAngles[(i + 1) % n])
-            amounts[categories[i].id] = totalAmount * sweep / 360.0
+            amounts[categories[i].id] = BudgetCalculator.roundCents(totalAmount * sweep / 360.0)
         }
         amounts
     }
@@ -352,7 +353,7 @@ fun PieChartEditor(
                                             handleAngles[i],
                                             handleAngles[(i + 1) % n]
                                         )
-                                        newAmounts[categories[i].id] = totalAmount * sweep / 360.0
+                                        newAmounts[categories[i].id] = BudgetCalculator.roundCents(totalAmount * sweep / 360.0)
                                     }
                                     onAmountsChanged(newAmounts)
                                 }

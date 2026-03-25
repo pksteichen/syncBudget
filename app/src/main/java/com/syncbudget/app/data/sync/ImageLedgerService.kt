@@ -115,6 +115,10 @@ object ImageLedgerService {
                 val receiptId = item.name.removeSuffix(".enc")
                 if (receiptId !in ledgerIds) {
                     try {
+                        // Skip recently-uploaded files to avoid race with ledger creation
+                        val metadata = item.metadata.await()
+                        val createdAt = metadata.creationTimeMillis
+                        if (System.currentTimeMillis() - createdAt < 10 * 60 * 1000L) continue
                         item.delete().await()
                         purged++
                     } catch (e: Exception) {

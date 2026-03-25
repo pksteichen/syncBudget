@@ -3384,9 +3384,9 @@ fun TransactionDialog(
     if (showDiscardConfirm) {
         AdAwareAlertDialog(
             onDismissRequest = { showDiscardConfirm = false },
-            title = { Text("Discard Changes?") },  // TODO: i18n
+            title = { Text(S.transactions.discardChangesTitle) },
             style = DialogStyle.WARNING,
-            text = { Text("You have unsaved changes. Discard them?") },  // TODO: i18n
+            text = { Text(S.transactions.discardChangesBody) },
             confirmButton = {
                 DialogWarningButton(onClick = {
                     showDiscardConfirm = false
@@ -3399,11 +3399,11 @@ fun TransactionDialog(
                         onDeleteAmortization?.invoke(entry)
                     }
                     onDismiss()
-                }) { Text("Discard") }  // TODO: i18n
+                }) { Text(S.transactions.discard) }
             },
             dismissButton = {
                 DialogSecondaryButton(onClick = { showDiscardConfirm = false }) {
-                    Text("Keep Editing")  // TODO: i18n
+                    Text(S.transactions.keepEditing)
                 }
             }
         )

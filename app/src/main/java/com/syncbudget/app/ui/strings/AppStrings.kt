@@ -436,7 +436,11 @@ data class TransactionsStrings(
     val amountExample: String,
     val moveCategoryBody: (String, String) -> String,
     val sumMismatchBody: (String, String) -> String,
-    val selectFieldToAdjust: String
+    val selectFieldToAdjust: String,
+    val discardChangesTitle: String,
+    val discardChangesBody: String,
+    val discard: String,
+    val keepEditing: String
 )
 
 data class FutureExpendituresStrings(

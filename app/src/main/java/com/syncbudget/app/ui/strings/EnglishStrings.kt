@@ -410,7 +410,11 @@ object EnglishStrings : AppStrings {
         amountExample = "e.g. 42.50",
         moveCategoryBody = { valueLabel, catName -> "Where would you like to place $valueLabel from $catName?" },
         sumMismatchBody = { catTotal, txnTotal -> "Category amounts total $catTotal but Total is $txnTotal." },
-        selectFieldToAdjust = "Select field to adjust:"
+        selectFieldToAdjust = "Select field to adjust:",
+        discardChangesTitle = "Discard Changes?",
+        discardChangesBody = "You have unsaved changes. Discard them?",
+        discard = "Discard",
+        keepEditing = "Keep Editing"
     )
 
     override val futureExpenditures = FutureExpendituresStrings(

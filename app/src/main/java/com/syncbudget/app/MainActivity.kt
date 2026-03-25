@@ -1323,12 +1323,17 @@ class MainActivity : ComponentActivity() {
                             // Update device metadata — keep appSyncVersion=2
                             // to avoid triggering "update_required" in old
                             // SyncWorker until it's fully replaced.
+                            val receiptPrefs = context.getSharedPreferences("receipt_sync_prefs", Context.MODE_PRIVATE)
+                            val uploadSpeed = receiptPrefs.getLong("lastUploadSpeedBps", 0L)
+                            val speedMeasuredAt = receiptPrefs.getLong("lastSpeedMeasuredAt", 0L)
                             FirestoreService.updateDeviceMetadata(
                                 groupId, localDeviceId,
                                 syncVersion = 0L,
                                 appSyncVersion = 2,
                                 minSyncVersion = 2,
-                                photoCapable = isPaidUser || isSubscriber
+                                photoCapable = isPaidUser || isSubscriber,
+                                uploadSpeedBps = uploadSpeed,
+                                uploadSpeedMeasuredAt = speedMeasuredAt
                             )
                         } catch (e: Exception) {
                             android.util.Log.w("SyncLoop", "Light health check failed", e)

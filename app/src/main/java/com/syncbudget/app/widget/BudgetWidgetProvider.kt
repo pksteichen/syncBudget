@@ -11,6 +11,7 @@ import android.content.res.Configuration
 import android.os.Bundle
 import android.view.View
 import android.widget.RemoteViews
+import androidx.work.WorkManager
 import com.syncbudget.app.MainActivity
 import com.syncbudget.app.R
 import com.syncbudget.app.data.BudgetPeriod
@@ -41,6 +42,11 @@ class BudgetWidgetProvider : AppWidgetProvider() {
             // Schedule the next reset alarm
             scheduleResetAlarm(context)
         }
+    }
+
+    override fun onDisabled(context: Context) {
+        super.onDisabled(context)
+        WorkManager.getInstance(context).cancelUniqueWork("widget_refresh")
     }
 
     override fun onAppWidgetOptionsChanged(
@@ -85,7 +91,7 @@ class BudgetWidgetProvider : AppWidgetProvider() {
                     val calDay = if (resetDayOfWeek == 7) Calendar.SUNDAY
                         else resetDayOfWeek + 1
                     cal.set(Calendar.DAY_OF_WEEK, calDay)
-                    cal.set(Calendar.HOUR_OF_DAY, 0)
+                    cal.set(Calendar.HOUR_OF_DAY, resetHour)
                     cal.set(Calendar.MINUTE, 0)
                     cal.set(Calendar.SECOND, 30)
                     if (cal.timeInMillis <= System.currentTimeMillis()) {
@@ -95,7 +101,7 @@ class BudgetWidgetProvider : AppWidgetProvider() {
                 BudgetPeriod.MONTHLY -> {
                     cal.set(Calendar.DAY_OF_MONTH,
                         resetDayOfMonth.coerceAtMost(cal.getActualMaximum(Calendar.DAY_OF_MONTH)))
-                    cal.set(Calendar.HOUR_OF_DAY, 0)
+                    cal.set(Calendar.HOUR_OF_DAY, resetHour)
                     cal.set(Calendar.MINUTE, 0)
                     cal.set(Calendar.SECOND, 30)
                     if (cal.timeInMillis <= System.currentTimeMillis()) {
