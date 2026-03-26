@@ -4382,8 +4382,14 @@ fun TransactionDialog(
                                 incomeSources.find { it.id == isId }?.amount ?: 0.0
                             } ?: 0.0
 
-                            // Compute savings goal remembered amount
-                            val sgAmount = if (linkedSavingsGoalId != null) totalAmount else 0.0
+                            // Compute savings goal remembered amount: the lesser of the
+                            // transaction amount and what the goal actually has saved.
+                            // If the goal has $500 but the transaction is $670, only $500
+                            // is covered by the goal — the remaining $170 hits the budget.
+                            val sgAmount = if (linkedSavingsGoalId != null) {
+                                val goal = savingsGoals.find { it.id == linkedSavingsGoalId }
+                                if (goal != null) minOf(totalAmount, goal.totalSavedSoFar) else 0.0
+                            } else 0.0
 
                             val txn = if (editTransaction != null) {
                                 // Preserve fields not editable in this dialog
