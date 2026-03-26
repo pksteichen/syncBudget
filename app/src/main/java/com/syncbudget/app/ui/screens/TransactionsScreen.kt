@@ -4383,12 +4383,17 @@ fun TransactionDialog(
                             } ?: 0.0
 
                             // Compute savings goal remembered amount: the lesser of the
-                            // transaction amount and what the goal actually has saved.
-                            // If the goal has $500 but the transaction is $670, only $500
-                            // is covered by the goal — the remaining $170 hits the budget.
+                            // transaction amount and what the goal actually has available.
+                            // On edit, the goal's totalSavedSoFar was already depleted by
+                            // the original link — add back what this transaction took to
+                            // get the true available amount before recalculating.
                             val sgAmount = if (linkedSavingsGoalId != null) {
                                 val goal = savingsGoals.find { it.id == linkedSavingsGoalId }
-                                if (goal != null) minOf(totalAmount, goal.totalSavedSoFar) else 0.0
+                                if (goal != null) {
+                                    val previouslyTaken = editTransaction?.linkedSavingsGoalAmount ?: 0.0
+                                    val available = goal.totalSavedSoFar + previouslyTaken
+                                    minOf(totalAmount, available)
+                                } else 0.0
                             } else 0.0
 
                             val txn = if (editTransaction != null) {
