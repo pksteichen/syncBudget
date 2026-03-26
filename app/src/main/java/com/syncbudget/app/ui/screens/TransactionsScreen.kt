@@ -2376,8 +2376,13 @@ fun TransactionsScreen(
             }
         } else if (txn.linkedSavingsGoalId != null || txn.linkedSavingsGoalAmount > 0.0) {
             val goalName = savingsGoals.find { it.id == txn.linkedSavingsGoalId }?.name ?: txn.source
+            val remainder = BudgetCalculator.roundCents((txn.amount - txn.linkedSavingsGoalAmount).coerceAtLeast(0.0))
             title = S.transactions.effectTitleSavingsGoal
-            body = S.transactions.effectSavingsGoal(fc(txn.amount), goalName)
+            if (remainder > 0.0) {
+                body = S.transactions.effectSavingsGoalPartial(fc(txn.linkedSavingsGoalAmount), goalName, fc(remainder))
+            } else {
+                body = S.transactions.effectSavingsGoal(fc(txn.amount), goalName)
+            }
         } else if (txn.excludeFromBudget) {
             title = S.transactions.effectTitleExcluded
             body = S.transactions.effectExcluded(fc(txn.amount))
@@ -2766,9 +2771,10 @@ private fun TransactionRow(
         effectPrefix = if (isExpense) "-" else ""
     } else if (isLinkedSavingsGoal) {
         showEffect = true
-        effectAmount = 0.0
-        effectColor = Color(0xFFFF9800)
-        effectPrefix = ""
+        val remainder = (transaction.amount - transaction.linkedSavingsGoalAmount).coerceAtLeast(0.0)
+        effectAmount = remainder
+        effectColor = if (remainder > 0.0) Color(0xFFFF9800) else Color(0xFF4CAF50)
+        effectPrefix = if (remainder > 0.0) "-" else ""
     } else if (transaction.excludeFromBudget) {
         showEffect = true
         effectAmount = 0.0

@@ -323,6 +323,9 @@ object EnglishStrings : AppStrings {
         effectIncomeActualUnder = { amt, name, srcAmt, diff -> "This $amt income is $diff less than the budgeted $srcAmt for \"$name\". The $diff shortfall is deducted from your available cash.\n\nIf deleted, this shortfall will be removed from available cash." },
         effectIncomeActualAdjust = { amt, name -> "This $amt income is linked to \"$name\". In Actual-Adjust mode, the budgeted amount was updated to match, so there is no difference.\n\nIf deleted, the budget reverts to the source's current amount." },
         effectSavingsGoal = { amt, name -> "This $amt purchase was funded from savings goal \"$name\". The money came from savings, not your budget, so it has no effect on available cash.\n\nIf deleted, the spent amount will be restored to the savings goal." },
+        effectSavingsGoalPartial = { savingsAmount, goalName, budgetAmount ->
+            "Your savings goal \"$goalName\" covered $savingsAmount of this purchase. The remaining $budgetAmount was deducted from your available cash."
+        },
         effectExcluded = { amt -> "This $amt transaction is excluded from budget calculations. It has no effect on your available cash.\n\nIf deleted, it is simply removed." },
         bulkVerifyTitle = "Verify Transactions",
         bulkVerifyMessage = { count -> "Mark $count selected transaction(s) as:" },

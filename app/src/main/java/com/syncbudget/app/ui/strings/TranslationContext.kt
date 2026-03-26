@@ -345,6 +345,7 @@ object TranslationContext {
         "effectIncomeActualUnder" to "Explanation for linked income in Actual mode when received less than budgeted. Lambdas: amt, name, srcAmt, diff=shortfall.",
         "effectIncomeActualAdjust" to "Explanation for linked income in Actual-Adjust mode. Lambdas: amt, name.",
         "effectSavingsGoal" to "Explanation for a transaction funded from a savings goal. Lambdas: amt, name=goal name.",
+        "effectSavingsGoalPartial" to "Explanation for a transaction partially funded from a savings goal, where the remainder was deducted from available cash. Lambdas: savingsAmount=amount covered by savings, goalName=goal name, budgetAmount=remainder deducted from budget.",
         "effectExcluded" to "Explanation for a transaction excluded from budget. Lambda: amt=transaction amount.",
         "bulkVerifyTitle" to "Dialog title when bulk-verifying multiple selected transactions.",
         "bulkVerifyMessage" to "Dialog body asking what status to assign to selected transactions. Lambda: 'count' is the number of selected transactions.",

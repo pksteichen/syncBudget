@@ -940,8 +940,12 @@ class MainActivity : ComponentActivity() {
             // (amortization entries are built into the safe budget amount)
             fun isBudgetAccountedExpense(txn: Transaction): Boolean {
                 if (txn.type != TransactionType.EXPENSE) return false
-                return txn.linkedAmortizationEntryId != null ||
-                    txn.linkedSavingsGoalId != null || txn.linkedSavingsGoalAmount > 0.0
+                if (txn.linkedAmortizationEntryId != null) return true
+                // SG-linked: only fully accounted if savings covers the entire amount
+                if (txn.linkedSavingsGoalId != null || txn.linkedSavingsGoalAmount > 0.0) {
+                    return txn.linkedSavingsGoalAmount >= txn.amount
+                }
+                return false
             }
 
             // For recurring-linked expenses, returns the cash effect (recurringAmount - txnAmount).

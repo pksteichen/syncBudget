@@ -347,6 +347,7 @@ data class TransactionsStrings(
     val effectIncomeActualUnder: (String, String, String, String) -> String,
     val effectIncomeActualAdjust: (String, String) -> String,
     val effectSavingsGoal: (String, String) -> String,
+    val effectSavingsGoalPartial: (savingsAmount: String, goalName: String, budgetAmount: String) -> String,
     val effectExcluded: (String) -> String,
     val bulkVerifyTitle: String,
     val bulkVerifyMessage: (Int) -> String,

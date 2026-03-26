@@ -321,6 +321,9 @@ object SpanishStrings : AppStrings {
         effectIncomeActualUnder = { amt, name, srcAmt, diff -> "Este ingreso de $amt es $diff menos que el presupuestado de $srcAmt para \"$name\". El d\u00e9ficit de $diff se deduce de tu efectivo disponible.\n\nSi se elimina, este d\u00e9ficit se eliminar\u00e1 del efectivo disponible." },
         effectIncomeActualAdjust = { amt, name -> "Este ingreso de $amt est\u00e1 vinculado a \"$name\". En modo Actual-Ajuste, el monto presupuestado se actualiz\u00f3 para coincidir, por lo que no hay diferencia.\n\nSi se elimina, el presupuesto vuelve al monto actual de la fuente." },
         effectSavingsGoal = { amt, name -> "Esta compra de $amt fue financiada por la meta de ahorro \"$name\". El dinero provino de ahorros, no del presupuesto, por lo que no afecta tu efectivo disponible.\n\nSi se elimina, el monto gastado se restaurar\u00e1 a la meta de ahorro." },
+        effectSavingsGoalPartial = { savingsAmount, goalName, budgetAmount ->
+            "Tu meta de ahorro \"$goalName\" cubri\u00f3 $savingsAmount de esta compra. Los $budgetAmount restantes se descontaron de tu efectivo disponible."
+        },
         effectExcluded = { amt -> "Esta transacci\u00f3n de $amt est\u00e1 excluida de los c\u00e1lculos del presupuesto. No tiene efecto en tu efectivo disponible.\n\nSi se elimina, simplemente se elimina." },
         verifiedToast = "\u00a1Has verificado esta transacci\u00f3n!",
         unverifiedToast = "Has marcado esta transacci\u00f3n como no verificada.",
