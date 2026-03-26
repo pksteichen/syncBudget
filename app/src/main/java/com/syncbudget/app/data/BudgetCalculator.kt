@@ -420,8 +420,12 @@ object BudgetCalculator {
             if (txn.date.isBefore(budgetStartDate)) continue
             if (txn.excludeFromBudget) continue
             if (txn.type == TransactionType.EXPENSE) {
-                // Savings-goal-linked: money came from savings, not the budget
-                if (txn.linkedSavingsGoalId != null || txn.linkedSavingsGoalAmount > 0.0) continue
+                // Savings-goal-linked: savings covers part/all; remainder hits budget
+                if (txn.linkedSavingsGoalId != null || txn.linkedSavingsGoalAmount > 0.0) {
+                    val remainder = roundCents(txn.amount - txn.linkedSavingsGoalAmount).coerceAtLeast(0.0)
+                    if (remainder > 0.0) cash -= remainder
+                    continue
+                }
                 if (txn.linkedAmortizationEntryId != null) continue // fully budget-accounted
                 if (txn.amortizationAppliedAmount > 0.0) {
                     // Was linked to a deleted amortization — only deduct the unamortized remainder
