@@ -480,7 +480,7 @@ object ImageLedgerService {
 
     // ── Snapshot Archive ────────────────────────────────────────
 
-    private const val SNAPSHOT_DOC_ID = "__snapshot_request__"
+    private const val SNAPSHOT_DOC_ID = "_snapshot_request"
 
     suspend fun getSnapshotEntry(groupId: String): SnapshotLedgerEntry? {
         return try {

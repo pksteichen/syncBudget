@@ -1656,343 +1656,138 @@ fun TransactionsScreen(
     }
 
     // Save dialog
-    if (showSaveDialog) {
-        AdAwareDialog(
-            onDismissRequest = {
-                showSaveDialog = false
-                saveError = null
-            },
-        ) {
-            Surface(
-                modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 6.dp
-            ) {
-                val saveScrollState = rememberScrollState()
-                Box {
-                Column {
-                    DialogHeader(S.transactions.saveTransactions)
-
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier
-                            .weight(1f, fill = false)
-                            .verticalScroll(saveScrollState)
-                            .padding(horizontal = 20.dp, vertical = 16.dp)
-                    ) {
-                        Text(S.transactions.format, style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onBackground)
-                        SaveFormat.entries.forEach { format ->
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable {
-                                        selectedSaveFormat = format
-                                        saveError = null
-                                    }
-                                    .padding(vertical = 4.dp, horizontal = 4.dp)
-                            ) {
-                                RadioButton(
-                                    selected = selectedSaveFormat == format,
-                                    onClick = {
-                                        selectedSaveFormat = format
-                                        saveError = null
-                                    }
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(when (format) {
-                                    SaveFormat.CSV -> S.transactions.csv
-                                    SaveFormat.XLS -> S.transactions.xls
-                                    SaveFormat.PDF -> format.label
-                                }, style = MaterialTheme.typography.bodyLarge)
-                            }
-                        }
-
-                        val transactionsToSave = if (selectionMode && selectedIds.any { it.value })
-                            transactions.filter { selectedIds[it.id] == true } else transactions
-                        Text(S.transactions.selectedCount(transactionsToSave.size),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
-
+    SaveFormatDialog(
+        showSaveDialog = showSaveDialog,
+        selectedSaveFormat = selectedSaveFormat,
+        selectionMode = selectionMode,
+        selectedIds = selectedIds,
+        transactions = transactions,
+        categories = categories,
+        currencySymbol = currencySymbol,
+        onDismiss = {
+            showSaveDialog = false
+            saveError = null
+        },
+        onFormatSelected = { format ->
+            selectedSaveFormat = format
+            saveError = null
+        },
+        onSaveCsv = {
+            showSaveDialog = false
+            csvSaveLauncher.launch("budgetrak_transactions.csv")
+        },
+        onSaveXls = {
+            showSaveDialog = false
+            xlsSaveLauncher.launch("budgetrak_transactions.xlsx")
+        },
+        onSavePdf = {
+            showSaveDialog = false
+            val toSave = if (selectionMode && selectedIds.any { it.value }) {
+                transactions.filter { selectedIds[it.id] == true }
+            } else { transactions }
+            saveScope.launch(Dispatchers.IO) {
+                try {
+                    val files = ExpenseReportGenerator.generateReports(context, toSave, categories, currencySymbol)
+                    withContext(Dispatchers.Main) {
+                        toastState.show("${files.size} expense report(s) saved to Download/BudgeTrak/PDF", durationMs = 7500L)
                     }
-
-                    DialogFooter {
-                        FlowRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End,
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            DialogSecondaryButton(onClick = {
-                                showSaveDialog = false
-                                saveError = null
-                            }) { Text(S.common.cancel) }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            DialogPrimaryButton(onClick = {
-                                when (selectedSaveFormat) {
-                                    SaveFormat.CSV -> {
-                                        showSaveDialog = false
-                                        csvSaveLauncher.launch("budgetrak_transactions.csv")
-                                    }
-                                    SaveFormat.XLS -> {
-                                        showSaveDialog = false
-                                        xlsSaveLauncher.launch("budgetrak_transactions.xlsx")
-                                    }
-                                    SaveFormat.PDF -> {
-                                        showSaveDialog = false
-                                        val toSave = if (selectionMode && selectedIds.any { it.value }) {
-                                            transactions.filter { selectedIds[it.id] == true }
-                                        } else { transactions }
-                                        saveScope.launch(Dispatchers.IO) {
-                                            try {
-                                                val files = ExpenseReportGenerator.generateReports(context, toSave, categories, currencySymbol)
-                                                withContext(Dispatchers.Main) {
-                                                    toastState.show("${files.size} expense report(s) saved to Download/BudgeTrak/PDF", durationMs = 7500L)
-                                                }
-                                            } catch (e: Exception) {
-                                                withContext(Dispatchers.Main) {
-                                                    toastState.show("PDF generation failed: ${e.message}")
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }) { Text(S.common.save) }
-                        }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        toastState.show("PDF generation failed: ${e.message}")
                     }
-                }
-                PulsingScrollArrow(
-                    scrollState = saveScrollState,
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(start = 12.dp, bottom = 50.dp)
-                )
                 }
             }
         }
-    }
+    )
 
     // Full backup load confirmation dialog
-    if (showFullBackupDialog && pendingFullBackupContent != null) {
-        AdAwareAlertDialog(
-            onDismissRequest = {
-                showFullBackupDialog = false
-                pendingFullBackupContent = null
-            },
-            style = DialogStyle.WARNING,
-            title = { Text(S.transactions.fullBackupDetected) },
-            text = {
-                Column {
-                    Text(S.transactions.fullBackupBody)
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        S.transactions.fullRestoreWarning,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    if (isSyncConfigured) {
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            if (isSyncAdmin) S.transactions.fullBackupSyncWarning
-                            else S.transactions.fullBackupNonAdminBlock,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                if (isSyncConfigured && !isSyncAdmin) {
-                    Column {
-                        DialogWarningButton(onClick = {}, enabled = false) {
-                            Text(S.transactions.loadAllDataOverwrite)
-                        }
-                        Text(
-                            S.transactions.fullBackupNonAdminBlock,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        )
-                    }
-                } else {
-                    var restoreBtnYPx by remember { mutableIntStateOf(0) }
-                    DialogWarningButton(
-                        onClick = {
-                            onLoadFullBackup(pendingFullBackupContent!!)
-                            scrollToTopTrigger++
-                            showFullBackupDialog = false
-                            pendingFullBackupContent = null
-                            toastState.show(S.transactions.fullBackupRestored, restoreBtnYPx)
-                        },
-                        modifier = Modifier.onGloballyPositioned { restoreBtnYPx = it.positionInWindow().y.toInt() }
-                    ) { Text(S.transactions.loadAllDataOverwrite) }
-                }
-            },
-            dismissButton = {
-                DialogSecondaryButton(onClick = {
-                    val existingIdSet = transactions.map { it.id }.toSet()
-                    val result = FullBackupSerializer.extractTransactions(
-                        pendingFullBackupContent!!, existingIdSet
-                    )
-                    parsedTransactions.clear()
-                    parsedTransactions.addAll(result.transactions)
-                    showFullBackupDialog = false
-                    pendingFullBackupContent = null
-                    if (result.error != null && result.transactions.isEmpty()) {
-                        importError = result.error
-                        importStage = ImportStage.PARSE_ERROR
-                    } else {
-                        totalFileTransactions = parsedTransactions.size
-                        val filtered = filterAlreadyLoadedDays(parsedTransactions.toList(), transactions)
-                        parsedTransactions.clear()
-                        parsedTransactions.addAll(filtered)
-                        importApproved.clear()
-                        importIndex = 0
-                        ignoreAllDuplicates = false
-                        importStage = ImportStage.DUPLICATE_CHECK
-                    }
-                }) { Text(S.transactions.loadTransactionsOnly) }
-            }
-        )
-    }
-
-    // Import / Load format selection dialog
-    if (showImportFormatDialog) {
-        AdAwareDialog(
-            onDismissRequest = {
-                showImportFormatDialog = false
-            },
-        ) {
-            Surface(
-                modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 6.dp
-            ) {
-                val loadScrollState = rememberScrollState()
-                Box {
-                Column {
-                    DialogHeader(S.transactions.loadTransactions)
-
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier
-                            .weight(1f, fill = false)
-                            .verticalScroll(loadScrollState)
-                            .padding(horizontal = 20.dp, vertical = 16.dp)
-                    ) {
-                        Text(S.transactions.format, style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onBackground)
-                        BankFormat.entries.forEach { format ->
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable {
-                                        selectedBankFormat = format
-                                    }
-                                    .padding(vertical = 4.dp, horizontal = 4.dp)
-                            ) {
-                                RadioButton(
-                                    selected = selectedBankFormat == format,
-                                    onClick = {
-                                        selectedBankFormat = format
-                                    }
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(when (format) {
-                                    BankFormat.GENERIC_CSV -> S.transactions.formatGenericCsv
-                                    BankFormat.US_BANK -> S.transactions.formatUsBank
-                                    BankFormat.SECURESYNC_CSV -> S.transactions.formatBudgeTrakCsv
-                                }, style = MaterialTheme.typography.bodyLarge)
-                            }
-                        }
-
-                    }
-
-                    DialogFooter {
-                        FlowRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End,
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            DialogSecondaryButton(onClick = {
-                                showImportFormatDialog = false
-                            }) { Text(S.common.cancel) }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            DialogPrimaryButton(
-                                onClick = {
-                                    showImportFormatDialog = false
-                                    filePickerLauncher.launch(arrayOf("text/*", "*/*"))
-                                }
-                            ) { Text(S.transactions.selectFile) }
-                        }
-                    }
-                }
-                PulsingScrollArrow(
-                    scrollState = loadScrollState,
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(start = 12.dp, bottom = 50.dp)
-                )
-                }
+    FullBackupLoadDialog(
+        showFullBackupDialog = showFullBackupDialog,
+        pendingFullBackupContent = pendingFullBackupContent,
+        isSyncConfigured = isSyncConfigured,
+        isSyncAdmin = isSyncAdmin,
+        onDismiss = {
+            showFullBackupDialog = false
+            pendingFullBackupContent = null
+        },
+        onRestoreFullBackup = {
+            onLoadFullBackup(pendingFullBackupContent!!)
+            scrollToTopTrigger++
+            showFullBackupDialog = false
+            pendingFullBackupContent = null
+            toastState.show(S.transactions.fullBackupRestored)
+        },
+        onLoadTransactionsOnly = {
+            val existingIdSet = transactions.map { it.id }.toSet()
+            val result = FullBackupSerializer.extractTransactions(
+                pendingFullBackupContent!!, existingIdSet
+            )
+            parsedTransactions.clear()
+            parsedTransactions.addAll(result.transactions)
+            showFullBackupDialog = false
+            pendingFullBackupContent = null
+            if (result.error != null && result.transactions.isEmpty()) {
+                importError = result.error
+                importStage = ImportStage.PARSE_ERROR
+            } else {
+                totalFileTransactions = parsedTransactions.size
+                val filtered = filterAlreadyLoadedDays(parsedTransactions.toList(), transactions)
+                parsedTransactions.clear()
+                parsedTransactions.addAll(filtered)
+                importApproved.clear()
+                importIndex = 0
+                ignoreAllDuplicates = false
+                importStage = ImportStage.DUPLICATE_CHECK
             }
         }
-    }
+    )
+
+    // Import / Load format selection dialog
+    ImportFormatSelectionDialog(
+        showImportFormatDialog = showImportFormatDialog,
+        selectedBankFormat = selectedBankFormat,
+        onDismiss = { showImportFormatDialog = false },
+        onFormatSelected = { selectedBankFormat = it },
+        onSelectFile = {
+            showImportFormatDialog = false
+            filePickerLauncher.launch(arrayOf("text/*", "*/*"))
+        }
+    )
 
     // Parse error dialog
-    if (importStage == ImportStage.PARSE_ERROR) {
-        AdAwareAlertDialog(
-            onDismissRequest = {
-                importStage = null
-                parsedTransactions.clear()
-                importError = null
-            },
-            title = { Text(S.transactions.parseError) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(importError ?: S.transactions.unknownError)
-                    if (parsedTransactions.isNotEmpty()) {
-                        Text(S.transactions.parsedBeforeError(parsedTransactions.size))
-                    }
-                    if (importSkippedRows > 0 && importTotalDataRows > 0) {
-                        Text(S.transactions.rowsSkippedWarning(importSkippedRows, importTotalDataRows))
-                    }
-                }
-            },
-            style = DialogStyle.WARNING,
-            confirmButton = {
-                if (parsedTransactions.isNotEmpty()) {
-                    DialogPrimaryButton(onClick = {
-                        val categorized = parsedTransactions.map { txn ->
-                            autoCategorize(txn, transactions, categories)
-                        }
-                        parsedTransactions.clear()
-                        parsedTransactions.addAll(categorized)
-                        totalFileTransactions = parsedTransactions.size
-                        val filtered = filterAlreadyLoadedDays(parsedTransactions.toList(), transactions)
-                        parsedTransactions.clear()
-                        parsedTransactions.addAll(filtered)
-                        importApproved.clear()
-                        importIndex = 0
-                        ignoreAllDuplicates = false
-                        importError = null
-                        importStage = ImportStage.DUPLICATE_CHECK
-                    }) { Text(S.transactions.keep) }
-                }
-            },
-            dismissButton = {
-                DialogSecondaryButton(onClick = {
-                    parsedTransactions.clear()
-                    importError = null
-                    importStage = null
-                }) { Text(S.common.delete) }
+    ImportParseErrorDialog(
+        importStage = importStage,
+        importError = importError,
+        parsedTransactionsCount = parsedTransactions.size,
+        importSkippedRows = importSkippedRows,
+        importTotalDataRows = importTotalDataRows,
+        onDismiss = {
+            importStage = null
+            parsedTransactions.clear()
+            importError = null
+        },
+        onKeepParsed = {
+            val categorized = parsedTransactions.map { txn ->
+                autoCategorize(txn, transactions, categories)
             }
-        )
-    }
+            parsedTransactions.clear()
+            parsedTransactions.addAll(categorized)
+            totalFileTransactions = parsedTransactions.size
+            val filtered = filterAlreadyLoadedDays(parsedTransactions.toList(), transactions)
+            parsedTransactions.clear()
+            parsedTransactions.addAll(filtered)
+            importApproved.clear()
+            importIndex = 0
+            ignoreAllDuplicates = false
+            importError = null
+            importStage = ImportStage.DUPLICATE_CHECK
+        },
+        onDiscard = {
+            parsedTransactions.clear()
+            importError = null
+            importStage = null
+        }
+    )
 
     // Import duplicate resolution dialog
     if (importStage == ImportStage.DUPLICATE_CHECK && currentImportDup != null && importIndex < parsedTransactions.size) {
@@ -2030,99 +1825,57 @@ fun TransactionsScreen(
     }
 
     // Manual duplicate resolution dialog
-    if (showManualDuplicateDialog && pendingManualSave != null && manualDuplicateMatch != null) {
-        DuplicateResolutionDialog(
-            existingTransaction = manualDuplicateMatch!!,
-            newTransaction = pendingManualSave!!,
-            currencySymbol = currencySymbol,
-            dateFormatter = dateFormatter,
-            categoryMap = categoryMap,
-            showIgnoreAll = false,
-            onIgnore = {
-                // Keep Both — continue to linking chain
-                val txn = pendingManualSave!!
-                val isEdit = pendingManualIsEdit
-                pendingManualSave = null
-                manualDuplicateMatch = null
-                showManualDuplicateDialog = false
-                val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null || txn.linkedSavingsGoalId != null
-                if (!alreadyLinked) {
-                    val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
-                    if (recurringMatch != null) {
-                        pendingRecurringTxn = txn
-                        pendingRecurringMatch = recurringMatch
-                        pendingRecurringIsEdit = isEdit
-                        showRecurringDialog = true
+    ManualDuplicateDialog(
+        showManualDuplicateDialog = showManualDuplicateDialog,
+        pendingManualSave = pendingManualSave,
+        manualDuplicateMatch = manualDuplicateMatch,
+        currencySymbol = currencySymbol,
+        dateFormatter = dateFormatter,
+        categoryMap = categoryMap,
+        onKeepBothOrKeepNew = { deleteExisting ->
+            if (deleteExisting) onDeleteTransaction(manualDuplicateMatch!!)
+            val txn = pendingManualSave!!
+            val isEdit = pendingManualIsEdit
+            pendingManualSave = null
+            manualDuplicateMatch = null
+            showManualDuplicateDialog = false
+            val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null || txn.linkedSavingsGoalId != null
+            if (!alreadyLinked) {
+                val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
+                if (recurringMatch != null) {
+                    pendingRecurringTxn = txn
+                    pendingRecurringMatch = recurringMatch
+                    pendingRecurringIsEdit = isEdit
+                    showRecurringDialog = true
+                } else {
+                    val amortizationMatch = findAmortizationMatch(txn, amortizationEntries, percentTolerance, matchDollar, matchChars)
+                    if (amortizationMatch != null) {
+                        pendingAmortizationTxn = txn
+                        pendingAmortizationMatch = amortizationMatch
+                        pendingAmortizationIsEdit = isEdit
+                        showAmortizationDialog = true
                     } else {
-                        val amortizationMatch = findAmortizationMatch(txn, amortizationEntries, percentTolerance, matchDollar, matchChars)
-                        if (amortizationMatch != null) {
-                            pendingAmortizationTxn = txn
-                            pendingAmortizationMatch = amortizationMatch
-                            pendingAmortizationIsEdit = isEdit
-                            showAmortizationDialog = true
+                        val budgetMatch = findBudgetIncomeMatch(txn, incomeSources, matchChars, matchDays)
+                        if (budgetMatch != null) {
+                            pendingBudgetIncomeTxn = txn
+                            pendingBudgetIncomeMatch = budgetMatch
+                            pendingBudgetIncomeIsEdit = isEdit
+                            showBudgetIncomeDialog = true
                         } else {
-                            val budgetMatch = findBudgetIncomeMatch(txn, incomeSources, matchChars, matchDays)
-                            if (budgetMatch != null) {
-                                pendingBudgetIncomeTxn = txn
-                                pendingBudgetIncomeMatch = budgetMatch
-                                pendingBudgetIncomeIsEdit = isEdit
-                                showBudgetIncomeDialog = true
-                            } else {
-                                if (isEdit) onUpdateTransaction(txn) else addAndScroll(txn)
-                            }
+                            if (isEdit) onUpdateTransaction(txn) else addAndScroll(txn)
                         }
                     }
-                } else {
-                    if (isEdit) onUpdateTransaction(txn) else addAndScroll(txn)
                 }
-            },
-            onKeepNew = {
-                onDeleteTransaction(manualDuplicateMatch!!)
-                // Continue to linking chain after deleting existing
-                val txn = pendingManualSave!!
-                val isEdit = pendingManualIsEdit
-                pendingManualSave = null
-                manualDuplicateMatch = null
-                showManualDuplicateDialog = false
-                val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null || txn.linkedSavingsGoalId != null
-                if (!alreadyLinked) {
-                    val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
-                    if (recurringMatch != null) {
-                        pendingRecurringTxn = txn
-                        pendingRecurringMatch = recurringMatch
-                        pendingRecurringIsEdit = isEdit
-                        showRecurringDialog = true
-                    } else {
-                        val amortizationMatch = findAmortizationMatch(txn, amortizationEntries, percentTolerance, matchDollar, matchChars)
-                        if (amortizationMatch != null) {
-                            pendingAmortizationTxn = txn
-                            pendingAmortizationMatch = amortizationMatch
-                            pendingAmortizationIsEdit = isEdit
-                            showAmortizationDialog = true
-                        } else {
-                            val budgetMatch = findBudgetIncomeMatch(txn, incomeSources, matchChars, matchDays)
-                            if (budgetMatch != null) {
-                                pendingBudgetIncomeTxn = txn
-                                pendingBudgetIncomeMatch = budgetMatch
-                                pendingBudgetIncomeIsEdit = isEdit
-                                showBudgetIncomeDialog = true
-                            } else {
-                                if (isEdit) onUpdateTransaction(txn) else addAndScroll(txn)
-                            }
-                        }
-                    }
-                } else {
-                    if (isEdit) onUpdateTransaction(txn) else addAndScroll(txn)
-                }
-            },
-            onKeepExisting = {
-                pendingManualSave = null
-                manualDuplicateMatch = null
-                showManualDuplicateDialog = false
-            },
-            onIgnoreAll = {}
-        )
-    }
+            } else {
+                if (isEdit) onUpdateTransaction(txn) else addAndScroll(txn)
+            }
+        },
+        onKeepExisting = {
+            pendingManualSave = null
+            manualDuplicateMatch = null
+            showManualDuplicateDialog = false
+        }
+    )
 
     // Import recurring expense match dialog
     if (importStage == ImportStage.DUPLICATE_CHECK && currentImportRecurring != null && importIndex < parsedTransactions.size) {
@@ -2309,101 +2062,17 @@ fun TransactionsScreen(
     }
 
     // Effect explanation popup
-    effectExplanationTransaction?.let { txn ->
-        val isExpense = txn.type == TransactionType.EXPENSE
-        val fc = { amt: Double -> formatCurrency(amt, currencySymbol) }
-
-        val title: String
-        val body: String
-
-        if (txn.linkedRecurringExpenseId != null) {
-            val reAmt = if (txn.linkedRecurringExpenseAmount > 0.0) txn.linkedRecurringExpenseAmount
-                else recurringExpenses.find { it.id == txn.linkedRecurringExpenseId }?.amount ?: 0.0
-            val reName = recurringExpenses.find { it.id == txn.linkedRecurringExpenseId }?.source ?: txn.source
-            val diff = reAmt - txn.amount
-            title = S.transactions.effectTitleRecurring
-            body = if (kotlin.math.abs(diff) < 0.005) {
-                S.transactions.effectRecurringMatch(fc(txn.amount), reName, fc(reAmt))
-            } else if (diff > 0) {
-                S.transactions.effectRecurringUnder(fc(txn.amount), reName, fc(reAmt), fc(diff))
-            } else {
-                S.transactions.effectRecurringOver(fc(txn.amount), reName, fc(reAmt), fc(kotlin.math.abs(diff)))
-            }
-        } else if (txn.linkedAmortizationEntryId != null) {
-            val ae = amortizationEntries.find { it.id == txn.linkedAmortizationEntryId }
-            val aeName = ae?.source ?: txn.source
-            val aeTotal = ae?.amount ?: txn.amount
-            val aePeriods = ae?.totalPeriods ?: 1
-            val perPeriod = aeTotal / aePeriods
-            val elapsed = if (ae != null) {
-                val today = LocalDate.now()
-                when (budgetPeriod) {
-                    BudgetPeriod.DAILY -> java.time.temporal.ChronoUnit.DAYS.between(ae.startDate, today).toInt()
-                    BudgetPeriod.WEEKLY -> java.time.temporal.ChronoUnit.WEEKS.between(ae.startDate, today).toInt()
-                    BudgetPeriod.MONTHLY -> java.time.temporal.ChronoUnit.MONTHS.between(ae.startDate, today).toInt()
-                }.coerceIn(0, aePeriods)
-            } else 0
-            val isComplete = elapsed >= aePeriods
-            val periodLabel = when (budgetPeriod) {
-                BudgetPeriod.DAILY -> S.common.periodDay
-                BudgetPeriod.WEEKLY -> S.common.periodWeek
-                BudgetPeriod.MONTHLY -> S.common.periodMonth
-            }
-            title = S.transactions.effectTitleAmortization
-            body = if (isComplete) {
-                S.transactions.effectAmortizationComplete(fc(txn.amount), aeName, fc(aeTotal), aePeriods.toString(), periodLabel)
-            } else {
-                S.transactions.effectAmortizationActive(fc(txn.amount), aeName, fc(aeTotal), fc(perPeriod), periodLabel, elapsed.toString(), aePeriods.toString())
-            }
-        } else if (txn.linkedIncomeSourceId != null) {
-            val srcAmt = if (txn.linkedIncomeSourceAmount > 0.0) txn.linkedIncomeSourceAmount
-                else incomeSources.find { it.id == txn.linkedIncomeSourceId }?.amount ?: 0.0
-            val srcName = incomeSources.find { it.id == txn.linkedIncomeSourceId }?.source ?: txn.source
-            title = S.transactions.effectTitleIncome
-            body = when (incomeMode) {
-                IncomeMode.FIXED -> S.transactions.effectIncomeFixed(fc(txn.amount), srcName, fc(srcAmt))
-                IncomeMode.ACTUAL -> {
-                    val diff = txn.amount - srcAmt
-                    if (kotlin.math.abs(diff) < 0.005) {
-                        S.transactions.effectIncomeActualMatch(fc(txn.amount), srcName, fc(srcAmt))
-                    } else if (diff > 0) {
-                        S.transactions.effectIncomeActualOver(fc(txn.amount), srcName, fc(srcAmt), fc(diff))
-                    } else {
-                        S.transactions.effectIncomeActualUnder(fc(txn.amount), srcName, fc(srcAmt), fc(kotlin.math.abs(diff)))
-                    }
-                }
-                IncomeMode.ACTUAL_ADJUST -> S.transactions.effectIncomeActualAdjust(fc(txn.amount), srcName)
-            }
-        } else if (txn.linkedSavingsGoalId != null || txn.linkedSavingsGoalAmount > 0.0) {
-            val goalName = savingsGoals.find { it.id == txn.linkedSavingsGoalId }?.name ?: txn.source
-            val remainder = BudgetCalculator.roundCents((txn.amount - txn.linkedSavingsGoalAmount).coerceAtLeast(0.0))
-            title = S.transactions.effectTitleSavingsGoal
-            if (remainder > 0.0) {
-                body = S.transactions.effectSavingsGoalPartial(fc(txn.linkedSavingsGoalAmount), goalName, fc(remainder))
-            } else {
-                body = S.transactions.effectSavingsGoal(fc(txn.amount), goalName)
-            }
-        } else if (txn.excludeFromBudget) {
-            title = S.transactions.effectTitleExcluded
-            body = S.transactions.effectExcluded(fc(txn.amount))
-        } else {
-            title = ""
-            body = ""
-        }
-
-        if (title.isNotEmpty()) {
-            AdAwareAlertDialog(
-                onDismissRequest = { effectExplanationTransaction = null },
-                title = { Text(title) },
-                text = { Text(body) },
-                confirmButton = {
-                    DialogSecondaryButton(onClick = { effectExplanationTransaction = null }) {
-                        Text(S.common.close)
-                    }
-                }
-            )
-        }
-    }
+    EffectExplanationPopup(
+        effectExplanationTransaction = effectExplanationTransaction,
+        currencySymbol = currencySymbol,
+        recurringExpenses = recurringExpenses,
+        amortizationEntries = amortizationEntries,
+        incomeSources = incomeSources,
+        savingsGoals = savingsGoals,
+        budgetPeriod = budgetPeriod,
+        incomeMode = incomeMode,
+        onDismiss = { effectExplanationTransaction = null }
+    )
 
 }
 
@@ -5317,5 +4986,438 @@ private fun SearchDatePickerDialog(
                 }
             )
         }
+    }
+}
+
+@Composable
+private fun SaveFormatDialog(
+    showSaveDialog: Boolean,
+    selectedSaveFormat: SaveFormat,
+    selectionMode: Boolean,
+    selectedIds: SnapshotStateMap<Int, Boolean>,
+    transactions: List<Transaction>,
+    categories: List<Category>,
+    currencySymbol: String,
+    onDismiss: () -> Unit,
+    onFormatSelected: (SaveFormat) -> Unit,
+    onSaveCsv: () -> Unit,
+    onSaveXls: () -> Unit,
+    onSavePdf: () -> Unit
+) {
+    if (!showSaveDialog) return
+    val S = LocalStrings.current
+    AdAwareDialog(
+        onDismissRequest = onDismiss,
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            val saveScrollState = rememberScrollState()
+            Box {
+            Column {
+                DialogHeader(S.transactions.saveTransactions)
+
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(saveScrollState)
+                        .padding(horizontal = 20.dp, vertical = 16.dp)
+                ) {
+                    Text(S.transactions.format, style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onBackground)
+                    SaveFormat.entries.forEach { format ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    onFormatSelected(format)
+                                }
+                                .padding(vertical = 4.dp, horizontal = 4.dp)
+                        ) {
+                            RadioButton(
+                                selected = selectedSaveFormat == format,
+                                onClick = {
+                                    onFormatSelected(format)
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(when (format) {
+                                SaveFormat.CSV -> S.transactions.csv
+                                SaveFormat.XLS -> S.transactions.xls
+                                SaveFormat.PDF -> format.label
+                            }, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+
+                    val transactionsToSave = if (selectionMode && selectedIds.any { it.value })
+                        transactions.filter { selectedIds[it.id] == true } else transactions
+                    Text(S.transactions.selectedCount(transactionsToSave.size),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
+
+                }
+
+                DialogFooter {
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel) }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        DialogPrimaryButton(onClick = {
+                            when (selectedSaveFormat) {
+                                SaveFormat.CSV -> onSaveCsv()
+                                SaveFormat.XLS -> onSaveXls()
+                                SaveFormat.PDF -> onSavePdf()
+                            }
+                        }) { Text(S.common.save) }
+                    }
+                }
+            }
+            PulsingScrollArrow(
+                scrollState = saveScrollState,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 12.dp, bottom = 50.dp)
+            )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FullBackupLoadDialog(
+    showFullBackupDialog: Boolean,
+    pendingFullBackupContent: String?,
+    isSyncConfigured: Boolean,
+    isSyncAdmin: Boolean,
+    onDismiss: () -> Unit,
+    onRestoreFullBackup: () -> Unit,
+    onLoadTransactionsOnly: () -> Unit
+) {
+    if (!showFullBackupDialog || pendingFullBackupContent == null) return
+    val S = LocalStrings.current
+    AdAwareAlertDialog(
+        onDismissRequest = onDismiss,
+        style = DialogStyle.WARNING,
+        title = { Text(S.transactions.fullBackupDetected) },
+        text = {
+            Column {
+                Text(S.transactions.fullBackupBody)
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    S.transactions.fullRestoreWarning,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+                if (isSyncConfigured) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        if (isSyncAdmin) S.transactions.fullBackupSyncWarning
+                        else S.transactions.fullBackupNonAdminBlock,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            if (isSyncConfigured && !isSyncAdmin) {
+                Column {
+                    DialogWarningButton(onClick = {}, enabled = false) {
+                        Text(S.transactions.loadAllDataOverwrite)
+                    }
+                    Text(
+                        S.transactions.fullBackupNonAdminBlock,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    )
+                }
+            } else {
+                var restoreBtnYPx by remember { mutableIntStateOf(0) }
+                DialogWarningButton(
+                    onClick = onRestoreFullBackup,
+                    modifier = Modifier.onGloballyPositioned { restoreBtnYPx = it.positionInWindow().y.toInt() }
+                ) { Text(S.transactions.loadAllDataOverwrite) }
+            }
+        },
+        dismissButton = {
+            DialogSecondaryButton(onClick = onLoadTransactionsOnly) {
+                Text(S.transactions.loadTransactionsOnly)
+            }
+        }
+    )
+}
+
+@Composable
+private fun ImportFormatSelectionDialog(
+    showImportFormatDialog: Boolean,
+    selectedBankFormat: BankFormat,
+    onDismiss: () -> Unit,
+    onFormatSelected: (BankFormat) -> Unit,
+    onSelectFile: () -> Unit
+) {
+    if (!showImportFormatDialog) return
+    val S = LocalStrings.current
+    AdAwareDialog(
+        onDismissRequest = onDismiss,
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            val loadScrollState = rememberScrollState()
+            Box {
+            Column {
+                DialogHeader(S.transactions.loadTransactions)
+
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(loadScrollState)
+                        .padding(horizontal = 20.dp, vertical = 16.dp)
+                ) {
+                    Text(S.transactions.format, style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onBackground)
+                    BankFormat.entries.forEach { format ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    onFormatSelected(format)
+                                }
+                                .padding(vertical = 4.dp, horizontal = 4.dp)
+                        ) {
+                            RadioButton(
+                                selected = selectedBankFormat == format,
+                                onClick = {
+                                    onFormatSelected(format)
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(when (format) {
+                                BankFormat.GENERIC_CSV -> S.transactions.formatGenericCsv
+                                BankFormat.US_BANK -> S.transactions.formatUsBank
+                                BankFormat.SECURESYNC_CSV -> S.transactions.formatBudgeTrakCsv
+                            }, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+
+                }
+
+                DialogFooter {
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel) }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        DialogPrimaryButton(
+                            onClick = onSelectFile
+                        ) { Text(S.transactions.selectFile) }
+                    }
+                }
+            }
+            PulsingScrollArrow(
+                scrollState = loadScrollState,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 12.dp, bottom = 50.dp)
+            )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ImportParseErrorDialog(
+    importStage: ImportStage?,
+    importError: String?,
+    parsedTransactionsCount: Int,
+    importSkippedRows: Int,
+    importTotalDataRows: Int,
+    onDismiss: () -> Unit,
+    onKeepParsed: () -> Unit,
+    onDiscard: () -> Unit
+) {
+    if (importStage != ImportStage.PARSE_ERROR) return
+    val S = LocalStrings.current
+    AdAwareAlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(S.transactions.parseError) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(importError ?: S.transactions.unknownError)
+                if (parsedTransactionsCount > 0) {
+                    Text(S.transactions.parsedBeforeError(parsedTransactionsCount))
+                }
+                if (importSkippedRows > 0 && importTotalDataRows > 0) {
+                    Text(S.transactions.rowsSkippedWarning(importSkippedRows, importTotalDataRows))
+                }
+            }
+        },
+        style = DialogStyle.WARNING,
+        confirmButton = {
+            if (parsedTransactionsCount > 0) {
+                DialogPrimaryButton(onClick = onKeepParsed) { Text(S.transactions.keep) }
+            }
+        },
+        dismissButton = {
+            DialogSecondaryButton(onClick = onDiscard) { Text(S.common.delete) }
+        }
+    )
+}
+
+@Composable
+private fun ManualDuplicateDialog(
+    showManualDuplicateDialog: Boolean,
+    pendingManualSave: Transaction?,
+    manualDuplicateMatch: Transaction?,
+    currencySymbol: String,
+    dateFormatter: DateTimeFormatter,
+    categoryMap: Map<Int, Category>,
+    onKeepBothOrKeepNew: (deleteExisting: Boolean) -> Unit,
+    onKeepExisting: () -> Unit
+) {
+    if (!showManualDuplicateDialog || pendingManualSave == null || manualDuplicateMatch == null) return
+    DuplicateResolutionDialog(
+        existingTransaction = manualDuplicateMatch,
+        newTransaction = pendingManualSave,
+        currencySymbol = currencySymbol,
+        dateFormatter = dateFormatter,
+        categoryMap = categoryMap,
+        showIgnoreAll = false,
+        onIgnore = {
+            // Keep Both — continue to linking chain
+            onKeepBothOrKeepNew(false)
+        },
+        onKeepNew = {
+            // Delete existing, continue to linking chain
+            onKeepBothOrKeepNew(true)
+        },
+        onKeepExisting = onKeepExisting,
+        onIgnoreAll = {}
+    )
+}
+
+@Composable
+private fun EffectExplanationPopup(
+    effectExplanationTransaction: Transaction?,
+    currencySymbol: String,
+    recurringExpenses: List<RecurringExpense>,
+    amortizationEntries: List<AmortizationEntry>,
+    incomeSources: List<IncomeSource>,
+    savingsGoals: List<SavingsGoal>,
+    budgetPeriod: BudgetPeriod,
+    incomeMode: IncomeMode,
+    onDismiss: () -> Unit
+) {
+    val txn = effectExplanationTransaction ?: return
+    val S = LocalStrings.current
+    val fc = { amt: Double -> formatCurrency(amt, currencySymbol) }
+
+    val title: String
+    val body: String
+
+    if (txn.linkedRecurringExpenseId != null) {
+        val reAmt = if (txn.linkedRecurringExpenseAmount > 0.0) txn.linkedRecurringExpenseAmount
+            else recurringExpenses.find { it.id == txn.linkedRecurringExpenseId }?.amount ?: 0.0
+        val reName = recurringExpenses.find { it.id == txn.linkedRecurringExpenseId }?.source ?: txn.source
+        val diff = reAmt - txn.amount
+        title = S.transactions.effectTitleRecurring
+        body = if (kotlin.math.abs(diff) < 0.005) {
+            S.transactions.effectRecurringMatch(fc(txn.amount), reName, fc(reAmt))
+        } else if (diff > 0) {
+            S.transactions.effectRecurringUnder(fc(txn.amount), reName, fc(reAmt), fc(diff))
+        } else {
+            S.transactions.effectRecurringOver(fc(txn.amount), reName, fc(reAmt), fc(kotlin.math.abs(diff)))
+        }
+    } else if (txn.linkedAmortizationEntryId != null) {
+        val ae = amortizationEntries.find { it.id == txn.linkedAmortizationEntryId }
+        val aeName = ae?.source ?: txn.source
+        val aeTotal = ae?.amount ?: txn.amount
+        val aePeriods = ae?.totalPeriods ?: 1
+        val perPeriod = aeTotal / aePeriods
+        val elapsed = if (ae != null) {
+            val today = LocalDate.now()
+            when (budgetPeriod) {
+                BudgetPeriod.DAILY -> java.time.temporal.ChronoUnit.DAYS.between(ae.startDate, today).toInt()
+                BudgetPeriod.WEEKLY -> java.time.temporal.ChronoUnit.WEEKS.between(ae.startDate, today).toInt()
+                BudgetPeriod.MONTHLY -> java.time.temporal.ChronoUnit.MONTHS.between(ae.startDate, today).toInt()
+            }.coerceIn(0, aePeriods)
+        } else 0
+        val isComplete = elapsed >= aePeriods
+        val periodLabel = when (budgetPeriod) {
+            BudgetPeriod.DAILY -> S.common.periodDay
+            BudgetPeriod.WEEKLY -> S.common.periodWeek
+            BudgetPeriod.MONTHLY -> S.common.periodMonth
+        }
+        title = S.transactions.effectTitleAmortization
+        body = if (isComplete) {
+            S.transactions.effectAmortizationComplete(fc(txn.amount), aeName, fc(aeTotal), aePeriods.toString(), periodLabel)
+        } else {
+            S.transactions.effectAmortizationActive(fc(txn.amount), aeName, fc(aeTotal), fc(perPeriod), periodLabel, elapsed.toString(), aePeriods.toString())
+        }
+    } else if (txn.linkedIncomeSourceId != null) {
+        val srcAmt = if (txn.linkedIncomeSourceAmount > 0.0) txn.linkedIncomeSourceAmount
+            else incomeSources.find { it.id == txn.linkedIncomeSourceId }?.amount ?: 0.0
+        val srcName = incomeSources.find { it.id == txn.linkedIncomeSourceId }?.source ?: txn.source
+        title = S.transactions.effectTitleIncome
+        body = when (incomeMode) {
+            IncomeMode.FIXED -> S.transactions.effectIncomeFixed(fc(txn.amount), srcName, fc(srcAmt))
+            IncomeMode.ACTUAL -> {
+                val diff = txn.amount - srcAmt
+                if (kotlin.math.abs(diff) < 0.005) {
+                    S.transactions.effectIncomeActualMatch(fc(txn.amount), srcName, fc(srcAmt))
+                } else if (diff > 0) {
+                    S.transactions.effectIncomeActualOver(fc(txn.amount), srcName, fc(srcAmt), fc(diff))
+                } else {
+                    S.transactions.effectIncomeActualUnder(fc(txn.amount), srcName, fc(srcAmt), fc(kotlin.math.abs(diff)))
+                }
+            }
+            IncomeMode.ACTUAL_ADJUST -> S.transactions.effectIncomeActualAdjust(fc(txn.amount), srcName)
+        }
+    } else if (txn.linkedSavingsGoalId != null || txn.linkedSavingsGoalAmount > 0.0) {
+        val goalName = savingsGoals.find { it.id == txn.linkedSavingsGoalId }?.name ?: txn.source
+        val remainder = BudgetCalculator.roundCents((txn.amount - txn.linkedSavingsGoalAmount).coerceAtLeast(0.0))
+        title = S.transactions.effectTitleSavingsGoal
+        if (remainder > 0.0) {
+            body = S.transactions.effectSavingsGoalPartial(fc(txn.linkedSavingsGoalAmount), goalName, fc(remainder))
+        } else {
+            body = S.transactions.effectSavingsGoal(fc(txn.amount), goalName)
+        }
+    } else if (txn.excludeFromBudget) {
+        title = S.transactions.effectTitleExcluded
+        body = S.transactions.effectExcluded(fc(txn.amount))
+    } else {
+        title = ""
+        body = ""
+    }
+
+    if (title.isNotEmpty()) {
+        AdAwareAlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text(title) },
+            text = { Text(body) },
+            confirmButton = {
+                DialogSecondaryButton(onClick = onDismiss) {
+                    Text(S.common.close)
+                }
+            }
+        )
     }
 }

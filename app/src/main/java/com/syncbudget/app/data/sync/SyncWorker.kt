@@ -52,12 +52,25 @@ class SyncWorker(
                     if (groupId != null && keyBase64 != null) {
                         val key = Base64.decode(keyBase64, Base64.NO_WRAP)
                         val supportDir = com.syncbudget.app.data.BackupManager.getSupportDir()
+                        // Generate fresh dump from current disk data
+                        val diagText = try {
+                            val fresh = com.syncbudget.app.data.DiagDumpBuilder.build(applicationContext)
+                            // Also save to disk so the local copy is current
+                            java.io.File(supportDir, "sync_diag.txt").writeText(fresh)
+                            val diagDevName = devName.replace(Regex("[^a-zA-Z0-9]"), "_").take(20)
+                            if (diagDevName.isNotEmpty()) {
+                                java.io.File(supportDir, "sync_diag_${diagDevName}.txt").writeText(fresh)
+                            }
+                            fresh
+                        } catch (e: Exception) {
+                            android.util.Log.w("SyncWorker", "Fresh dump failed, falling back to existing: ${e.message}")
+                            try {
+                                java.io.File(supportDir, "sync_diag.txt").readText()
+                            } catch (_: Exception) { "(no diag file)" }
+                        }
                         val syncLogText = try {
                             java.io.File(supportDir, "native_sync_log.txt").readText()
                         } catch (_: Exception) { "" }
-                        val diagText = try {
-                            java.io.File(supportDir, "sync_diag.txt").readText()
-                        } catch (_: Exception) { "(no diag file)" }
                         FirestoreService.uploadDebugFiles(groupId, deviceId, devName, syncLogText, diagText, key)
                     }
                 } catch (e: Exception) {
@@ -85,8 +98,7 @@ class SyncWorker(
                 }
             }
 
-            // Update widget
-            com.syncbudget.app.widget.BudgetWidgetProvider.updateAllWidgets(applicationContext)
+            // Widget update handled by PeriodRefreshWorker
 
             return Result.success()
         } catch (e: Exception) {

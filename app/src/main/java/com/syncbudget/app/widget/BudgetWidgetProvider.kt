@@ -30,15 +30,15 @@ class BudgetWidgetProvider : AppWidgetProvider() {
             updateWidget(context, appWidgetManager, appWidgetId)
         }
         // Ensure background refresh is scheduled whenever widgets exist
-        WidgetRefreshWorker.schedule(context)
+        com.syncbudget.app.data.sync.PeriodRefreshWorker.schedule(context)
         scheduleResetAlarm(context)
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         if (intent.action == ACTION_RESET_REFRESH) {
-            // Budget period just reset — trigger immediate widget refresh
-            WidgetRefreshWorker.runOnce(context)
+            // Budget period just reset — trigger immediate refresh
+            com.syncbudget.app.data.sync.PeriodRefreshWorker.runOnce(context)
             // Schedule the next reset alarm
             scheduleResetAlarm(context)
         }
@@ -46,7 +46,8 @@ class BudgetWidgetProvider : AppWidgetProvider() {
 
     override fun onDisabled(context: Context) {
         super.onDisabled(context)
-        WorkManager.getInstance(context).cancelUniqueWork("widget_refresh")
+        // PeriodRefreshWorker serves broader purpose (sync + period refresh),
+        // so we do NOT cancel it when the last widget is removed.
     }
 
     override fun onAppWidgetOptionsChanged(
@@ -140,7 +141,33 @@ class BudgetWidgetProvider : AppWidgetProvider() {
             }
         }
 
+        private var lastWidgetRedraw = 0L
+        @Volatile private var pendingRedraw = false
+        private const val WIDGET_THROTTLE_MS = 5_000L
+
+        /**
+         * Throttled widget update. Redraws at most once every 5 seconds.
+         * If a call arrives within the throttle window, one deferred redraw
+         * is scheduled — additional calls during the wait are dropped.
+         */
         fun updateAllWidgets(context: Context) {
+            val now = System.currentTimeMillis()
+            val elapsed = now - lastWidgetRedraw
+            if (elapsed >= WIDGET_THROTTLE_MS) {
+                doUpdateAllWidgets(context)
+                return
+            }
+            // Within throttle window — schedule one deferred redraw
+            if (pendingRedraw) return  // already queued, don't stack
+            pendingRedraw = true
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                pendingRedraw = false
+                doUpdateAllWidgets(context)
+            }, WIDGET_THROTTLE_MS - elapsed)
+        }
+
+        private fun doUpdateAllWidgets(context: Context) {
+            lastWidgetRedraw = System.currentTimeMillis()
             val manager = AppWidgetManager.getInstance(context)
             val component = ComponentName(context, BudgetWidgetProvider::class.java)
             val ids = manager.getAppWidgetIds(component)

@@ -56,9 +56,12 @@ import com.syncbudget.app.data.sync.PeriodLedgerEntry
 import com.syncbudget.app.data.sync.PeriodLedgerRepository
 import com.syncbudget.app.data.sync.SyncIdGenerator
 import com.syncbudget.app.data.sync.FirestoreDocSync
+import com.syncbudget.app.data.sync.SyncMergeProcessor
 import com.syncbudget.app.data.sync.SyncWriteHelper
+import com.syncbudget.app.data.PeriodRefreshService
 import com.syncbudget.app.data.sync.EncryptedDocSerializer
 import com.syncbudget.app.data.sync.FirestoreDocService
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.awaitCancellation
 import com.syncbudget.app.data.sync.SubscriptionReminderReceiver
 import com.syncbudget.app.data.sync.SyncWorker
@@ -66,6 +69,7 @@ import com.syncbudget.app.data.sync.active
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.syncbudget.app.data.BackupManager
+import com.syncbudget.app.data.DiagDumpBuilder
 import com.syncbudget.app.data.FullBackupSerializer
 import com.syncbudget.app.data.findAmortizationMatch
 import com.syncbudget.app.data.findBudgetIncomeMatch
@@ -143,7 +147,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.syncbudget.app.ui.theme.AppToastState
 import com.syncbudget.app.ui.theme.LocalAppToast
+import android.content.SharedPreferences
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -151,6 +159,11 @@ import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.tasks.await
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        /** True when the app is visible to the user. Background workers check this to skip. */
+        @Volatile var isAppActive = false
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -964,6 +977,11 @@ class MainActivity : ComponentActivity() {
             DisposableEffect(lifecycleOwner) {
                 val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
                     android.util.Log.i("SyncLifecycle", "Lifecycle event: $event")
+                    if (event == androidx.lifecycle.Lifecycle.Event.ON_START) {
+                        isAppActive = true
+                    } else if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
+                        isAppActive = false
+                    }
                     if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                         syncTrigger++
                     }
@@ -1000,168 +1018,143 @@ class MainActivity : ComponentActivity() {
                     // references), so this callback always reads current values.
                     docSync.onBatchChanged = { events ->
                         try {
-                            val changedCollections = mutableSetOf<String>()
-                            var conflictDetected = false
-                            for (event in events) {
-                                changedCollections.add(event.collection)
-                                when (event.collection) {
-                                    EncryptedDocSerializer.COLLECTION_TRANSACTIONS -> {
-                                        var txn = event.record as Transaction
-                                        // Conflict: another device edited while we had pending edits
-                                        if (event.isConflict) {
-                                            txn = txn.copy(isUserCategorized = false)
-                                            conflictDetected = true
-                                        }
-                                        val idx = transactions.indexOfFirst { it.id == txn.id }
-                                        if (idx >= 0) transactions[idx] = txn else transactions.add(txn)
-                                        // Push conflict flag so other device sees unverified too
-                                        if (event.isConflict) {
-                                            SyncWriteHelper.pushTransaction(txn)
-                                        }
-                                    }
-                                    EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES -> {
-                                        val re = event.record as RecurringExpense
-                                        val idx = recurringExpenses.indexOfFirst { it.id == re.id }
-                                        if (idx >= 0) recurringExpenses[idx] = re else recurringExpenses.add(re)
-                                    }
-                                    EncryptedDocSerializer.COLLECTION_INCOME_SOURCES -> {
-                                        val src = event.record as IncomeSource
-                                        val idx = incomeSources.indexOfFirst { it.id == src.id }
-                                        if (idx >= 0) incomeSources[idx] = src else incomeSources.add(src)
-                                    }
-                                    EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS -> {
-                                        val sg = event.record as SavingsGoal
-                                        val idx = savingsGoals.indexOfFirst { it.id == sg.id }
-                                        if (idx >= 0) savingsGoals[idx] = sg else savingsGoals.add(sg)
-                                    }
-                                    EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES -> {
-                                        val ae = event.record as AmortizationEntry
-                                        val idx = amortizationEntries.indexOfFirst { it.id == ae.id }
-                                        if (idx >= 0) amortizationEntries[idx] = ae else amortizationEntries.add(ae)
-                                    }
-                                EncryptedDocSerializer.COLLECTION_CATEGORIES -> {
-                                    val cat = event.record as Category
-                                    // Tag-based dedup
-                                    val localMatch = if (cat.tag.isNotEmpty()) {
-                                        categories.firstOrNull {
-                                            it.tag == cat.tag && it.id != cat.id && !it.deleted
-                                        }
-                                    } else null
-                                    if (localMatch != null) {
-                                        val remapJson = syncPrefs.getString("catIdRemap", null)
-                                        val remap = if (remapJson != null) {
-                                            try {
-                                                val json = org.json.JSONObject(remapJson)
-                                                json.keys().asSequence().associate { it.toInt() to json.getInt(it) }.toMutableMap()
-                                            } catch (_: Exception) { mutableMapOf() }
-                                        } else mutableMapOf()
-                                        remap[cat.id] = localMatch.id
-                                        syncPrefs.edit().putString("catIdRemap",
-                                            org.json.JSONObject(remap.mapKeys { it.key.toString() }).toString()
-                                        ).apply()
-                                        for (i in transactions.indices) {
-                                            val t = transactions[i]
-                                            val newCats = t.categoryAmounts.map { ca ->
-                                                if (ca.categoryId == cat.id) ca.copy(categoryId = localMatch.id) else ca
-                                            }
-                                            if (newCats != t.categoryAmounts) {
-                                                transactions[i] = t.copy(categoryAmounts = newCats)
-                                                changedCollections.add(EncryptedDocSerializer.COLLECTION_TRANSACTIONS)
-                                            }
-                                        }
-                                        // Delete the duplicate from Firestore — remap is applied,
-                                        // the doc just wastes space and confuses integrity checks
-                                        coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                            try {
-                                                val gId = syncGroupId ?: return@launch
-                                                FirestoreDocService.deleteDoc(gId,
-                                                    EncryptedDocSerializer.COLLECTION_CATEGORIES, cat.id.toString())
-                                                android.util.Log.i("SyncDedup", "Deleted remapped category ${cat.id} from Firestore")
-                                            } catch (e: Exception) {
-                                                android.util.Log.w("SyncDedup", "Failed to delete remapped category: ${e.message}")
-                                            }
-                                        }
-                                    } else {
-                                        val idx = categories.indexOfFirst { it.id == cat.id }
-                                        if (idx >= 0) categories[idx] = cat else categories.add(cat)
-                                    }
+                            // Build catIdRemap from sync prefs
+                            val remapJson = syncPrefs.getString("catIdRemap", null)
+                            val catIdRemap: MutableMap<Int, Int> = if (remapJson != null) {
+                                try {
+                                    val json = org.json.JSONObject(remapJson)
+                                    json.keys().asSequence().associate { it.toInt() to json.getInt(it) }.toMutableMap()
+                                } catch (_: Exception) { mutableMapOf() }
+                            } else mutableMapOf()
+
+                            // Process batch through shared merge processor
+                            val result = SyncMergeProcessor.processBatch(
+                                events = events,
+                                currentTransactions = transactions.toList(),
+                                currentRecurringExpenses = recurringExpenses.toList(),
+                                currentIncomeSources = incomeSources.toList(),
+                                currentSavingsGoals = savingsGoals.toList(),
+                                currentAmortizationEntries = amortizationEntries.toList(),
+                                currentCategories = categories.toList(),
+                                currentPeriodLedger = periodLedger.toList(),
+                                currentSharedSettings = sharedSettings,
+                                catIdRemap = catIdRemap,
+                                currentBudgetStartDate = budgetStartDate
+                            )
+
+                            // Apply merged data to in-memory Compose state
+                            result.transactions?.let { list ->
+                                transactions.clear(); transactions.addAll(list)
+                            }
+                            result.recurringExpenses?.let { list ->
+                                recurringExpenses.clear(); recurringExpenses.addAll(list)
+                            }
+                            result.incomeSources?.let { list ->
+                                incomeSources.clear(); incomeSources.addAll(list)
+                            }
+                            result.savingsGoals?.let { list ->
+                                savingsGoals.clear(); savingsGoals.addAll(list)
+                            }
+                            result.amortizationEntries?.let { list ->
+                                amortizationEntries.clear(); amortizationEntries.addAll(list)
+                            }
+                            result.categories?.let { list ->
+                                categories.clear(); categories.addAll(list)
+                            }
+                            result.periodLedger?.let { list ->
+                                periodLedger.clear(); periodLedger.addAll(list)
+                            }
+                            result.sharedSettings?.let { merged ->
+                                sharedSettings = merged
+                                currencySymbol = merged.currency
+                                budgetPeriod = try { BudgetPeriod.valueOf(merged.budgetPeriod) } catch (_: Exception) { budgetPeriod }
+                                resetHour = merged.resetHour
+                                resetDayOfWeek = merged.resetDayOfWeek
+                                resetDayOfMonth = merged.resetDayOfMonth
+                                isManualBudgetEnabled = merged.isManualBudgetEnabled
+                                manualBudgetAmount = merged.manualBudgetAmount
+                                incomeMode = try { IncomeMode.valueOf(merged.incomeMode) } catch (_: Exception) { IncomeMode.FIXED }
+                                weekStartSunday = merged.weekStartSunday
+                                matchDays = merged.matchDays
+                                matchPercent = merged.matchPercent
+                                matchDollar = merged.matchDollar
+                                matchChars = merged.matchChars
+                                val syncedStartDate = merged.budgetStartDate?.let {
+                                    try { java.time.LocalDate.parse(it) } catch (_: Exception) { null }
                                 }
-                                EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER -> {
-                                    val ple = event.record as PeriodLedgerEntry
-                                    val idx = periodLedger.indexOfFirst { it.id == ple.id }
-                                    if (idx >= 0) periodLedger[idx] = ple else periodLedger.add(ple)
-                                }
-                                EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS -> {
-                                    val merged = event.record as SharedSettings
-                                    sharedSettings = merged
-                                    currencySymbol = merged.currency
-                                    budgetPeriod = try { BudgetPeriod.valueOf(merged.budgetPeriod) } catch (_: Exception) { budgetPeriod }
-                                    resetHour = merged.resetHour
-                                    resetDayOfWeek = merged.resetDayOfWeek
-                                    resetDayOfMonth = merged.resetDayOfMonth
-                                    isManualBudgetEnabled = merged.isManualBudgetEnabled
-                                    manualBudgetAmount = merged.manualBudgetAmount
-                                    incomeMode = try { IncomeMode.valueOf(merged.incomeMode) } catch (_: Exception) { IncomeMode.FIXED }
-                                    weekStartSunday = merged.weekStartSunday
-                                    matchDays = merged.matchDays
-                                    matchPercent = merged.matchPercent
-                                    matchDollar = merged.matchDollar
-                                    matchChars = merged.matchChars
-                                    val syncedStartDate = merged.budgetStartDate?.let {
-                                        try { java.time.LocalDate.parse(it) } catch (_: Exception) { null }
-                                    }
-                                    if (syncedStartDate != null && syncedStartDate != budgetStartDate) {
-                                        budgetStartDate = syncedStartDate
-                                        lastRefreshDate = java.time.LocalDate.now()
-                                        prefs.edit()
-                                            .putString("budgetStartDate", budgetStartDate.toString())
-                                            .putString("lastRefreshDate", lastRefreshDate.toString())
-                                            .apply()
-                                    }
-                                    prefs.edit()
-                                        .putString("currencySymbol", merged.currency)
-                                        .putString("budgetPeriod", merged.budgetPeriod)
-                                        .putInt("resetHour", merged.resetHour)
-                                        .putInt("resetDayOfWeek", merged.resetDayOfWeek)
-                                        .putInt("resetDayOfMonth", merged.resetDayOfMonth)
-                                        .putBoolean("isManualBudgetEnabled", merged.isManualBudgetEnabled)
-                                        .putString("manualBudgetAmount", merged.manualBudgetAmount.toString())
-                                        .putBoolean("weekStartSunday", merged.weekStartSunday)
-                                        .putInt("matchDays", merged.matchDays)
-                                        .putString("matchPercent", merged.matchPercent.toString())
-                                        .putInt("matchDollar", merged.matchDollar)
-                                        .putInt("matchChars", merged.matchChars)
-                                        .putString("incomeMode", merged.incomeMode)
-                                        .apply()
+                                if (syncedStartDate != null && syncedStartDate != budgetStartDate) {
+                                    budgetStartDate = syncedStartDate
+                                    lastRefreshDate = java.time.LocalDate.now()
                                 }
                             }
+
+                            // Apply settings prefs
+                            result.settingsPrefsToApply?.let { prefsMap ->
+                                val editor = prefs.edit()
+                                for ((key, value) in prefsMap) {
+                                    when (value) {
+                                        is String -> editor.putString(key, value)
+                                        is Boolean -> editor.putBoolean(key, value)
+                                        is Int -> editor.putInt(key, value)
+                                        else -> editor.putString(key, value.toString())
+                                    }
+                                }
+                                editor.apply()
                             }
-                            // Recompute cash on main thread (reads derivedState)
-                            if (changedCollections.any { it != EncryptedDocSerializer.COLLECTION_CATEGORIES })
-                                recomputeCash()
+
+                            // Persist catIdRemap if modified
+                            if (catIdRemap.isNotEmpty()) {
+                                syncPrefs.edit().putString("catIdRemap",
+                                    org.json.JSONObject(catIdRemap.mapKeys { it.key.toString() }).toString()
+                                ).apply()
+                            }
+
+                            // Recompute cash (skip if only categories changed)
+                            val hasNonCatChanges = events.any { it.collection != EncryptedDocSerializer.COLLECTION_CATEGORIES }
+                            if (hasNonCatChanges) recomputeCash()
+
                             // Save changed collections to JSON on background thread
-                            val txnSnapshot = if (EncryptedDocSerializer.COLLECTION_TRANSACTIONS in changedCollections) transactions.toList() else null
-                            val reSnapshot = if (EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES in changedCollections) recurringExpenses.toList() else null
-                            val isSnapshot = if (EncryptedDocSerializer.COLLECTION_INCOME_SOURCES in changedCollections) incomeSources.toList() else null
-                            val sgSnapshot = if (EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS in changedCollections) savingsGoals.toList() else null
-                            val aeSnapshot = if (EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES in changedCollections) amortizationEntries.toList() else null
-                            val catSnapshot = if (EncryptedDocSerializer.COLLECTION_CATEGORIES in changedCollections) categories.toList() else null
-                            val pleSnapshot = if (EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER in changedCollections) periodLedger.toList() else null
-                            val ssSnapshot = if (EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS in changedCollections) sharedSettings else null
+                            val txnSnap = result.transactions
+                            val reSnap = result.recurringExpenses
+                            val isSnap = result.incomeSources
+                            val sgSnap = result.savingsGoals
+                            val aeSnap = result.amortizationEntries
+                            val catSnap = result.categories
+                            val pleSnap = result.periodLedger
+                            val ssSnap = result.sharedSettings
                             coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                txnSnapshot?.let { TransactionRepository.save(context, it) }
-                                reSnapshot?.let { RecurringExpenseRepository.save(context, it) }
-                                isSnapshot?.let { IncomeSourceRepository.save(context, it) }
-                                sgSnapshot?.let { SavingsGoalRepository.save(context, it) }
-                                aeSnapshot?.let { AmortizationRepository.save(context, it) }
-                                catSnapshot?.let { CategoryRepository.save(context, it) }
-                                pleSnapshot?.let { PeriodLedgerRepository.save(context, it) }
-                                ssSnapshot?.let { SharedSettingsRepository.save(context, it) }
+                                txnSnap?.let { TransactionRepository.save(context, it) }
+                                reSnap?.let { RecurringExpenseRepository.save(context, it) }
+                                isSnap?.let { IncomeSourceRepository.save(context, it) }
+                                sgSnap?.let { SavingsGoalRepository.save(context, it) }
+                                aeSnap?.let { AmortizationRepository.save(context, it) }
+                                catSnap?.let { CategoryRepository.save(context, it) }
+                                pleSnap?.let { PeriodLedgerRepository.save(context, it) }
+                                ssSnap?.let { SharedSettingsRepository.save(context, it) }
                             }
+
+                            // Handle side effects: push back conflicts, delete remapped categories
+                            for (txn in result.conflictedTransactionsToPushBack) {
+                                SyncWriteHelper.pushTransaction(txn)
+                            }
+                            if (result.categoriesToDeleteFromFirestore.isNotEmpty()) {
+                                coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                    val gId = syncGroupId ?: return@launch
+                                    for (catId in result.categoriesToDeleteFromFirestore) {
+                                        try {
+                                            FirestoreDocService.deleteDoc(gId,
+                                                EncryptedDocSerializer.COLLECTION_CATEGORIES, catId.toString())
+                                            android.util.Log.i("SyncDedup", "Deleted remapped category $catId from Firestore")
+                                        } catch (e: Exception) {
+                                            android.util.Log.w("SyncDedup", "Failed to delete remapped category: ${e.message}")
+                                        }
+                                    }
+                                }
+                            }
+
                             com.syncbudget.app.widget.BudgetWidgetProvider.updateAllWidgets(context)
                             lastSyncActivity = System.currentTimeMillis()
-                            // Flash sync repair alert if conflict detected
-                            if (conflictDetected) {
+                            if (result.conflictDetected) {
                                 syncRepairAlert = true
                                 prefs.edit().putBoolean("syncRepairAlert", true).apply()
                             }
@@ -1611,6 +1604,7 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(isSyncConfigured) {
                 if (isSyncConfigured) {
                     SyncWorker.schedule(context)
+                    com.syncbudget.app.data.sync.PeriodRefreshWorker.schedule(context)
                 }
             }
 
@@ -1734,332 +1728,65 @@ class MainActivity : ComponentActivity() {
 
             // Period refresh — checks every 30s while the app is open so the
             // UI updates when a period boundary passes without needing a restart.
-            // Uses shared initialSyncReceived gate (declared above migrations).
+            // Delegates to shared PeriodRefreshService (also used by PeriodRefreshWorker).
             LaunchedEffect(Unit) {
                 // Wait for initial sync if needed (shared gate set by migrations block)
                 while (!initialSyncReceived) { delay(200) }
                 while (true) {
                     if (budgetStartDate != null && lastRefreshDate != null) {
-                        // For DAILY periods, respect resetHour: the budget "day" starts
-                        // at resetHour, not midnight. Before resetHour we're still in
-                        // yesterday's period.
-                        val now = java.time.LocalDateTime.now()
-                        val today = if (budgetPeriod == BudgetPeriod.DAILY && resetHour > 0 && now.hour < resetHour)
-                            now.toLocalDate().minusDays(1) else now.toLocalDate()
-                        // Use aligned period start for counting, not raw lastRefreshDate,
-                        // to prevent drift when the user misses opening the app.
-                        val refreshTz = if (isSyncConfigured && sharedSettings.familyTimezone.isNotEmpty())
-                            java.time.ZoneId.of(sharedSettings.familyTimezone) else null
-                        val currentPeriod = BudgetCalculator.currentPeriodStart(
-                            budgetPeriod, resetDayOfWeek, resetDayOfMonth, refreshTz, resetHour
+                        val config = PeriodRefreshService.RefreshConfig(
+                            budgetStartDate = budgetStartDate!!,
+                            lastRefreshDate = lastRefreshDate!!,
+                            budgetPeriod = budgetPeriod,
+                            resetHour = resetHour,
+                            resetDayOfWeek = resetDayOfWeek,
+                            resetDayOfMonth = resetDayOfMonth,
+                            familyTimezone = if (isSyncConfigured && sharedSettings.familyTimezone.isNotEmpty())
+                                sharedSettings.familyTimezone else "",
+                            localDeviceId = localDeviceId,
+                            incomeMode = incomeMode,
+                            isManualBudgetEnabled = isManualBudgetEnabled,
+                            manualBudgetAmount = manualBudgetAmount
                         )
-                        val refreshDate = lastRefreshDate ?: continue
-                        val missedPeriods = BudgetCalculator.countPeriodsCompleted(refreshDate, currentPeriod, budgetPeriod)
-                        if (missedPeriods > 0) {
-                            lastRefreshDate = currentPeriod
-
-                            // Create one ledger entry per missed period using aligned dates
-                            val addedLedgerEntries = mutableListOf<PeriodLedgerEntry>()
-                            for (period in 0 until missedPeriods) {
-                                val periodsBack = (missedPeriods - 1 - period).toLong()
-                                val periodDate = when (budgetPeriod) {
-                                    BudgetPeriod.DAILY -> currentPeriod.minusDays(periodsBack)
-                                    BudgetPeriod.WEEKLY -> currentPeriod.minusWeeks(periodsBack)
-                                    BudgetPeriod.MONTHLY -> currentPeriod.minusMonths(periodsBack)
-                                }
-                                val alreadyRecorded = periodLedger.any {
-                                    it.periodStartDate.toLocalDate() == periodDate
-                                }
-                                if (!alreadyRecorded) {
-                                    val entry = PeriodLedgerEntry(
-                                        periodStartDate = periodDate.atStartOfDay(),
-                                        appliedAmount = budgetAmount,
-                                        deviceId = localDeviceId
-                                    )
-                                    periodLedger.add(entry)
-                                    addedLedgerEntries.add(entry)
-                                }
+                        val result = PeriodRefreshService.refreshIfNeeded(context, config)
+                        if (result != null) {
+                            // Update in-memory Compose state from result
+                            lastRefreshDate = result.newLastRefreshDate
+                            for (entry in result.newLedgerEntries) {
+                                if (periodLedger.none { it.id == entry.id }) periodLedger.add(entry)
                             }
-                            savePeriodLedger(addedLedgerEntries)
-
-                            // Update savings goals totalSavedSoFar for non-paused, non-complete items.
-                            // Use the correct date for each catch-up period so periodsLeft
-                            // decreases properly (instead of using today for all iterations).
-                            // NO lamportClock.tick() — savings goal accrual is deterministic.
-                            // Both devices compute the same value from the same data, so
-                            // clock advancement would create unnecessary divergence.
-                            for (period in 0 until missedPeriods) {
-                                val periodsBack = (missedPeriods - 1 - period).toLong()
-                                val periodDate = when (budgetPeriod) {
-                                    BudgetPeriod.DAILY -> currentPeriod.minusDays(periodsBack)
-                                    BudgetPeriod.WEEKLY -> currentPeriod.minusWeeks(periodsBack)
-                                    BudgetPeriod.MONTHLY -> currentPeriod.minusMonths(periodsBack)
-                                }
-                                savingsGoals.forEachIndexed { idx, goal ->
-                                    if (!goal.isPaused && !goal.deleted) {
-                                        val remaining = goal.targetAmount - goal.totalSavedSoFar
-                                        if (remaining > 0) {
-                                            if (goal.targetDate != null) {
-                                                if (periodDate.isBefore(goal.targetDate)) {
-                                                    val periods = when (budgetPeriod) {
-                                                        BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(periodDate, goal.targetDate)
-                                                        BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(periodDate, goal.targetDate)
-                                                        BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(periodDate, goal.targetDate)
-                                                    }
-                                                    if (periods > 0) {
-                                                        val deduction = BudgetCalculator.roundCents(minOf(remaining / periods.toDouble(), remaining))
-                                                        savingsGoals[idx] = goal.copy(
-                                                            totalSavedSoFar = goal.totalSavedSoFar + deduction
-                                                        )
-                                                    }
-                                                }
-                                            } else {
-                                                val contribution = BudgetCalculator.roundCents(minOf(
-                                                    goal.contributionPerPeriod,
-                                                    remaining
-                                                ))
-                                                if (contribution > 0) {
-                                                    savingsGoals[idx] = goal.copy(
-                                                        totalSavedSoFar = goal.totalSavedSoFar + contribution
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                            for (sg in result.updatedSavingsGoals) {
+                                val idx = savingsGoals.indexOfFirst { it.id == sg.id }
+                                if (idx >= 0) savingsGoals[idx] = sg
                             }
-                            saveSavingsGoals()
-
-                            // Update RE set-aside tracking for each catch-up period.
-                            // NO lamportClock.tick() — set-aside accrual is deterministic.
-                            // Both devices compute the same value from the same RE data.
-                            var reChanged = false
-                            for (period in 0 until missedPeriods) {
-                                val periodsBack = (missedPeriods - 1 - period).toLong()
-                                val periodDate = when (budgetPeriod) {
-                                    BudgetPeriod.DAILY -> currentPeriod.minusDays(periodsBack)
-                                    BudgetPeriod.WEEKLY -> currentPeriod.minusWeeks(periodsBack)
-                                    BudgetPeriod.MONTHLY -> currentPeriod.minusMonths(periodsBack)
-                                }
-                                val periodEnd = when (budgetPeriod) {
-                                    BudgetPeriod.DAILY -> periodDate.plusDays(1)
-                                    BudgetPeriod.WEEKLY -> periodDate.plusWeeks(1)
-                                    BudgetPeriod.MONTHLY -> periodDate.plusMonths(1)
-                                }
-                                recurringExpenses.forEachIndexed { idx, re ->
-                                    if (re.deleted) return@forEachIndexed
-                                    val occurrences = BudgetCalculator.generateOccurrences(
-                                        re.repeatType, re.repeatInterval, re.startDate,
-                                        re.monthDay1, re.monthDay2, periodDate, periodEnd.minusDays(1)
-                                    )
-                                    if (occurrences.isNotEmpty()) {
-                                        // Due date reached: reset set-aside, deactivate accelerated
-                                        recurringExpenses[idx] = re.copy(
-                                            setAsideSoFar = 0.0,
-                                            isAccelerated = if (re.isAccelerated) false else re.isAccelerated
-                                        )
-                                        reChanged = true
-                                    } else {
-                                        val increment = if (re.isAccelerated) {
-                                            val periodsLeft = BudgetCalculator.periodsUntilNextOccurrence(re, budgetPeriod, periodDate)
-                                            if (periodsLeft > 0) BudgetCalculator.roundCents(
-                                                (re.amount - re.setAsideSoFar) / periodsLeft
-                                            ) else 0.0
-                                        } else {
-                                            BudgetCalculator.normalPerPeriodDeduction(re, budgetPeriod, periodDate)
-                                        }
-                                        if (increment > 0) {
-                                            recurringExpenses[idx] = re.copy(
-                                                setAsideSoFar = minOf(re.setAsideSoFar + increment, re.amount)
-                                            )
-                                            reChanged = true
-                                        }
-                                    }
-                                }
+                            for (re in result.updatedRecurringExpenses) {
+                                val idx = recurringExpenses.indexOfFirst { it.id == re.id }
+                                if (idx >= 0) recurringExpenses[idx] = re
                             }
-                            if (reChanged) saveRecurringExpenses()
-
                             recomputeCash()
-                            prefs.edit()
-                                .putString("lastRefreshDate", lastRefreshDate.toString())
-                                .apply()
+                            // Push to Firestore via save functions (hint-based).
+                            // Uses existing save functions which handle disk save
+                            // (redundant but harmless), push via SyncWriteHelper,
+                            // and update lastSaved* caches + lastSyncActivity.
+                            if (result.newLedgerEntries.isNotEmpty()) savePeriodLedger(result.newLedgerEntries)
+                            if (result.updatedSavingsGoals.isNotEmpty()) saveSavingsGoals(result.updatedSavingsGoals)
+                            if (result.updatedRecurringExpenses.isNotEmpty()) saveRecurringExpenses(result.updatedRecurringExpenses)
                         }
                     }
                     delay(30_000) // Re-check every 30 seconds
                 }
             }
 
-            // ── Reusable state dump builder ──
-            fun buildDiagDump(): String {
-                val dump = StringBuilder()
-                dump.appendLine("=== State Dump ${java.time.LocalDateTime.now()} ===")
-                dump.appendLine("DeviceId: $localDeviceId")
-                dump.appendLine("isAdmin: $isSyncAdmin")
-                dump.appendLine("isSyncConfigured: $isSyncConfigured")
-                dump.appendLine()
-                dump.appendLine("── App Prefs ──")
-                dump.appendLine("availableCash (prefs): ${prefs.getDoubleCompat("availableCash")}")
-                dump.appendLine("availableCash (state): $availableCash")
-                dump.appendLine("budgetStartDate: $budgetStartDate")
-                dump.appendLine("lastRefreshDate: $lastRefreshDate")
-                dump.appendLine("budgetPeriod: $budgetPeriod")
-                dump.appendLine("budgetAmount (derived): $budgetAmount")
-                dump.appendLine("safeBudgetAmount (derived): $safeBudgetAmount")
-                dump.appendLine("isManualBudget: $isManualBudgetEnabled  manualAmount: $manualBudgetAmount")
-                dump.appendLine()
-                dump.appendLine("── SharedSettings ──")
-                dump.appendLine("availableCash: ${sharedSettings.availableCash}")
-                dump.appendLine("budgetStartDate: ${sharedSettings.budgetStartDate}")
-                dump.appendLine("budgetPeriod: ${sharedSettings.budgetPeriod}")
-                dump.appendLine("manualBudgetAmount: ${sharedSettings.manualBudgetAmount}")
-                dump.appendLine("isManualBudgetEnabled: ${sharedSettings.isManualBudgetEnabled}")
-                dump.appendLine("currency: ${sharedSettings.currency}")
-                dump.appendLine("lastChangedBy: ${sharedSettings.lastChangedBy}")
-                dump.appendLine()
-                // Sync metadata
-                dump.appendLine("── Sync Metadata ──")
-                val nativeDocsDone = syncPrefs.getBoolean("migration_native_docs_done", false)
-                dump.appendLine("syncMode: ${if (nativeDocsDone) "FIRESTORE_NATIVE" else "CRDT_LEGACY"}")
-                dump.appendLine("migration_native_docs_done: $nativeDocsDone")
-                dump.appendLine("syncStatus: $syncStatus")
-                dump.appendLine("SyncWriteHelper.isInitialized: ${SyncWriteHelper.isInitialized()}")
-                val remapJsonDump = syncPrefs.getString("catIdRemap", null)
-                dump.appendLine("catIdRemap: ${remapJsonDump ?: "(empty)"}")
-                // Include file-based sync log tail
-                try {
-                    val nativeLogFile = java.io.File(BackupManager.getSupportDir(), "native_sync_log.txt")
-                    if (nativeLogFile.exists()) {
-                        val lines = nativeLogFile.readLines()
-                        val tail = lines.takeLast(50)
-                        dump.appendLine()
-                        dump.appendLine("── Native Sync Log (last ${tail.size} lines) ──")
-                        tail.forEach { dump.appendLine(it) }
-                    }
-                } catch (_: Exception) {}
-                dump.appendLine()
-
-                dump.appendLine("── Categories ──")
-                val categoryMap = categories.associateBy { it.id }
-                for (cat in categories.sortedBy { it.id }) {
-                    dump.appendLine("  id=${cat.id} '${cat.name}' tag=${cat.tag} icon=${cat.iconName} dev=${cat.deviceId.take(8)}… del=${cat.deleted}")
-                }
-                dump.appendLine()
-
-                dump.appendLine("── Recurring Expenses ──")
-                for (re in recurringExpenses.sortedBy { it.source }) {
-                    dump.appendLine("  id=${re.id} '${re.source}' amt=${re.amount} ${re.repeatType}/${re.repeatInterval} dev=${re.deviceId.take(8)}… del=${re.deleted} setAside=${re.setAsideSoFar} accel=${re.isAccelerated}")
-                }
-                dump.appendLine()
-
-                dump.appendLine("── Transactions (active, in current period) ──")
-                val activeTxns = transactions.filter { !it.deleted }
-                val periodTxns = if (budgetStartDate != null) activeTxns.filter { !it.date.isBefore(budgetStartDate) } else activeTxns
-                for (txn in periodTxns.sortedBy { it.date }) {
-                    val budgetAccounted = if (txn.type == TransactionType.EXPENSE) isBudgetAccountedExpense(txn) else false
-                    val catDesc = if (txn.categoryAmounts.isEmpty()) "cats=NONE"
-                        else txn.categoryAmounts.joinToString(",") { ca ->
-                            val name = categoryMap[ca.categoryId]?.name ?: "???"
-                            "${ca.categoryId}($name):${ca.amount}"
-                        }
-                    val linkDesc = listOfNotNull(
-                        txn.linkedRecurringExpenseId?.let { "reId=$it(reAmt=${txn.linkedRecurringExpenseAmount})" },
-                        txn.linkedAmortizationEntryId?.let { "aeId=$it(appl=${txn.amortizationAppliedAmount})" },
-                        txn.linkedIncomeSourceId?.let { "isId=$it(isAmt=${txn.linkedIncomeSourceAmount})" },
-                        txn.linkedSavingsGoalId?.let { "sgId=$it(sgAmt=${txn.linkedSavingsGoalAmount})" }
-                    ).joinToString(" ").ifEmpty { "" }
-                    val flagDesc = listOfNotNull(
-                        if (txn.excludeFromBudget) "ef=true" else null,
-                        if (txn.isBudgetIncome) "bi=true" else null
-                    ).joinToString(" ").let { if (it.isNotEmpty()) "$it " else "" }
-                    dump.appendLine("  ${txn.date} ${txn.type} ${txn.amount} '${txn.source}' dev=${txn.deviceId.take(8)}… ba=$budgetAccounted ${flagDesc}$linkDesc $catDesc")
-                }
-                // Recompute cash using the ACTUAL BudgetCalculator logic for verification
-                val verifyLedger = periodLedger.toList()
-                val verifyTxns = activeTransactions
-                val verifyRe = activeRecurringExpenses
-                val verifyIs = activeIncomeSources
-                val verifyCash = BudgetCalculator.recomputeAvailableCash(
-                    budgetStartDate ?: java.time.LocalDate.now(),
-                    verifyLedger, verifyTxns, verifyRe, incomeMode, verifyIs
-                )
-                // Breakdown: sum period ledger credits
-                val ledgerCredits = if (budgetStartDate != null) {
-                    verifyLedger
-                        .filter { !it.periodStartDate.toLocalDate().isBefore(budgetStartDate) }
-                        .groupBy { it.periodStartDate.toLocalDate() }
-                        .values.map { entries -> entries.maxByOrNull { it.periodStartDate } ?: entries.first() }
-                        .sumOf { it.appliedAmount }
-                } else 0.0
-                dump.appendLine("── Cash Verification ──")
-                dump.appendLine("Ledger credits (sum of ${verifyLedger.size} entries): $ledgerCredits")
-                dump.appendLine("Recomputed cash (BudgetCalculator): $verifyCash")
-                dump.appendLine("Stored cash (prefs): $availableCash")
-                dump.appendLine("Match: ${kotlin.math.abs(verifyCash - availableCash) < 0.01}")
-                dump.appendLine()
-                dump.appendLine("── Period Ledger ──")
-                for (entry in periodLedger) {
-                    dump.appendLine("  ${entry.periodStartDate} applied=${entry.appliedAmount}")
-                }
-                dump.appendLine("=== End Dump ===")
-                return dump.toString()
-            }
-
-            /** Write text to a file in Download/BudgeTrak/support/ via MediaStore. */
-            fun writeDiagToMediaStore(fileName: String, text: String) {
-                // Write directly to support dir (app-created directory, no
-                // MediaStore ownership issues on Android 10+).
-                try {
-                    val file = java.io.File(BackupManager.getSupportDir(), fileName)
-                    file.writeText(text)
-                } catch (e: Exception) {
-                    android.util.Log.w("DiagDump", "Direct write failed for $fileName, trying MediaStore: ${e.message}")
-                    // Fallback to MediaStore for files the app didn't create directly
-                    try {
-                        val resolver = context.contentResolver
-                        val existing = resolver.query(
-                            android.provider.MediaStore.Files.getContentUri("external"),
-                            arrayOf(android.provider.MediaStore.MediaColumns._ID),
-                            "${android.provider.MediaStore.MediaColumns.DISPLAY_NAME} = ? AND ${android.provider.MediaStore.MediaColumns.RELATIVE_PATH} = ?",
-                            arrayOf(fileName, "Download/BudgeTrak/support/"),
-                            null
-                        )
-                        val uri = if (existing != null && existing.moveToFirst()) {
-                            val id = existing.getLong(0)
-                            existing.close()
-                            android.content.ContentUris.withAppendedId(
-                                android.provider.MediaStore.Files.getContentUri("external"), id
-                            )
-                        } else {
-                            existing?.close()
-                            val values = android.content.ContentValues().apply {
-                                put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-                                put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain")
-                                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "Download/BudgeTrak/support/")
-                            }
-                            resolver.insert(android.provider.MediaStore.Files.getContentUri("external"), values)
-                        }
-                        if (uri != null) {
-                            resolver.openOutputStream(uri, "wt")?.use { it.write(text.toByteArray()) }
-                        }
-                    } catch (e2: Exception) {
-                        android.util.Log.e("DiagDump", "MediaStore write also failed for $fileName: ${e2.message}")
-                    }
-                }
-            }
-
-            fun sanitizeDeviceName(name: String): String =
-                name.replace(Regex("[^a-zA-Z0-9]"), "_").take(20)
-
             // ── One-time CRDT state dump to Downloads (debug only) ──
             if (com.syncbudget.app.BuildConfig.DEBUG) {
                 remember {
                     try {
-                        val diagText = buildDiagDump()
-                        writeDiagToMediaStore("sync_diag.txt", diagText)
+                        val diagText = DiagDumpBuilder.build(context)
+                        DiagDumpBuilder.writeDiagToMediaStore(context, "sync_diag.txt", diagText)
                         // Also write device-named copy
-                        val devName = sanitizeDeviceName(com.syncbudget.app.data.sync.GroupManager.getDeviceName(context))
+                        val devName = DiagDumpBuilder.sanitizeDeviceName(com.syncbudget.app.data.sync.GroupManager.getDeviceName(context))
                         if (devName.isNotEmpty()) {
-                            writeDiagToMediaStore("sync_diag_${devName}.txt", diagText)
+                            DiagDumpBuilder.writeDiagToMediaStore(context, "sync_diag_${devName}.txt", diagText)
                         }
                     } catch (e: Exception) {
                         android.util.Log.e("DiagDump", "Diag write failed: ${e.message}")
@@ -2243,671 +1970,141 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     )
-                    "settings" -> SettingsScreen(
+                    "settings" -> SettingsScreenBranch(
                         currencySymbol = currencySymbol,
                         appLanguage = appLanguage,
-                        onLanguageChange = { lang ->
-                            appLanguage = lang
-                            prefs.edit().putString("appLanguage", lang).apply()
-                            val newStrings: AppStrings = if (lang == "es") SpanishStrings else EnglishStrings
-                            val changedCats = mutableListOf<Category>()
-                            categories.forEachIndexed { idx, cat ->
-                                if (cat.tag.isNotEmpty()) {
-                                    val allKnown = getAllKnownNamesForTag(cat.tag)
-                                    if (cat.name in allKnown) {
-                                        val newName = getDefaultCategoryName(cat.tag, newStrings)
-                                        if (newName != null && newName != cat.name) {
-                                            categories[idx] = cat.copy(name = newName)
-                                            changedCats.add(categories[idx])
-                                        }
-                                    }
-                                }
-                            }
-                            if (changedCats.isNotEmpty()) saveCategories(changedCats)
-                        },
-                        onNavigateToBudgetConfig = { currentScreen = "budget_config" },
-                        onNavigateToFamilySync = { currentScreen = "family_sync" },
-                        onNavigateToQuickStart = {
-                            quickStartStep = QuickStartStep.WELCOME
-                            currentScreen = "main"
-                        },
+                        onSetAppLanguage = { appLanguage = it },
+                        prefs = prefs,
+                        categories = categories,
+                        saveCategories = { saveCategories(it) },
+                        onSetCurrentScreen = { currentScreen = it },
+                        onSetQuickStartStep = { quickStartStep = it },
                         matchDays = matchDays,
-                        onMatchDaysChange = {
-                            matchDays = it; prefs.edit().putInt("matchDays", it).apply()
-                            if (isSyncConfigured) {
-                                sharedSettings = sharedSettings.copy(matchDays = it, lastChangedBy = localDeviceId)
-                                SharedSettingsRepository.save(context, sharedSettings)
-                                SyncWriteHelper.pushSharedSettings(sharedSettings)
-                                lastSyncActivity = System.currentTimeMillis()
-                            }
-                        },
-                        matchPercent = matchPercent,
-                        onMatchPercentChange = {
-                            matchPercent = it; prefs.edit().putString("matchPercent", it.toString()).apply()
-                            if (isSyncConfigured) {
-                                sharedSettings = sharedSettings.copy(matchPercent = it, lastChangedBy = localDeviceId)
-                                SharedSettingsRepository.save(context, sharedSettings)
-                                SyncWriteHelper.pushSharedSettings(sharedSettings)
-                                lastSyncActivity = System.currentTimeMillis()
-                            }
-                        },
-                        matchDollar = matchDollar,
-                        onMatchDollarChange = {
-                            matchDollar = it; prefs.edit().putInt("matchDollar", it).apply()
-                            if (isSyncConfigured) {
-                                sharedSettings = sharedSettings.copy(matchDollar = it, lastChangedBy = localDeviceId)
-                                SharedSettingsRepository.save(context, sharedSettings)
-                                SyncWriteHelper.pushSharedSettings(sharedSettings)
-                                lastSyncActivity = System.currentTimeMillis()
-                            }
-                        },
-                        matchChars = matchChars,
-                        onMatchCharsChange = {
-                            matchChars = it; prefs.edit().putInt("matchChars", it).apply()
-                            if (isSyncConfigured) {
-                                sharedSettings = sharedSettings.copy(matchChars = it, lastChangedBy = localDeviceId)
-                                SharedSettingsRepository.save(context, sharedSettings)
-                                SyncWriteHelper.pushSharedSettings(sharedSettings)
-                                lastSyncActivity = System.currentTimeMillis()
-                            }
-                        },
-                        chartPalette = chartPalette,
-                        onChartPaletteChange = { chartPalette = it; prefs.edit().putString("chartPalette", it).apply() },
-                        budgetPeriod = budgetPeriod.name,
-                        weekStartSunday = weekStartSunday,
-                        onWeekStartChange = {
-                            weekStartSunday = it; prefs.edit().putBoolean("weekStartSunday", it).apply()
-                            if (isSyncConfigured) {
-                                sharedSettings = sharedSettings.copy(weekStartSunday = it, lastChangedBy = localDeviceId)
-                                SharedSettingsRepository.save(context, sharedSettings)
-                                SyncWriteHelper.pushSharedSettings(sharedSettings)
-                                lastSyncActivity = System.currentTimeMillis()
-                            }
-                        },
-                        onCurrencyChange = {
-                            currencySymbol = it
-                            prefs.edit().putString("currencySymbol", it).apply()
-                            if (isSyncConfigured) {
-                                sharedSettings = sharedSettings.copy(currency = it, lastChangedBy = localDeviceId)
-                                SharedSettingsRepository.save(context, sharedSettings)
-                                SyncWriteHelper.pushSharedSettings(sharedSettings)
-                                lastSyncActivity = System.currentTimeMillis()
-                            }
-                        },
+                        onSetMatchDays = { matchDays = it },
                         isSyncConfigured = isSyncConfigured,
-                        isAdmin = isSyncAdmin,
+                        sharedSettings = sharedSettings,
+                        onSetSharedSettings = { sharedSettings = it },
+                        context = context,
+                        localDeviceId = localDeviceId,
+                        onSetLastSyncActivity = { lastSyncActivity = it },
+                        matchPercent = matchPercent,
+                        onSetMatchPercent = { matchPercent = it },
+                        matchDollar = matchDollar,
+                        onSetMatchDollar = { matchDollar = it },
+                        matchChars = matchChars,
+                        onSetMatchChars = { matchChars = it },
+                        chartPalette = chartPalette,
+                        onSetChartPalette = { chartPalette = it },
+                        budgetPeriod = budgetPeriod,
+                        weekStartSunday = weekStartSunday,
+                        onSetWeekStartSunday = { weekStartSunday = it },
+                        onSetCurrencySymbol = { currencySymbol = it },
+                        isSyncAdmin = isSyncAdmin,
                         showDecimals = showDecimals,
-                        onDecimalsChange = {
-                            showDecimals = it
-                            prefs.edit().putBoolean("showDecimals", it).apply()
-                        },
+                        onSetShowDecimals = { showDecimals = it },
                         dateFormatPattern = dateFormatPattern,
-                        onDateFormatChange = {
-                            dateFormatPattern = it
-                            prefs.edit().putString("dateFormatPattern", it).apply()
-                        },
-                        isPaidUser = isPaidUser || isSubscriber,
-                        onPaidUserChange = { newValue ->
-                            isPaidUser = newValue
-                            prefs.edit().putBoolean("isPaidUser", newValue).apply()
-                            com.syncbudget.app.widget.BudgetWidgetProvider.updateAllWidgets(context)
-                        },
+                        onSetDateFormatPattern = { dateFormatPattern = it },
+                        isPaidUser = isPaidUser,
+                        onSetIsPaidUser = { isPaidUser = it },
                         isSubscriber = isSubscriber,
-                        onSubscriberChange = { newValue ->
-                            isSubscriber = newValue
-                            prefs.edit().putBoolean("isSubscriber", newValue).apply()
-                        },
+                        onSetIsSubscriber = { isSubscriber = it },
                         subscriptionExpiry = subscriptionExpiry,
-                        onSubscriptionExpiryChange = { newValue ->
-                            subscriptionExpiry = newValue
-                            prefs.edit().putLong("subscriptionExpiry", newValue).apply()
-                        },
+                        onSetSubscriptionExpiry = { subscriptionExpiry = it },
                         showWidgetLogo = showWidgetLogo,
-                        onWidgetLogoChange = { newValue ->
-                            showWidgetLogo = newValue
-                            prefs.edit().putBoolean("showWidgetLogo", newValue).apply()
-                            com.syncbudget.app.widget.BudgetWidgetProvider.updateAllWidgets(context)
-                        },
-                        categories = activeCategories,
-                        transactions = activeTransactions,
-                        onAddCategory = { cat ->
-                            val added = cat.copy(
-                                deviceId = localDeviceId,
-                            )
-                            categories.add(added)
-                            saveCategories(listOf(added))
-                        },
-                        onUpdateCategory = { updated ->
-                            val idx = categories.indexOfFirst { it.id == updated.id }
-                            if (idx >= 0) {
-                                val old = categories[idx]
-                                // Don't overwrite deviceId — it tracks the original creator.
-                                categories[idx] = updated.copy(
-                                    deviceId = old.deviceId,
-                                    deleted = old.deleted,
-                                )
-                                saveCategories(listOf(categories[idx]))
-                            }
-                        },
-                        onDeleteCategory = { cat ->
-                            val idx = categories.indexOfFirst { it.id == cat.id }
-                            if (idx >= 0) {
-                                categories[idx] = categories[idx].copy(deleted = true)
-                                saveCategories(listOf(categories[idx]))
-                            }
-                        },
-                        onToggleCharted = { cat ->
-                            val idx = categories.indexOfFirst { it.id == cat.id }
-                            if (idx >= 0) {
-                                categories[idx] = categories[idx].copy(
-                                    charted = !categories[idx].charted,
-                                )
-                                saveCategories(listOf(categories[idx]))
-                            }
-                        },
-                        onToggleWidgetVisible = { cat ->
-                            val idx = categories.indexOfFirst { it.id == cat.id }
-                            if (idx >= 0) {
-                                categories[idx] = categories[idx].copy(
-                                    widgetVisible = !categories[idx].widgetVisible,
-                                )
-                                saveCategories(listOf(categories[idx]))
-                            }
-                        },
-                        onReassignCategory = { fromId, toId ->
-                            val changedTxns = mutableListOf<Transaction>()
-                            transactions.forEachIndexed { index, txn ->
-                                val updated = txn.categoryAmounts.map { ca ->
-                                    if (ca.categoryId == fromId) {
-                                        // Check if toId already exists in this transaction
-                                        val existingTo = txn.categoryAmounts.find { it.categoryId == toId }
-                                        if (existingTo != null) ca.copy(categoryId = -1) // mark for merge
-                                        else ca.copy(categoryId = toId)
-                                    } else ca
-                                }
-                                // Merge amounts if both fromId and toId existed
-                                val markedForMerge = updated.find { it.categoryId == -1 }
-                                val finalAmounts = if (markedForMerge != null) {
-                                    val mergedAmount = (updated.find { it.categoryId == toId }?.amount ?: 0.0) + markedForMerge.amount
-                                    updated.filter { it.categoryId != -1 && it.categoryId != toId } +
-                                        CategoryAmount(toId, mergedAmount)
-                                } else updated
-                                if (finalAmounts != txn.categoryAmounts) {
-                                    transactions[index] = txn.copy(
-                                        categoryAmounts = finalAmounts,
-                                    )
-                                    changedTxns.add(transactions[index])
-                                }
-                            }
-                            saveTransactions(changedTxns)
-                        },
-                        receiptPruneAgeDays = sharedSettings.receiptPruneAgeDays,
-                        onReceiptPruneChange = { days ->
-                            sharedSettings = sharedSettings.copy(
-                                receiptPruneAgeDays = days,
-                                lastChangedBy = localDeviceId
-                            )
-                            SharedSettingsRepository.save(context, sharedSettings)
-                            SyncWriteHelper.pushSharedSettings(sharedSettings)
-                            lastSyncActivity = System.currentTimeMillis()
-                        },
-                        receiptCacheSize = remember(isPaidUser) {
-                            com.syncbudget.app.data.sync.ReceiptManager.getTotalStorageBytes(context)
-                        },
+                        onSetShowWidgetLogo = { showWidgetLogo = it },
+                        activeCategories = activeCategories,
+                        activeTransactions = activeTransactions,
+                        transactions = transactions,
+                        saveTransactions = { saveTransactions(it) },
                         backupsEnabled = backupsEnabled,
-                        onBackupsEnabledChange = { enabled ->
-                            if (enabled) {
-                                showBackupPasswordDialog = true
-                            } else {
-                                showDisableBackupDialog = true
-                            }
-                        },
+                        onSetShowBackupPasswordDialog = { showBackupPasswordDialog = it },
+                        onSetShowDisableBackupDialog = { showDisableBackupDialog = it },
                         backupFrequencyWeeks = backupFrequencyWeeks,
-                        onBackupFrequencyChange = { weeks ->
-                            backupFrequencyWeeks = weeks
-                            backupPrefs.edit().putInt("backup_frequency_weeks", weeks).apply()
-                        },
+                        onSetBackupFrequencyWeeks = { backupFrequencyWeeks = it },
+                        backupPrefs = backupPrefs,
                         backupRetention = backupRetention,
-                        onBackupRetentionChange = { ret ->
-                            backupRetention = ret
-                            backupPrefs.edit().putInt("backup_retention", ret).apply()
-                        },
+                        onSetBackupRetention = { backupRetention = it },
                         lastBackupDate = lastBackupDate,
-                        nextBackupDate = com.syncbudget.app.data.BackupManager.getNextBackupDate(context),
-                        onBackupNow = {
-                            val pwd = com.syncbudget.app.data.BackupManager.getPassword(context)
-                            if (pwd != null) {
-                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                                    val result = com.syncbudget.app.data.BackupManager.performBackup(context, pwd)
-                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                        lastBackupDate = backupPrefs.getString("last_backup_date", null)
-                                    }
-                                }
-                            }
-                        },
-                        onRestoreBackup = { showRestoreDialog = true },
-                        onSavePhotos = { showSavePhotosDialog = true },
-                        onDumpDebug = {
-                            coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                try {
-                                    val devName = com.syncbudget.app.data.sync.GroupManager.getDeviceName(context)
-                                    val sanitized = sanitizeDeviceName(devName)
-                                    val supportDir = BackupManager.getSupportDir()
-
-                                    // 1. Build fresh diag dump and save locally
-                                    val diagText = buildDiagDump()
-                                    writeDiagToMediaStore("sync_diag.txt", diagText)
-                                    if (sanitized.isNotEmpty()) {
-                                        writeDiagToMediaStore("sync_diag_${sanitized}.txt", diagText)
-                                    }
-
-                                    // 2. Read sync_log and save with device name
-                                    val syncLogFile = java.io.File(supportDir, "sync_log.txt")
-                                    val syncLogText = if (syncLogFile.exists()) syncLogFile.readText() else ""
-                                    if (sanitized.isNotEmpty() && syncLogText.isNotEmpty()) {
-                                        writeDiagToMediaStore("sync_log_${sanitized}.txt", syncLogText)
-                                    }
-
-                                    // 2b. Capture logcat to file (app can read its own logs) — debug only
-                                    if (com.syncbudget.app.BuildConfig.DEBUG) {
-                                        try {
-                                            val logcatProcess = Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-t", "1000"))
-                                            val logcatText = logcatProcess.inputStream.bufferedReader().readText()
-                                            logcatProcess.waitFor()
-                                            writeDiagToMediaStore("logcat_${sanitized}.txt", logcatText)
-                                        } catch (e: Exception) {
-                                            android.util.Log.w("DumpDebug", "Logcat capture failed: ${e.message}")
-                                        }
-                                    }
-
-                                    val gId = syncGroupId
-                                    if (gId != null) {
-                                        // 3. Upload own files
-                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                            toastState.show("Uploading local debug files\u2026")
-                                        }
-                                        // Append extra debug files to the diag upload
-                                        val extraDebug = StringBuilder(diagText)
-                                        for (extraName in listOf("clock_dump.txt", "fcm_debug.txt")) {
-                                            val f = java.io.File(supportDir, extraName)
-                                            if (f.exists()) {
-                                                extraDebug.appendLine("\n=== $extraName ===")
-                                                extraDebug.appendLine(f.readText())
-                                            }
-                                        }
-                                        // Append logcat if captured
-                                        try {
-                                            val lp = Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-t", "500"))
-                                            val lt = lp.inputStream.bufferedReader().readText()
-                                            lp.waitFor()
-                                            if (lt.isNotEmpty()) {
-                                                extraDebug.appendLine("\n=== logcat (last 500) ===")
-                                                extraDebug.appendLine(lt)
-                                            }
-                                        } catch (_: Exception) {}
-                                        val debugKey = com.syncbudget.app.data.sync.GroupManager.getEncryptionKey(context)
-                                        FirestoreService.uploadDebugFiles(gId, localDeviceId, devName, syncLogText, extraDebug.toString(), debugKey)
-
-                                        // 4. Request all devices upload fresh files
-                                        FirestoreService.requestDebugDump(gId)
-
-                                        // 4b. Send FCM push to wake up remote devices
-                                        try {
-                                            val fcmTokens = FirestoreService.getFcmTokens(gId, localDeviceId)
-                                            val supportDir = BackupManager.getSupportDir()
-                                            val debugLog = java.io.File(supportDir, "fcm_debug.txt")
-                                            debugLog.appendText("[${java.time.LocalDateTime.now()}] FCM tokens found: ${fcmTokens.size}\n")
-                                            for (token in fcmTokens) {
-                                                debugLog.appendText("  token: ${token.take(20)}...\n")
-                                                val sent = FcmSender.sendDebugRequest(context, token)
-                                                debugLog.appendText("  result: $sent, error: ${FcmSender.lastError}\n")
-                                            }
-                                            if (fcmTokens.isEmpty()) {
-                                                debugLog.appendText("  No FCM tokens found for remote devices\n")
-                                            }
-                                        } catch (e: Exception) {
-                                            val supportDir = BackupManager.getSupportDir()
-                                            java.io.File(supportDir, "fcm_debug.txt")
-                                                .appendText("[${java.time.LocalDateTime.now()}] FCM exception: ${e.javaClass.simpleName}: ${e.message}\n")
-                                        }
-
-                                        // 5. Poll for remote files (wait up to 90s for other devices)
-                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                            toastState.show("Waiting for remote device\u2026")
-                                        }
-                                        val requestTime = System.currentTimeMillis()
-                                        var gotFreshRemote = false
-                                        for (attempt in 1..18) { // 18 × 5s = 90s max
-                                            kotlinx.coroutines.delay(5_000)
-                                            val remoteFiles = FirestoreService.downloadDebugFiles(gId, localDeviceId, debugKey)
-                                            // Check if any remote file was updated AFTER our request
-                                            val fresh = remoteFiles.filter { it.updatedAt > requestTime - 5000 }
-                                            if (fresh.isNotEmpty()) {
-                                                for (remote in remoteFiles) {
-                                                    val rName = sanitizeDeviceName(remote.deviceName)
-                                                    if (remote.syncLog.isNotEmpty()) writeDiagToMediaStore("sync_log_${rName}.txt", remote.syncLog)
-                                                    if (remote.syncDiag.isNotEmpty()) writeDiagToMediaStore("sync_diag_${rName}.txt", remote.syncDiag)
-                                                }
-                                                gotFreshRemote = true
-                                                break
-                                            }
-                                        }
-                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                            if (gotFreshRemote) {
-                                                toastState.show("Debug files synced")
-                                            } else {
-                                                toastState.show("Local files saved. Remote device didn\u2019t respond in 90s.")
-                                            }
-                                        }
-                                    } else {
-                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                            toastState.show("Debug files saved locally")
-                                        }
-                                    }
-                                } catch (e: Exception) {
-                                    android.util.Log.e("DumpDebug", "Debug sync failed: ${e.message}", e)
-                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                        toastState.show("Debug sync failed: ${e.message?.take(60)}")
-                                    }
-                                }
-                            }
-                        },
-                        onBack = { currentScreen = "main" },
-                        onHelpClick = { currentScreen = "settings_help" }
+                        onSetLastBackupDate = { lastBackupDate = it },
+                        onSetShowRestoreDialog = { showRestoreDialog = it },
+                        onSetShowSavePhotosDialog = { showSavePhotosDialog = it },
+                        coroutineScope = coroutineScope,
+                        syncGroupId = syncGroupId,
+                        toastState = toastState,
                     )
-                    "transactions" -> TransactionsScreen(
-                        transactions = activeTransactions,
+                    "transactions" -> TransactionsScreenBranch(
+                        activeTransactions = activeTransactions,
                         currencySymbol = currencySymbol,
                         dateFormatPattern = dateFormatPattern,
-                        categories = activeCategories,
-                        isPaidUser = isPaidUser || isSubscriber,
+                        activeCategories = activeCategories,
+                        isPaidUser = isPaidUser,
                         isSubscriber = isSubscriber,
-                        recurringExpenses = activeRecurringExpenses,
-                        amortizationEntries = activeAmortizationEntries,
-                        incomeSources = activeIncomeSources,
-                        savingsGoals = activeSavingsGoals,
+                        activeRecurringExpenses = activeRecurringExpenses,
+                        activeAmortizationEntries = activeAmortizationEntries,
+                        activeIncomeSources = activeIncomeSources,
+                        activeSavingsGoals = activeSavingsGoals,
                         matchDays = matchDays,
                         matchPercent = matchPercent,
                         matchDollar = matchDollar,
                         matchChars = matchChars,
                         chartPalette = chartPalette,
-                        showAttribution = sharedSettings.showAttribution && isSyncConfigured,
-                        deviceNameMap = run {
-                            val roster = try {
-                                val obj = org.json.JSONObject(sharedSettings.deviceRoster)
-                                obj.keys().asSequence().associateWith { obj.getString(it) }
-                            } catch (_: Exception) { emptyMap() }
-                            // Live devices override roster (freshest names), roster fills in former members
-                            roster + syncDevices.associate { it.deviceId to it.deviceName.ifEmpty { it.deviceId.take(8) } }
-                        },
-                        localDeviceId = localDeviceId,
-                        onAddTransaction = { txn ->
-                            addTransactionWithBudgetEffect(txn)
-                        },
-                        onUpdateTransaction = { updated ->
-                            val old = transactions.find { it.id == updated.id }
-                            val index = transactions.indexOfFirst { it.id == updated.id }
-                            if (index >= 0) {
-                                val prev = transactions[index]
-                                // Don't overwrite deviceId — it tracks the original creator.
-                                transactions[index] = updated.copy(
-                                    deviceId = prev.deviceId,
-                                    deleted = prev.deleted,
-                                    // If user manually unlinks, clear remembered amounts (linked-in-error → full amount applies)
-                                    amortizationAppliedAmount = if (prev.linkedAmortizationEntryId != null && updated.linkedAmortizationEntryId == null) 0.0 else prev.amortizationAppliedAmount,
-                                    linkedRecurringExpenseAmount = if (prev.linkedRecurringExpenseId != null && updated.linkedRecurringExpenseId == null) 0.0 else prev.linkedRecurringExpenseAmount,
-                                    linkedIncomeSourceAmount = if (prev.linkedIncomeSourceId != null && updated.linkedIncomeSourceId == null) 0.0 else prev.linkedIncomeSourceAmount,
-                                    // Manual unlink from savings goal: clear remembered amount, restore funds to goal
-                                    linkedSavingsGoalAmount = if (prev.linkedSavingsGoalId != null && updated.linkedSavingsGoalId == null) 0.0
-                                        else if (updated.linkedSavingsGoalId != null && prev.linkedSavingsGoalId == null) updated.linkedSavingsGoalAmount
-                                        else prev.linkedSavingsGoalAmount,
-                                )
-                                // Handle savings goal link/unlink effects
-                                val wasLinkedToGoal = prev.linkedSavingsGoalId
-                                val nowLinkedToGoal = updated.linkedSavingsGoalId
-                                if (wasLinkedToGoal != null && nowLinkedToGoal == null) {
-                                    // Manual unlink: restore funds to goal
-                                    val gIdx = savingsGoals.indexOfFirst { it.id == wasLinkedToGoal }
-                                    if (gIdx >= 0) {
-                                        val g = savingsGoals[gIdx]
-                                        savingsGoals[gIdx] = g.copy(
-                                            totalSavedSoFar = g.totalSavedSoFar + prev.linkedSavingsGoalAmount,
-                                        )
-                                        saveSavingsGoals(listOf(savingsGoals[gIdx]))
-                                    }
-                                } else if (wasLinkedToGoal == null && nowLinkedToGoal != null) {
-                                    // Newly linked: deduct from goal
-                                    val gIdx = savingsGoals.indexOfFirst { it.id == nowLinkedToGoal }
-                                    if (gIdx >= 0) {
-                                        val g = savingsGoals[gIdx]
-                                        savingsGoals[gIdx] = g.copy(
-                                            totalSavedSoFar = maxOf(0.0, g.totalSavedSoFar - updated.amount),
-                                        )
-                                        saveSavingsGoals(listOf(savingsGoals[gIdx]))
-                                    }
-                                }
-                                saveTransactions(listOf(transactions[index]))
-                            }
-                            recomputeCash()
-                        },
-                        onDeleteTransaction = { txn ->
-                            val idx = transactions.indexOfFirst { it.id == txn.id }
-                            if (idx >= 0) {
-                                val t = transactions[idx]
-                                // If linked to savings goal, restore funds
-                                if (t.linkedSavingsGoalId != null && t.linkedSavingsGoalAmount > 0.0) {
-                                    val gIdx = savingsGoals.indexOfFirst { it.id == t.linkedSavingsGoalId }
-                                    if (gIdx >= 0) {
-                                        val g = savingsGoals[gIdx]
-                                        savingsGoals[gIdx] = g.copy(
-                                            totalSavedSoFar = g.totalSavedSoFar + t.linkedSavingsGoalAmount,
-                                        )
-                                        saveSavingsGoals(listOf(savingsGoals[gIdx]))
-                                    }
-                                }
-                                transactions[idx] = t.copy(
-                                    deleted = true
-                                )
-                                saveTransactions(listOf(transactions[idx]))
-                                // Clean up receipt photos (local + cloud)
-                                val receiptIds = listOfNotNull(t.receiptId1, t.receiptId2, t.receiptId3, t.receiptId4, t.receiptId5)
-                                if (receiptIds.isNotEmpty()) {
-                                    coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                        for (rid in receiptIds) {
-                                            com.syncbudget.app.data.sync.ReceiptManager.deleteReceiptFull(context, rid)
-                                        }
-                                    }
-                                }
-                            }
-                            recomputeCash()
-                        },
-                        onDeleteTransactions = { ids ->
-                            val changedGoals = mutableListOf<SavingsGoal>()
-                            val changedTxns = mutableListOf<Transaction>()
-                            transactions.forEachIndexed { index, txn ->
-                                if (txn.id in ids && !txn.deleted) {
-                                    // Restore savings goal funds for linked transactions
-                                    if (txn.linkedSavingsGoalId != null && txn.linkedSavingsGoalAmount > 0.0) {
-                                        val gIdx = savingsGoals.indexOfFirst { it.id == txn.linkedSavingsGoalId }
-                                        if (gIdx >= 0) {
-                                            val g = savingsGoals[gIdx]
-                                            savingsGoals[gIdx] = g.copy(
-                                                totalSavedSoFar = g.totalSavedSoFar + txn.linkedSavingsGoalAmount,
-                                            )
-                                            changedGoals.add(savingsGoals[gIdx])
-                                        }
-                                    }
-                                    transactions[index] = txn.copy(
-                                        deleted = true,
-                                    )
-                                    changedTxns.add(transactions[index])
-                                }
-                            }
-                            if (changedGoals.isNotEmpty()) saveSavingsGoals(changedGoals)
-                            saveTransactions(changedTxns)
-                            recomputeCash()
-                            // Clean up receipt photos for all deleted transactions
-                            val deletedReceiptIds = ids.flatMap { id ->
-                                val txn = transactions.find { it.id == id } ?: return@flatMap emptyList()
-                                listOfNotNull(txn.receiptId1, txn.receiptId2, txn.receiptId3, txn.receiptId4, txn.receiptId5)
-                            }
-                            if (deletedReceiptIds.isNotEmpty()) {
-                                coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                    for (rid in deletedReceiptIds) {
-                                        com.syncbudget.app.data.sync.ReceiptManager.deleteReceiptFull(context, rid)
-                                    }
-                                }
-                            }
-                        },
-                        onSerializeFullBackup = {
-                            FullBackupSerializer.serialize(context)
-                        },
-                        onLoadFullBackup = { jsonContent ->
-                            FullBackupSerializer.restoreFullState(context, jsonContent)
-
-                            // Reload all lists from repositories
-                            val newTxns = TransactionRepository.load(context)
-                            transactions.clear(); transactions.addAll(newTxns)
-
-                            val newCats = CategoryRepository.load(context)
-                            categories.clear(); categories.addAll(newCats)
-
-                            val newRE = RecurringExpenseRepository.load(context)
-                            recurringExpenses.clear(); recurringExpenses.addAll(newRE)
-
-                            val newIS = IncomeSourceRepository.load(context)
-                            incomeSources.clear(); incomeSources.addAll(newIS)
-
-                            val newAE = AmortizationRepository.load(context)
-                            amortizationEntries.clear(); amortizationEntries.addAll(newAE)
-
-                            val newSG = SavingsGoalRepository.load(context)
-                            savingsGoals.clear(); savingsGoals.addAll(newSG)
-
-                            val newPL = PeriodLedgerRepository.load(context)
-                            periodLedger.clear(); periodLedger.addAll(newPL)
-
-                            sharedSettings = SharedSettingsRepository.load(context)
-
-                            // Reload local prefs
-                            currencySymbol = prefs.getString("currencySymbol", "$") ?: "$"
-                            digitCount = prefs.getInt("digitCount", 3)
-                            showDecimals = prefs.getBoolean("showDecimals", false)
-                            dateFormatPattern = prefs.getString("dateFormatPattern", "yyyy-MM-dd") ?: "yyyy-MM-dd"
-                            chartPalette = prefs.getString("chartPalette", "Sunset") ?: "Sunset"
-                            appLanguage = prefs.getString("appLanguage", "en") ?: "en"
-                            budgetPeriod = try { BudgetPeriod.valueOf(prefs.getString("budgetPeriod", "DAILY") ?: "DAILY") }
-                                           catch (_: Exception) { BudgetPeriod.DAILY }
-                            resetHour = prefs.getInt("resetHour", 0)
-                            resetDayOfWeek = prefs.getInt("resetDayOfWeek", 7)
-                            resetDayOfMonth = prefs.getInt("resetDayOfMonth", 1)
-                            isManualBudgetEnabled = prefs.getBoolean("isManualBudgetEnabled", false)
-                            manualBudgetAmount = prefs.getDoubleCompat("manualBudgetAmount")
-                            availableCash = prefs.getDoubleCompat("availableCash")
-                            budgetStartDate = prefs.getString("budgetStartDate", null)?.let { LocalDate.parse(it) }
-                            lastRefreshDate = prefs.getString("lastRefreshDate", null)?.let { LocalDate.parse(it) }
-                            weekStartSunday = prefs.getBoolean("weekStartSunday", true)
-                            matchDays = prefs.getInt("matchDays", 7)
-                            matchPercent = prefs.getDoubleCompat("matchPercent", 1.0)
-                            matchDollar = prefs.getInt("matchDollar", 1)
-                            matchChars = prefs.getInt("matchChars", 5)
-
-                            // Handle family sync: dissolve old group, create new one.
-                            // Clear all deviceIds and clocks first so records get
-                            // properly stamped with THIS device's identity when a
-                            // new group is created (the backup may have come from a
-                            // different device).
-                            if (isSyncConfigured) {
-                                // Clear sync identity on all records
-                                // Clear sync identity on all records
-                                transactions.forEachIndexed { i, t ->
-                                    transactions[i] = t.copy(deviceId = "")
-                                }
-                                saveTransactions()
-                                categories.forEachIndexed { i, c ->
-                                    categories[i] = c.copy(deviceId = "")
-                                }
-                                saveCategories()
-                                recurringExpenses.forEachIndexed { i, r ->
-                                    recurringExpenses[i] = r.copy(deviceId = "")
-                                }
-                                saveRecurringExpenses()
-                                incomeSources.forEachIndexed { i, s ->
-                                    incomeSources[i] = s.copy(deviceId = "")
-                                }
-                                saveIncomeSources()
-                                savingsGoals.forEachIndexed { i, g ->
-                                    savingsGoals[i] = g.copy(deviceId = "")
-                                }
-                                saveSavingsGoals()
-                                amortizationEntries.forEachIndexed { i, e ->
-                                    amortizationEntries[i] = e.copy(deviceId = "")
-                                }
-                                saveAmortizationEntries()
-
-                                // Clear sync prefs for new group
-                                context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
-                                    .edit().putBoolean("pushClockFixApplied", true).apply()
-
-                                val oldGroupId = syncGroupId
-                                if (oldGroupId != null) {
-                                    coroutineScope.launch {
-                                        try {
-                                            GroupManager.dissolveGroup(context, oldGroupId)
-                                        } catch (_: Exception) {}
-                                        val newGroup = GroupManager.createGroup(context)
-                                        // Initialize group doc BEFORE registering device
-                                        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                                        db.collection("groups").document(newGroup.groupId)
-                                            .set(mapOf("createdAt" to System.currentTimeMillis(), "lastActivity" to System.currentTimeMillis()))
-                                            .await()
-                                        // Register admin device
-                                        FirestoreService.registerDevice(
-                                            newGroup.groupId, localDeviceId,
-                                            GroupManager.getDeviceName(context), isAdmin = true
-                                        )
-                                        isSyncConfigured = true
-                                        syncGroupId = newGroup.groupId
-                                        isSyncAdmin = true
-                                        syncStatus = "synced"
-                                        lastSyncActivity = 0L
-                                        syncDevices = emptyList()
-                                        generatedPairingCode = null
-                                    }
-                                }
-                            }
-                        },
+                        sharedSettings = sharedSettings,
+                        onSetSharedSettings = { sharedSettings = it },
                         isSyncConfigured = isSyncConfigured,
+                        onSetIsSyncConfigured = { isSyncConfigured = it },
+                        syncDevices = syncDevices,
+                        onSetSyncDevices = { syncDevices = it },
+                        localDeviceId = localDeviceId,
+                        addTransactionWithBudgetEffect = { addTransactionWithBudgetEffect(it) },
+                        transactions = transactions,
+                        savingsGoals = savingsGoals,
+                        saveSavingsGoals = { saveSavingsGoals(it) },
+                        saveTransactions = { saveTransactions(it) },
+                        recomputeCash = { recomputeCash() },
+                        coroutineScope = coroutineScope,
+                        context = context,
+                        categories = categories,
+                        recurringExpenses = recurringExpenses,
+                        incomeSources = incomeSources,
+                        amortizationEntries = amortizationEntries,
+                        periodLedger = periodLedger,
+                        prefs = prefs,
+                        onSetCurrencySymbol = { currencySymbol = it },
+                        onSetDigitCount = { digitCount = it },
+                        onSetShowDecimals = { showDecimals = it },
+                        onSetDateFormatPattern = { dateFormatPattern = it },
+                        onSetChartPalette = { chartPalette = it },
+                        onSetAppLanguage = { appLanguage = it },
+                        onSetBudgetPeriod = { budgetPeriod = it },
+                        onSetResetHour = { resetHour = it },
+                        onSetResetDayOfWeek = { resetDayOfWeek = it },
+                        onSetResetDayOfMonth = { resetDayOfMonth = it },
+                        onSetIsManualBudgetEnabled = { isManualBudgetEnabled = it },
+                        onSetManualBudgetAmount = { manualBudgetAmount = it },
+                        onSetAvailableCash = { availableCash = it },
+                        onSetBudgetStartDate = { budgetStartDate = it },
+                        onSetLastRefreshDate = { lastRefreshDate = it },
+                        onSetWeekStartSunday = { weekStartSunday = it },
+                        onSetMatchDays = { matchDays = it },
+                        onSetMatchPercent = { matchPercent = it },
+                        onSetMatchDollar = { matchDollar = it },
+                        onSetMatchChars = { matchChars = it },
+                        syncGroupId = syncGroupId,
+                        onSetSyncGroupId = { syncGroupId = it },
                         isSyncAdmin = isSyncAdmin,
+                        onSetIsSyncAdmin = { isSyncAdmin = it },
+                        syncStatus = syncStatus,
+                        onSetSyncStatus = { syncStatus = it },
+                        lastSyncActivity = lastSyncActivity,
+                        onSetLastSyncActivity = { lastSyncActivity = it },
+                        onSetGeneratedPairingCode = { generatedPairingCode = it },
+                        saveCategories = { saveCategories(it) },
+                        saveRecurringExpenses = { saveRecurringExpenses(it) },
+                        saveIncomeSources = { saveIncomeSources(it) },
+                        saveAmortizationEntries = { saveAmortizationEntries(it) },
                         budgetPeriod = budgetPeriod,
                         incomeMode = incomeMode,
-                        onAdjustIncomeAmount = { srcId, newAmount ->
-                            val idx = incomeSources.indexOfFirst { it.id == srcId }
-                            if (idx >= 0 && incomeSources[idx].amount != newAmount) {
-                                incomeSources[idx] = incomeSources[idx].copy(
-                                    amount = newAmount,
-                                )
-                                saveIncomeSources(listOf(incomeSources[idx]))
-                            }
-                        },
-                        onAddAmortization = { entry ->
-                            val added = entry.copy(
-                                deviceId = localDeviceId,
-                            )
-                            amortizationEntries.add(added)
-                            saveAmortizationEntries(listOf(added))
-                        },
-                        onDeleteAmortization = { entry ->
-                            val idx = amortizationEntries.indexOfFirst { it.id == entry.id }
-                            if (idx >= 0) {
-                                amortizationEntries[idx] = amortizationEntries[idx].copy(
-                                    deleted = true,
-                                )
-                                saveAmortizationEntries(listOf(amortizationEntries[idx]))
-                            }
-                        },
-                        onBack = { currentScreen = "main" },
-                        onHelpClick = { currentScreen = "transactions_help" }
+                        onSetCurrentScreen = { currentScreen = it },
                     )
                     "future_expenditures" -> FutureExpendituresScreen(
                         isPaidUser = isPaidUser,
@@ -3105,9 +2302,7 @@ class MainActivity : ComponentActivity() {
                         currencySymbol = currencySymbol,
                         dateFormatPattern = dateFormatPattern,
                         onAddIncomeSource = { src ->
-                            val added = src.copy(
-                                deviceId = localDeviceId,
-                            )
+                            val added = src.copy(deviceId = localDeviceId)
                             incomeSources.add(added)
                             saveIncomeSources(listOf(added))
                         },
@@ -3134,13 +2329,10 @@ class MainActivity : ComponentActivity() {
                             if (idx >= 0) {
                                 incomeSources[idx] = incomeSources[idx].copy(deleted = true)
                                 saveIncomeSources(listOf(incomeSources[idx]))
-                                // Unlink any transactions linked to this income source
                                 val unlinkedTxns = mutableListOf<Transaction>()
                                 transactions.forEachIndexed { i, txn ->
                                     if (txn.linkedIncomeSourceId == src.id) {
-                                        transactions[i] = txn.copy(
-                                            linkedIncomeSourceId = null,
-                                        )
+                                        transactions[i] = txn.copy(linkedIncomeSourceId = null)
                                         unlinkedTxns.add(transactions[i])
                                     }
                                 }
@@ -3152,9 +2344,10 @@ class MainActivity : ComponentActivity() {
                         onBudgetPeriodChange = {
                             budgetPeriod = it; prefs.edit().putString("budgetPeriod", it.name).apply()
                             if (isSyncConfigured) {
-                                sharedSettings = sharedSettings.copy(budgetPeriod = it.name, lastChangedBy = localDeviceId)
+                                val updated = sharedSettings.copy(budgetPeriod = it.name, lastChangedBy = localDeviceId)
+                                sharedSettings = updated
                                 SharedSettingsRepository.save(context, sharedSettings)
-                                SyncWriteHelper.pushSharedSettings(sharedSettings)
+                                com.syncbudget.app.data.sync.SyncWriteHelper.pushSharedSettings(sharedSettings)
                                 lastSyncActivity = System.currentTimeMillis()
                             }
                         },
@@ -3162,29 +2355,30 @@ class MainActivity : ComponentActivity() {
                         onResetHourChange = {
                             resetHour = it; prefs.edit().putInt("resetHour", it).apply()
                             if (isSyncConfigured) {
-                                sharedSettings = sharedSettings.copy(resetHour = it, lastChangedBy = localDeviceId)
+                                val updated = sharedSettings.copy(resetHour = it, lastChangedBy = localDeviceId)
+                                sharedSettings = updated
                                 SharedSettingsRepository.save(context, sharedSettings)
-                                SyncWriteHelper.pushSharedSettings(sharedSettings)
+                                com.syncbudget.app.data.sync.SyncWriteHelper.pushSharedSettings(sharedSettings)
                                 lastSyncActivity = System.currentTimeMillis()
                             }
                         },
                         resetDayOfWeek = resetDayOfWeek,
                         onResetDayOfWeekChange = {
                             resetDayOfWeek = it; prefs.edit().putInt("resetDayOfWeek", it).apply()
-                            // Keep weekStartSunday in sync: Sunday(7)→true, Monday(1)→false
                             val newWeekStart = (it == 7)
                             if (weekStartSunday != newWeekStart) {
                                 weekStartSunday = newWeekStart
                                 prefs.edit().putBoolean("weekStartSunday", newWeekStart).apply()
                             }
                             if (isSyncConfigured) {
-                                sharedSettings = sharedSettings.copy(
+                                val updated = sharedSettings.copy(
                                     resetDayOfWeek = it,
                                     weekStartSunday = newWeekStart,
                                     lastChangedBy = localDeviceId
                                 )
+                                sharedSettings = updated
                                 SharedSettingsRepository.save(context, sharedSettings)
-                                SyncWriteHelper.pushSharedSettings(sharedSettings)
+                                com.syncbudget.app.data.sync.SyncWriteHelper.pushSharedSettings(sharedSettings)
                                 lastSyncActivity = System.currentTimeMillis()
                             }
                         },
@@ -3192,9 +2386,10 @@ class MainActivity : ComponentActivity() {
                         onResetDayOfMonthChange = {
                             resetDayOfMonth = it; prefs.edit().putInt("resetDayOfMonth", it).apply()
                             if (isSyncConfigured) {
-                                sharedSettings = sharedSettings.copy(resetDayOfMonth = it, lastChangedBy = localDeviceId)
+                                val updated = sharedSettings.copy(resetDayOfMonth = it, lastChangedBy = localDeviceId)
+                                sharedSettings = updated
                                 SharedSettingsRepository.save(context, sharedSettings)
-                                SyncWriteHelper.pushSharedSettings(sharedSettings)
+                                com.syncbudget.app.data.sync.SyncWriteHelper.pushSharedSettings(sharedSettings)
                                 lastSyncActivity = System.currentTimeMillis()
                             }
                         },
@@ -3204,7 +2399,6 @@ class MainActivity : ComponentActivity() {
                         onManualBudgetToggle = { enabled ->
                             isManualBudgetEnabled = enabled
                             prefs.edit().putBoolean("isManualBudgetEnabled", enabled).apply()
-                            // Auto-switch from ACTUAL_ADJUST to ACTUAL when manual override is enabled
                             if (enabled && incomeMode == IncomeMode.ACTUAL_ADJUST) {
                                 incomeMode = IncomeMode.ACTUAL
                                 prefs.edit().putString("incomeMode", "ACTUAL").apply()
@@ -3213,9 +2407,10 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             if (isSyncConfigured) {
-                                sharedSettings = sharedSettings.copy(isManualBudgetEnabled = enabled, lastChangedBy = localDeviceId)
+                                val updated = sharedSettings.copy(isManualBudgetEnabled = enabled, lastChangedBy = localDeviceId)
+                                sharedSettings = updated
                                 SharedSettingsRepository.save(context, sharedSettings)
-                                SyncWriteHelper.pushSharedSettings(sharedSettings)
+                                com.syncbudget.app.data.sync.SyncWriteHelper.pushSharedSettings(sharedSettings)
                                 lastSyncActivity = System.currentTimeMillis()
                             }
                         },
@@ -3223,25 +2418,25 @@ class MainActivity : ComponentActivity() {
                             manualBudgetAmount = amount
                             prefs.edit().putString("manualBudgetAmount", amount.toString()).apply()
                             if (isSyncConfigured) {
-                                sharedSettings = sharedSettings.copy(manualBudgetAmount = amount, lastChangedBy = localDeviceId)
+                                val updated = sharedSettings.copy(manualBudgetAmount = amount, lastChangedBy = localDeviceId)
+                                sharedSettings = updated
                                 SharedSettingsRepository.save(context, sharedSettings)
-                                SyncWriteHelper.pushSharedSettings(sharedSettings)
+                                com.syncbudget.app.data.sync.SyncWriteHelper.pushSharedSettings(sharedSettings)
                                 lastSyncActivity = System.currentTimeMillis()
                             }
                         },
-                        budgetStartDate = budgetStartDate?.format(DateTimeFormatter.ofPattern(dateFormatPattern)),
+                        budgetStartDate = budgetStartDate?.format(java.time.format.DateTimeFormatter.ofPattern(dateFormatPattern)),
                         onResetBudget = {
                             val tz = if (isSyncConfigured && sharedSettings.familyTimezone.isNotEmpty())
-                                ZoneId.of(sharedSettings.familyTimezone) else null
+                                java.time.ZoneId.of(sharedSettings.familyTimezone) else null
                             budgetStartDate = BudgetCalculator.currentPeriodStart(budgetPeriod, resetDayOfWeek, resetDayOfMonth, tz, resetHour)
                             lastRefreshDate = budgetStartDate
-                            // Record period ledger entry with CRDT stamping
                             val entryDate = budgetStartDate!!.atStartOfDay()
                             val alreadyRecorded = periodLedger.any {
                                 it.periodStartDate.toLocalDate() == budgetStartDate
                             }
                             val newLedgerEntry = if (!alreadyRecorded) {
-                                val entry = PeriodLedgerEntry(
+                                val entry = com.syncbudget.app.data.sync.PeriodLedgerEntry(
                                     periodStartDate = entryDate,
                                     appliedAmount = budgetAmount,
                                     deviceId = localDeviceId
@@ -3251,18 +2446,19 @@ class MainActivity : ComponentActivity() {
                             } else null
                             savePeriodLedger(listOfNotNull(newLedgerEntry))
                             if (isSyncConfigured) {
-                                sharedSettings = sharedSettings.copy(
-                                    budgetStartDate = budgetStartDate?.toString(),
+                                val updated = sharedSettings.copy(
+                                    budgetStartDate = budgetStartDate.toString(),
                                     lastChangedBy = localDeviceId
                                 )
+                                sharedSettings = updated
                                 SharedSettingsRepository.save(context, sharedSettings)
-                                SyncWriteHelper.pushSharedSettings(sharedSettings)
+                                com.syncbudget.app.data.sync.SyncWriteHelper.pushSharedSettings(sharedSettings)
                                 lastSyncActivity = System.currentTimeMillis()
                             }
                             recomputeCash()
                             prefs.edit()
                                 .putString("budgetStartDate", budgetStartDate.toString())
-                                .putString("lastRefreshDate", lastRefreshDate.toString())
+                                .putString("lastRefreshDate", budgetStartDate.toString())
                                 .apply()
                         },
                         isSyncConfigured = isSyncConfigured,
@@ -3273,9 +2469,10 @@ class MainActivity : ComponentActivity() {
                             incomeMode = mode
                             prefs.edit().putString("incomeMode", modeName).apply()
                             if (isSyncConfigured) {
-                                sharedSettings = sharedSettings.copy(incomeMode = modeName, lastChangedBy = localDeviceId)
+                                val updated = sharedSettings.copy(incomeMode = modeName, lastChangedBy = localDeviceId)
+                                sharedSettings = updated
                                 SharedSettingsRepository.save(context, sharedSettings)
-                                SyncWriteHelper.pushSharedSettings(sharedSettings)
+                                com.syncbudget.app.data.sync.SyncWriteHelper.pushSharedSettings(sharedSettings)
                                 lastSyncActivity = System.currentTimeMillis()
                             }
                             recomputeCash()
@@ -3283,368 +2480,64 @@ class MainActivity : ComponentActivity() {
                         onBack = { currentScreen = "settings" },
                         onHelpClick = { currentScreen = "budget_config_help" }
                     )
-                    "family_sync" -> FamilySyncScreen(
-                        isConfigured = isSyncConfigured,
+                    "family_sync" -> FamilySyncScreenBranch(
+                        isSyncConfigured = isSyncConfigured,
+                        onSetIsSyncConfigured = { isSyncConfigured = it },
                         isSubscriber = isSubscriber,
-                        groupId = syncGroupId,
-                        isAdmin = isSyncAdmin,
-                        deviceName = GroupManager.getDeviceName(context),
+                        syncGroupId = syncGroupId,
+                        onSetSyncGroupId = { syncGroupId = it },
+                        isSyncAdmin = isSyncAdmin,
+                        onSetIsSyncAdmin = { isSyncAdmin = it },
                         localDeviceId = localDeviceId,
-                        devices = syncDevices,
+                        syncDevices = syncDevices,
+                        onSetSyncDevices = { syncDevices = it },
                         syncStatus = syncStatus,
-                        lastSyncTime = lastSyncTimeDisplay,
-                        familyTimezone = sharedSettings.familyTimezone,
-                        onTimezoneChange = { tz ->
-                            sharedSettings = sharedSettings.copy(
-                                familyTimezone = tz,
-                                lastChangedBy = localDeviceId
-                            )
-                            SharedSettingsRepository.save(context, sharedSettings)
-                            SyncWriteHelper.pushSharedSettings(sharedSettings)
-                            lastSyncActivity = System.currentTimeMillis()
-                        },
-                        showAttribution = sharedSettings.showAttribution,
-                        onShowAttributionChange = { enabled ->
-                            sharedSettings = sharedSettings.copy(
-                                showAttribution = enabled,
-                                lastChangedBy = localDeviceId
-                            )
-                            SharedSettingsRepository.save(context, sharedSettings)
-                            SyncWriteHelper.pushSharedSettings(sharedSettings)
-                            lastSyncActivity = System.currentTimeMillis()
-                        },
-                        orphanedDeviceIds = remember(transactions.toList(), syncDevices, localDeviceId, sharedSettings.deviceRoster) {
-                            val roster = try {
-                                val obj = org.json.JSONObject(sharedSettings.deviceRoster)
-                                obj.keys().asSequence().toSet()
-                            } catch (_: Exception) { emptySet() }
-                            val knownIds = syncDevices.map { it.deviceId }.toSet() + localDeviceId + roster
-                            transactions.toList()
-                                .map { it.deviceId }
-                                .filter { it.isNotEmpty() && it !in knownIds }
-                                .toSet()
-                        },
-                        deviceRoster = remember(sharedSettings.deviceRoster) {
-                            try {
-                                val obj = org.json.JSONObject(sharedSettings.deviceRoster)
-                                obj.keys().asSequence().associateWith { obj.getString(it) }
-                            } catch (_: Exception) { emptyMap() }
-                        },
-                        onSaveDeviceRoster = { roster ->
-                            val json = org.json.JSONObject(roster).toString()
-                            sharedSettings = sharedSettings.copy(
-                                deviceRoster = json,
-                                lastChangedBy = localDeviceId
-                            )
-                            SharedSettingsRepository.save(context, sharedSettings)
-                            SyncWriteHelper.pushSharedSettings(sharedSettings)
-                            lastSyncActivity = System.currentTimeMillis()
-                        },
-                        onPurgeStaleRoster = {
-                            val txnDeviceIds = transactions.toList()
-                                .map { it.deviceId }
-                                .filter { it.isNotEmpty() }
-                                .toSet()
-                            val currentIds = syncDevices.map { it.deviceId }.toSet()
-                            val currentRoster = try {
-                                val obj = org.json.JSONObject(sharedSettings.deviceRoster)
-                                obj.keys().asSequence().associateWith { obj.getString(it) }
-                            } catch (_: Exception) { emptyMap() }
-                            // Keep roster entries that have transactions OR are current devices
-                            val pruned = currentRoster.filterKeys { it in txnDeviceIds || it in currentIds }
-                            if (pruned.size < currentRoster.size) {
-                                sharedSettings = sharedSettings.copy(
-                                    deviceRoster = org.json.JSONObject(pruned).toString(),
-                                    lastChangedBy = localDeviceId
-                                )
-                                SharedSettingsRepository.save(context, sharedSettings)
-                                SyncWriteHelper.pushSharedSettings(sharedSettings)
-                                lastSyncActivity = System.currentTimeMillis()
-                            }
-                        },
+                        onSetSyncStatus = { syncStatus = it },
+                        lastSyncTimeDisplay = lastSyncTimeDisplay,
+                        sharedSettings = sharedSettings,
+                        onSetSharedSettings = { sharedSettings = it },
+                        context = context,
+                        onSetLastSyncActivity = { lastSyncActivity = it },
+                        transactions = transactions,
                         pendingAdminClaim = pendingAdminClaim,
-                        onClaimAdmin = {
-                            coroutineScope.launch {
-                                try {
-                                    val gId = syncGroupId ?: return@launch
-                                    val now = System.currentTimeMillis()
-                                    val claim = AdminClaim(
-                                        claimantDeviceId = localDeviceId,
-                                        claimantName = GroupManager.getDeviceName(context),
-                                        claimedAt = now,
-                                        expiresAt = now + 24 * 60 * 60 * 1000L
-                                    )
-                                    FirestoreService.createAdminClaim(gId, claim)
-                                    pendingAdminClaim = FirestoreService.getAdminClaim(gId)
-                                } catch (_: Exception) {}
-                            }
-                        },
-                        onObjectClaim = {
-                            coroutineScope.launch {
-                                try {
-                                    val gId = syncGroupId ?: return@launch
-                                    FirestoreService.addObjection(gId, localDeviceId)
-                                    pendingAdminClaim = FirestoreService.getAdminClaim(gId)
-                                } catch (_: Exception) {}
-                            }
-                        },
+                        onSetPendingAdminClaim = { pendingAdminClaim = it },
+                        coroutineScope = coroutineScope,
                         syncErrorMessage = syncErrorMessage,
+                        onSetSyncErrorMessage = { syncErrorMessage = it },
                         syncProgressMessage = syncProgressMessage,
-                        onCreateGroup = { nickname ->
-                            coroutineScope.launch {
-                                try {
-                                    GroupManager.setDeviceName(context, nickname)
-                                    val info = GroupManager.createGroup(context)
-
-                                    // Update UI state immediately after local group creation
-                                    syncGroupId = info.groupId
-                                    isSyncAdmin = true
-                                    isSyncConfigured = true
-                                    syncStatus = "syncing"
-
-                                    // Initialize group doc BEFORE registering device
-                                    val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                                    db.collection("groups").document(info.groupId)
-                                        .set(mapOf("createdAt" to System.currentTimeMillis(), "lastActivity" to System.currentTimeMillis()))
-                                        .await()
-                                    // Register this device as admin
-                                    FirestoreService.registerDevice(
-                                        info.groupId,
-                                        localDeviceId,
-                                        nickname,
-                                        isAdmin = true
-                                    )
-                                    // Initialize SharedSettings from current app_prefs
-                                    sharedSettings = SharedSettings(
-                                        currency = currencySymbol,
-                                        budgetPeriod = budgetPeriod.name,
-                                        budgetStartDate = budgetStartDate?.toString(),
-                                        isManualBudgetEnabled = isManualBudgetEnabled,
-                                        manualBudgetAmount = manualBudgetAmount,
-                                        weekStartSunday = weekStartSunday,
-                                        resetDayOfWeek = resetDayOfWeek,
-                                        resetDayOfMonth = resetDayOfMonth,
-                                        resetHour = resetHour,
-                                        familyTimezone = java.util.TimeZone.getDefault().id,
-                                        matchDays = matchDays,
-                                        matchPercent = matchPercent,
-                                        matchDollar = matchDollar,
-                                        matchChars = matchChars,
-                                        incomeMode = incomeMode.name,
-                                        lastChangedBy = localDeviceId,
-                                    )
-                                    SharedSettingsRepository.save(context, sharedSettings)
-
-                                    // Stamp all existing data with deviceId so they push on first sync.
-                                    // Only stamp records that have no deviceId (empty).
-                                    transactions.forEachIndexed { i, t ->
-                                        if (t.deviceId.isEmpty()) {
-                                            transactions[i] = t.copy(deviceId = localDeviceId)
-                                        }
-                                    }
-                                    saveTransactions()
-                                    categories.forEachIndexed { i, c ->
-                                        if (c.deviceId.isEmpty()) {
-                                            categories[i] = c.copy(deviceId = localDeviceId)
-                                        }
-                                    }
-                                    saveCategories()
-                                    savingsGoals.forEachIndexed { i, g ->
-                                        if (g.deviceId.isEmpty()) {
-                                            savingsGoals[i] = g.copy(deviceId = localDeviceId)
-                                        }
-                                    }
-                                    saveSavingsGoals()
-                                    amortizationEntries.forEachIndexed { i, e ->
-                                        if (e.deviceId.isEmpty()) {
-                                            amortizationEntries[i] = e.copy(deviceId = localDeviceId)
-                                        }
-                                    }
-                                    saveAmortizationEntries()
-                                    recurringExpenses.forEachIndexed { i, r ->
-                                        if (r.deviceId.isEmpty()) {
-                                            recurringExpenses[i] = r.copy(deviceId = localDeviceId)
-                                        }
-                                    }
-                                    saveRecurringExpenses()
-                                    incomeSources.forEachIndexed { i, s ->
-                                        if (s.deviceId.isEmpty()) {
-                                            incomeSources[i] = s.copy(deviceId = localDeviceId)
-                                        }
-                                    }
-                                    saveIncomeSources()
-
-                                    syncStatus = "synced"
-                                } catch (_: Exception) {
-                                    syncStatus = "error"
-                                }
-                            }
-                        },
-                        onJoinGroup = { code, nickname ->
-                            coroutineScope.launch {
-                                try {
-                                    GroupManager.setDeviceName(context, nickname)
-                                    val success = GroupManager.joinGroup(context, code)
-                                    if (success) {
-                                        // Clear local data — the group's data will arrive
-                                        // via Firestore listeners once they start.
-                                        transactions.clear()
-                                        recurringExpenses.clear()
-                                        incomeSources.clear()
-                                        savingsGoals.clear()
-                                        amortizationEntries.clear()
-                                        categories.clear()
-                                        periodLedger.clear()
-                                        TransactionRepository.save(context, emptyList())
-                                        RecurringExpenseRepository.save(context, emptyList())
-                                        IncomeSourceRepository.save(context, emptyList())
-                                        SavingsGoalRepository.save(context, emptyList())
-                                        AmortizationRepository.save(context, emptyList())
-                                        CategoryRepository.save(context, emptyList())
-                                        PeriodLedgerRepository.save(context, emptyList())
-
-                                        // Mark migrations as done so we don't push empty data
-                                        syncPrefs.edit()
-                                            .putBoolean("migration_native_docs_done", true)
-                                            .putBoolean("migration_per_field_enc_done", true)
-                                            .apply()
-
-                                        syncGroupId = GroupManager.getGroupId(context)
-                                        isSyncAdmin = false
-                                        isSyncConfigured = true
-                                        syncStatus = "synced"
-                                    } else {
-                                        syncErrorMessage = "Invalid or expired pairing code"
-                                    }
-                                } catch (e: Exception) {
-                                    syncStatus = "error"
-                                    syncErrorMessage = e.message
-                                }
-                            }
-                        },
-                        onLeaveGroup = {
-                            coroutineScope.launch {
-                                GroupManager.leaveGroup(context)
-                                syncPrefs.edit()
-                                    .remove("catIdRemap")
-                                    .remove("lastSuccessfulSync")
-                                    .apply()
-                                isSyncConfigured = false
-                                syncGroupId = null
-                                isSyncAdmin = false
-                                syncStatus = "off"
-                                lastSyncActivity = 0L
-                                syncDevices = emptyList()
-                                pendingAdminClaim = null
-                                syncErrorMessage = null
-                            }
-                        },
-                        onDissolveGroup = {
-                            val gId = syncGroupId
-                            if (gId != null) {
-                                syncStatus = "syncing"
-                                coroutineScope.launch {
-                                    try {
-                                        android.util.Log.d("Sync", "Dissolving group $gId")
-                                        GroupManager.dissolveGroup(context, gId) { msg ->
-                                            syncProgressMessage = msg
-                                        }
-                                        android.util.Log.d("Sync", "Group dissolved successfully")
-                                        syncPrefs.edit()
-                                            .remove("catIdRemap")
-                                            .remove("lastSuccessfulSync")
-                                            .apply()
-                                        isSyncConfigured = false
-                                        syncGroupId = null
-                                        isSyncAdmin = false
-                                        syncStatus = "off"
-                                        lastSyncActivity = 0L
-                                        syncDevices = emptyList()
-                                        pendingAdminClaim = null
-                                        syncErrorMessage = null
-                                        syncProgressMessage = null
-                                    } catch (e: Exception) {
-                                        android.util.Log.e("Sync", "Dissolve failed, falling back to local leave", e)
-                                        // If Firestore is unreachable (group already dissolved, network down),
-                                        // fall back to local-only leave so user isn't stuck.
-                                        try {
-                                            GroupManager.leaveGroup(context, localOnly = true)
-                                        } catch (_: Exception) {}
-                                        syncPrefs.edit()
-                                            .remove("catIdRemap")
-                                            .remove("lastSuccessfulSync")
-                                            .apply()
-                                        isSyncConfigured = false
-                                        syncGroupId = null
-                                        isSyncAdmin = false
-                                        syncStatus = "off"
-                                        lastSyncActivity = 0L
-                                        syncDevices = emptyList()
-                                        pendingAdminClaim = null
-                                        syncErrorMessage = null
-                                        syncProgressMessage = null
-                                        toastState.show("Group left locally (server unreachable)")
-                                    }
-                                }
-                            }
-                        },
-                        onSyncNow = doSyncNow,
-                        onGeneratePairingCode = {
-                            val gId = syncGroupId
-                            val key = GroupManager.getEncryptionKey(context)
-                            if (gId != null && key != null) {
-                                coroutineScope.launch {
-                                    try {
-                                        // No need to push data — the new device receives
-                                        // everything via Firestore listeners on join.
-                                        generatedPairingCode = GroupManager.generatePairingCode(context, gId, key)
-                                    } catch (_: Exception) {}
-                                }
-                            }
-                        },
+                        onSetSyncProgressMessage = { syncProgressMessage = it },
+                        currencySymbol = currencySymbol,
+                        budgetPeriod = budgetPeriod,
+                        budgetStartDate = budgetStartDate,
+                        isManualBudgetEnabled = isManualBudgetEnabled,
+                        manualBudgetAmount = manualBudgetAmount,
+                        weekStartSunday = weekStartSunday,
+                        resetDayOfWeek = resetDayOfWeek,
+                        resetDayOfMonth = resetDayOfMonth,
+                        resetHour = resetHour,
+                        matchDays = matchDays,
+                        matchPercent = matchPercent,
+                        matchDollar = matchDollar,
+                        matchChars = matchChars,
+                        incomeMode = incomeMode,
+                        categories = categories,
+                        recurringExpenses = recurringExpenses,
+                        incomeSources = incomeSources,
+                        savingsGoals = savingsGoals,
+                        amortizationEntries = amortizationEntries,
+                        periodLedger = periodLedger,
+                        saveTransactions = { saveTransactions(it) },
+                        saveCategories = { saveCategories(it) },
+                        saveSavingsGoals = { saveSavingsGoals(it) },
+                        saveAmortizationEntries = { saveAmortizationEntries(it) },
+                        saveRecurringExpenses = { saveRecurringExpenses(it) },
+                        saveIncomeSources = { saveIncomeSources(it) },
+                        doSyncNow = doSyncNow,
                         generatedPairingCode = generatedPairingCode,
-                        onDismissPairingCode = { generatedPairingCode = null },
-                        onRenameDevice = { targetDeviceId, newName ->
-                            val gId = syncGroupId ?: return@FamilySyncScreen
-                            coroutineScope.launch {
-                                try {
-                                    FirestoreService.updateDeviceName(gId, targetDeviceId, newName)
-                                    // If renaming self, also update local prefs
-                                    if (targetDeviceId == localDeviceId) {
-                                        GroupManager.setDeviceName(context, newName)
-                                    }
-                                    // Refresh device list
-                                    syncDevices = GroupManager.getDevices(gId)
-                                    // Update permanent roster
-                                    val currentRoster = try {
-                                        val obj = org.json.JSONObject(sharedSettings.deviceRoster)
-                                        obj.keys().asSequence().associateWith { obj.getString(it) }.toMutableMap()
-                                    } catch (_: Exception) { mutableMapOf() }
-                                    currentRoster[targetDeviceId] = newName
-                                    sharedSettings = sharedSettings.copy(
-                                        deviceRoster = org.json.JSONObject(currentRoster as Map<*, *>).toString(),
-                                        lastChangedBy = localDeviceId
-                                    )
-                                    SharedSettingsRepository.save(context, sharedSettings)
-                                    SyncWriteHelper.pushSharedSettings(sharedSettings)
-                                    lastSyncActivity = System.currentTimeMillis()
-                                } catch (_: Exception) {}
-                            }
-                        },
-                        onRemoveDevice = { targetDeviceId ->
-                            val gId = syncGroupId ?: return@FamilySyncScreen
-                            coroutineScope.launch {
-                                try {
-                                    FirestoreService.removeDevice(gId, targetDeviceId)
-                                    syncDevices = GroupManager.getDevices(gId)
-                                } catch (_: Exception) {}
-                            }
-                        },
-                        onHelpClick = { currentScreen = "family_sync_help" },
-                        onBack = {
-                            generatedPairingCode = null
-                            currentScreen = "settings"
-                        }
+                        onSetGeneratedPairingCode = { generatedPairingCode = it },
+                        syncPrefs = syncPrefs,
+                        toastState = toastState,
+                        onSetCurrentScreen = { currentScreen = it },
                     )
                     "dashboard_help" -> DashboardHelpScreen(
                         onBack = { currentScreen = "main" }
@@ -3687,555 +2580,85 @@ class MainActivity : ComponentActivity() {
                 }
 
                 // Dashboard quick-add dialogs (rendered over any screen)
-                if (dashboardShowAddIncome) {
-                    TransactionDialog(
-                        title = strings.common.addNewIncomeTransaction,
-                        sourceLabel = strings.common.sourceLabel,
-                        categories = activeCategories,
-                        existingIds = existingIds,
-                        currencySymbol = currencySymbol,
-                        dateFormatter = dateFormatter,
-                        chartPalette = chartPalette,
-                        recurringExpenses = activeRecurringExpenses,
-                        amortizationEntries = activeAmortizationEntries,
-                        incomeSources = activeIncomeSources,
-                        savingsGoals = activeSavingsGoals,
-                        pastSources = activeTransactions.groupingBy { it.source }.eachCount().entries.sortedByDescending { it.value }.map { it.key },
-                        budgetPeriod = budgetPeriod,
-                        isPaidUser = isPaidUser || isSubscriber,
-                        onDismiss = { dashboardShowAddIncome = false },
-                        onSave = { txn ->
-                            runMatchingChain(txn)
-                            dashboardShowAddIncome = false
-                        },
-                        onAddAmortization = { entry ->
-                            val added = entry.copy(
-                                deviceId = localDeviceId,
-                            )
-                            amortizationEntries.add(added)
-                            saveAmortizationEntries(listOf(added))
-                        },
-                        onDeleteAmortization = { entry ->
-                            val idx = amortizationEntries.indexOfFirst { it.id == entry.id }
-                            if (idx >= 0) {
-                                amortizationEntries[idx] = amortizationEntries[idx].copy(
-                                    deleted = true
-                                )
-                                saveAmortizationEntries(listOf(amortizationEntries[idx]))
-                            }
-                        }
-                    )
-                }
-
-                if (dashboardShowAddExpense) {
-                    TransactionDialog(
-                        title = strings.common.addNewExpenseTransaction,
-                        sourceLabel = strings.common.merchantLabel,
-                        categories = activeCategories,
-                        existingIds = existingIds,
-                        currencySymbol = currencySymbol,
-                        dateFormatter = dateFormatter,
-                        isExpense = true,
-                        chartPalette = chartPalette,
-                        recurringExpenses = activeRecurringExpenses,
-                        amortizationEntries = activeAmortizationEntries,
-                        incomeSources = activeIncomeSources,
-                        savingsGoals = activeSavingsGoals,
-                        pastSources = activeTransactions.groupingBy { it.source }.eachCount().entries.sortedByDescending { it.value }.map { it.key },
-                        budgetPeriod = budgetPeriod,
-                        isPaidUser = isPaidUser || isSubscriber,
-                        onDismiss = { dashboardShowAddExpense = false },
-                        onSave = { txn ->
-                            runMatchingChain(txn)
-                            dashboardShowAddExpense = false
-                        },
-                        onAddAmortization = { entry ->
-                            val added = entry.copy(
-                                deviceId = localDeviceId,
-                            )
-                            amortizationEntries.add(added)
-                            saveAmortizationEntries(listOf(added))
-                        },
-                        onDeleteAmortization = { entry ->
-                            val idx = amortizationEntries.indexOfFirst { it.id == entry.id }
-                            if (idx >= 0) {
-                                amortizationEntries[idx] = amortizationEntries[idx].copy(
-                                    deleted = true
-                                )
-                                saveAmortizationEntries(listOf(amortizationEntries[idx]))
-                            }
-                        }
-                    )
-                }
-
-                // Dashboard duplicate resolution dialog
-                if (dashShowManualDuplicateDialog && dashPendingManualSave != null && dashManualDuplicateMatch != null) {
-                    DuplicateResolutionDialog(
-                        existingTransaction = dashManualDuplicateMatch!!,
-                        newTransaction = dashPendingManualSave!!,
-                        currencySymbol = currencySymbol,
-                        dateFormatter = dateFormatter,
-                        categoryMap = categoryMap,
-                        showIgnoreAll = false,
-                        onIgnore = {
-                            val txn = dashPendingManualSave!!
-                            dashPendingManualSave = null
-                            dashManualDuplicateMatch = null
-                            dashShowManualDuplicateDialog = false
-                            runLinkingChain(txn)
-                        },
-                        onKeepNew = {
-                            val dup = dashManualDuplicateMatch!!
-                            val dupIdx = transactions.indexOfFirst { it.id == dup.id }
-                            if (dupIdx >= 0) {
-                                transactions[dupIdx] = transactions[dupIdx].copy(
-                                    deleted = true
-                                )
-                            }
-                            saveTransactions(if (dupIdx >= 0) listOf(transactions[dupIdx]) else emptyList())
-                            val txn = dashPendingManualSave!!
-                            dashPendingManualSave = null
-                            dashManualDuplicateMatch = null
-                            dashShowManualDuplicateDialog = false
-                            runLinkingChain(txn)
-                        },
-                        onKeepExisting = {
-                            dashPendingManualSave = null
-                            dashManualDuplicateMatch = null
-                            dashShowManualDuplicateDialog = false
-                        },
-                        onIgnoreAll = {}
-                    )
-                }
-
-                // Dashboard recurring expense match dialog
-                if (dashShowRecurringDialog && dashPendingRecurringTxn != null && dashPendingRecurringMatch != null) {
-                    val dateCloseEnough = isRecurringDateCloseEnough(dashPendingRecurringTxn!!.date, dashPendingRecurringMatch!!)
-                    RecurringExpenseConfirmDialog(
-                        transaction = dashPendingRecurringTxn!!,
-                        recurringExpense = dashPendingRecurringMatch!!,
-                        currencySymbol = currencySymbol,
-                        dateFormatter = dateFormatter,
-                        showDateAdvisory = !dateCloseEnough,
-                        onConfirmRecurring = {
-                            val txn = dashPendingRecurringTxn!!
-                            val updatedTxn = txn.copy(
-                                linkedRecurringExpenseId = dashPendingRecurringMatch!!.id,
-                                linkedRecurringExpenseAmount = dashPendingRecurringMatch!!.amount
-                            )
-                            addTransactionWithBudgetEffect(updatedTxn)
-                            dashPendingRecurringTxn = null
-                            dashPendingRecurringMatch = null
-                            dashShowRecurringDialog = false
-                        },
-                        onNotRecurring = {
-                            val txn = dashPendingRecurringTxn!!
-                            dashPendingRecurringTxn = null
-                            dashPendingRecurringMatch = null
-                            dashShowRecurringDialog = false
-                            // Continue linking chain: check amortization, then budget income
-                            val amortizationMatch = findAmortizationMatch(txn, activeAmortizationEntries, percentTolerance, matchDollar, matchChars)
-                            if (amortizationMatch != null) {
-                                dashPendingAmortizationTxn = txn
-                                dashPendingAmortizationMatch = amortizationMatch
-                                dashShowAmortizationDialog = true
-                            } else {
-                                val budgetMatch = findBudgetIncomeMatch(txn, activeIncomeSources, matchChars, matchDays)
-                                if (budgetMatch != null) {
-                                    dashPendingBudgetIncomeTxn = txn
-                                    dashPendingBudgetIncomeMatch = budgetMatch
-                                    dashShowBudgetIncomeDialog = true
-                                } else {
-                                    addTransactionWithBudgetEffect(txn)
-                                }
-                            }
-                        }
-                    )
-                }
-
-                // Dashboard amortization match dialog
-                if (dashShowAmortizationDialog && dashPendingAmortizationTxn != null && dashPendingAmortizationMatch != null) {
-                    AmortizationConfirmDialog(
-                        transaction = dashPendingAmortizationTxn!!,
-                        amortizationEntry = dashPendingAmortizationMatch!!,
-                        currencySymbol = currencySymbol,
-                        dateFormatter = dateFormatter,
-                        onConfirmAmortization = {
-                            val txn = dashPendingAmortizationTxn!!
-                            val updatedTxn = txn.copy(linkedAmortizationEntryId = dashPendingAmortizationMatch!!.id)
-                            addTransactionWithBudgetEffect(updatedTxn)
-                            dashPendingAmortizationTxn = null
-                            dashPendingAmortizationMatch = null
-                            dashShowAmortizationDialog = false
-                        },
-                        onNotAmortized = {
-                            addTransactionWithBudgetEffect(dashPendingAmortizationTxn!!)
-                            dashPendingAmortizationTxn = null
-                            dashPendingAmortizationMatch = null
-                            dashShowAmortizationDialog = false
-                        }
-                    )
-                }
-
-                // Dashboard budget income match dialog
-                if (dashShowBudgetIncomeDialog && dashPendingBudgetIncomeTxn != null && dashPendingBudgetIncomeMatch != null) {
-                    BudgetIncomeConfirmDialog(
-                        transaction = dashPendingBudgetIncomeTxn!!,
-                        incomeSource = dashPendingBudgetIncomeMatch!!,
-                        currencySymbol = currencySymbol,
-                        dateFormatter = dateFormatter,
-                        onConfirmBudgetIncome = {
-                            val recurringIncomeCatId = categories.find { it.tag == "recurring_income" }?.id
-                            val baseTxn = dashPendingBudgetIncomeTxn!!
-                            val txn = baseTxn.copy(
-                                isBudgetIncome = true,
-                                linkedIncomeSourceId = dashPendingBudgetIncomeMatch!!.id,
-                                linkedIncomeSourceAmount = dashPendingBudgetIncomeMatch!!.amount,
-                                categoryAmounts = if (recurringIncomeCatId != null)
-                                    listOf(CategoryAmount(recurringIncomeCatId, baseTxn.amount))
-                                else baseTxn.categoryAmounts,
-                                isUserCategorized = true
-                            )
-                            // ACTUAL_ADJUST: update the income source BEFORE adding txn
-                            // so recomputeCash sees matching amounts (delta = 0)
-                            if (incomeMode == IncomeMode.ACTUAL_ADJUST) {
-                                val srcId = dashPendingBudgetIncomeMatch!!.id
-                                val idx = incomeSources.indexOfFirst { it.id == srcId }
-                                if (idx >= 0 && incomeSources[idx].amount != baseTxn.amount) {
-                                    incomeSources[idx] = incomeSources[idx].copy(
-                                        amount = baseTxn.amount,
-                                    )
-                                    saveIncomeSources(listOf(incomeSources[idx]))
-                                }
-                            }
-                            addTransactionWithBudgetEffect(txn)
-                            dashPendingBudgetIncomeTxn = null
-                            dashPendingBudgetIncomeMatch = null
-                            dashShowBudgetIncomeDialog = false
-                        },
-                        onNotBudgetIncome = {
-                            addTransactionWithBudgetEffect(dashPendingBudgetIncomeTxn!!)
-                            dashPendingBudgetIncomeTxn = null
-                            dashPendingBudgetIncomeMatch = null
-                            dashShowBudgetIncomeDialog = false
-                        }
-                    )
-                }
-
-                // Confirmation dialog: apply recurring expense amount change to past transactions?
-                pendingREAmountUpdate?.let { (updated, oldAmount) ->
-                    AdAwareAlertDialog(
-                        onDismissRequest = {
-                            pendingREAmountUpdate = null
-                            recomputeCash()
-                        },
-                        title = { Text(strings.common.applyToPastTitle) },
-                        text = { Text(strings.common.applyToPastBody) },
-                        style = DialogStyle.WARNING,
-                        confirmButton = {
-                            DialogWarningButton(onClick = {
-                                val changedTxns = mutableListOf<Transaction>()
-                                transactions.forEachIndexed { i, txn ->
-                                    if (txn.linkedRecurringExpenseId == updated.id && !txn.deleted) {
-                                        transactions[i] = txn.copy(
-                                            linkedRecurringExpenseAmount = updated.amount,
-                                        )
-                                        changedTxns.add(transactions[i])
-                                    }
-                                }
-                                saveTransactions(changedTxns)
-                                pendingREAmountUpdate = null
-                                recomputeCash()
-                            }) { Text(strings.common.applyToPastConfirm) }
-                        },
-                        dismissButton = {
-                            DialogSecondaryButton(onClick = {
-                                pendingREAmountUpdate = null
-                                recomputeCash()
-                            }) { Text(strings.common.applyToPastDeny) }
-                        }
-                    )
-                }
-
-                // Confirmation dialog: apply income source amount change to past transactions?
-                pendingISAmountUpdate?.let { (updated, oldAmount) ->
-                    AdAwareAlertDialog(
-                        onDismissRequest = {
-                            pendingISAmountUpdate = null
-                            recomputeCash()
-                        },
-                        title = { Text(strings.common.applyToPastTitle) },
-                        text = { Text(strings.common.applyToPastBody) },
-                        style = DialogStyle.WARNING,
-                        confirmButton = {
-                            DialogWarningButton(onClick = {
-                                val changedTxns = mutableListOf<Transaction>()
-                                transactions.forEachIndexed { i, txn ->
-                                    if (txn.linkedIncomeSourceId == updated.id && !txn.deleted) {
-                                        transactions[i] = txn.copy(
-                                            linkedIncomeSourceAmount = updated.amount,
-                                        )
-                                        changedTxns.add(transactions[i])
-                                    }
-                                }
-                                saveTransactions(changedTxns)
-                                pendingISAmountUpdate = null
-                                recomputeCash()
-                            }) { Text(strings.common.applyToPastConfirm) }
-                        },
-                        dismissButton = {
-                            DialogSecondaryButton(onClick = {
-                                pendingISAmountUpdate = null
-                                recomputeCash()
-                            }) { Text(strings.common.applyToPastDeny) }
-                        }
-                    )
-                }
-
-                // Backup password dialog
-                if (showBackupPasswordDialog) {
-                    var pwd by remember { mutableStateOf("") }
-                    var pwdConfirm by remember { mutableStateOf("") }
-                    var pwdError by remember { mutableStateOf<String?>(null) }
-                    AdAwareAlertDialog(
-                        onDismissRequest = { showBackupPasswordDialog = false },
-                        title = { Text(strings.settings.setBackupPassword) },
-                        style = DialogStyle.WARNING,
-                        text = {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(
-                                    strings.settings.backupPasswordWarning,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                                OutlinedTextField(
-                                    value = pwd, onValueChange = { pwd = it; pwdError = null },
-                                    label = { Text(strings.settings.passwordLabel) }, singleLine = true,
-                                    visualTransformation = PasswordVisualTransformation()
-                                )
-                                OutlinedTextField(
-                                    value = pwdConfirm, onValueChange = { pwdConfirm = it; pwdError = null },
-                                    label = { Text(strings.settings.confirmPasswordLabel) }, singleLine = true,
-                                    visualTransformation = PasswordVisualTransformation()
-                                )
-                                if (pwdError != null) {
-                                    Text(pwdError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                                }
-                            }
-                        },
-                        confirmButton = {
-                            DialogWarningButton(onClick = {
-                                when {
-                                    pwd.length < 8 -> pwdError = strings.settings.passwordTooShort
-                                    pwd != pwdConfirm -> pwdError = strings.settings.passwordMismatch
-                                    else -> {
-                                        com.syncbudget.app.data.BackupManager.savePassword(context, pwd.toCharArray())
-                                        backupsEnabled = true
-                                        backupPrefs.edit().putBoolean("backups_enabled", true).apply()
-                                        showBackupPasswordDialog = false
-                                    }
-                                }
-                            }) { Text(strings.settings.enableBackups) }
-                        },
-                        dismissButton = {
-                            DialogSecondaryButton(onClick = { showBackupPasswordDialog = false }) {
-                                Text(strings.common.cancel)
-                            }
-                        }
-                    )
-                }
-
-                // Disable backup confirmation dialog
-                if (showDisableBackupDialog) {
-                    var confirmDelete by remember { mutableStateOf(false) }
-                    AdAwareAlertDialog(
-                        onDismissRequest = { showDisableBackupDialog = false; confirmDelete = false },
-                        title = { Text(strings.settings.disableBackups) },
-                        style = if (confirmDelete) DialogStyle.DANGER else DialogStyle.DEFAULT,
-                        text = {
-                            if (!confirmDelete) {
-                                Text(strings.settings.keepOrDeletePrompt)
-                            } else {
-                                Text(
-                                    strings.settings.deleteAllConfirmMsg,
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                            }
-                        },
-                        confirmButton = {
-                            if (!confirmDelete) {
-                                DialogDangerButton(onClick = { confirmDelete = true }) {
-                                    Text(strings.settings.deleteAllBtn)
-                                }
-                            } else {
-                                DialogDangerButton(onClick = {
-                                    com.syncbudget.app.data.BackupManager.deleteAllBackups()
-                                    backupsEnabled = false
-                                    backupPrefs.edit().putBoolean("backups_enabled", false).apply()
-                                    showDisableBackupDialog = false; confirmDelete = false
-                                }) { Text(strings.settings.confirmDeleteBtn) }
-                            }
-                        },
-                        dismissButton = {
-                            DialogSecondaryButton(onClick = {
-                                if (confirmDelete) { confirmDelete = false } else {
-                                    backupsEnabled = false
-                                    backupPrefs.edit().putBoolean("backups_enabled", false).apply()
-                                    showDisableBackupDialog = false
-                                }
-                            }) { Text(if (confirmDelete) strings.common.back else strings.settings.keepFilesBtn) }
-                        }
-                    )
-                }
-
-                // Save Photos dialog
-                if (showSavePhotosDialog) {
-                    AdAwareAlertDialog(
-                        onDismissRequest = { showSavePhotosDialog = false },
-                        title = { Text("Save Photos") },
-                        style = DialogStyle.DEFAULT,
-                        text = {
-                            Text("Photos are already backed up in encrypted backups if Automatic Backups is enabled below. This will save unencrypted copies of all receipt photos to Download/BudgeTrak/photos/ on your device if you need them for other purposes.")
-                        },
-                        confirmButton = {
-                            DialogPrimaryButton(onClick = {
-                                showSavePhotosDialog = false
-                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                                    try {
-                                        val photosDir = java.io.File(com.syncbudget.app.data.BackupManager.getBudgetrakDir(), "photos")
-                                        photosDir.mkdirs()
-                                        val receiptDir = java.io.File(context.filesDir, "receipts")
-                                        val files = receiptDir.listFiles() ?: emptyArray()
-                                        var count = 0
-                                        for (f in files) {
-                                            f.copyTo(java.io.File(photosDir, f.name), overwrite = true)
-                                            count++
-                                        }
-                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                            toastState.show("Saved $count photos to Download/BudgeTrak/photos/")
-                                        }
-                                    } catch (e: Exception) {
-                                        android.util.Log.w("SavePhotos", "Failed: ${e.message}")
-                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                            toastState.show("Failed to save photos: ${e.message}")
-                                        }
-                                    }
-                                }
-                            }) { Text(strings.common.save) }
-                        },
-                        dismissButton = {
-                            DialogSecondaryButton(onClick = { showSavePhotosDialog = false }) {
-                                Text(strings.common.cancel)
-                            }
-                        }
-                    )
-                }
-
-                // Restore backup dialog
-                if (showRestoreDialog) {
-                    val availableBackups = remember { com.syncbudget.app.data.BackupManager.listAvailableBackups() }
-                    var selectedBackup by remember { mutableStateOf<com.syncbudget.app.data.BackupManager.BackupEntry?>(null) }
-                    var restorePassword by remember { mutableStateOf("") }
-                    var restoreError by remember { mutableStateOf<String?>(null) }
-                    var restoring by remember { mutableStateOf(false) }
-                    val restoreScrollState = rememberScrollState()
-
-                    AdAwareDialog(onDismissRequest = { if (!restoring) showRestoreDialog = false }) {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
-                            shape = RoundedCornerShape(16.dp),
-                            color = MaterialTheme.colorScheme.surface,
-                            tonalElevation = 6.dp
-                        ) {
-                            Column {
-                                DialogHeader(strings.settings.restoreBackup)
-
-                                Column(
-                                    modifier = Modifier
-                                        .weight(1f, fill = false)
-                                        .verticalScroll(restoreScrollState)
-                                        .padding(horizontal = 20.dp, vertical = 16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    if (availableBackups.isEmpty()) {
-                                        Text(strings.settings.noBackupsFound)
-                                    } else {
-                                        Text(strings.settings.selectBackupPrompt, style = MaterialTheme.typography.bodyMedium)
-                                        availableBackups.forEach { backup ->
-                                            val sizeMb = "%.1f".format((backup.systemSizeBytes + backup.photosSizeBytes) / (1024.0 * 1024.0))
-                                            val selected = selectedBackup?.date == backup.date
-                                            Surface(
-                                                modifier = Modifier.fillMaxWidth().clickable { selectedBackup = backup; restoreError = null },
-                                                color = if (selected) MaterialTheme.colorScheme.primaryContainer
-                                                        else MaterialTheme.colorScheme.surface,
-                                                shape = RoundedCornerShape(8.dp),
-                                                tonalElevation = if (selected) 2.dp else 0.dp
-                                            ) {
-                                                Column(modifier = Modifier.padding(12.dp)) {
-                                                    Text(backup.date, style = MaterialTheme.typography.bodyLarge)
-                                                    Text("${sizeMb} MB" + if (backup.photosFile != null) " (${strings.settings.withPhotos})" else " (${strings.settings.dataOnly})",
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                                                }
-                                            }
-                                        }
-                                        if (selectedBackup != null) {
-                                            Text(strings.settings.restoreWarning,
-                                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                                            OutlinedTextField(
-                                                value = restorePassword, onValueChange = { restorePassword = it; restoreError = null },
-                                                label = { Text(strings.settings.backupPasswordLabel) }, singleLine = true,
-                                                visualTransformation = PasswordVisualTransformation(),
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                        }
-                                        if (restoreError != null) {
-                                            Text(restoreError!!, color = MaterialTheme.colorScheme.error)
-                                        }
-                                    }
-                                }
-
-                                DialogFooter {
-                                    FlowRow(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.End,
-                                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        if (!restoring) {
-                                            DialogSecondaryButton(onClick = { showRestoreDialog = false }) { Text(strings.common.cancel) }
-                                        }
-                                        if (selectedBackup != null && !restoring) {
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            DialogDangerButton(onClick = {
-                                                if (restorePassword.isEmpty()) { restoreError = strings.settings.enterPasswordError; return@DialogDangerButton }
-                                                restoring = true
-                                                val backup = selectedBackup!!
-                                                val pwd = restorePassword.toCharArray()
-                                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                                                    val sysResult = com.syncbudget.app.data.BackupManager.restoreSystemBackup(context, backup.systemFile, pwd)
-                                                    if (sysResult.isSuccess && backup.photosFile != null) {
-                                                        val photosResult = com.syncbudget.app.data.BackupManager.restorePhotosBackup(context, backup.photosFile, pwd)
-                                                        val photosRestored = photosResult.getOrNull() ?: 0
-                                                        android.util.Log.d("BackupRestore", "Photos restored: $photosRestored")
-                                                    }
-                                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                                        restoring = false
-                                                        if (sysResult.isSuccess) {
-                                                            showRestoreDialog = false
-                                                            this@MainActivity.recreate()
-                                                        } else {
-                                                            restoreError = sysResult.exceptionOrNull()?.message ?: "Restore failed"
-                                                        }
-                                                    }
-                                                }
-                                            }) { Text(strings.settings.restoreBtn) }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                DashboardDialogs(
+                    dashboardShowAddIncome = dashboardShowAddIncome,
+                    dashboardShowAddExpense = dashboardShowAddExpense,
+                    dashShowManualDuplicateDialog = dashShowManualDuplicateDialog,
+                    dashPendingManualSave = dashPendingManualSave,
+                    dashManualDuplicateMatch = dashManualDuplicateMatch,
+                    dashShowRecurringDialog = dashShowRecurringDialog,
+                    dashPendingRecurringTxn = dashPendingRecurringTxn,
+                    dashPendingRecurringMatch = dashPendingRecurringMatch,
+                    dashShowAmortizationDialog = dashShowAmortizationDialog,
+                    dashPendingAmortizationTxn = dashPendingAmortizationTxn,
+                    dashPendingAmortizationMatch = dashPendingAmortizationMatch,
+                    dashShowBudgetIncomeDialog = dashShowBudgetIncomeDialog,
+                    dashPendingBudgetIncomeTxn = dashPendingBudgetIncomeTxn,
+                    dashPendingBudgetIncomeMatch = dashPendingBudgetIncomeMatch,
+                    pendingREAmountUpdate = pendingREAmountUpdate,
+                    pendingISAmountUpdate = pendingISAmountUpdate,
+                    showBackupPasswordDialog = showBackupPasswordDialog,
+                    showDisableBackupDialog = showDisableBackupDialog,
+                    showRestoreDialog = showRestoreDialog,
+                    showSavePhotosDialog = showSavePhotosDialog,
+                    backupsEnabled = backupsEnabled,
+                    strings = strings,
+                    activeCategories = activeCategories,
+                    existingIds = existingIds,
+                    currencySymbol = currencySymbol,
+                    dateFormatter = dateFormatter,
+                    chartPalette = chartPalette,
+                    activeRecurringExpenses = activeRecurringExpenses,
+                    activeAmortizationEntries = activeAmortizationEntries,
+                    activeIncomeSources = activeIncomeSources,
+                    activeSavingsGoals = activeSavingsGoals,
+                    activeTransactions = activeTransactions,
+                    budgetPeriod = budgetPeriod,
+                    isPaidUser = isPaidUser,
+                    isSubscriber = isSubscriber,
+                    localDeviceId = localDeviceId,
+                    categoryMap = categoryMap,
+                    percentTolerance = percentTolerance,
+                    matchDollar = matchDollar,
+                    matchChars = matchChars,
+                    matchDays = matchDays,
+                    categories = categories,
+                    incomeMode = incomeMode,
+                    context = context,
+                    toastState = toastState,
+                    transactions = transactions,
+                    amortizationEntries = amortizationEntries,
+                    incomeSources = incomeSources,
+                    backupPrefs = backupPrefs,
+                    onSetDashboardShowAddIncome = { dashboardShowAddIncome = it },
+                    onSetDashboardShowAddExpense = { dashboardShowAddExpense = it },
+                    onSetDashShowManualDuplicateDialog = { dashShowManualDuplicateDialog = it },
+                    onSetDashPendingManualSave = { dashPendingManualSave = it },
+                    onSetDashManualDuplicateMatch = { dashManualDuplicateMatch = it },
+                    onSetDashShowRecurringDialog = { dashShowRecurringDialog = it },
+                    onSetDashPendingRecurringTxn = { dashPendingRecurringTxn = it },
+                    onSetDashPendingRecurringMatch = { dashPendingRecurringMatch = it },
+                    onSetDashShowAmortizationDialog = { dashShowAmortizationDialog = it },
+                    onSetDashPendingAmortizationTxn = { dashPendingAmortizationTxn = it },
+                    onSetDashPendingAmortizationMatch = { dashPendingAmortizationMatch = it },
+                    onSetDashShowBudgetIncomeDialog = { dashShowBudgetIncomeDialog = it },
+                    onSetDashPendingBudgetIncomeTxn = { dashPendingBudgetIncomeTxn = it },
+                    onSetDashPendingBudgetIncomeMatch = { dashPendingBudgetIncomeMatch = it },
+                    onSetPendingREAmountUpdate = { pendingREAmountUpdate = it },
+                    onSetPendingISAmountUpdate = { pendingISAmountUpdate = it },
+                    onSetShowBackupPasswordDialog = { showBackupPasswordDialog = it },
+                    onSetShowDisableBackupDialog = { showDisableBackupDialog = it },
+                    onSetShowRestoreDialog = { showRestoreDialog = it },
+                    onSetShowSavePhotosDialog = { showSavePhotosDialog = it },
+                    onSetBackupsEnabled = { backupsEnabled = it },
+                    runMatchingChain = { runMatchingChain(it) },
+                    runLinkingChain = { runLinkingChain(it) },
+                    addTransactionWithBudgetEffect = { addTransactionWithBudgetEffect(it) },
+                    saveAmortizationEntries = { saveAmortizationEntries(it) },
+                    saveTransactions = { saveTransactions(it) },
+                    saveIncomeSources = { saveIncomeSources(it) },
+                    recomputeCash = { recomputeCash() },
+                )
 
                 } // Box(weight)
               } // Column
@@ -4274,4 +2697,1884 @@ class MainActivity : ComponentActivity() {
             } // SyncBudgetTheme
         }
     }
+
+    @Composable
+    private fun DashboardDialogs(
+        dashboardShowAddIncome: Boolean,
+        dashboardShowAddExpense: Boolean,
+        dashShowManualDuplicateDialog: Boolean,
+        dashPendingManualSave: Transaction?,
+        dashManualDuplicateMatch: Transaction?,
+        dashShowRecurringDialog: Boolean,
+        dashPendingRecurringTxn: Transaction?,
+        dashPendingRecurringMatch: RecurringExpense?,
+        dashShowAmortizationDialog: Boolean,
+        dashPendingAmortizationTxn: Transaction?,
+        dashPendingAmortizationMatch: AmortizationEntry?,
+        dashShowBudgetIncomeDialog: Boolean,
+        dashPendingBudgetIncomeTxn: Transaction?,
+        dashPendingBudgetIncomeMatch: IncomeSource?,
+        pendingREAmountUpdate: Pair<RecurringExpense, Double>?,
+        pendingISAmountUpdate: Pair<IncomeSource, Double>?,
+        showBackupPasswordDialog: Boolean,
+        showDisableBackupDialog: Boolean,
+        showRestoreDialog: Boolean,
+        showSavePhotosDialog: Boolean,
+        backupsEnabled: Boolean,
+        strings: com.syncbudget.app.ui.strings.AppStrings,
+        activeCategories: List<Category>,
+        existingIds: Set<Int>,
+        currencySymbol: String,
+        dateFormatter: java.time.format.DateTimeFormatter,
+        chartPalette: String,
+        activeRecurringExpenses: List<RecurringExpense>,
+        activeAmortizationEntries: List<AmortizationEntry>,
+        activeIncomeSources: List<IncomeSource>,
+        activeSavingsGoals: List<SavingsGoal>,
+        activeTransactions: List<Transaction>,
+        budgetPeriod: BudgetPeriod,
+        isPaidUser: Boolean,
+        isSubscriber: Boolean,
+        localDeviceId: String,
+        categoryMap: Map<Int, Category>,
+        percentTolerance: Double,
+        matchDollar: Int,
+        matchChars: Int,
+        matchDays: Int,
+        categories: SnapshotStateList<Category>,
+        incomeMode: IncomeMode,
+        context: android.content.Context,
+        toastState: AppToastState,
+        transactions: SnapshotStateList<Transaction>,
+        amortizationEntries: SnapshotStateList<AmortizationEntry>,
+        incomeSources: SnapshotStateList<IncomeSource>,
+        backupPrefs: SharedPreferences,
+        onSetDashboardShowAddIncome: (Boolean) -> Unit,
+        onSetDashboardShowAddExpense: (Boolean) -> Unit,
+        onSetDashShowManualDuplicateDialog: (Boolean) -> Unit,
+        onSetDashPendingManualSave: (Transaction?) -> Unit,
+        onSetDashManualDuplicateMatch: (Transaction?) -> Unit,
+        onSetDashShowRecurringDialog: (Boolean) -> Unit,
+        onSetDashPendingRecurringTxn: (Transaction?) -> Unit,
+        onSetDashPendingRecurringMatch: (RecurringExpense?) -> Unit,
+        onSetDashShowAmortizationDialog: (Boolean) -> Unit,
+        onSetDashPendingAmortizationTxn: (Transaction?) -> Unit,
+        onSetDashPendingAmortizationMatch: (AmortizationEntry?) -> Unit,
+        onSetDashShowBudgetIncomeDialog: (Boolean) -> Unit,
+        onSetDashPendingBudgetIncomeTxn: (Transaction?) -> Unit,
+        onSetDashPendingBudgetIncomeMatch: (IncomeSource?) -> Unit,
+        onSetPendingREAmountUpdate: (Pair<RecurringExpense, Double>?) -> Unit,
+        onSetPendingISAmountUpdate: (Pair<IncomeSource, Double>?) -> Unit,
+        onSetShowBackupPasswordDialog: (Boolean) -> Unit,
+        onSetShowDisableBackupDialog: (Boolean) -> Unit,
+        onSetShowRestoreDialog: (Boolean) -> Unit,
+        onSetShowSavePhotosDialog: (Boolean) -> Unit,
+        onSetBackupsEnabled: (Boolean) -> Unit,
+        runMatchingChain: (Transaction) -> Unit,
+        runLinkingChain: (Transaction) -> Unit,
+        addTransactionWithBudgetEffect: (Transaction) -> Unit,
+        saveAmortizationEntries: (List<AmortizationEntry>) -> Unit,
+        saveTransactions: (List<Transaction>) -> Unit,
+        saveIncomeSources: (List<IncomeSource>) -> Unit,
+        recomputeCash: () -> Unit,
+    ) {
+        if (dashboardShowAddIncome) {
+            TransactionDialog(
+                title = strings.common.addNewIncomeTransaction,
+                sourceLabel = strings.common.sourceLabel,
+                categories = activeCategories,
+                existingIds = existingIds,
+                currencySymbol = currencySymbol,
+                dateFormatter = dateFormatter,
+                chartPalette = chartPalette,
+                recurringExpenses = activeRecurringExpenses,
+                amortizationEntries = activeAmortizationEntries,
+                incomeSources = activeIncomeSources,
+                savingsGoals = activeSavingsGoals,
+                pastSources = activeTransactions.groupingBy { it.source }.eachCount().entries.sortedByDescending { it.value }.map { it.key },
+                budgetPeriod = budgetPeriod,
+                isPaidUser = isPaidUser || isSubscriber,
+                onDismiss = { onSetDashboardShowAddIncome(false) },
+                onSave = { txn ->
+                    runMatchingChain(txn)
+                    onSetDashboardShowAddIncome(false)
+                },
+                onAddAmortization = { entry ->
+                    val added = entry.copy(
+                        deviceId = localDeviceId,
+                    )
+                    amortizationEntries.add(added)
+                    saveAmortizationEntries(listOf(added))
+                },
+                onDeleteAmortization = { entry ->
+                    val idx = amortizationEntries.indexOfFirst { it.id == entry.id }
+                    if (idx >= 0) {
+                        amortizationEntries[idx] = amortizationEntries[idx].copy(
+                            deleted = true
+                        )
+                        saveAmortizationEntries(listOf(amortizationEntries[idx]))
+                    }
+                }
+            )
+        }
+
+        if (dashboardShowAddExpense) {
+            TransactionDialog(
+                title = strings.common.addNewExpenseTransaction,
+                sourceLabel = strings.common.merchantLabel,
+                categories = activeCategories,
+                existingIds = existingIds,
+                currencySymbol = currencySymbol,
+                dateFormatter = dateFormatter,
+                isExpense = true,
+                chartPalette = chartPalette,
+                recurringExpenses = activeRecurringExpenses,
+                amortizationEntries = activeAmortizationEntries,
+                incomeSources = activeIncomeSources,
+                savingsGoals = activeSavingsGoals,
+                pastSources = activeTransactions.groupingBy { it.source }.eachCount().entries.sortedByDescending { it.value }.map { it.key },
+                budgetPeriod = budgetPeriod,
+                isPaidUser = isPaidUser || isSubscriber,
+                onDismiss = { onSetDashboardShowAddExpense(false) },
+                onSave = { txn ->
+                    runMatchingChain(txn)
+                    onSetDashboardShowAddExpense(false)
+                },
+                onAddAmortization = { entry ->
+                    val added = entry.copy(
+                        deviceId = localDeviceId,
+                    )
+                    amortizationEntries.add(added)
+                    saveAmortizationEntries(listOf(added))
+                },
+                onDeleteAmortization = { entry ->
+                    val idx = amortizationEntries.indexOfFirst { it.id == entry.id }
+                    if (idx >= 0) {
+                        amortizationEntries[idx] = amortizationEntries[idx].copy(
+                            deleted = true
+                        )
+                        saveAmortizationEntries(listOf(amortizationEntries[idx]))
+                    }
+                }
+            )
+        }
+
+        // Dashboard duplicate resolution dialog
+        if (dashShowManualDuplicateDialog && dashPendingManualSave != null && dashManualDuplicateMatch != null) {
+            DuplicateResolutionDialog(
+                existingTransaction = dashManualDuplicateMatch,
+                newTransaction = dashPendingManualSave,
+                currencySymbol = currencySymbol,
+                dateFormatter = dateFormatter,
+                categoryMap = categoryMap,
+                showIgnoreAll = false,
+                onIgnore = {
+                    val txn = dashPendingManualSave
+                    onSetDashPendingManualSave(null)
+                    onSetDashManualDuplicateMatch(null)
+                    onSetDashShowManualDuplicateDialog(false)
+                    runLinkingChain(txn)
+                },
+                onKeepNew = {
+                    val dup = dashManualDuplicateMatch
+                    val dupIdx = transactions.indexOfFirst { it.id == dup.id }
+                    if (dupIdx >= 0) {
+                        transactions[dupIdx] = transactions[dupIdx].copy(
+                            deleted = true
+                        )
+                    }
+                    saveTransactions(if (dupIdx >= 0) listOf(transactions[dupIdx]) else emptyList())
+                    val txn = dashPendingManualSave
+                    onSetDashPendingManualSave(null)
+                    onSetDashManualDuplicateMatch(null)
+                    onSetDashShowManualDuplicateDialog(false)
+                    runLinkingChain(txn)
+                },
+                onKeepExisting = {
+                    onSetDashPendingManualSave(null)
+                    onSetDashManualDuplicateMatch(null)
+                    onSetDashShowManualDuplicateDialog(false)
+                },
+                onIgnoreAll = {}
+            )
+        }
+
+        // Dashboard recurring expense match dialog
+        if (dashShowRecurringDialog && dashPendingRecurringTxn != null && dashPendingRecurringMatch != null) {
+            val dateCloseEnough = isRecurringDateCloseEnough(dashPendingRecurringTxn.date, dashPendingRecurringMatch)
+            RecurringExpenseConfirmDialog(
+                transaction = dashPendingRecurringTxn,
+                recurringExpense = dashPendingRecurringMatch,
+                currencySymbol = currencySymbol,
+                dateFormatter = dateFormatter,
+                showDateAdvisory = !dateCloseEnough,
+                onConfirmRecurring = {
+                    val txn = dashPendingRecurringTxn
+                    val updatedTxn = txn.copy(
+                        linkedRecurringExpenseId = dashPendingRecurringMatch.id,
+                        linkedRecurringExpenseAmount = dashPendingRecurringMatch.amount
+                    )
+                    addTransactionWithBudgetEffect(updatedTxn)
+                    onSetDashPendingRecurringTxn(null)
+                    onSetDashPendingRecurringMatch(null)
+                    onSetDashShowRecurringDialog(false)
+                },
+                onNotRecurring = {
+                    val txn = dashPendingRecurringTxn
+                    onSetDashPendingRecurringTxn(null)
+                    onSetDashPendingRecurringMatch(null)
+                    onSetDashShowRecurringDialog(false)
+                    // Continue linking chain: check amortization, then budget income
+                    val amortizationMatch = findAmortizationMatch(txn, activeAmortizationEntries, percentTolerance, matchDollar, matchChars)
+                    if (amortizationMatch != null) {
+                        onSetDashPendingAmortizationTxn(txn)
+                        onSetDashPendingAmortizationMatch(amortizationMatch)
+                        onSetDashShowAmortizationDialog(true)
+                    } else {
+                        val budgetMatch = findBudgetIncomeMatch(txn, activeIncomeSources, matchChars, matchDays)
+                        if (budgetMatch != null) {
+                            onSetDashPendingBudgetIncomeTxn(txn)
+                            onSetDashPendingBudgetIncomeMatch(budgetMatch)
+                            onSetDashShowBudgetIncomeDialog(true)
+                        } else {
+                            addTransactionWithBudgetEffect(txn)
+                        }
+                    }
+                }
+            )
+        }
+
+        // Dashboard amortization match dialog
+        if (dashShowAmortizationDialog && dashPendingAmortizationTxn != null && dashPendingAmortizationMatch != null) {
+            AmortizationConfirmDialog(
+                transaction = dashPendingAmortizationTxn,
+                amortizationEntry = dashPendingAmortizationMatch,
+                currencySymbol = currencySymbol,
+                dateFormatter = dateFormatter,
+                onConfirmAmortization = {
+                    val txn = dashPendingAmortizationTxn
+                    val updatedTxn = txn.copy(linkedAmortizationEntryId = dashPendingAmortizationMatch.id)
+                    addTransactionWithBudgetEffect(updatedTxn)
+                    onSetDashPendingAmortizationTxn(null)
+                    onSetDashPendingAmortizationMatch(null)
+                    onSetDashShowAmortizationDialog(false)
+                },
+                onNotAmortized = {
+                    addTransactionWithBudgetEffect(dashPendingAmortizationTxn)
+                    onSetDashPendingAmortizationTxn(null)
+                    onSetDashPendingAmortizationMatch(null)
+                    onSetDashShowAmortizationDialog(false)
+                }
+            )
+        }
+
+        // Dashboard budget income match dialog
+        if (dashShowBudgetIncomeDialog && dashPendingBudgetIncomeTxn != null && dashPendingBudgetIncomeMatch != null) {
+            BudgetIncomeConfirmDialog(
+                transaction = dashPendingBudgetIncomeTxn,
+                incomeSource = dashPendingBudgetIncomeMatch,
+                currencySymbol = currencySymbol,
+                dateFormatter = dateFormatter,
+                onConfirmBudgetIncome = {
+                    val recurringIncomeCatId = categories.find { it.tag == "recurring_income" }?.id
+                    val baseTxn = dashPendingBudgetIncomeTxn
+                    val txn = baseTxn.copy(
+                        isBudgetIncome = true,
+                        linkedIncomeSourceId = dashPendingBudgetIncomeMatch.id,
+                        linkedIncomeSourceAmount = dashPendingBudgetIncomeMatch.amount,
+                        categoryAmounts = if (recurringIncomeCatId != null)
+                            listOf(CategoryAmount(recurringIncomeCatId, baseTxn.amount))
+                        else baseTxn.categoryAmounts,
+                        isUserCategorized = true
+                    )
+                    // ACTUAL_ADJUST: update the income source BEFORE adding txn
+                    // so recomputeCash sees matching amounts (delta = 0)
+                    if (incomeMode == IncomeMode.ACTUAL_ADJUST) {
+                        val srcId = dashPendingBudgetIncomeMatch.id
+                        val idx = incomeSources.indexOfFirst { it.id == srcId }
+                        if (idx >= 0 && incomeSources[idx].amount != baseTxn.amount) {
+                            incomeSources[idx] = incomeSources[idx].copy(
+                                amount = baseTxn.amount,
+                            )
+                            saveIncomeSources(listOf(incomeSources[idx]))
+                        }
+                    }
+                    addTransactionWithBudgetEffect(txn)
+                    onSetDashPendingBudgetIncomeTxn(null)
+                    onSetDashPendingBudgetIncomeMatch(null)
+                    onSetDashShowBudgetIncomeDialog(false)
+                },
+                onNotBudgetIncome = {
+                    addTransactionWithBudgetEffect(dashPendingBudgetIncomeTxn)
+                    onSetDashPendingBudgetIncomeTxn(null)
+                    onSetDashPendingBudgetIncomeMatch(null)
+                    onSetDashShowBudgetIncomeDialog(false)
+                }
+            )
+        }
+
+        // Confirmation dialog: apply recurring expense amount change to past transactions?
+        pendingREAmountUpdate?.let { (updated, oldAmount) ->
+            AdAwareAlertDialog(
+                onDismissRequest = {
+                    onSetPendingREAmountUpdate(null)
+                    recomputeCash()
+                },
+                title = { Text(strings.common.applyToPastTitle) },
+                text = { Text(strings.common.applyToPastBody) },
+                style = DialogStyle.WARNING,
+                confirmButton = {
+                    DialogWarningButton(onClick = {
+                        val changedTxns = mutableListOf<Transaction>()
+                        transactions.forEachIndexed { i, txn ->
+                            if (txn.linkedRecurringExpenseId == updated.id && !txn.deleted) {
+                                transactions[i] = txn.copy(
+                                    linkedRecurringExpenseAmount = updated.amount,
+                                )
+                                changedTxns.add(transactions[i])
+                            }
+                        }
+                        saveTransactions(changedTxns)
+                        onSetPendingREAmountUpdate(null)
+                        recomputeCash()
+                    }) { Text(strings.common.applyToPastConfirm) }
+                },
+                dismissButton = {
+                    DialogSecondaryButton(onClick = {
+                        onSetPendingREAmountUpdate(null)
+                        recomputeCash()
+                    }) { Text(strings.common.applyToPastDeny) }
+                }
+            )
+        }
+
+        // Confirmation dialog: apply income source amount change to past transactions?
+        pendingISAmountUpdate?.let { (updated, oldAmount) ->
+            AdAwareAlertDialog(
+                onDismissRequest = {
+                    onSetPendingISAmountUpdate(null)
+                    recomputeCash()
+                },
+                title = { Text(strings.common.applyToPastTitle) },
+                text = { Text(strings.common.applyToPastBody) },
+                style = DialogStyle.WARNING,
+                confirmButton = {
+                    DialogWarningButton(onClick = {
+                        val changedTxns = mutableListOf<Transaction>()
+                        transactions.forEachIndexed { i, txn ->
+                            if (txn.linkedIncomeSourceId == updated.id && !txn.deleted) {
+                                transactions[i] = txn.copy(
+                                    linkedIncomeSourceAmount = updated.amount,
+                                )
+                                changedTxns.add(transactions[i])
+                            }
+                        }
+                        saveTransactions(changedTxns)
+                        onSetPendingISAmountUpdate(null)
+                        recomputeCash()
+                    }) { Text(strings.common.applyToPastConfirm) }
+                },
+                dismissButton = {
+                    DialogSecondaryButton(onClick = {
+                        onSetPendingISAmountUpdate(null)
+                        recomputeCash()
+                    }) { Text(strings.common.applyToPastDeny) }
+                }
+            )
+        }
+
+        // Backup password dialog
+        if (showBackupPasswordDialog) {
+            var pwd by remember { mutableStateOf("") }
+            var pwdConfirm by remember { mutableStateOf("") }
+            var pwdError by remember { mutableStateOf<String?>(null) }
+            AdAwareAlertDialog(
+                onDismissRequest = { onSetShowBackupPasswordDialog(false) },
+                title = { Text(strings.settings.setBackupPassword) },
+                style = DialogStyle.WARNING,
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            strings.settings.backupPasswordWarning,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        OutlinedTextField(
+                            value = pwd, onValueChange = { pwd = it; pwdError = null },
+                            label = { Text(strings.settings.passwordLabel) }, singleLine = true,
+                            visualTransformation = PasswordVisualTransformation()
+                        )
+                        OutlinedTextField(
+                            value = pwdConfirm, onValueChange = { pwdConfirm = it; pwdError = null },
+                            label = { Text(strings.settings.confirmPasswordLabel) }, singleLine = true,
+                            visualTransformation = PasswordVisualTransformation()
+                        )
+                        if (pwdError != null) {
+                            Text(pwdError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                },
+                confirmButton = {
+                    DialogWarningButton(onClick = {
+                        when {
+                            pwd.length < 8 -> pwdError = strings.settings.passwordTooShort
+                            pwd != pwdConfirm -> pwdError = strings.settings.passwordMismatch
+                            else -> {
+                                com.syncbudget.app.data.BackupManager.savePassword(context, pwd.toCharArray())
+                                onSetBackupsEnabled(true)
+                                backupPrefs.edit().putBoolean("backups_enabled", true).apply()
+                                onSetShowBackupPasswordDialog(false)
+                            }
+                        }
+                    }) { Text(strings.settings.enableBackups) }
+                },
+                dismissButton = {
+                    DialogSecondaryButton(onClick = { onSetShowBackupPasswordDialog(false) }) {
+                        Text(strings.common.cancel)
+                    }
+                }
+            )
+        }
+
+        // Disable backup confirmation dialog
+        if (showDisableBackupDialog) {
+            var confirmDelete by remember { mutableStateOf(false) }
+            AdAwareAlertDialog(
+                onDismissRequest = { onSetShowDisableBackupDialog(false); confirmDelete = false },
+                title = { Text(strings.settings.disableBackups) },
+                style = if (confirmDelete) DialogStyle.DANGER else DialogStyle.DEFAULT,
+                text = {
+                    if (!confirmDelete) {
+                        Text(strings.settings.keepOrDeletePrompt)
+                    } else {
+                        Text(
+                            strings.settings.deleteAllConfirmMsg,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                },
+                confirmButton = {
+                    if (!confirmDelete) {
+                        DialogDangerButton(onClick = { confirmDelete = true }) {
+                            Text(strings.settings.deleteAllBtn)
+                        }
+                    } else {
+                        DialogDangerButton(onClick = {
+                            com.syncbudget.app.data.BackupManager.deleteAllBackups()
+                            onSetBackupsEnabled(false)
+                            backupPrefs.edit().putBoolean("backups_enabled", false).apply()
+                            onSetShowDisableBackupDialog(false); confirmDelete = false
+                        }) { Text(strings.settings.confirmDeleteBtn) }
+                    }
+                },
+                dismissButton = {
+                    DialogSecondaryButton(onClick = {
+                        if (confirmDelete) { confirmDelete = false } else {
+                            onSetBackupsEnabled(false)
+                            backupPrefs.edit().putBoolean("backups_enabled", false).apply()
+                            onSetShowDisableBackupDialog(false)
+                        }
+                    }) { Text(if (confirmDelete) strings.common.back else strings.settings.keepFilesBtn) }
+                }
+            )
+        }
+
+        // Save Photos dialog
+        if (showSavePhotosDialog) {
+            AdAwareAlertDialog(
+                onDismissRequest = { onSetShowSavePhotosDialog(false) },
+                title = { Text("Save Photos") },
+                style = DialogStyle.DEFAULT,
+                text = {
+                    Text("Photos are already backed up in encrypted backups if Automatic Backups is enabled below. This will save unencrypted copies of all receipt photos to Download/BudgeTrak/photos/ on your device if you need them for other purposes.")
+                },
+                confirmButton = {
+                    DialogPrimaryButton(onClick = {
+                        onSetShowSavePhotosDialog(false)
+                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                            try {
+                                val photosDir = java.io.File(com.syncbudget.app.data.BackupManager.getBudgetrakDir(), "photos")
+                                photosDir.mkdirs()
+                                val receiptDir = java.io.File(context.filesDir, "receipts")
+                                val files = receiptDir.listFiles() ?: emptyArray()
+                                var count = 0
+                                for (f in files) {
+                                    f.copyTo(java.io.File(photosDir, f.name), overwrite = true)
+                                    count++
+                                }
+                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                    toastState.show("Saved $count photos to Download/BudgeTrak/photos/")
+                                }
+                            } catch (e: Exception) {
+                                android.util.Log.w("SavePhotos", "Failed: ${e.message}")
+                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                    toastState.show("Failed to save photos: ${e.message}")
+                                }
+                            }
+                        }
+                    }) { Text(strings.common.save) }
+                },
+                dismissButton = {
+                    DialogSecondaryButton(onClick = { onSetShowSavePhotosDialog(false) }) {
+                        Text(strings.common.cancel)
+                    }
+                }
+            )
+        }
+
+        // Restore backup dialog
+        if (showRestoreDialog) {
+            val availableBackups = remember { com.syncbudget.app.data.BackupManager.listAvailableBackups() }
+            var selectedBackup by remember { mutableStateOf<com.syncbudget.app.data.BackupManager.BackupEntry?>(null) }
+            var restorePassword by remember { mutableStateOf("") }
+            var restoreError by remember { mutableStateOf<String?>(null) }
+            var restoring by remember { mutableStateOf(false) }
+            val restoreScrollState = rememberScrollState()
+
+            AdAwareDialog(onDismissRequest = { if (!restoring) onSetShowRestoreDialog(false) }) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 6.dp
+                ) {
+                    Column {
+                        DialogHeader(strings.settings.restoreBackup)
+
+                        Column(
+                            modifier = Modifier
+                                .weight(1f, fill = false)
+                                .verticalScroll(restoreScrollState)
+                                .padding(horizontal = 20.dp, vertical = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (availableBackups.isEmpty()) {
+                                Text(strings.settings.noBackupsFound)
+                            } else {
+                                Text(strings.settings.selectBackupPrompt, style = MaterialTheme.typography.bodyMedium)
+                                availableBackups.forEach { backup ->
+                                    val sizeMb = "%.1f".format((backup.systemSizeBytes + backup.photosSizeBytes) / (1024.0 * 1024.0))
+                                    val selected = selectedBackup?.date == backup.date
+                                    Surface(
+                                        modifier = Modifier.fillMaxWidth().clickable { selectedBackup = backup; restoreError = null },
+                                        color = if (selected) MaterialTheme.colorScheme.primaryContainer
+                                                else MaterialTheme.colorScheme.surface,
+                                        shape = RoundedCornerShape(8.dp),
+                                        tonalElevation = if (selected) 2.dp else 0.dp
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Text(backup.date, style = MaterialTheme.typography.bodyLarge)
+                                            Text("${sizeMb} MB" + if (backup.photosFile != null) " (${strings.settings.withPhotos})" else " (${strings.settings.dataOnly})",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                                        }
+                                    }
+                                }
+                                if (selectedBackup != null) {
+                                    Text(strings.settings.restoreWarning,
+                                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                                    OutlinedTextField(
+                                        value = restorePassword, onValueChange = { restorePassword = it; restoreError = null },
+                                        label = { Text(strings.settings.backupPasswordLabel) }, singleLine = true,
+                                        visualTransformation = PasswordVisualTransformation(),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                                if (restoreError != null) {
+                                    Text(restoreError!!, color = MaterialTheme.colorScheme.error)
+                                }
+                            }
+                        }
+
+                        DialogFooter {
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End,
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                if (!restoring) {
+                                    DialogSecondaryButton(onClick = { onSetShowRestoreDialog(false) }) { Text(strings.common.cancel) }
+                                }
+                                if (selectedBackup != null && !restoring) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    DialogDangerButton(onClick = {
+                                        if (restorePassword.isEmpty()) { restoreError = strings.settings.enterPasswordError; return@DialogDangerButton }
+                                        restoring = true
+                                        val backup = selectedBackup!!
+                                        val pwd = restorePassword.toCharArray()
+                                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                            val sysResult = com.syncbudget.app.data.BackupManager.restoreSystemBackup(context, backup.systemFile, pwd)
+                                            if (sysResult.isSuccess && backup.photosFile != null) {
+                                                val photosResult = com.syncbudget.app.data.BackupManager.restorePhotosBackup(context, backup.photosFile, pwd)
+                                                val photosRestored = photosResult.getOrNull() ?: 0
+                                                android.util.Log.d("BackupRestore", "Photos restored: $photosRestored")
+                                            }
+                                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                                restoring = false
+                                                if (sysResult.isSuccess) {
+                                                    onSetShowRestoreDialog(false)
+                                                    this@MainActivity.recreate()
+                                                } else {
+                                                    restoreError = sysResult.exceptionOrNull()?.message ?: "Restore failed"
+                                                }
+                                            }
+                                        }
+                                    }) { Text(strings.settings.restoreBtn) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Extracted screen branches to reduce ART instruction count ──
+
+    @Composable
+    private fun SettingsScreenBranch(
+        currencySymbol: String,
+        appLanguage: String,
+        onSetAppLanguage: (String) -> Unit,
+        prefs: SharedPreferences,
+        categories: SnapshotStateList<Category>,
+        saveCategories: (List<Category>?) -> Unit,
+        onSetCurrentScreen: (String) -> Unit,
+        onSetQuickStartStep: (QuickStartStep?) -> Unit,
+        matchDays: Int,
+        onSetMatchDays: (Int) -> Unit,
+        isSyncConfigured: Boolean,
+        sharedSettings: SharedSettings,
+        onSetSharedSettings: (SharedSettings) -> Unit,
+        context: android.content.Context,
+        localDeviceId: String,
+        onSetLastSyncActivity: (Long) -> Unit,
+        matchPercent: Double,
+        onSetMatchPercent: (Double) -> Unit,
+        matchDollar: Int,
+        onSetMatchDollar: (Int) -> Unit,
+        matchChars: Int,
+        onSetMatchChars: (Int) -> Unit,
+        chartPalette: String,
+        onSetChartPalette: (String) -> Unit,
+        budgetPeriod: BudgetPeriod,
+        weekStartSunday: Boolean,
+        onSetWeekStartSunday: (Boolean) -> Unit,
+        onSetCurrencySymbol: (String) -> Unit,
+        isSyncAdmin: Boolean,
+        showDecimals: Boolean,
+        onSetShowDecimals: (Boolean) -> Unit,
+        dateFormatPattern: String,
+        onSetDateFormatPattern: (String) -> Unit,
+        isPaidUser: Boolean,
+        onSetIsPaidUser: (Boolean) -> Unit,
+        isSubscriber: Boolean,
+        onSetIsSubscriber: (Boolean) -> Unit,
+        subscriptionExpiry: Long,
+        onSetSubscriptionExpiry: (Long) -> Unit,
+        showWidgetLogo: Boolean,
+        onSetShowWidgetLogo: (Boolean) -> Unit,
+        activeCategories: List<Category>,
+        activeTransactions: List<Transaction>,
+        transactions: SnapshotStateList<Transaction>,
+        saveTransactions: (List<Transaction>?) -> Unit,
+        backupsEnabled: Boolean,
+        onSetShowBackupPasswordDialog: (Boolean) -> Unit,
+        onSetShowDisableBackupDialog: (Boolean) -> Unit,
+        backupFrequencyWeeks: Int,
+        onSetBackupFrequencyWeeks: (Int) -> Unit,
+        backupPrefs: SharedPreferences,
+        backupRetention: Int,
+        onSetBackupRetention: (Int) -> Unit,
+        lastBackupDate: String?,
+        onSetLastBackupDate: (String?) -> Unit,
+        onSetShowRestoreDialog: (Boolean) -> Unit,
+        onSetShowSavePhotosDialog: (Boolean) -> Unit,
+        coroutineScope: CoroutineScope,
+        syncGroupId: String?,
+        toastState: AppToastState,
+    ) {
+        SettingsScreen(
+            currencySymbol = currencySymbol,
+            appLanguage = appLanguage,
+            onLanguageChange = { lang ->
+                onSetAppLanguage(lang)
+                prefs.edit().putString("appLanguage", lang).apply()
+                val newStrings: AppStrings = if (lang == "es") SpanishStrings else EnglishStrings
+                val changedCats = mutableListOf<Category>()
+                categories.forEachIndexed { idx, cat ->
+                    if (cat.tag.isNotEmpty()) {
+                        val allKnown = getAllKnownNamesForTag(cat.tag)
+                        if (cat.name in allKnown) {
+                            val newName = getDefaultCategoryName(cat.tag, newStrings)
+                            if (newName != null && newName != cat.name) {
+                                categories[idx] = cat.copy(name = newName)
+                                changedCats.add(categories[idx])
+                            }
+                        }
+                    }
+                }
+                if (changedCats.isNotEmpty()) saveCategories(changedCats)
+            },
+            onNavigateToBudgetConfig = { onSetCurrentScreen("budget_config") },
+            onNavigateToFamilySync = { onSetCurrentScreen("family_sync") },
+            onNavigateToQuickStart = {
+                onSetQuickStartStep(QuickStartStep.WELCOME)
+                onSetCurrentScreen("main")
+            },
+            matchDays = matchDays,
+            onMatchDaysChange = {
+                onSetMatchDays(it); prefs.edit().putInt("matchDays", it).apply()
+                if (isSyncConfigured) {
+                    val updated = sharedSettings.copy(matchDays = it, lastChangedBy = localDeviceId)
+                    onSetSharedSettings(updated)
+                    SharedSettingsRepository.save(context, updated)
+                    SyncWriteHelper.pushSharedSettings(updated)
+                    onSetLastSyncActivity(System.currentTimeMillis())
+                }
+            },
+            matchPercent = matchPercent,
+            onMatchPercentChange = {
+                onSetMatchPercent(it); prefs.edit().putString("matchPercent", it.toString()).apply()
+                if (isSyncConfigured) {
+                    val updated = sharedSettings.copy(matchPercent = it, lastChangedBy = localDeviceId)
+                    onSetSharedSettings(updated)
+                    SharedSettingsRepository.save(context, updated)
+                    SyncWriteHelper.pushSharedSettings(updated)
+                    onSetLastSyncActivity(System.currentTimeMillis())
+                }
+            },
+            matchDollar = matchDollar,
+            onMatchDollarChange = {
+                onSetMatchDollar(it); prefs.edit().putInt("matchDollar", it).apply()
+                if (isSyncConfigured) {
+                    val updated = sharedSettings.copy(matchDollar = it, lastChangedBy = localDeviceId)
+                    onSetSharedSettings(updated)
+                    SharedSettingsRepository.save(context, updated)
+                    SyncWriteHelper.pushSharedSettings(updated)
+                    onSetLastSyncActivity(System.currentTimeMillis())
+                }
+            },
+            matchChars = matchChars,
+            onMatchCharsChange = {
+                onSetMatchChars(it); prefs.edit().putInt("matchChars", it).apply()
+                if (isSyncConfigured) {
+                    val updated = sharedSettings.copy(matchChars = it, lastChangedBy = localDeviceId)
+                    onSetSharedSettings(updated)
+                    SharedSettingsRepository.save(context, updated)
+                    SyncWriteHelper.pushSharedSettings(updated)
+                    onSetLastSyncActivity(System.currentTimeMillis())
+                }
+            },
+            chartPalette = chartPalette,
+            onChartPaletteChange = { onSetChartPalette(it); prefs.edit().putString("chartPalette", it).apply() },
+            budgetPeriod = budgetPeriod.name,
+            weekStartSunday = weekStartSunday,
+            onWeekStartChange = {
+                onSetWeekStartSunday(it); prefs.edit().putBoolean("weekStartSunday", it).apply()
+                if (isSyncConfigured) {
+                    val updated = sharedSettings.copy(weekStartSunday = it, lastChangedBy = localDeviceId)
+                    onSetSharedSettings(updated)
+                    SharedSettingsRepository.save(context, updated)
+                    SyncWriteHelper.pushSharedSettings(updated)
+                    onSetLastSyncActivity(System.currentTimeMillis())
+                }
+            },
+            onCurrencyChange = {
+                onSetCurrencySymbol(it)
+                prefs.edit().putString("currencySymbol", it).apply()
+                if (isSyncConfigured) {
+                    val updated = sharedSettings.copy(currency = it, lastChangedBy = localDeviceId)
+                    onSetSharedSettings(updated)
+                    SharedSettingsRepository.save(context, updated)
+                    SyncWriteHelper.pushSharedSettings(updated)
+                    onSetLastSyncActivity(System.currentTimeMillis())
+                }
+            },
+            isSyncConfigured = isSyncConfigured,
+            isAdmin = isSyncAdmin,
+            showDecimals = showDecimals,
+            onDecimalsChange = {
+                onSetShowDecimals(it)
+                prefs.edit().putBoolean("showDecimals", it).apply()
+            },
+            dateFormatPattern = dateFormatPattern,
+            onDateFormatChange = {
+                onSetDateFormatPattern(it)
+                prefs.edit().putString("dateFormatPattern", it).apply()
+            },
+            isPaidUser = isPaidUser || isSubscriber,
+            onPaidUserChange = { newValue ->
+                onSetIsPaidUser(newValue)
+                prefs.edit().putBoolean("isPaidUser", newValue).apply()
+                com.syncbudget.app.widget.BudgetWidgetProvider.updateAllWidgets(context)
+            },
+            isSubscriber = isSubscriber,
+            onSubscriberChange = { newValue ->
+                onSetIsSubscriber(newValue)
+                prefs.edit().putBoolean("isSubscriber", newValue).apply()
+            },
+            subscriptionExpiry = subscriptionExpiry,
+            onSubscriptionExpiryChange = { newValue ->
+                onSetSubscriptionExpiry(newValue)
+                prefs.edit().putLong("subscriptionExpiry", newValue).apply()
+            },
+            showWidgetLogo = showWidgetLogo,
+            onWidgetLogoChange = { newValue ->
+                onSetShowWidgetLogo(newValue)
+                prefs.edit().putBoolean("showWidgetLogo", newValue).apply()
+                com.syncbudget.app.widget.BudgetWidgetProvider.updateAllWidgets(context)
+            },
+            categories = activeCategories,
+            transactions = activeTransactions,
+            onAddCategory = { cat ->
+                val added = cat.copy(
+                    deviceId = localDeviceId,
+                )
+                categories.add(added)
+                saveCategories(listOf(added))
+            },
+            onUpdateCategory = { updated ->
+                val idx = categories.indexOfFirst { it.id == updated.id }
+                if (idx >= 0) {
+                    val old = categories[idx]
+                    // Don't overwrite deviceId — it tracks the original creator.
+                    categories[idx] = updated.copy(
+                        deviceId = old.deviceId,
+                        deleted = old.deleted,
+                    )
+                    saveCategories(listOf(categories[idx]))
+                }
+            },
+            onDeleteCategory = { cat ->
+                val idx = categories.indexOfFirst { it.id == cat.id }
+                if (idx >= 0) {
+                    categories[idx] = categories[idx].copy(deleted = true)
+                    saveCategories(listOf(categories[idx]))
+                }
+            },
+            onToggleCharted = { cat ->
+                val idx = categories.indexOfFirst { it.id == cat.id }
+                if (idx >= 0) {
+                    categories[idx] = categories[idx].copy(
+                        charted = !categories[idx].charted,
+                    )
+                    saveCategories(listOf(categories[idx]))
+                }
+            },
+            onToggleWidgetVisible = { cat ->
+                val idx = categories.indexOfFirst { it.id == cat.id }
+                if (idx >= 0) {
+                    categories[idx] = categories[idx].copy(
+                        widgetVisible = !categories[idx].widgetVisible,
+                    )
+                    saveCategories(listOf(categories[idx]))
+                }
+            },
+            onReassignCategory = { fromId, toId ->
+                val changedTxns = mutableListOf<Transaction>()
+                transactions.forEachIndexed { index, txn ->
+                    val updatedAmts = txn.categoryAmounts.map { ca ->
+                        if (ca.categoryId == fromId) {
+                            // Check if toId already exists in this transaction
+                            val existingTo = txn.categoryAmounts.find { it.categoryId == toId }
+                            if (existingTo != null) ca.copy(categoryId = -1) // mark for merge
+                            else ca.copy(categoryId = toId)
+                        } else ca
+                    }
+                    // Merge amounts if both fromId and toId existed
+                    val markedForMerge = updatedAmts.find { it.categoryId == -1 }
+                    val finalAmounts = if (markedForMerge != null) {
+                        val mergedAmount = (updatedAmts.find { it.categoryId == toId }?.amount ?: 0.0) + markedForMerge.amount
+                        updatedAmts.filter { it.categoryId != -1 && it.categoryId != toId } +
+                            CategoryAmount(toId, mergedAmount)
+                    } else updatedAmts
+                    if (finalAmounts != txn.categoryAmounts) {
+                        transactions[index] = txn.copy(
+                            categoryAmounts = finalAmounts,
+                        )
+                        changedTxns.add(transactions[index])
+                    }
+                }
+                saveTransactions(changedTxns)
+            },
+            receiptPruneAgeDays = sharedSettings.receiptPruneAgeDays,
+            onReceiptPruneChange = { days ->
+                val updated = sharedSettings.copy(
+                    receiptPruneAgeDays = days,
+                    lastChangedBy = localDeviceId
+                )
+                onSetSharedSettings(updated)
+                SharedSettingsRepository.save(context, updated)
+                SyncWriteHelper.pushSharedSettings(updated)
+                onSetLastSyncActivity(System.currentTimeMillis())
+            },
+            receiptCacheSize = remember(isPaidUser) {
+                com.syncbudget.app.data.sync.ReceiptManager.getTotalStorageBytes(context)
+            },
+            backupsEnabled = backupsEnabled,
+            onBackupsEnabledChange = { enabled ->
+                if (enabled) {
+                    onSetShowBackupPasswordDialog(true)
+                } else {
+                    onSetShowDisableBackupDialog(true)
+                }
+            },
+            backupFrequencyWeeks = backupFrequencyWeeks,
+            onBackupFrequencyChange = { weeks ->
+                onSetBackupFrequencyWeeks(weeks)
+                backupPrefs.edit().putInt("backup_frequency_weeks", weeks).apply()
+            },
+            backupRetention = backupRetention,
+            onBackupRetentionChange = { ret ->
+                onSetBackupRetention(ret)
+                backupPrefs.edit().putInt("backup_retention", ret).apply()
+            },
+            lastBackupDate = lastBackupDate,
+            nextBackupDate = com.syncbudget.app.data.BackupManager.getNextBackupDate(context),
+            onBackupNow = {
+                val pwd = com.syncbudget.app.data.BackupManager.getPassword(context)
+                if (pwd != null) {
+                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                        val result = com.syncbudget.app.data.BackupManager.performBackup(context, pwd)
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            onSetLastBackupDate(backupPrefs.getString("last_backup_date", null))
+                        }
+                    }
+                }
+            },
+            onRestoreBackup = { onSetShowRestoreDialog(true) },
+            onSavePhotos = { onSetShowSavePhotosDialog(true) },
+            onDumpDebug = {
+                coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    try {
+                        val devName = com.syncbudget.app.data.sync.GroupManager.getDeviceName(context)
+                        val sanitized = DiagDumpBuilder.sanitizeDeviceName(devName)
+                        val supportDir = BackupManager.getSupportDir()
+
+                        // 1. Build fresh diag dump and save locally
+                        val diagText = DiagDumpBuilder.build(context)
+                        DiagDumpBuilder.writeDiagToMediaStore(context, "sync_diag.txt", diagText)
+                        if (sanitized.isNotEmpty()) {
+                            DiagDumpBuilder.writeDiagToMediaStore(context, "sync_diag_${sanitized}.txt", diagText)
+                        }
+
+                        // 2. Read sync_log and save with device name
+                        val syncLogFile = java.io.File(supportDir, "sync_log.txt")
+                        val syncLogText = if (syncLogFile.exists()) syncLogFile.readText() else ""
+                        if (sanitized.isNotEmpty() && syncLogText.isNotEmpty()) {
+                            DiagDumpBuilder.writeDiagToMediaStore(context, "sync_log_${sanitized}.txt", syncLogText)
+                        }
+
+                        // 2b. Capture logcat to file (app can read its own logs) — debug only
+                        if (com.syncbudget.app.BuildConfig.DEBUG) {
+                            try {
+                                val logcatProcess = Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-t", "1000"))
+                                val logcatText = logcatProcess.inputStream.bufferedReader().readText()
+                                logcatProcess.waitFor()
+                                DiagDumpBuilder.writeDiagToMediaStore(context, "logcat_${sanitized}.txt", logcatText)
+                            } catch (e: Exception) {
+                                android.util.Log.w("DumpDebug", "Logcat capture failed: ${e.message}")
+                            }
+                        }
+
+                        val gId = syncGroupId
+                        if (gId != null) {
+                            // 3. Upload own files
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                toastState.show("Uploading local debug files\u2026")
+                            }
+                            // Append extra debug files to the diag upload
+                            val extraDebug = StringBuilder(diagText)
+                            for (extraName in listOf("clock_dump.txt", "fcm_debug.txt")) {
+                                val f = java.io.File(supportDir, extraName)
+                                if (f.exists()) {
+                                    extraDebug.appendLine("\n=== $extraName ===")
+                                    extraDebug.appendLine(f.readText())
+                                }
+                            }
+                            // Append logcat if captured
+                            try {
+                                val lp = Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-t", "500"))
+                                val lt = lp.inputStream.bufferedReader().readText()
+                                lp.waitFor()
+                                if (lt.isNotEmpty()) {
+                                    extraDebug.appendLine("\n=== logcat (last 500) ===")
+                                    extraDebug.appendLine(lt)
+                                }
+                            } catch (_: Exception) {}
+                            val debugKey = com.syncbudget.app.data.sync.GroupManager.getEncryptionKey(context)
+                            FirestoreService.uploadDebugFiles(gId, localDeviceId, devName, syncLogText, extraDebug.toString(), debugKey)
+
+                            // 4. Request all devices upload fresh files
+                            FirestoreService.requestDebugDump(gId)
+
+                            // 4b. Send FCM push to wake up remote devices
+                            try {
+                                val fcmTokens = FirestoreService.getFcmTokens(gId, localDeviceId)
+                                val supportDir = BackupManager.getSupportDir()
+                                val debugLog = java.io.File(supportDir, "fcm_debug.txt")
+                                debugLog.appendText("[${java.time.LocalDateTime.now()}] FCM tokens found: ${fcmTokens.size}\n")
+                                for (token in fcmTokens) {
+                                    debugLog.appendText("  token: ${token.take(20)}...\n")
+                                    val sent = FcmSender.sendDebugRequest(context, token)
+                                    debugLog.appendText("  result: $sent, error: ${FcmSender.lastError}\n")
+                                }
+                                if (fcmTokens.isEmpty()) {
+                                    debugLog.appendText("  No FCM tokens found for remote devices\n")
+                                }
+                            } catch (e: Exception) {
+                                val supportDir = BackupManager.getSupportDir()
+                                java.io.File(supportDir, "fcm_debug.txt")
+                                    .appendText("[${java.time.LocalDateTime.now()}] FCM exception: ${e.javaClass.simpleName}: ${e.message}\n")
+                            }
+
+                            // 5. Poll for remote files (wait up to 90s for other devices)
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                toastState.show("Waiting for remote device\u2026")
+                            }
+                            val requestTime = System.currentTimeMillis()
+                            var gotFreshRemote = false
+                            for (attempt in 1..18) { // 18 × 5s = 90s max
+                                kotlinx.coroutines.delay(5_000)
+                                val remoteFiles = FirestoreService.downloadDebugFiles(gId, localDeviceId, debugKey)
+                                // Check if any remote file was updated AFTER our request
+                                val fresh = remoteFiles.filter { it.updatedAt > requestTime - 5000 }
+                                if (fresh.isNotEmpty()) {
+                                    for (remote in remoteFiles) {
+                                        val rName = DiagDumpBuilder.sanitizeDeviceName(remote.deviceName)
+                                        if (remote.syncLog.isNotEmpty()) DiagDumpBuilder.writeDiagToMediaStore(context, "sync_log_${rName}.txt", remote.syncLog)
+                                        if (remote.syncDiag.isNotEmpty()) DiagDumpBuilder.writeDiagToMediaStore(context, "sync_diag_${rName}.txt", remote.syncDiag)
+                                    }
+                                    gotFreshRemote = true
+                                    break
+                                }
+                            }
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                if (gotFreshRemote) {
+                                    toastState.show("Debug files synced")
+                                } else {
+                                    toastState.show("Local files saved. Remote device didn\u2019t respond in 90s.")
+                                }
+                            }
+                        } else {
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                toastState.show("Debug files saved locally")
+                            }
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("DumpDebug", "Debug sync failed: ${e.message}", e)
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            toastState.show("Debug sync failed: ${e.message?.take(60)}")
+                        }
+                    }
+                }
+            },
+            onBack = { onSetCurrentScreen("main") },
+            onHelpClick = { onSetCurrentScreen("settings_help") }
+        )
+    }
+
+    @Composable
+    private fun TransactionsScreenBranch(
+        activeTransactions: List<Transaction>,
+        currencySymbol: String,
+        dateFormatPattern: String,
+        activeCategories: List<Category>,
+        isPaidUser: Boolean,
+        isSubscriber: Boolean,
+        activeRecurringExpenses: List<RecurringExpense>,
+        activeAmortizationEntries: List<AmortizationEntry>,
+        activeIncomeSources: List<IncomeSource>,
+        activeSavingsGoals: List<SavingsGoal>,
+        matchDays: Int,
+        matchPercent: Double,
+        matchDollar: Int,
+        matchChars: Int,
+        chartPalette: String,
+        sharedSettings: SharedSettings,
+        onSetSharedSettings: (SharedSettings) -> Unit,
+        isSyncConfigured: Boolean,
+        onSetIsSyncConfigured: (Boolean) -> Unit,
+        syncDevices: List<com.syncbudget.app.data.sync.DeviceInfo>,
+        onSetSyncDevices: (List<com.syncbudget.app.data.sync.DeviceInfo>) -> Unit,
+        localDeviceId: String,
+        addTransactionWithBudgetEffect: (Transaction) -> Unit,
+        transactions: SnapshotStateList<Transaction>,
+        savingsGoals: SnapshotStateList<SavingsGoal>,
+        saveSavingsGoals: (List<SavingsGoal>?) -> Unit,
+        saveTransactions: (List<Transaction>?) -> Unit,
+        recomputeCash: () -> Unit,
+        coroutineScope: CoroutineScope,
+        context: android.content.Context,
+        categories: SnapshotStateList<Category>,
+        recurringExpenses: SnapshotStateList<RecurringExpense>,
+        incomeSources: SnapshotStateList<IncomeSource>,
+        amortizationEntries: SnapshotStateList<AmortizationEntry>,
+        periodLedger: SnapshotStateList<com.syncbudget.app.data.sync.PeriodLedgerEntry>,
+        prefs: SharedPreferences,
+        onSetCurrencySymbol: (String) -> Unit,
+        onSetDigitCount: (Int) -> Unit,
+        onSetShowDecimals: (Boolean) -> Unit,
+        onSetDateFormatPattern: (String) -> Unit,
+        onSetChartPalette: (String) -> Unit,
+        onSetAppLanguage: (String) -> Unit,
+        onSetBudgetPeriod: (BudgetPeriod) -> Unit,
+        onSetResetHour: (Int) -> Unit,
+        onSetResetDayOfWeek: (Int) -> Unit,
+        onSetResetDayOfMonth: (Int) -> Unit,
+        onSetIsManualBudgetEnabled: (Boolean) -> Unit,
+        onSetManualBudgetAmount: (Double) -> Unit,
+        onSetAvailableCash: (Double) -> Unit,
+        onSetBudgetStartDate: (LocalDate?) -> Unit,
+        onSetLastRefreshDate: (LocalDate?) -> Unit,
+        onSetWeekStartSunday: (Boolean) -> Unit,
+        onSetMatchDays: (Int) -> Unit,
+        onSetMatchPercent: (Double) -> Unit,
+        onSetMatchDollar: (Int) -> Unit,
+        onSetMatchChars: (Int) -> Unit,
+        syncGroupId: String?,
+        onSetSyncGroupId: (String?) -> Unit,
+        isSyncAdmin: Boolean,
+        onSetIsSyncAdmin: (Boolean) -> Unit,
+        syncStatus: String,
+        onSetSyncStatus: (String) -> Unit,
+        lastSyncActivity: Long,
+        onSetLastSyncActivity: (Long) -> Unit,
+        onSetGeneratedPairingCode: (String?) -> Unit,
+        saveCategories: (List<Category>?) -> Unit,
+        saveRecurringExpenses: (List<RecurringExpense>?) -> Unit,
+        saveIncomeSources: (List<IncomeSource>?) -> Unit,
+        saveAmortizationEntries: (List<AmortizationEntry>?) -> Unit,
+        budgetPeriod: BudgetPeriod,
+        incomeMode: IncomeMode,
+        onSetCurrentScreen: (String) -> Unit,
+    ) {
+        TransactionsScreen(
+            transactions = activeTransactions,
+            currencySymbol = currencySymbol,
+            dateFormatPattern = dateFormatPattern,
+            categories = activeCategories,
+            isPaidUser = isPaidUser || isSubscriber,
+            isSubscriber = isSubscriber,
+            recurringExpenses = activeRecurringExpenses,
+            amortizationEntries = activeAmortizationEntries,
+            incomeSources = activeIncomeSources,
+            savingsGoals = activeSavingsGoals,
+            matchDays = matchDays,
+            matchPercent = matchPercent,
+            matchDollar = matchDollar,
+            matchChars = matchChars,
+            chartPalette = chartPalette,
+            showAttribution = sharedSettings.showAttribution && isSyncConfigured,
+            deviceNameMap = run {
+                val roster = try {
+                    val obj = org.json.JSONObject(sharedSettings.deviceRoster)
+                    obj.keys().asSequence().associateWith { obj.getString(it) }
+                } catch (_: Exception) { emptyMap() }
+                // Live devices override roster (freshest names), roster fills in former members
+                roster + syncDevices.associate { it.deviceId to it.deviceName.ifEmpty { it.deviceId.take(8) } }
+            },
+            localDeviceId = localDeviceId,
+            onAddTransaction = { txn ->
+                addTransactionWithBudgetEffect(txn)
+            },
+            onUpdateTransaction = { updated ->
+                val old = transactions.find { it.id == updated.id }
+                val index = transactions.indexOfFirst { it.id == updated.id }
+                if (index >= 0) {
+                    val prev = transactions[index]
+                    // Don't overwrite deviceId — it tracks the original creator.
+                    transactions[index] = updated.copy(
+                        deviceId = prev.deviceId,
+                        deleted = prev.deleted,
+                        // If user manually unlinks, clear remembered amounts (linked-in-error → full amount applies)
+                        amortizationAppliedAmount = if (prev.linkedAmortizationEntryId != null && updated.linkedAmortizationEntryId == null) 0.0 else prev.amortizationAppliedAmount,
+                        linkedRecurringExpenseAmount = if (prev.linkedRecurringExpenseId != null && updated.linkedRecurringExpenseId == null) 0.0 else prev.linkedRecurringExpenseAmount,
+                        linkedIncomeSourceAmount = if (prev.linkedIncomeSourceId != null && updated.linkedIncomeSourceId == null) 0.0 else prev.linkedIncomeSourceAmount,
+                        // Manual unlink from savings goal: clear remembered amount, restore funds to goal
+                        linkedSavingsGoalAmount = if (prev.linkedSavingsGoalId != null && updated.linkedSavingsGoalId == null) 0.0
+                            else if (updated.linkedSavingsGoalId != null && prev.linkedSavingsGoalId == null) updated.linkedSavingsGoalAmount
+                            else prev.linkedSavingsGoalAmount,
+                    )
+                    // Handle savings goal link/unlink effects
+                    val wasLinkedToGoal = prev.linkedSavingsGoalId
+                    val nowLinkedToGoal = updated.linkedSavingsGoalId
+                    if (wasLinkedToGoal != null && nowLinkedToGoal == null) {
+                        // Manual unlink: restore funds to goal
+                        val gIdx = savingsGoals.indexOfFirst { it.id == wasLinkedToGoal }
+                        if (gIdx >= 0) {
+                            val g = savingsGoals[gIdx]
+                            savingsGoals[gIdx] = g.copy(
+                                totalSavedSoFar = g.totalSavedSoFar + prev.linkedSavingsGoalAmount,
+                            )
+                            saveSavingsGoals(listOf(savingsGoals[gIdx]))
+                        }
+                    } else if (wasLinkedToGoal == null && nowLinkedToGoal != null) {
+                        // Newly linked: deduct from goal
+                        val gIdx = savingsGoals.indexOfFirst { it.id == nowLinkedToGoal }
+                        if (gIdx >= 0) {
+                            val g = savingsGoals[gIdx]
+                            savingsGoals[gIdx] = g.copy(
+                                totalSavedSoFar = maxOf(0.0, g.totalSavedSoFar - updated.amount),
+                            )
+                            saveSavingsGoals(listOf(savingsGoals[gIdx]))
+                        }
+                    }
+                    saveTransactions(listOf(transactions[index]))
+                }
+                recomputeCash()
+            },
+            onDeleteTransaction = { txn ->
+                val idx = transactions.indexOfFirst { it.id == txn.id }
+                if (idx >= 0) {
+                    val t = transactions[idx]
+                    // If linked to savings goal, restore funds
+                    if (t.linkedSavingsGoalId != null && t.linkedSavingsGoalAmount > 0.0) {
+                        val gIdx = savingsGoals.indexOfFirst { it.id == t.linkedSavingsGoalId }
+                        if (gIdx >= 0) {
+                            val g = savingsGoals[gIdx]
+                            savingsGoals[gIdx] = g.copy(
+                                totalSavedSoFar = g.totalSavedSoFar + t.linkedSavingsGoalAmount,
+                            )
+                            saveSavingsGoals(listOf(savingsGoals[gIdx]))
+                        }
+                    }
+                    transactions[idx] = t.copy(
+                        deleted = true
+                    )
+                    saveTransactions(listOf(transactions[idx]))
+                    // Clean up receipt photos (local + cloud)
+                    val receiptIds = listOfNotNull(t.receiptId1, t.receiptId2, t.receiptId3, t.receiptId4, t.receiptId5)
+                    if (receiptIds.isNotEmpty()) {
+                        coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                            for (rid in receiptIds) {
+                                com.syncbudget.app.data.sync.ReceiptManager.deleteReceiptFull(context, rid)
+                            }
+                        }
+                    }
+                }
+                recomputeCash()
+            },
+            onDeleteTransactions = { ids ->
+                val changedGoals = mutableListOf<SavingsGoal>()
+                val changedTxns = mutableListOf<Transaction>()
+                transactions.forEachIndexed { index, txn ->
+                    if (txn.id in ids && !txn.deleted) {
+                        // Restore savings goal funds for linked transactions
+                        if (txn.linkedSavingsGoalId != null && txn.linkedSavingsGoalAmount > 0.0) {
+                            val gIdx = savingsGoals.indexOfFirst { it.id == txn.linkedSavingsGoalId }
+                            if (gIdx >= 0) {
+                                val g = savingsGoals[gIdx]
+                                savingsGoals[gIdx] = g.copy(
+                                    totalSavedSoFar = g.totalSavedSoFar + txn.linkedSavingsGoalAmount,
+                                )
+                                changedGoals.add(savingsGoals[gIdx])
+                            }
+                        }
+                        transactions[index] = txn.copy(
+                            deleted = true,
+                        )
+                        changedTxns.add(transactions[index])
+                    }
+                }
+                if (changedGoals.isNotEmpty()) saveSavingsGoals(changedGoals)
+                saveTransactions(changedTxns)
+                recomputeCash()
+                // Clean up receipt photos for all deleted transactions
+                val deletedReceiptIds = ids.flatMap { id ->
+                    val txn = transactions.find { it.id == id } ?: return@flatMap emptyList()
+                    listOfNotNull(txn.receiptId1, txn.receiptId2, txn.receiptId3, txn.receiptId4, txn.receiptId5)
+                }
+                if (deletedReceiptIds.isNotEmpty()) {
+                    coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                        for (rid in deletedReceiptIds) {
+                            com.syncbudget.app.data.sync.ReceiptManager.deleteReceiptFull(context, rid)
+                        }
+                    }
+                }
+            },
+            onSerializeFullBackup = {
+                FullBackupSerializer.serialize(context)
+            },
+            onLoadFullBackup = { jsonContent ->
+                FullBackupSerializer.restoreFullState(context, jsonContent)
+
+                // Reload all lists from repositories
+                val newTxns = TransactionRepository.load(context)
+                transactions.clear(); transactions.addAll(newTxns)
+
+                val newCats = CategoryRepository.load(context)
+                categories.clear(); categories.addAll(newCats)
+
+                val newRE = RecurringExpenseRepository.load(context)
+                recurringExpenses.clear(); recurringExpenses.addAll(newRE)
+
+                val newIS = IncomeSourceRepository.load(context)
+                incomeSources.clear(); incomeSources.addAll(newIS)
+
+                val newAE = AmortizationRepository.load(context)
+                amortizationEntries.clear(); amortizationEntries.addAll(newAE)
+
+                val newSG = SavingsGoalRepository.load(context)
+                savingsGoals.clear(); savingsGoals.addAll(newSG)
+
+                val newPL = PeriodLedgerRepository.load(context)
+                periodLedger.clear(); periodLedger.addAll(newPL)
+
+                onSetSharedSettings(SharedSettingsRepository.load(context))
+
+                // Reload local prefs
+                onSetCurrencySymbol(prefs.getString("currencySymbol", "$") ?: "$")
+                onSetDigitCount(prefs.getInt("digitCount", 3))
+                onSetShowDecimals(prefs.getBoolean("showDecimals", false))
+                onSetDateFormatPattern(prefs.getString("dateFormatPattern", "yyyy-MM-dd") ?: "yyyy-MM-dd")
+                onSetChartPalette(prefs.getString("chartPalette", "Sunset") ?: "Sunset")
+                onSetAppLanguage(prefs.getString("appLanguage", "en") ?: "en")
+                onSetBudgetPeriod(try { BudgetPeriod.valueOf(prefs.getString("budgetPeriod", "DAILY") ?: "DAILY") }
+                                   catch (_: Exception) { BudgetPeriod.DAILY })
+                onSetResetHour(prefs.getInt("resetHour", 0))
+                onSetResetDayOfWeek(prefs.getInt("resetDayOfWeek", 7))
+                onSetResetDayOfMonth(prefs.getInt("resetDayOfMonth", 1))
+                onSetIsManualBudgetEnabled(prefs.getBoolean("isManualBudgetEnabled", false))
+                onSetManualBudgetAmount(prefs.getDoubleCompat("manualBudgetAmount"))
+                onSetAvailableCash(prefs.getDoubleCompat("availableCash"))
+                onSetBudgetStartDate(prefs.getString("budgetStartDate", null)?.let { LocalDate.parse(it) })
+                onSetLastRefreshDate(prefs.getString("lastRefreshDate", null)?.let { LocalDate.parse(it) })
+                onSetWeekStartSunday(prefs.getBoolean("weekStartSunday", true))
+                onSetMatchDays(prefs.getInt("matchDays", 7))
+                onSetMatchPercent(prefs.getDoubleCompat("matchPercent", 1.0))
+                onSetMatchDollar(prefs.getInt("matchDollar", 1))
+                onSetMatchChars(prefs.getInt("matchChars", 5))
+
+                // Handle family sync: dissolve old group, create new one.
+                // Clear all deviceIds and clocks first so records get
+                // properly stamped with THIS device's identity when a
+                // new group is created (the backup may have come from a
+                // different device).
+                if (isSyncConfigured) {
+                    // Clear sync identity on all records
+                    // Clear sync identity on all records
+                    transactions.forEachIndexed { i, t ->
+                        transactions[i] = t.copy(deviceId = "")
+                    }
+                    saveTransactions(null)
+                    categories.forEachIndexed { i, c ->
+                        categories[i] = c.copy(deviceId = "")
+                    }
+                    saveCategories(null)
+                    recurringExpenses.forEachIndexed { i, r ->
+                        recurringExpenses[i] = r.copy(deviceId = "")
+                    }
+                    saveRecurringExpenses(null)
+                    incomeSources.forEachIndexed { i, s ->
+                        incomeSources[i] = s.copy(deviceId = "")
+                    }
+                    saveIncomeSources(null)
+                    savingsGoals.forEachIndexed { i, g ->
+                        savingsGoals[i] = g.copy(deviceId = "")
+                    }
+                    saveSavingsGoals(null)
+                    amortizationEntries.forEachIndexed { i, e ->
+                        amortizationEntries[i] = e.copy(deviceId = "")
+                    }
+                    saveAmortizationEntries(null)
+
+                    // Clear sync prefs for new group
+                    context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
+                        .edit().putBoolean("pushClockFixApplied", true).apply()
+
+                    val oldGroupId = syncGroupId
+                    if (oldGroupId != null) {
+                        coroutineScope.launch {
+                            try {
+                                GroupManager.dissolveGroup(context, oldGroupId)
+                            } catch (_: Exception) {}
+                            val newGroup = GroupManager.createGroup(context)
+                            // Initialize group doc BEFORE registering device
+                            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                            db.collection("groups").document(newGroup.groupId)
+                                .set(mapOf("createdAt" to System.currentTimeMillis(), "lastActivity" to System.currentTimeMillis()))
+                                .await()
+                            // Register admin device
+                            FirestoreService.registerDevice(
+                                newGroup.groupId, localDeviceId,
+                                GroupManager.getDeviceName(context), isAdmin = true
+                            )
+                            onSetIsSyncConfigured(true)
+                            onSetSyncGroupId(newGroup.groupId)
+                            onSetIsSyncAdmin(true)
+                            onSetSyncStatus("synced")
+                            onSetLastSyncActivity(0L)
+                            onSetSyncDevices(emptyList())
+                            onSetGeneratedPairingCode(null)
+                        }
+                    }
+                }
+            },
+            isSyncConfigured = isSyncConfigured,
+            isSyncAdmin = isSyncAdmin,
+            budgetPeriod = budgetPeriod,
+            incomeMode = incomeMode,
+            onAdjustIncomeAmount = { srcId, newAmount ->
+                val idx = incomeSources.indexOfFirst { it.id == srcId }
+                if (idx >= 0 && incomeSources[idx].amount != newAmount) {
+                    incomeSources[idx] = incomeSources[idx].copy(
+                        amount = newAmount,
+                    )
+                    saveIncomeSources(listOf(incomeSources[idx]))
+                }
+            },
+            onAddAmortization = { entry ->
+                val added = entry.copy(
+                    deviceId = localDeviceId,
+                )
+                amortizationEntries.add(added)
+                saveAmortizationEntries(listOf(added))
+            },
+            onDeleteAmortization = { entry ->
+                val idx = amortizationEntries.indexOfFirst { it.id == entry.id }
+                if (idx >= 0) {
+                    amortizationEntries[idx] = amortizationEntries[idx].copy(
+                        deleted = true,
+                    )
+                    saveAmortizationEntries(listOf(amortizationEntries[idx]))
+                }
+            },
+            onBack = { onSetCurrentScreen("main") },
+            onHelpClick = { onSetCurrentScreen("transactions_help") }
+        )
+    }
+
+    @Composable
+    private fun FamilySyncScreenBranch(
+        isSyncConfigured: Boolean,
+        onSetIsSyncConfigured: (Boolean) -> Unit,
+        isSubscriber: Boolean,
+        syncGroupId: String?,
+        onSetSyncGroupId: (String?) -> Unit,
+        isSyncAdmin: Boolean,
+        onSetIsSyncAdmin: (Boolean) -> Unit,
+        localDeviceId: String,
+        syncDevices: List<com.syncbudget.app.data.sync.DeviceInfo>,
+        onSetSyncDevices: (List<com.syncbudget.app.data.sync.DeviceInfo>) -> Unit,
+        syncStatus: String,
+        onSetSyncStatus: (String) -> Unit,
+        lastSyncTimeDisplay: String?,
+        sharedSettings: SharedSettings,
+        onSetSharedSettings: (SharedSettings) -> Unit,
+        context: android.content.Context,
+        onSetLastSyncActivity: (Long) -> Unit,
+        transactions: SnapshotStateList<Transaction>,
+        pendingAdminClaim: AdminClaim?,
+        onSetPendingAdminClaim: (AdminClaim?) -> Unit,
+        coroutineScope: CoroutineScope,
+        syncErrorMessage: String?,
+        onSetSyncErrorMessage: (String?) -> Unit,
+        syncProgressMessage: String?,
+        onSetSyncProgressMessage: (String?) -> Unit,
+        currencySymbol: String,
+        budgetPeriod: BudgetPeriod,
+        budgetStartDate: LocalDate?,
+        isManualBudgetEnabled: Boolean,
+        manualBudgetAmount: Double,
+        weekStartSunday: Boolean,
+        resetDayOfWeek: Int,
+        resetDayOfMonth: Int,
+        resetHour: Int,
+        matchDays: Int,
+        matchPercent: Double,
+        matchDollar: Int,
+        matchChars: Int,
+        incomeMode: IncomeMode,
+        categories: SnapshotStateList<Category>,
+        recurringExpenses: SnapshotStateList<RecurringExpense>,
+        incomeSources: SnapshotStateList<IncomeSource>,
+        savingsGoals: SnapshotStateList<SavingsGoal>,
+        amortizationEntries: SnapshotStateList<AmortizationEntry>,
+        periodLedger: SnapshotStateList<com.syncbudget.app.data.sync.PeriodLedgerEntry>,
+        saveTransactions: (List<Transaction>?) -> Unit,
+        saveCategories: (List<Category>?) -> Unit,
+        saveSavingsGoals: (List<SavingsGoal>?) -> Unit,
+        saveAmortizationEntries: (List<AmortizationEntry>?) -> Unit,
+        saveRecurringExpenses: (List<RecurringExpense>?) -> Unit,
+        saveIncomeSources: (List<IncomeSource>?) -> Unit,
+        doSyncNow: () -> Unit,
+        generatedPairingCode: String?,
+        onSetGeneratedPairingCode: (String?) -> Unit,
+        syncPrefs: SharedPreferences,
+        toastState: AppToastState,
+        onSetCurrentScreen: (String) -> Unit,
+    ) {
+        FamilySyncScreen(
+            isConfigured = isSyncConfigured,
+            isSubscriber = isSubscriber,
+            groupId = syncGroupId,
+            isAdmin = isSyncAdmin,
+            deviceName = GroupManager.getDeviceName(context),
+            localDeviceId = localDeviceId,
+            devices = syncDevices,
+            syncStatus = syncStatus,
+            lastSyncTime = lastSyncTimeDisplay,
+            familyTimezone = sharedSettings.familyTimezone,
+            onTimezoneChange = { tz ->
+                val updated = sharedSettings.copy(
+                    familyTimezone = tz,
+                    lastChangedBy = localDeviceId
+                )
+                onSetSharedSettings(updated)
+                SharedSettingsRepository.save(context, updated)
+                SyncWriteHelper.pushSharedSettings(updated)
+                onSetLastSyncActivity(System.currentTimeMillis())
+            },
+            showAttribution = sharedSettings.showAttribution,
+            onShowAttributionChange = { enabled ->
+                val updated = sharedSettings.copy(
+                    showAttribution = enabled,
+                    lastChangedBy = localDeviceId
+                )
+                onSetSharedSettings(updated)
+                SharedSettingsRepository.save(context, updated)
+                SyncWriteHelper.pushSharedSettings(updated)
+                onSetLastSyncActivity(System.currentTimeMillis())
+            },
+            orphanedDeviceIds = remember(transactions.toList(), syncDevices, localDeviceId, sharedSettings.deviceRoster) {
+                val roster = try {
+                    val obj = org.json.JSONObject(sharedSettings.deviceRoster)
+                    obj.keys().asSequence().toSet()
+                } catch (_: Exception) { emptySet() }
+                val knownIds = syncDevices.map { it.deviceId }.toSet() + localDeviceId + roster
+                transactions.toList()
+                    .map { it.deviceId }
+                    .filter { it.isNotEmpty() && it !in knownIds }
+                    .toSet()
+            },
+            deviceRoster = remember(sharedSettings.deviceRoster) {
+                try {
+                    val obj = org.json.JSONObject(sharedSettings.deviceRoster)
+                    obj.keys().asSequence().associateWith { obj.getString(it) }
+                } catch (_: Exception) { emptyMap() }
+            },
+            onSaveDeviceRoster = { roster ->
+                val json = org.json.JSONObject(roster).toString()
+                val updated = sharedSettings.copy(
+                    deviceRoster = json,
+                    lastChangedBy = localDeviceId
+                )
+                onSetSharedSettings(updated)
+                SharedSettingsRepository.save(context, updated)
+                SyncWriteHelper.pushSharedSettings(updated)
+                onSetLastSyncActivity(System.currentTimeMillis())
+            },
+            onPurgeStaleRoster = {
+                val txnDeviceIds = transactions.toList()
+                    .map { it.deviceId }
+                    .filter { it.isNotEmpty() }
+                    .toSet()
+                val currentIds = syncDevices.map { it.deviceId }.toSet()
+                val currentRoster = try {
+                    val obj = org.json.JSONObject(sharedSettings.deviceRoster)
+                    obj.keys().asSequence().associateWith { obj.getString(it) }
+                } catch (_: Exception) { emptyMap() }
+                // Keep roster entries that have transactions OR are current devices
+                val pruned = currentRoster.filterKeys { it in txnDeviceIds || it in currentIds }
+                if (pruned.size < currentRoster.size) {
+                    val updated = sharedSettings.copy(
+                        deviceRoster = org.json.JSONObject(pruned).toString(),
+                        lastChangedBy = localDeviceId
+                    )
+                    onSetSharedSettings(updated)
+                    SharedSettingsRepository.save(context, updated)
+                    SyncWriteHelper.pushSharedSettings(updated)
+                    onSetLastSyncActivity(System.currentTimeMillis())
+                }
+            },
+            pendingAdminClaim = pendingAdminClaim,
+            onClaimAdmin = {
+                coroutineScope.launch {
+                    try {
+                        val gId = syncGroupId ?: return@launch
+                        val now = System.currentTimeMillis()
+                        val claim = AdminClaim(
+                            claimantDeviceId = localDeviceId,
+                            claimantName = GroupManager.getDeviceName(context),
+                            claimedAt = now,
+                            expiresAt = now + 24 * 60 * 60 * 1000L
+                        )
+                        FirestoreService.createAdminClaim(gId, claim)
+                        onSetPendingAdminClaim(FirestoreService.getAdminClaim(gId))
+                    } catch (_: Exception) {}
+                }
+            },
+            onObjectClaim = {
+                coroutineScope.launch {
+                    try {
+                        val gId = syncGroupId ?: return@launch
+                        FirestoreService.addObjection(gId, localDeviceId)
+                        onSetPendingAdminClaim(FirestoreService.getAdminClaim(gId))
+                    } catch (_: Exception) {}
+                }
+            },
+            syncErrorMessage = syncErrorMessage,
+            syncProgressMessage = syncProgressMessage,
+            onCreateGroup = { nickname ->
+                coroutineScope.launch {
+                    try {
+                        GroupManager.setDeviceName(context, nickname)
+                        val info = GroupManager.createGroup(context)
+
+                        // Update UI state immediately after local group creation
+                        onSetSyncGroupId(info.groupId)
+                        onSetIsSyncAdmin(true)
+                        onSetIsSyncConfigured(true)
+                        onSetSyncStatus("syncing")
+
+                        // Initialize group doc BEFORE registering device
+                        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                        db.collection("groups").document(info.groupId)
+                            .set(mapOf("createdAt" to System.currentTimeMillis(), "lastActivity" to System.currentTimeMillis()))
+                            .await()
+                        // Register this device as admin
+                        FirestoreService.registerDevice(
+                            info.groupId,
+                            localDeviceId,
+                            nickname,
+                            isAdmin = true
+                        )
+                        // Initialize SharedSettings from current app_prefs
+                        val newSettings = SharedSettings(
+                            currency = currencySymbol,
+                            budgetPeriod = budgetPeriod.name,
+                            budgetStartDate = budgetStartDate?.toString(),
+                            isManualBudgetEnabled = isManualBudgetEnabled,
+                            manualBudgetAmount = manualBudgetAmount,
+                            weekStartSunday = weekStartSunday,
+                            resetDayOfWeek = resetDayOfWeek,
+                            resetDayOfMonth = resetDayOfMonth,
+                            resetHour = resetHour,
+                            familyTimezone = java.util.TimeZone.getDefault().id,
+                            matchDays = matchDays,
+                            matchPercent = matchPercent,
+                            matchDollar = matchDollar,
+                            matchChars = matchChars,
+                            incomeMode = incomeMode.name,
+                            lastChangedBy = localDeviceId,
+                        )
+                        onSetSharedSettings(newSettings)
+                        SharedSettingsRepository.save(context, newSettings)
+
+                        // Stamp all existing data with deviceId so they push on first sync.
+                        // Only stamp records that have no deviceId (empty).
+                        transactions.forEachIndexed { i, t ->
+                            if (t.deviceId.isEmpty()) {
+                                transactions[i] = t.copy(deviceId = localDeviceId)
+                            }
+                        }
+                        saveTransactions(null)
+                        categories.forEachIndexed { i, c ->
+                            if (c.deviceId.isEmpty()) {
+                                categories[i] = c.copy(deviceId = localDeviceId)
+                            }
+                        }
+                        saveCategories(null)
+                        savingsGoals.forEachIndexed { i, g ->
+                            if (g.deviceId.isEmpty()) {
+                                savingsGoals[i] = g.copy(deviceId = localDeviceId)
+                            }
+                        }
+                        saveSavingsGoals(null)
+                        amortizationEntries.forEachIndexed { i, e ->
+                            if (e.deviceId.isEmpty()) {
+                                amortizationEntries[i] = e.copy(deviceId = localDeviceId)
+                            }
+                        }
+                        saveAmortizationEntries(null)
+                        recurringExpenses.forEachIndexed { i, r ->
+                            if (r.deviceId.isEmpty()) {
+                                recurringExpenses[i] = r.copy(deviceId = localDeviceId)
+                            }
+                        }
+                        saveRecurringExpenses(null)
+                        incomeSources.forEachIndexed { i, s ->
+                            if (s.deviceId.isEmpty()) {
+                                incomeSources[i] = s.copy(deviceId = localDeviceId)
+                            }
+                        }
+                        saveIncomeSources(null)
+
+                        onSetSyncStatus("synced")
+                    } catch (_: Exception) {
+                        onSetSyncStatus("error")
+                    }
+                }
+            },
+            onJoinGroup = { code, nickname ->
+                coroutineScope.launch {
+                    try {
+                        GroupManager.setDeviceName(context, nickname)
+                        val success = GroupManager.joinGroup(context, code)
+                        if (success) {
+                            // Clear local data — the group's data will arrive
+                            // via Firestore listeners once they start.
+                            transactions.clear()
+                            recurringExpenses.clear()
+                            incomeSources.clear()
+                            savingsGoals.clear()
+                            amortizationEntries.clear()
+                            categories.clear()
+                            periodLedger.clear()
+                            TransactionRepository.save(context, emptyList())
+                            RecurringExpenseRepository.save(context, emptyList())
+                            IncomeSourceRepository.save(context, emptyList())
+                            SavingsGoalRepository.save(context, emptyList())
+                            AmortizationRepository.save(context, emptyList())
+                            CategoryRepository.save(context, emptyList())
+                            PeriodLedgerRepository.save(context, emptyList())
+
+                            // Mark migrations as done so we don't push empty data
+                            syncPrefs.edit()
+                                .putBoolean("migration_native_docs_done", true)
+                                .putBoolean("migration_per_field_enc_done", true)
+                                .apply()
+
+                            onSetSyncGroupId(GroupManager.getGroupId(context))
+                            onSetIsSyncAdmin(false)
+                            onSetIsSyncConfigured(true)
+                            onSetSyncStatus("synced")
+                        } else {
+                            onSetSyncErrorMessage("Invalid or expired pairing code")
+                        }
+                    } catch (e: Exception) {
+                        onSetSyncStatus("error")
+                        onSetSyncErrorMessage(e.message)
+                    }
+                }
+            },
+            onLeaveGroup = {
+                coroutineScope.launch {
+                    GroupManager.leaveGroup(context)
+                    syncPrefs.edit()
+                        .remove("catIdRemap")
+                        .remove("lastSuccessfulSync")
+                        .apply()
+                    onSetIsSyncConfigured(false)
+                    onSetSyncGroupId(null)
+                    onSetIsSyncAdmin(false)
+                    onSetSyncStatus("off")
+                    onSetLastSyncActivity(0L)
+                    onSetSyncDevices(emptyList())
+                    onSetPendingAdminClaim(null)
+                    onSetSyncErrorMessage(null)
+                }
+            },
+            onDissolveGroup = {
+                val gId = syncGroupId
+                if (gId != null) {
+                    onSetSyncStatus("syncing")
+                    coroutineScope.launch {
+                        try {
+                            android.util.Log.d("Sync", "Dissolving group $gId")
+                            GroupManager.dissolveGroup(context, gId) { msg ->
+                                onSetSyncProgressMessage(msg)
+                            }
+                            android.util.Log.d("Sync", "Group dissolved successfully")
+                            syncPrefs.edit()
+                                .remove("catIdRemap")
+                                .remove("lastSuccessfulSync")
+                                .apply()
+                            onSetIsSyncConfigured(false)
+                            onSetSyncGroupId(null)
+                            onSetIsSyncAdmin(false)
+                            onSetSyncStatus("off")
+                            onSetLastSyncActivity(0L)
+                            onSetSyncDevices(emptyList())
+                            onSetPendingAdminClaim(null)
+                            onSetSyncErrorMessage(null)
+                            onSetSyncProgressMessage(null)
+                        } catch (e: Exception) {
+                            android.util.Log.e("Sync", "Dissolve failed, falling back to local leave", e)
+                            // If Firestore is unreachable (group already dissolved, network down),
+                            // fall back to local-only leave so user isn't stuck.
+                            try {
+                                GroupManager.leaveGroup(context, localOnly = true)
+                            } catch (_: Exception) {}
+                            syncPrefs.edit()
+                                .remove("catIdRemap")
+                                .remove("lastSuccessfulSync")
+                                .apply()
+                            onSetIsSyncConfigured(false)
+                            onSetSyncGroupId(null)
+                            onSetIsSyncAdmin(false)
+                            onSetSyncStatus("off")
+                            onSetLastSyncActivity(0L)
+                            onSetSyncDevices(emptyList())
+                            onSetPendingAdminClaim(null)
+                            onSetSyncErrorMessage(null)
+                            onSetSyncProgressMessage(null)
+                            toastState.show("Group left locally (server unreachable)")
+                        }
+                    }
+                }
+            },
+            onSyncNow = doSyncNow,
+            onGeneratePairingCode = {
+                val gId = syncGroupId
+                val key = GroupManager.getEncryptionKey(context)
+                if (gId != null && key != null) {
+                    coroutineScope.launch {
+                        try {
+                            // No need to push data — the new device receives
+                            // everything via Firestore listeners on join.
+                            onSetGeneratedPairingCode(GroupManager.generatePairingCode(context, gId, key))
+                        } catch (_: Exception) {}
+                    }
+                }
+            },
+            generatedPairingCode = generatedPairingCode,
+            onDismissPairingCode = { onSetGeneratedPairingCode(null) },
+            onRenameDevice = { targetDeviceId, newName ->
+                val gId = syncGroupId ?: return@FamilySyncScreen
+                coroutineScope.launch {
+                    try {
+                        FirestoreService.updateDeviceName(gId, targetDeviceId, newName)
+                        // If renaming self, also update local prefs
+                        if (targetDeviceId == localDeviceId) {
+                            GroupManager.setDeviceName(context, newName)
+                        }
+                        // Refresh device list
+                        onSetSyncDevices(GroupManager.getDevices(gId))
+                        // Update permanent roster
+                        val currentRoster = try {
+                            val obj = org.json.JSONObject(sharedSettings.deviceRoster)
+                            obj.keys().asSequence().associateWith { obj.getString(it) }.toMutableMap()
+                        } catch (_: Exception) { mutableMapOf() }
+                        currentRoster[targetDeviceId] = newName
+                        val updated = sharedSettings.copy(
+                            deviceRoster = org.json.JSONObject(currentRoster as Map<*, *>).toString(),
+                            lastChangedBy = localDeviceId
+                        )
+                        onSetSharedSettings(updated)
+                        SharedSettingsRepository.save(context, updated)
+                        SyncWriteHelper.pushSharedSettings(updated)
+                        onSetLastSyncActivity(System.currentTimeMillis())
+                    } catch (_: Exception) {}
+                }
+            },
+            onRemoveDevice = { targetDeviceId ->
+                val gId = syncGroupId ?: return@FamilySyncScreen
+                coroutineScope.launch {
+                    try {
+                        FirestoreService.removeDevice(gId, targetDeviceId)
+                        onSetSyncDevices(GroupManager.getDevices(gId))
+                    } catch (_: Exception) {}
+                }
+            },
+            onHelpClick = { onSetCurrentScreen("family_sync_help") },
+            onBack = {
+                onSetGeneratedPairingCode(null)
+                onSetCurrentScreen("settings")
+            }
+        )
+    }
+
 }
