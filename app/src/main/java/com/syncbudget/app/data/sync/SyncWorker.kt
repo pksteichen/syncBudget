@@ -80,18 +80,9 @@ class SyncWorker(
                 fcmPrefs.edit().putBoolean("fcm_debug_requested", false).apply()
             }
 
-            // Background Firestore lastSeen heartbeat (until RTDB prerequisite is completed)
+            // Background receipt photo sync (paid users only)
             val groupId = syncPrefs.getString("groupId", null)
             val deviceId = SyncIdGenerator.getOrCreateDeviceId(applicationContext)
-            if (groupId != null) {
-                try {
-                    FirestoreService.updateDeviceLastSeen(groupId, deviceId)
-                } catch (e: Exception) {
-                    android.util.Log.w("SyncWorker", "LastSeen update failed: ${e.message}")
-                }
-            }
-
-            // Background receipt photo sync (paid users only)
             val keyBase64Bg = SecurePrefs.get(applicationContext).getString("encryptionKey", null)
                 ?: syncPrefs.getString("encryptionKey", null)
             if (groupId != null && keyBase64Bg != null) {
