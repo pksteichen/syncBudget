@@ -140,6 +140,9 @@ object GroupManager {
             try {
                 FirestoreService.removeDevice(groupId, deviceId)
             } catch (_: Exception) {}
+            try {
+                RealtimePresenceService.deletePresenceNode(groupId, deviceId)
+            } catch (_: Exception) {}
         }
         prefs.edit()
             .remove("groupId")

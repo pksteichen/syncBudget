@@ -1325,6 +1325,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // ═══════════════════════════════════════════════════════════════════
 
     init {
+        // ── Firebase App Check (must run before any Firebase service calls) ──
+        try {
+            com.google.firebase.appcheck.FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
+                com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory.getInstance()
+            )
+        } catch (e: Exception) {
+            android.util.Log.w("AppCheck", "App Check init failed: ${e.message}")
+        }
+
         // ── Load data from repositories ──
         transactions.addAll(TransactionRepository.load(context))
 

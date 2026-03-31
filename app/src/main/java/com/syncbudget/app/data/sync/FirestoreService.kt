@@ -318,7 +318,7 @@ object FirestoreService {
             deleteSubcollection(groupRef.collection(subCollection), onProgress = onProgress)
         }
 
-        // Delete Cloud Storage receipt files
+        // Delete Cloud Storage receipt files + snapshot archive
         try {
             onProgress?.invoke("Removing receipt photos…")
             val storageRef = com.google.firebase.storage.FirebaseStorage.getInstance()
@@ -327,6 +327,15 @@ object FirestoreService {
             for (item in items.items) {
                 try { item.delete().await() } catch (_: Exception) {}
             }
+        } catch (_: Exception) {}
+        try {
+            com.google.firebase.storage.FirebaseStorage.getInstance()
+                .reference.child("groups/$groupId/photoSnapshot.enc").delete().await()
+        } catch (_: Exception) {}
+
+        // Delete RTDB presence nodes for entire group
+        try {
+            RealtimePresenceService.deleteGroupPresence(groupId)
         } catch (_: Exception) {}
 
         // Delete the group document itself

@@ -166,6 +166,22 @@ object RealtimePresenceService {
     }
 
     /**
+     * Delete a single device's presence node (called on group leave).
+     */
+    fun deletePresenceNode(groupId: String, deviceId: String) {
+        val db = getDatabase() ?: return
+        db.reference.child("groups/$groupId/presence/$deviceId").removeValue()
+    }
+
+    /**
+     * Delete all presence nodes for a group (called on group dissolution).
+     */
+    fun deleteGroupPresence(groupId: String) {
+        val db = getDatabase() ?: return
+        db.reference.child("groups/$groupId").removeValue()
+    }
+
+    /**
      * Clean up all RTDB listeners and references.
      */
     fun cleanup() {

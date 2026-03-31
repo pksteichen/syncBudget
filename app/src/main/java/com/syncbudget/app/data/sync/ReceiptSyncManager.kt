@@ -608,6 +608,19 @@ class ReceiptSyncManager(
         } catch (e: Exception) {
             syncLog("Receipt sync: failed to mark cleanup done: ${e.message}")
         }
+
+        // Clean up stale snapshot archives (>7 days in any state)
+        try {
+            val snapshotEntry = ImageLedgerService.getSnapshotEntry(groupId)
+            if (snapshotEntry != null && now - snapshotEntry.requestedAt > 7L * 24 * 60 * 60 * 1000) {
+                ImageLedgerService.deleteSnapshotArchive(groupId)
+                ImageLedgerService.deleteSnapshotEntry(groupId)
+                syncLog("Receipt sync: cleaned up stale snapshot (>7 days)")
+            }
+        } catch (e: Exception) {
+            syncLog("Receipt sync: snapshot cleanup failed: ${e.message}")
+        }
+
         prefs.edit().putLong("lastStalePruneRun", now).apply()
     }
 

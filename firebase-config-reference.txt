@@ -1,40 +1,31 @@
 ================================================================================
-  SecureSync Budget — Firebase Configuration Reference
-  Generated: March 15, 2026
+  BudgeTrak — Firebase Configuration Reference
+  Updated: March 31, 2026
   Project ID: sync-23ce9
   Project Name: SecureSync (Prod)
   Plan: Blaze (pay-as-you-go)
 ================================================================================
 
 This file is a verified snapshot of the live Firebase configuration for the
-SecureSync Budget project. Use it as a reference when Firebase Console access
-is unavailable, when setting up a new environment, or when onboarding a new
+BudgeTrak project. Use it as a reference when Firebase Console access is
+unavailable, when setting up a new environment, or when onboarding a new
 developer. Always verify against the live console after major Firebase changes.
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  AUDIT SUMMARY (verified March 15, 2026)
+  AUDIT SUMMARY (verified March 31, 2026)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  [✓] Security rules published with request.auth != null (March 23, 2026)
-  [✓] Firebase Anonymous Auth enabled (March 23, 2026)
-  [✓] Firebase Storage enabled with auth-required rules (March 21, 2026)
+  [✓] Blaze plan active
+  [✓] Firebase Anonymous Auth enabled
+  [✓] Firebase Storage enabled with auth-required rules
   [✓] TTL policies active: groups/lastActivity (90d), pairing_codes/expiresAt
-  [✓] lastActivity field uses FieldValue.serverTimestamp() in FirestoreService.kt
-      (pushDeltaAtomically + updateGroupActivity — TTL-compatible)
-  [✓] Automatic indexes enabled (Ascending, Descending, Arrays)
-  [✗] No manual composite indexes created (acceptable — Firestore auto-creates
-      on first query; monitor logcat for FAILED_PRECONDITION errors)
-  [✗] TTL policy NOT yet configured on groups collection
-  [✗] TTL policy NOT yet configured on pairing_codes collection
-  [ ] Cloud Function for subcollection cleanup: NOT deployed (Spark plan)
-
-  ACTION REQUIRED: Set up TTL policies — see Section 5 below.
-  BLOCKER: Google Cloud billing must be enabled before TTL policies can be
-  created. This does not require upgrading from Spark — you just need a
-  billing account linked. See Section 5 for full setup instructions.
-  NOTE: TTL configuration has moved out of Firebase Console in the new UI.
-  It must be done via Google Cloud Console (see Section 5).
+  [✓] Realtime Database enabled (presence system)
+  [✓] RTDB security rules deployed
+  [✓] Automatic Firestore indexes enabled
+  [✓] Firestore security rules published
+  [✓] Firestore security rules published (all ops require request.auth != null)
+  [ ] Cloud Function for TTL cascade cleanup — NOT deployed (see Section 7)
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -44,89 +35,105 @@ developer. Always verify against the live console after major Firebase changes.
   Firebase Project ID : sync-23ce9
   Display Name        : SecureSync (tagged "Prod")
   Firebase Console    : https://console.firebase.google.com/project/sync-23ce9
-  Plan                : Spark (free tier)
-  Android Package     : com.syncbudget.app
-  google-services.json: app/google-services.json
+  Plan                : Blaze (pay-as-you-go)
+  Android Package     : com.securesync.app (namespace: com.syncbudget.app)
+  google-services.json: app/google-services.json (includes RTDB URL)
   Firestore Database  : (default)
-  Firestore Console   : https://console.firebase.google.com/project/sync-23ce9/firestore
+  Realtime Database   : sync-23ce9-default-rtdb (us-central1)
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  2. FIRESTORE SECURITY RULES  (published, verified March 15, 2026)
+  2. FIRESTORE SECURITY RULES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   Console path: Firestore Database → Rules tab
-  Last published: Feb 23, 2026 • 8:25 AM  (previous: Feb 21, 2026 • 3:42 PM)
-
-  To update: edit rules in the console Rules tab, then click "Publish".
+  Verified: March 31, 2026 (from screenshot)
 
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── Group documents ──
-    // Holds: nextDeltaVersion, lastActivity, status, debugRequestedAt,
-    //        debug_{deviceId}_log/diag/name/at, imageLedgerFlagClock,
-    //        imageCleanupAssignee/assignedAt/lastCleanupDate,
-    //        subscriptionExpiry
     match /groups/{groupId} {
-      allow read: if true;
-      allow create: if request.resource.data.keys().hasAll(['nextDeltaVersion', 'lastActivity'])
-                    && request.resource.data.nextDeltaVersion is int;
-      allow update: if true;  // Many features merge fields; restrict by auth before public
-      allow delete: if true;
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null;
 
-      // ── Deltas (encrypted sync payloads) ──
       match /deltas/{deltaId} {
-        allow read: if true;
-        allow create: if request.resource.data.encryptedPayload is string
-                      && request.resource.data.encryptedPayload.size() < 1048576;  // 1 MB max
-        allow delete: if true;
+        allow read: if request.auth != null;
+        allow create: if request.auth != null
+                      && request.resource.data.encryptedPayload is string
+                      && request.resource.data.encryptedPayload.size() < 1048576;
+        allow delete: if request.auth != null;
       }
 
-      // ── Devices ──
-      // Holds: deviceId, deviceName, isAdmin, lastSyncVersion, lastSeen,
-      //        fingerprintData, photoCapable, uploadSpeedBps, removed,
-      //        debugSyncLog, debugSyncDiag, debugUpdatedAt, appSyncVersion
       match /devices/{deviceId} {
-        allow read: if true;
-        allow write: if true;  // Merge writes add various fields; restrict by auth before public
-        allow delete: if true;
+        allow read: if request.auth != null;
+        allow write: if request.auth != null;
+        allow delete: if request.auth != null;
       }
 
-      // ── Snapshots ──
-      // latest doc: snapshotVersion, createdBy, chunkCount, writeGeneration, timestamp
-      // chunk docs: data (string only)
       match /snapshots/{snapshotId} {
-        allow read: if true;
-        allow write: if true;  // Chunks don't have encryptedData; restrict by auth before public
-        allow delete: if true;
+        allow read: if request.auth != null;
+        allow write: if request.auth != null;
+        allow delete: if request.auth != null;
       }
 
-      // ── Admin claims ──
       match /adminClaim/{claimId} {
-        allow read: if true;
-        allow write: if true;
-        allow delete: if true;
+        allow read: if request.auth != null;
+        allow write: if request.auth != null;
+        allow delete: if request.auth != null;
       }
 
-      // ── Image ledger ──
       match /imageLedger/{entryId} {
-        allow read: if true;
-        allow write: if true;
-        allow delete: if true;
+        allow read: if request.auth != null;
+        allow write: if request.auth != null;
+        allow delete: if request.auth != null;
+      }
+
+      // Firestore-native sync collections (encrypted doc per record)
+      match /transactions/{docId} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null;
+      }
+      match /recurringExpenses/{docId} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null;
+      }
+      match /incomeSources/{docId} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null;
+      }
+      match /savingsGoals/{docId} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null;
+      }
+      match /amortizationEntries/{docId} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null;
+      }
+      match /categories/{docId} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null;
+      }
+      match /periodLedger/{docId} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null;
+      }
+      match /sharedSettings/{docId} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null;
       }
     }
 
-    // ── Pairing codes (short-lived, one-time use) ──
     match /pairing_codes/{code} {
-      allow read: if true;
-      allow create: if request.resource.data.keys().hasAll(['groupId', 'encryptedKey', 'expiresAt']);
-      allow delete: if true;
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.data.keys().hasAll(['groupId', 'encryptedKey', 'expiresAt']);
+      allow delete: if request.auth != null;
     }
 
-    // Deny everything else
     match /{document=**} {
       allow read, write: if false;
     }
@@ -135,308 +142,329 @@ service cloud.firestore {
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   SECURITY NOTES:
-  - No Firebase Authentication required. App uses device-generated IDs and
-    AES-256 end-to-end encryption. Even with full Firestore read access, an
-    attacker cannot read financial data.
-  - group update rule restricts writable fields to nextDeltaVersion and
-    lastActivity only. The "status" field (used for group dissolution) is not
-    in the allowed update keys — this means only the app's deleteGroup() path
-    (which uses SetOptions.merge()) can write it. This is intentional.
-  - Payload size limits prevent abuse: 1 MB for deltas, 5 MB for snapshots.
-  - Pairing codes are one-time use, deleted on redemption, and expire in 10
-    minutes (enforced in app code).
-
-  KNOWN RULE GAPS (acceptable for current threat model):
-  - All reads are public (allow read: if true). Acceptable because all data
-    is end-to-end encrypted. If you add unauthenticated sensitive metadata
-    fields in future, revisit.
-  - adminClaim writes are unrestricted. Acceptable because admin claim
-    resolution logic is enforced in app code, not rules.
-  - group update rule uses hasOnly(['nextDeltaVersion', 'lastActivity']).
-    The "status" and "dissolved" fields written by deleteGroup() use
-    SetOptions.merge() which bypasses the update rule — this is intentional
-    and correct behavior.
-
-  FUTURE HARDENING (if Firebase Auth is added):
-    Replace "allow read: if true" with:
-      allow read: if request.auth != null;
-    And scope writes to authenticated users only.
+  - All operations require Firebase Anonymous Auth (request.auth != null)
+  - All data is end-to-end encrypted (ChaCha20-Poly1305). Even with
+    Firestore access, an attacker cannot read financial data.
+  - Pairing codes are one-time use, deleted on redemption, expire in 10 min.
+  - Group IDs are random 12-char hex — effectively unguessable secrets.
+  - Delta payload capped at 1 MB.
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  3. FIRESTORE INDEXES  (verified March 15, 2026)
+  2b. FIREBASE STORAGE RULES (verified March 31, 2026)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  Console path: Firestore Database → Indexes tab
+  Console path: Storage → Rules tab
 
-  AUTOMATIC INDEXES (built-in, always on):
-    Ascending  — Collection scope: Enabled, Collection group scope: Disabled
-    Descending — Collection scope: Enabled, Collection group scope: Disabled
-    Arrays     — Collection scope: Enabled, Collection group scope: Disabled
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /groups/{groupId}/{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  MANUAL COMPOSITE INDEXES:
-    None created. The app's delta query (version > X, orderBy version ASC)
-    relies on the automatic single-field ascending index on "version".
-    Firestore will auto-create a composite index if needed on first query.
-
-  MONITORING: If you see "FAILED_PRECONDITION: The query requires an index"
-  in logcat, click the link in the error to create the index, or manually:
-    1. Firestore Database → Indexes → Manual → Create index
-    2. Collection ID: deltas
-    3. Fields: version — Ascending
-    4. Query scope: Collection
-    5. Click "Create"
+  Scoped to groups/{groupId}/ — requires auth. All receipt photos and
+  snapshot archives live under this path.
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  4. lastActivity FIELD — TIMESTAMP FORMAT (IMPORTANT)
+  3. REALTIME DATABASE (RTDB) — Added March 31, 2026
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  FirestoreService.kt uses FieldValue.serverTimestamp() for lastActivity in:
-    - pushDeltaAtomically()   — written on every delta push
-    - updateGroupActivity()   — written on device registration
+  Database URL: sync-23ce9-default-rtdb.firebaseio.com
+  Region: us-central1
 
-  This writes a native Firestore Timestamp, which is FULLY COMPATIBLE with
-  TTL policies. No app code changes are needed for TTL to work correctly.
+  PURPOSE: Instant online/offline presence detection for group devices.
+  Replaces Firestore device polling. Uses server-side onDisconnect() handler.
 
-  NOTE: The live Firestore data panel shows lastActivity as a large integer
-  (e.g. 1771788012258). This is how the Firebase Console displays server
-  timestamps in the data view — it is NOT epoch milliseconds stored as a
-  number. The underlying type is a Firestore Timestamp and TTL will interpret
-  it correctly.
+  ── DATA STRUCTURE ──────────────────────────────────────────────────────────
 
-  The older firebase-setup.txt warned about epoch millis — that warning is now
-  obsolete. The code already uses serverTimestamp() correctly.
+  groups/
+    {groupId}/
+      presence/
+        {deviceId}/
+          online               : boolean     # Server-managed via onDisconnect
+          deviceName           : string
+          lastSeen             : ServerValue.TIMESTAMP
+          photoCapable         : boolean
+          uploadSpeedBps       : number
+          uploadSpeedMeasuredAt: number
+
+  ── SECURITY RULES (deployed March 31, 2026) ────────────────────────────────
+
+  {
+    "rules": {
+      "groups": {
+        "$groupId": {
+          "presence": {
+            ".read": true,
+            "$deviceId": {
+              ".write": true
+            }
+          }
+        }
+      },
+      ".read": false,
+      ".write": false
+    }
+  }
+
+  NOTES:
+  - Read at presence level (not per-device) allows listing all devices
+  - Write restricted to per-device path
+  - Top-level .read/.write false prevents enumeration of all groups
+  - Group ID is the access secret (same model as Firestore)
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  5. TTL POLICIES  (NOT YET CONFIGURED — action required)
+  4. TTL POLICIES (active)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  PURPOSE:
-  TTL (Time-to-Live) policies automatically delete documents whose timestamp
-  field is older than the policy duration. This cleans up:
-    - Abandoned group documents (no activity for 90 days)
-    - Expired pairing codes that were never redeemed
-
-  UI NOTE: As of early 2026, the Firebase Console no longer has a TTL tab
-  in the Indexes panel. TTL must be configured via gcloud CLI or the
-  Google Cloud Console. The old "Indexes → TTL" path no longer exists.
 
   ── POLICY 1: Orphaned group cleanup ──────────────────────────────────────────
   Collection group : groups
-  TTL field        : lastActivity  (Firestore Timestamp — serverTimestamp())
+  TTL field        : lastActivity  (Firestore Timestamp via serverTimestamp())
   Delete after     : 90 days of inactivity
-
-  gcloud CLI command:
-    gcloud firestore fields ttls update lastActivity \
-      --collection-group=groups \
-      --enable-ttl \
-      --project=sync-23ce9
+  Status           : ACTIVE
 
   ── POLICY 2: Expired pairing code cleanup ────────────────────────────────────
   Collection group : pairing_codes
-  TTL field        : expiresAt
-
-  CODE FIX ALREADY APPLIED (March 15, 2026):
-  FirestoreService.kt createPairingCode() was updated to store expiresAt as
-  a Firestore Timestamp instead of epoch milliseconds:
-    "expiresAt" to Timestamp(expiresAt / 1000, 0)
-  This makes expiresAt fully compatible with Firestore TTL.
-  The import com.google.firebase.Timestamp was also added to the file.
-
-  ── HOW TO CREATE TTL POLICIES (when billing is enabled) ─────────────────────
-
-  STEP 1 — Enable billing on the Google Cloud project:
-  1. Go to: https://console.cloud.google.com/billing/linkedaccount?project=sync-23ce9
-  2. Click "Link a billing account" and follow the prompts
-  3. You will NOT be charged — the Spark free tier limits still apply.
-     Billing just needs to be enabled for the Cloud Firestore API to accept
-     TTL policy creation requests. A credit card is required on file.
-
-  STEP 2 — Create TTL policies via Google Cloud Console:
-  1. Go to: https://console.cloud.google.com/firestore/databases/-default-/ttl?project=sync-23ce9
-     (Navigation: Google Cloud Console → Firestore → Database (default) → Time-to-live (TTL))
-  2. Click "+ Create policy"
-  3. Enter:
-       Collection group : groups
-       Timestamp field  : lastActivity
-  4. Click "Create" — wait for Status to show "Active" (may take a few minutes)
-  5. Click "+ Create policy" again
-  6. Enter:
-       Collection group : pairing_codes
-       Timestamp field  : expiresAt
-  7. Click "Create"
-
-  NOTE: Firebase Console no longer has a TTL section as of early 2026.
-  The only paths are Google Cloud Console (above) or gcloud CLI (below).
-
-  ALTERNATIVE — gcloud CLI:
-    Install: https://cloud.google.com/sdk/docs/install
-    Run gcloud init and log in with the Google account owning sync-23ce9
-
-    gcloud firestore fields ttls update lastActivity \
-      --collection-group=groups \
-      --enable-ttl \
-      --project=sync-23ce9
-
-    gcloud firestore fields ttls update expiresAt \
-      --collection-group=pairing_codes \
-      --enable-ttl \
-      --project=sync-23ce9
+  TTL field        : expiresAt  (Firestore Timestamp)
+  Status           : ACTIVE
 
   ── WHAT HAPPENS ON TTL DELETION ──────────────────────────────────────────────
   - Only the matched document is deleted (the group doc itself)
-  - Subcollections (deltas, devices, snapshots, adminClaim) are NOT deleted
-  - Orphaned subcollections are encrypted and harmless; storage cost is minimal
-  - For full cleanup, deploy the Cloud Function in Section 7 (requires Blaze)
-  - TTL deletions are not instantaneous — Firestore processes them within
-    24-72 hours of the field expiring. This is normal and expected.
+  - Subcollections are NOT auto-deleted by Firestore
+  - RTDB presence nodes are NOT deleted
+  - Cloud Storage receipt files are NOT deleted
+  - For full cascade cleanup, deploy the Cloud Function in Section 7
+  - TTL deletions are not instantaneous — 24-72 hours after expiry
+
+  lastActivity is updated by:
+  - FirestoreService.updateGroupActivity() — called once per app launch
+  - FirestoreService.registerDevice() — on group join
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  6. DATA CLEANUP — DELTA PRUNING (app-side, already implemented)
+  5. FIRESTORE INDEXES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  The app implements pruneDeltas() in FirestoreService.kt which deletes delta
-  documents with version < belowVersion in batches of 100. This runs as part
-  of the normal sync cycle and keeps the deltas subcollection from growing
-  unboundedly for active groups.
+  AUTOMATIC INDEXES (built-in, always on):
+    Ascending, Descending, Arrays — Collection scope: Enabled
 
-  This is separate from TTL — pruning keeps ACTIVE groups clean, while TTL
-  handles ABANDONED groups.
+  MANUAL COMPOSITE INDEXES:
+    None required. The filtered listener query (updatedAt > cursor) uses a
+    single-field index on updatedAt which Firestore auto-creates.
+
+  MONITORING: If logcat shows "FAILED_PRECONDITION: The query requires an
+  index", click the link in the error to auto-create the missing index.
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  7. CLOUD FUNCTIONS  (NOT deployed — Spark plan limitation)
+  6. FIRESTORE DATA STRUCTURE REFERENCE (v2.4)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  Cloud Functions require the Blaze (pay-as-you-go) plan. The project is
-  currently on Spark (free). If you upgrade, deploy these functions:
+  groups/
+    {groupId}/                              # 12-char hex group document
+      lastActivity     : Timestamp          # Server timestamp (for TTL)
+      status           : string?            # "dissolved" when group deleted
+      subscriptionExpiry : number?          # Epoch millis, admin subscription
+      imageLedgerFlagClock : number?        # Counter, bumped on ledger changes
+      imageLastCleanupDate : string?        # "YYYY-MM-DD" last stale prune
+      debug_{deviceId}_* : string?          # Debug dump fields (per device)
 
-  ── Function 1: Subcollection cleanup on group deletion ───────────────────────
+      transactions/                         # Per-field encrypted business data
+        {docId}/
+          enc_*          : string           # Encrypted fields (ChaCha20-Poly1305)
+          deviceId       : string
+          deleted        : boolean
+          lastEditBy     : string
+          updatedAt      : Timestamp        # Server timestamp (for cursors)
+
+      recurringExpenses/                    # Same enc_* pattern
+      incomeSources/
+      savingsGoals/
+      amortizationEntries/
+      categories/
+      periodLedger/
+
+      sharedSettings/
+        current/                            # Singleton doc
+          enc_*          : string
+          updatedAt      : Timestamp
+          lastEditBy     : string
+
+      devices/
+        {deviceId}/
+          deviceId       : string
+          deviceName     : string
+          isAdmin        : boolean
+          removed        : boolean          # Soft-delete by admin
+          lastSyncVersion: number
+          lastSeen       : number           # Written by SyncWorker (background)
+          appSyncVersion : number
+          minSyncVersion : number
+          photoCapable   : boolean
+          uploadSpeedBps : number?
+          fcmToken       : string?
+
+      imageLedger/
+        {receiptId}/
+          receiptId      : string
+          originatorDeviceId : string
+          createdAt      : number
+          uploadedAt     : number           # 0 = not yet uploaded (recovery)
+          uploadAssignee : string?
+          assignedAt     : number
+          possessions    : map<deviceId, boolean>
+        _snapshot_request/                  # Snapshot lifecycle doc
+          requestedBy    : string
+          requestedAt    : number
+          builderId      : string?
+          status         : string
+          consumedBy     : map<deviceId, boolean>
+
+      adminClaim/
+        current/
+          claimantDeviceId : string
+          claimantName   : string
+          claimedAt      : number
+          expiresAt      : number
+          objections     : string[]
+          status         : string
+
+      deltas/                               # Legacy CRDT (may exist on old groups)
+      snapshots/                            # Legacy CRDT
+
+  pairing_codes/
+    {CODE}/                                 # 6-char alphanumeric (A-Z, 2-9)
+      groupId          : string
+      encryptedKey     : string
+      expiresAt        : Timestamp          # 10-minute TTL
+
+  ── CLOUD STORAGE ──────────────────────────────────────────────────────────
+
+  groups/{groupId}/receipts/{receiptId}.enc   # Encrypted receipt photos
+  groups/{groupId}/photoSnapshot.enc          # Encrypted snapshot archive (temp)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  7. CLOUD FUNCTIONS (NOT deployed — recommended)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Blaze plan is active. These functions can be deployed when ready.
+
+  ── Function 1: Cascade cleanup on group TTL deletion ────────────────────────
   Trigger: Firestore document delete on groups/{groupId}
-  Purpose: Clean up deltas, devices, snapshots, adminClaim subcollections
-           when a group is TTL-deleted (app-initiated deletions already handle
-           this via deleteGroup() in FirestoreService.kt)
+  Purpose: Clean up all subcollections, RTDB presence, and Cloud Storage
+           when a group is TTL-deleted (app-initiated dissolution already
+           handles this via deleteGroup() in FirestoreService.kt)
 
   // functions/index.js
   const functions = require('firebase-functions');
   const admin = require('firebase-admin');
   admin.initializeApp();
 
-  exports.cleanupGroupSubcollections = functions.firestore
+  exports.cleanupGroupData = functions.firestore
     .document('groups/{groupId}')
     .onDelete(async (snap, context) => {
       const groupId = context.params.groupId;
       const db = admin.firestore();
       const groupRef = db.collection('groups').doc(groupId);
-      const subcollections = ['deltas', 'devices', 'snapshots', 'adminClaim'];
+
+      // Delete all Firestore subcollections
+      const subcollections = [
+        'transactions', 'recurringExpenses', 'incomeSources',
+        'savingsGoals', 'amortizationEntries', 'categories',
+        'periodLedger', 'sharedSettings',
+        'devices', 'imageLedger', 'adminClaim',
+        'deltas', 'snapshots'  // Legacy
+      ];
       for (const sub of subcollections) {
         const docs = await groupRef.collection(sub).listDocuments();
-        const batch = db.batch();
-        for (const doc of docs) batch.delete(doc);
-        if (docs.length > 0) await batch.commit();
+        while (docs.length > 0) {
+          const batch = db.batch();
+          const chunk = docs.splice(0, 500);
+          for (const doc of chunk) batch.delete(doc);
+          await batch.commit();
+        }
+      }
+
+      // Delete RTDB presence nodes
+      await admin.database().ref(`groups/${groupId}`).remove();
+
+      // Delete Cloud Storage receipt files + snapshot archive
+      const bucket = admin.storage().bucket();
+      const [files] = await bucket.getFiles({ prefix: `groups/${groupId}/` });
+      for (const file of files) {
+        await file.delete().catch(() => {});
       }
     });
 
-  ── Function 2: Expired pairing code cleanup (if not using TTL) ───────────────
-  Trigger: Scheduled, every 24 hours
-  Purpose: Delete pairing_codes where expiresAt < now (epoch millis)
-
-  exports.cleanupExpiredCodes = functions.pubsub
-    .schedule('every 24 hours')
-    .onRun(async () => {
-      const db = admin.firestore();
-      const now = Date.now();
-      const expired = await db.collection('pairing_codes')
-        .where('expiresAt', '<', now)
-        .get();
-      const batch = db.batch();
-      expired.docs.forEach(doc => batch.delete(doc.ref));
-      if (!expired.empty) await batch.commit();
-    });
-
-  ── Deployment steps (when on Blaze plan) ─────────────────────────────────────
+  ── Deployment steps ─────────────────────────────────────────────────────────
   1. npm install -g firebase-tools
   2. firebase login
   3. firebase init functions  (select sync-23ce9, choose JavaScript)
-  4. Paste functions above into functions/index.js
+  4. Paste function above into functions/index.js
   5. firebase deploy --only functions
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  8. FIRESTORE DATA STRUCTURE REFERENCE
+  8. APP-SIDE DATA CLEANUP (v2.4)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  groups/
-    {groupId}/                          # 12-char hex group document
-      nextDeltaVersion : number         # Monotonic counter for delta ordering
-      createdAt        : number         # Epoch millis when group was created
-      lastActivity     : Timestamp      # Firestore server timestamp (for TTL)
-      status           : string?        # "dissolved" when group deleted
-      deltas/
-        v{version}/                     # One doc per sync delta
-          version          : number
-          sourceDeviceId   : string
-          encryptedPayload : string     # E2E encrypted, base64 (AES-256)
-          timestamp        : number     # Epoch millis
-      devices/
-        {deviceId}/                     # One doc per paired device
-          deviceId              : string
-          deviceName            : string
-          isAdmin               : boolean
-          removed               : boolean  # true = soft-deleted by admin
-          lastSyncVersion       : number
-          lastSeen              : number   # Epoch millis
-          fingerprintData       : string?  # JSON, device fingerprint
-          fingerprintSyncVersion: number?
-      snapshots/
-        latest/                         # Overwritten every ~50 deltas
-          snapshotVersion : number
-          createdBy       : string      # deviceId
-          encryptedData   : string?     # Single-doc path (small snapshots)
-          chunkCount      : number      # 0 = single-doc; >0 = chunked
-          timestamp       : number
-        chunk_{n}/                      # Chunk docs (large snapshots only)
-          data : string                 # Partial base64 encrypted data
-      adminClaim/
-        current/                        # Single doc, pending admin claim
-          claimantDeviceId : string
-          claimantName     : string
-          claimedAt        : number
-          expiresAt        : number
-          objections       : string[]   # deviceIds that objected
-          status           : string     # "pending"|"approved"|"rejected"
+  These cleanup mechanisms run in the app, not in Firebase backend:
 
-  pairing_codes/
-    {CODE}/                             # 6-char alphanumeric (A-Z, 2-9)
-      groupId      : string
-      encryptedKey : string             # Base64 AES-256 key
-      expiresAt    : number             # Epoch MILLIS (10-minute window)
-      timestamp    : number             # Epoch millis, creation time
+  TOMBSTONE CLEANUP (admin, once per 30 days):
+    Reads all 7 business collections, deletes docs where deleted=true and
+    updatedAt < oldestDeviceLastSeen - 1 day buffer. Uses RTDB syncDevices
+    for lastSeen. Gated by lastAdminCleanup in sync_engine prefs.
+
+  ORPHAN CLOUD STORAGE CLEANUP (admin, once per 30 days):
+    Lists all files in groups/{gid}/receipts/, compares against imageLedger.
+    Deletes files with no ledger entry (skips files <10 min old for race
+    protection). Runs alongside tombstone cleanup.
+
+  14-DAY RECEIPT PRUNING (any device, once per 24 hours):
+    Reads full imageLedger, deletes entries + Cloud Storage files older than
+    14 days. Gated by lastStalePruneRun in receipt_sync_prefs (local).
+    imageLastCleanupDate on group doc prevents duplicate work across devices.
+
+  SNAPSHOT ARCHIVE CLEANUP (any device, daily with pruning):
+    Deletes snapshot entry + Cloud Storage archive older than 7 days
+    regardless of state. Runs inside processStalePruning.
+
+  GROUP DISSOLUTION (admin, on-demand):
+    deleteGroup() cascade-deletes all 13 subcollections, Cloud Storage
+    receipt files, snapshot archive, and RTDB presence nodes.
+
+  DEVICE LEAVE (any device):
+    leaveGroup() soft-deletes Firestore device record (removed=true) and
+    deletes own RTDB presence node.
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  9. USAGE & COST (Spark free tier limits)
+  9. COST ESTIMATES (v2.4 optimized, at scale)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  Spark plan limits:
-    Storage  : 1 GiB
-    Reads    : 50,000 / day
-    Writes   : 20,000 / day
-    Deletes  : 20,000 / day
+  Scenario: 40,000 groups, 100,000 devices, 5 sessions/day, 2 changes/session
 
-  Observed usage (week of Mar 8-15, 2026):
-    Reads  : ~3,000 / week (well within limits)
-    Writes : ~1,800 / week (well within limits)
+  Filtered listeners with per-collection cursors:  ~$27/month
+  Reinstall full collection reads:                ~$135/month
+  Firestore writes:                                ~$54/month
+  Firestore storage:                               ~$81/month
+  Cloud Storage (photos):                          ~$86/month
+  Startup health check reads:                      ~$18/month
+  RTDB presence:                                    ~$0/month (free tier)
+  Integrity check (Source.CACHE):                   ~$0/month
+  ─────────────────────────────────────────────────
+  Estimated total:                                ~$401/month
 
-  Estimated usage per sync (5-device household, syncing every 15 min):
-    ~6,000 reads/day, ~4,000 writes/day — within free tier
-    Snapshot writes every ~50 syncs add minimal overhead
-
-  Upgrade to Blaze if: usage approaches limits, or Cloud Functions needed.
-  Blaze estimated cost for this use case: $0.01–$0.10/month.
+  Pre-optimization (v2.3) estimate:             ~$50,643/month
+  Savings:                                          ~99.2%
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -444,21 +472,26 @@ service cloud.firestore {
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   [✓] Firebase project created (sync-23ce9, Prod)
-  [✓] Android app registered, google-services.json in app/
+  [✓] Blaze plan active
+  [✓] Android app registered, google-services.json with RTDB URL
   [✓] Firestore database created and active
-  [✓] Security rules published and verified (Feb 23, 2026)
-  [✓] lastActivity uses FieldValue.serverTimestamp() — TTL-ready
-  [✓] Automatic indexes enabled (Ascending, Descending, Arrays)
-  [✓] Delta pruning implemented in app (FirestoreService.pruneDeltas)
-  [ ] Enable billing on Google Cloud project (required before TTL works)
-  [ ] TTL policy on groups/lastActivity — PENDING (see Section 5)
-  [ ] TTL policy on pairing_codes/expiresAt — PENDING (see Section 5)
-  [✓] expiresAt field type fixed in FirestoreService.kt (now Firestore Timestamp)
-  [ ] Composite index for deltas — not needed yet; auto-created on first query
-  [ ] Cloud Functions — NOT deployed (requires Blaze plan upgrade)
+  [✓] Realtime Database enabled (March 31, 2026)
+  [✓] RTDB security rules deployed
+  [✓] Firebase Anonymous Auth enabled
+  [✓] Firebase Storage enabled
+  [✓] TTL policy on groups/lastActivity — ACTIVE (90 days)
+  [✓] TTL policy on pairing_codes/expiresAt — ACTIVE
+  [✓] lastActivity uses FieldValue.serverTimestamp()
+  [✓] expiresAt stored as Firestore Timestamp
+  [✓] Automatic indexes enabled
+  [✓] App-side cleanup: tombstones (30d), orphans (30d), receipts (24h)
+  [✓] Firestore security rules verified (March 31, 2026)
+  [✓] Firebase Storage rules verified (March 31, 2026)
+  [ ] Cloud Function for TTL cascade cleanup — NOT deployed (see Section 7)
+  [ ] Firebase App Check — NOT configured (recommended before public launch)
 
 
 ================================================================================
-  END OF REFERENCE — SecureSync Firebase Configuration
-  Project: sync-23ce9  |  Generated: March 15, 2026
+  END OF REFERENCE — BudgeTrak Firebase Configuration
+  Project: sync-23ce9  |  Updated: March 31, 2026
 ================================================================================
