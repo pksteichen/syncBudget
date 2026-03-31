@@ -5,6 +5,7 @@ import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.Source
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeout
 
@@ -130,6 +131,26 @@ object FirestoreDocService {
         }
     }
 
+    /**
+     * Read all doc IDs from the local Firestore cache (no network, no billing).
+     * Returns empty list if cache is not populated.
+     */
+    suspend fun readDocIdsFromCache(
+        groupId: String,
+        collection: String
+    ): Set<String> {
+        return try {
+            withTimeout(5_000L) {
+                collectionRef(groupId, collection).get(Source.CACHE).await()
+                    .documents.filter { doc ->
+                        doc.getBoolean("deleted") != true
+                    }.map { it.id }.toSet()
+            }
+        } catch (_: Exception) {
+            emptySet() // Cache not populated yet — skip check
+        }
+    }
+
     // ── snapshot listeners ──────────────────────────────────────────────
 
     /**
@@ -147,6 +168,32 @@ object FirestoreDocService {
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     Log.e(TAG, "Listener error on $collection", error)
+                    onError(error)
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    onDocumentChange(snapshot.documentChanges)
+                }
+            }
+    }
+
+    /**
+     * Listen for changes in a collection since a given timestamp (filtered).
+     * Only documents with updatedAt > since are included in the result set.
+     * Dramatically reduces Firestore read costs on reconnect after >30 min gap.
+     */
+    fun listenToCollectionSince(
+        groupId: String,
+        collection: String,
+        since: com.google.firebase.Timestamp,
+        onDocumentChange: (List<DocumentChange>) -> Unit,
+        onError: (Exception) -> Unit
+    ): ListenerRegistration {
+        return collectionRef(groupId, collection)
+            .whereGreaterThan("updatedAt", since)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e(TAG, "Filtered listener error on $collection", error)
                     onError(error)
                     return@addSnapshotListener
                 }

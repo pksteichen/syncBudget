@@ -397,15 +397,13 @@ object ImageLedgerService {
     // ── 14-Day Cleanup ──────────────────────────────────────────
 
     /**
-     * Read cleanup assignment fields from group document.
+     * Read last cleanup date from group document.
      */
     suspend fun getCleanupState(groupId: String): CleanupState {
         return try {
             withTimeout(TIMEOUT_MS) {
                 val snap = groupRef(groupId).get().await()
                 CleanupState(
-                    assignee = snap.getString("imageCleanupAssignee"),
-                    assignedAt = snap.getLong("imageCleanupAssignedAt") ?: 0L,
                     lastCleanupDate = snap.getString("imageLastCleanupDate")
                 )
             }
@@ -416,39 +414,11 @@ object ImageLedgerService {
     }
 
     /**
-     * Claim cleanup duty for today via CAS.
+     * Mark cleanup as done for today (simple write, no CAS needed).
      */
-    suspend fun claimCleanupDuty(
-        groupId: String,
-        myDeviceId: String,
-        todayDate: String,
-        expectedAssignee: String?,
-        expectedAssignedAt: Long
-    ): Boolean {
-        return try {
-            withTimeout(TIMEOUT_MS) {
-                firestore.runTransaction { tx ->
-                    val snap = tx.get(groupRef(groupId))
-                    val currentAssignee = snap.getString("imageCleanupAssignee")
-                    val currentAssignedAt = snap.getLong("imageCleanupAssignedAt") ?: 0L
-
-                    if (currentAssignee == expectedAssignee && currentAssignedAt == expectedAssignedAt) {
-                        tx.update(
-                            groupRef(groupId), mapOf(
-                                "imageCleanupAssignee" to myDeviceId,
-                                "imageCleanupAssignedAt" to System.currentTimeMillis(),
-                                "imageLastCleanupDate" to todayDate
-                            )
-                        )
-                        true
-                    } else {
-                        false
-                    }
-                }.await()
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Claim cleanup duty failed: ${e.message}")
-            false
+    suspend fun markCleanupDone(groupId: String, todayDate: String) {
+        withTimeout(TIMEOUT_MS) {
+            groupRef(groupId).update("imageLastCleanupDate", todayDate).await()
         }
     }
 
@@ -473,8 +443,6 @@ object ImageLedgerService {
     }
 
     data class CleanupState(
-        val assignee: String? = null,
-        val assignedAt: Long = 0L,
         val lastCleanupDate: String? = null
     )
 

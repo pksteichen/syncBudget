@@ -76,6 +76,25 @@ class FirestoreDocSync(
     private val localPendingEdits = ConcurrentHashMap<String, Long>()
     private val pendingEditsPrefs = context.getSharedPreferences("pending_edits", Context.MODE_PRIVATE)
 
+    // Sync cursor: the latest updatedAt timestamp we've processed.
+    // Used to filter listeners so only changed docs are read on reconnect.
+    // Persisted to SharedPrefs on every batch delivery (crash-safe).
+    private val cursorPrefs = context.getSharedPreferences("sync_cursor", Context.MODE_PRIVATE)
+
+    private fun loadCursor(): com.google.firebase.Timestamp? {
+        val seconds = cursorPrefs.getLong("cursorSeconds", -1L)
+        if (seconds < 0) return null
+        val nanos = cursorPrefs.getInt("cursorNanos", 0)
+        return com.google.firebase.Timestamp(seconds, nanos)
+    }
+
+    private fun saveCursor(ts: com.google.firebase.Timestamp) {
+        cursorPrefs.edit()
+            .putLong("cursorSeconds", ts.seconds)
+            .putInt("cursorNanos", ts.nanoseconds)
+            .apply()
+    }
+
     init {
         // Restore persisted enc hash cache (survives process death)
         try {
@@ -160,23 +179,37 @@ class FirestoreDocSync(
     }
 
     private fun attachCollectionListener(collection: String) {
-        val reg = FirestoreDocService.listenToCollection(
-            groupId, collection,
-            onDocumentChange = { changes -> handleCollectionChanges(collection, changes) },
-            onError = { e ->
-                syncLog("Listener error: $collection — ${e.message}")
-                // Auto-reconnect after a delay
-                deserializeScope.launch {
-                    kotlinx.coroutines.delay(5_000)
-                    if (isListening) {
-                        syncLog("Reconnecting listener: $collection")
-                        kotlinx.coroutines.withContext(Dispatchers.Main) {
-                            attachCollectionListener(collection)
-                        }
+        val cursor = loadCursor()
+        val errorHandler = { e: Exception ->
+            syncLog("Listener error: $collection — ${e.message}")
+            deserializeScope.launch {
+                kotlinx.coroutines.delay(5_000)
+                if (isListening) {
+                    syncLog("Reconnecting listener: $collection")
+                    kotlinx.coroutines.withContext(Dispatchers.Main) {
+                        attachCollectionListener(collection)
                     }
                 }
             }
-        )
+            Unit
+        }
+        val reg = if (cursor != null) {
+            // Filtered: only docs changed since our last sync (saves reads on reconnect)
+            syncLog("Attaching filtered listener: $collection (cursor=${cursor.seconds})")
+            FirestoreDocService.listenToCollectionSince(
+                groupId, collection, cursor,
+                onDocumentChange = { changes -> handleCollectionChanges(collection, changes) },
+                onError = errorHandler
+            )
+        } else {
+            // No cursor (reinstall / first sync): full collection read
+            syncLog("Attaching full listener: $collection (no cursor)")
+            FirestoreDocService.listenToCollection(
+                groupId, collection,
+                onDocumentChange = { changes -> handleCollectionChanges(collection, changes) },
+                onError = errorHandler
+            )
+        }
         listeners[collection] = reg
     }
 
@@ -491,6 +524,16 @@ class FirestoreDocSync(
             if (events.isNotEmpty() || skippedUnchanged > 0) {
                 persistEncCache()
             }
+            // Update sync cursor to the latest updatedAt in this batch (crash-safe)
+            val latestTimestamp = toProcess.mapNotNull { change ->
+                change.document.getTimestamp("updatedAt")
+            }.maxOrNull()
+            if (latestTimestamp != null) {
+                val currentCursor = loadCursor()
+                if (currentCursor == null || latestTimestamp > currentCursor) {
+                    saveCursor(latestTimestamp)
+                }
+            }
         }
     }
 
@@ -521,6 +564,14 @@ class FirestoreDocSync(
                 if (encComposite != null) lastSeenEnc[stateKey] = encComposite
                 lastKnownState[stateKey] = settings
                 syncLog("Received 1 changes in sharedSettings")
+                // Advance cursor from sharedSettings updatedAt
+                val settingsTimestamp = doc.getTimestamp("updatedAt")
+                if (settingsTimestamp != null) {
+                    val currentCursor = loadCursor()
+                    if (currentCursor == null || settingsTimestamp > currentCursor) {
+                        saveCursor(settingsTimestamp)
+                    }
+                }
                 kotlinx.coroutines.withContext(Dispatchers.Main) {
                     onBatchChanged?.invoke(listOf(
                         DataChangeEvent(

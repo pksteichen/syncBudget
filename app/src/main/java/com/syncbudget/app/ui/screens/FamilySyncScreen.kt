@@ -505,8 +505,8 @@ fun FamilySyncScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             // tick forces recomposition every 10s for live status updates
-                            val statusColor = remember(tick, device.lastSeen) { deviceSyncColor(device.lastSeen) }
-                            val relTime = remember(tick, device.lastSeen) { deviceRelativeTime(device.lastSeen) }
+                            val statusColor = remember(tick, device.online, device.lastSeen) { deviceSyncColor(device.online, device.lastSeen) }
+                            val relTime = remember(tick, device.online, device.lastSeen) { deviceRelativeTime(device.online, device.lastSeen) }
                             Canvas(modifier = Modifier.size(12.dp)) {
                                 drawCircle(color = statusColor)
                             }

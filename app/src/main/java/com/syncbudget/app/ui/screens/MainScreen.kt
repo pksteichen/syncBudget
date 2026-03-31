@@ -247,18 +247,20 @@ private fun contrastColor(bg: Color): Color {
     return if (luminance > 0.5f) Color.Black else Color.White
 }
 
-internal fun deviceSyncColor(lastSeen: Long): Color {
+internal fun deviceSyncColor(online: Boolean, lastSeen: Long): Color {
+    if (online) return Color(0xFF4CAF50)  // green: RTDB says connected
     if (lastSeen == 0L) return Color(0xFF9E9E9E)
     val age = System.currentTimeMillis() - lastSeen
     return when {
-        age < 2 * 60_000L -> Color(0xFF4CAF50)   // green: active within 2 min
+        age < 2 * 60_000L -> Color(0xFF4CAF50)   // green: just went offline
         age < 10 * 60_000L -> Color(0xFFFFEB3B)   // yellow: within 10 min
         age < 24 * 3_600_000L -> Color(0xFFFF9800) // orange: within 24 hours
         else -> Color(0xFFF44336)                   // red: older
     }
 }
 
-internal fun deviceRelativeTime(lastSeen: Long): String? {
+internal fun deviceRelativeTime(online: Boolean, lastSeen: Long): String? {
+    if (online) return "online now"
     if (lastSeen == 0L) return null
     val elapsed = (System.currentTimeMillis() - lastSeen) / 1000
     return when {
@@ -506,7 +508,7 @@ fun MainScreen(
                                         .take(4)
                                     otherDevices.forEach { device ->
                                         Canvas(modifier = Modifier.size(8.dp)) {
-                                            drawCircle(color = deviceSyncColor(device.lastSeen))
+                                            drawCircle(color = deviceSyncColor(device.online, device.lastSeen))
                                         }
                                     }
                                 }

@@ -14,10 +14,11 @@ import java.util.concurrent.TimeUnit
  * Background worker for sync housekeeping.
  *
  * With Firestore-native sync, the foreground FirestoreDocSync handles all
- * real-time data sync via snapshot listeners. This worker only needs to:
+ * real-time data sync via snapshot listeners. This worker handles:
  *   1. Ensure Firebase anonymous auth
  *   2. Handle FCM debug dump requests (upload diag files to Firestore)
- *   3. Update the widget periodically
+ *   3. Background receipt photo sync (upload pending, download missing)
+ *   4. Firestore lastSeen heartbeat (fallback for RTDB presence)
  */
 class SyncWorker(
     appContext: Context,
@@ -79,22 +80,37 @@ class SyncWorker(
                 fcmPrefs.edit().putBoolean("fcm_debug_requested", false).apply()
             }
 
-            // Update device metadata (lastSeen for online status + tombstone cleanup)
+            // Background Firestore lastSeen heartbeat (until RTDB prerequisite is completed)
             val groupId = syncPrefs.getString("groupId", null)
             val deviceId = SyncIdGenerator.getOrCreateDeviceId(applicationContext)
             if (groupId != null) {
                 try {
-                    val appPrefs = applicationContext.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-                    val photoCapable = appPrefs.getBoolean("isPaidUser", false) || appPrefs.getBoolean("isSubscriber", false)
-                    FirestoreService.updateDeviceMetadata(
-                        groupId, deviceId,
-                        syncVersion = 0L,
-                        appSyncVersion = 2,
-                        minSyncVersion = 2,
-                        photoCapable = photoCapable
-                    )
+                    FirestoreService.updateDeviceLastSeen(groupId, deviceId)
                 } catch (e: Exception) {
-                    android.util.Log.w("SyncWorker", "Metadata update failed: ${e.message}")
+                    android.util.Log.w("SyncWorker", "LastSeen update failed: ${e.message}")
+                }
+            }
+
+            // Background receipt photo sync (paid users only)
+            val keyBase64Bg = SecurePrefs.get(applicationContext).getString("encryptionKey", null)
+                ?: syncPrefs.getString("encryptionKey", null)
+            if (groupId != null && keyBase64Bg != null) {
+                try {
+                    val key = Base64.decode(keyBase64Bg, Base64.NO_WRAP)
+                    val appPrefs = applicationContext.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+                    val photoCapable = appPrefs.getBoolean("isPaidUser", false) ||
+                            appPrefs.getBoolean("isSubscriber", false)
+                    if (photoCapable) {
+                        val transactions = com.syncbudget.app.data.TransactionRepository.load(applicationContext)
+                        val deviceRecords = FirestoreService.getDevices(groupId)
+                        val receiptSync = ReceiptSyncManager(
+                            applicationContext, groupId, deviceId, key
+                        ) { msg -> android.util.Log.i("SyncWorker", "Receipt: $msg") }
+                        receiptSync.syncReceipts(transactions, deviceRecords)
+                        // Don't save transaction list changes — foreground ViewModel owns that state
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("SyncWorker", "Background receipt sync failed: ${e.message}")
                 }
             }
 

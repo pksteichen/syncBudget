@@ -570,35 +570,21 @@ class ReceiptSyncManager(
         allDevices: List<DeviceRecord>
     ) {
         val now = System.currentTimeMillis()
+
+        // Skip if we checked within the last 24 hours
+        val lastLocalPrune = prefs.getLong("lastStalePruneRun", 0L)
+        if (now - lastLocalPrune < 24 * 60 * 60 * 1000L) return
+
         val today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
-
         val cleanupState = ImageLedgerService.getCleanupState(groupId)
-        if (cleanupState.lastCleanupDate == today) return
 
-        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-        if (hour < 12) return
-
-        val selectedCleaner = selectBuilder("cleanup$today", photoCapableDeviceIds, allDevices)
-        if (selectedCleaner != deviceId) {
-            if (cleanupState.assignee != null &&
-                now - cleanupState.assignedAt > STALE_ASSIGNMENT_MS
-            ) {
-                val claimed = ImageLedgerService.claimCleanupDuty(
-                    groupId, deviceId, today,
-                    cleanupState.assignee, cleanupState.assignedAt
-                )
-                if (!claimed) return
-            } else {
-                return
-            }
-        } else {
-            val claimed = ImageLedgerService.claimCleanupDuty(
-                groupId, deviceId, today,
-                cleanupState.assignee, cleanupState.assignedAt
-            )
-            if (!claimed) return
+        if (cleanupState.lastCleanupDate == today) {
+            // Another device already cleaned up today
+            prefs.edit().putLong("lastStalePruneRun", now).apply()
+            return
         }
 
+        // Perform cleanup (idempotent — safe if two devices race)
         syncLog("Receipt sync: performing 14-day stale cleanup")
         val ledger = ImageLedgerService.getFullLedger(groupId)
         var pruned = 0
@@ -615,6 +601,14 @@ class ReceiptSyncManager(
             ImageLedgerService.bumpFlagClock(groupId)
             syncLog("Receipt sync: pruned $pruned stale ledger entries")
         }
+
+        // Mark done in Firestore (so other devices skip) and locally
+        try {
+            ImageLedgerService.markCleanupDone(groupId, today)
+        } catch (e: Exception) {
+            syncLog("Receipt sync: failed to mark cleanup done: ${e.message}")
+        }
+        prefs.edit().putLong("lastStalePruneRun", now).apply()
     }
 
     // ── Builder Selection (speed priority + hash fallback) ──────

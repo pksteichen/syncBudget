@@ -67,7 +67,6 @@ object FirestoreService {
     ) = withTimeout(OP_TIMEOUT_MS) {
         val data = mutableMapOf<String, Any>(
             "lastSyncVersion" to syncVersion,
-            "lastSeen" to System.currentTimeMillis(),
             "photoCapable" to photoCapable
         )
         if (appSyncVersion > 0) {
@@ -87,6 +86,13 @@ object FirestoreService {
             .collection("devices")
             .document(deviceId)
             .set(data, SetOptions.merge())
+            .await()
+    }
+
+    /** Background-only: write lastSeen to Firestore as a fallback heartbeat (RTDB handles foreground presence). */
+    suspend fun updateDeviceLastSeen(groupId: String, deviceId: String) = withTimeout(OP_TIMEOUT_MS) {
+        db.collection("groups").document(groupId).collection("devices").document(deviceId)
+            .set(mapOf("lastSeen" to System.currentTimeMillis()), SetOptions.merge())
             .await()
     }
 
@@ -124,6 +130,20 @@ object FirestoreService {
             .filter { doc -> doc.getBoolean("removed") != true }
             .maxOfOrNull { doc -> (doc.getLong("minSyncVersion") ?: 0L).toInt() }
             ?: 0
+    }
+
+    /** Read group document once for all startup health checks. */
+    data class GroupHealthStatus(
+        val isDissolved: Boolean,
+        val subscriptionExpiry: Long
+    )
+
+    suspend fun getGroupHealthStatus(groupId: String): GroupHealthStatus = withTimeout(OP_TIMEOUT_MS) {
+        val doc = db.collection("groups").document(groupId).get().await()
+        GroupHealthStatus(
+            isDissolved = doc.exists() && doc.getString("status") == "dissolved",
+            subscriptionExpiry = doc.getLong("subscriptionExpiry") ?: 0L
+        )
     }
 
     /** Check if the device has been explicitly removed by the admin. */

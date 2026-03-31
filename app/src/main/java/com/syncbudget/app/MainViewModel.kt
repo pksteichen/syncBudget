@@ -196,6 +196,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var pendingAdminClaim by mutableStateOf<AdminClaim?>(null)
     var syncRepairAlert by mutableStateOf(prefs.getBoolean("syncRepairAlert", false))
     var lastSyncTimeDisplay by mutableStateOf<String?>(null)
+    private var imageLedgerListener: com.google.firebase.firestore.ListenerRegistration? = null
 
     // Gate for sync-dependent code: true immediately for solo users,
     // set to true after initial Firestore listener snapshot for synced users.
@@ -582,6 +583,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         // Launch sync setup coroutine
         startSyncSetup()
+
+        // Set up RTDB presence (foreground only)
+        try {
+            val deviceName = GroupManager.getDeviceName(context)
+            com.syncbudget.app.data.sync.RealtimePresenceService.setupPresence(gid, localDeviceId, deviceName)
+            com.syncbudget.app.data.sync.RealtimePresenceService.listenToGroupPresence(gid) { presenceRecords ->
+                // Merge RTDB presence with existing syncDevices metadata (admin status)
+                val currentDevices = syncDevices
+                val updatedDevices = currentDevices.map { device ->
+                    val presence = presenceRecords.find { it.deviceId == device.deviceId }
+                    if (presence != null) {
+                        device.copy(
+                            online = presence.online,
+                            lastSeen = maxOf(device.lastSeen, presence.lastSeen),
+                            deviceName = if (presence.deviceName.isNotEmpty()) presence.deviceName else device.deviceName
+                        )
+                    } else device
+                }
+                // Add devices in RTDB not yet in Firestore device list
+                val existingIds = updatedDevices.map { it.deviceId }.toSet()
+                val newDevices = presenceRecords
+                    .filter { it.deviceId !in existingIds }
+                    .map { DeviceInfo(it.deviceId, it.deviceName, isAdmin = false, lastSeen = it.lastSeen, online = it.online) }
+                syncDevices = updatedDevices + newDevices
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("SyncLoop", "RTDB presence setup failed (may not be configured): ${e.message}")
+        }
     }
 
     /**
@@ -590,6 +619,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun disposeSyncListeners() {
         docSync?.dispose()
         SyncWriteHelper.dispose()
+        com.syncbudget.app.data.sync.RealtimePresenceService.cleanup()
+        imageLedgerListener?.remove()
+        imageLedgerListener = null
     }
 
     /**
@@ -731,6 +763,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
+            // Check for missing receipt photos from newly-arrived transactions
+            if ((isPaidUser || isSubscriber) && isSyncConfigured) {
+                val updatedTxns = result.transactions
+                if (updatedTxns != null) {
+                    val missingReceiptIds = com.syncbudget.app.data.sync.ReceiptManager.collectAllReceiptIds(updatedTxns)
+                        .filter { !com.syncbudget.app.data.sync.ReceiptManager.hasLocalFile(context, it) }
+                    if (missingReceiptIds.isNotEmpty()) {
+                        val currentGroupId = syncGroupId ?: return
+                        val currentKey = GroupManager.getEncryptionKey(context) ?: return
+                        viewModelScope.launch {
+                            for (receiptId in missingReceiptIds) {
+                                try {
+                                    val data = com.syncbudget.app.data.sync.ImageLedgerService.downloadFromCloud(currentGroupId, receiptId)
+                                    if (data != null) {
+                                        com.syncbudget.app.data.sync.ReceiptManager.decryptAndSave(context, receiptId, data, currentKey)
+                                        com.syncbudget.app.data.sync.ImageLedgerService.markPossession(currentGroupId, receiptId, localDeviceId)
+                                        android.util.Log.i("ReceiptSync", "Downloaded receipt $receiptId on transaction arrival")
+                                    }
+                                } catch (e: Exception) {
+                                    android.util.Log.w("ReceiptSync", "Failed to download receipt $receiptId: ${e.message}")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             com.syncbudget.app.widget.BudgetWidgetProvider.updateAllWidgets(context)
             lastSyncActivity = System.currentTimeMillis()
             if (result.conflictDetected) {
@@ -757,6 +816,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 syncDevices = GroupManager.getDevices(groupId)
             } catch (e: Exception) {
                 android.util.Log.w("SyncLoop", "Failed to fetch initial device list", e)
+            }
+
+            // Write device capabilities once on foreground launch
+            try {
+                FirestoreService.updateDeviceMetadata(
+                    groupId, localDeviceId,
+                    syncVersion = 0L,
+                    appSyncVersion = 2,
+                    minSyncVersion = 2,
+                    photoCapable = isPaidUser || isSubscriber
+                )
+            } catch (e: Exception) {
+                android.util.Log.w("SyncLoop", "Device metadata write failed: ${e.message}")
             }
 
             // Register FCM token for push notifications
@@ -874,279 +946,242 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
-            // Admin: clean up Firestore tombstones that all devices have seen.
+            // Admin: tombstone + orphan cleanup (skip if ran within last 30 days)
             if (isSyncAdmin) {
-                try {
-                    val deviceRecords = FirestoreService.getDevices(groupId)
-                    if (deviceRecords.size >= 2) {
-                        val oldestLastSeen = deviceRecords.minOf { it.lastSeen }
-                        val cutoff = oldestLastSeen - 24 * 60 * 60 * 1000L // 1-day buffer
-                        if (cutoff > 0) {
-                            var totalPurged = 0
-                            for (collection in EncryptedDocSerializer.ALL_COLLECTIONS) {
-                                val docs = FirestoreDocService.readAllDocs(groupId, collection)
-                                for (doc in docs) {
-                                    val deleted = doc.getBoolean("deleted") ?: false
-                                    if (!deleted) continue
-                                    val updatedAt = doc.getTimestamp("updatedAt")?.toDate()?.time ?: continue
-                                    if (updatedAt < cutoff) {
-                                        FirestoreDocService.deleteDoc(groupId, collection, doc.id)
-                                        totalPurged++
+                val lastCleanup = syncPrefs.getLong("lastAdminCleanup", 0L)
+                val cleanupInterval = 30L * 24 * 60 * 60 * 1000 // 30 days
+                if (System.currentTimeMillis() - lastCleanup > cleanupInterval) {
+                    // Clean up Firestore tombstones that all devices have seen.
+                    // Uses RTDB-maintained syncDevices for lastSeen (1-day buffer for safety).
+                    try {
+                        val devices = syncDevices
+                        if (devices.size >= 2) {
+                            val oldestLastSeen = devices.minOf { it.lastSeen }
+                            val cutoff = oldestLastSeen - 24 * 60 * 60 * 1000L // 1-day buffer
+                            if (cutoff > 0) {
+                                var totalPurged = 0
+                                for (collection in EncryptedDocSerializer.ALL_COLLECTIONS) {
+                                    val docs = FirestoreDocService.readAllDocs(groupId, collection)
+                                    for (doc in docs) {
+                                        val deleted = doc.getBoolean("deleted") ?: false
+                                        if (!deleted) continue
+                                        val updatedAt = doc.getTimestamp("updatedAt")?.toDate()?.time ?: continue
+                                        if (updatedAt < cutoff) {
+                                            FirestoreDocService.deleteDoc(groupId, collection, doc.id)
+                                            totalPurged++
+                                        }
+                                    }
+                                }
+                                if (totalPurged > 0) {
+                                    android.util.Log.i("SyncLoop", "Purged $totalPurged old tombstones from Firestore")
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.w("SyncLoop", "Tombstone cleanup failed: ${e.message}")
+                    }
+
+                    // Clean up orphaned Cloud Storage receipt files (no matching ledger entry)
+                    try {
+                        com.syncbudget.app.data.sync.ImageLedgerService.purgeOrphanedCloudFiles(groupId)
+                    } catch (e: Exception) {
+                        android.util.Log.w("SyncLoop", "Orphan cloud cleanup failed: ${e.message}")
+                    }
+
+                    syncPrefs.edit().putLong("lastAdminCleanup", System.currentTimeMillis()).apply()
+                }
+            }
+
+            // Image ledger listener — replaces receipt sync polling in health check
+            if (isPaidUser || isSubscriber) {
+                val ledgerRef = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                    .collection("groups").document(groupId).collection("imageLedger")
+                imageLedgerListener = ledgerRef.addSnapshotListener { snapshot, err ->
+                    if (err != null || snapshot == null) return@addSnapshotListener
+                    val currentGroupId = groupId
+                    val currentKey = key
+                    viewModelScope.launch {
+                        try {
+                            for (change in snapshot.documentChanges) {
+                                val doc = change.document
+                                val receiptId = doc.getString("receiptId") ?: doc.id
+                                val uploadedAt = doc.getLong("uploadedAt") ?: 0L
+                                @Suppress("UNCHECKED_CAST")
+                                val possessions = doc.get("possessions") as? Map<String, Any> ?: emptyMap()
+
+                                when {
+                                    // File uploaded but we don't have it — download
+                                    uploadedAt > 0L && !com.syncbudget.app.data.sync.ReceiptManager.hasLocalFile(context, receiptId) -> {
+                                        val data = com.syncbudget.app.data.sync.ImageLedgerService.downloadFromCloud(currentGroupId, receiptId)
+                                        if (data != null) {
+                                            com.syncbudget.app.data.sync.ReceiptManager.decryptAndSave(context, receiptId, data, currentKey)
+                                            com.syncbudget.app.data.sync.ImageLedgerService.markPossession(currentGroupId, receiptId, localDeviceId)
+                                        }
+                                    }
+                                    // File uploaded and we have it — mark possession + prune check
+                                    uploadedAt > 0L && com.syncbudget.app.data.sync.ReceiptManager.hasLocalFile(context, receiptId) -> {
+                                        if (!possessions.containsKey(localDeviceId)) {
+                                            com.syncbudget.app.data.sync.ImageLedgerService.markPossession(currentGroupId, receiptId, localDeviceId)
+                                        }
+                                        val photoCapableIds = syncDevices.filter { /* need device records */ true }.map { it.deviceId }.toSet()
+                                        // Note: prune check needs photo-capable device IDs from Firestore device records
+                                        // This is done when full receipt sync runs (background worker or manual sync)
+                                    }
+                                    // Recovery request — we have the file locally, re-upload it
+                                    uploadedAt == 0L && com.syncbudget.app.data.sync.ReceiptManager.hasLocalFile(context, receiptId) -> {
+                                        val encrypted = com.syncbudget.app.data.sync.ReceiptManager.encryptForUpload(context, receiptId, currentKey)
+                                        if (encrypted != null) {
+                                            val uploaded = com.syncbudget.app.data.sync.ImageLedgerService.uploadToCloud(currentGroupId, receiptId, encrypted)
+                                            if (uploaded) {
+                                                com.syncbudget.app.data.sync.ImageLedgerService.markReuploadComplete(currentGroupId, receiptId)
+                                                android.util.Log.i("ReceiptLedger", "Re-uploaded $receiptId for recovery")
+                                            }
+                                        }
                                     }
                                 }
                             }
-                            if (totalPurged > 0) {
-                                android.util.Log.i("SyncLoop", "Purged $totalPurged old tombstones from Firestore")
-                            }
+                        } catch (e: Exception) {
+                            android.util.Log.w("ReceiptLedger", "Ledger listener processing failed: ${e.message}")
                         }
                     }
-                } catch (e: Exception) {
-                    android.util.Log.w("SyncLoop", "Tombstone cleanup failed: ${e.message}")
-                }
-
-                // Clean up orphaned Cloud Storage receipt files (no matching ledger entry)
-                try {
-                    com.syncbudget.app.data.sync.ImageLedgerService.purgeOrphanedCloudFiles(groupId)
-                } catch (e: Exception) {
-                    android.util.Log.w("SyncLoop", "Orphan cloud cleanup failed: ${e.message}")
                 }
             }
 
             syncStatus = "synced"
             lastSyncActivity = System.currentTimeMillis()
-            var healthCheckCounter = 0
 
-            // Periodic loop: push dirty changes + health checks
-            while (true) {
-                delay(5_000) // 5 seconds between checks
-                healthCheckCounter++
+            // ── One-time startup health check ──
+            // Wait for listeners to deliver initial snapshots
+            delay(3_000)
 
-                // Clear stale dirty flag if set
+            try {
+                // Single group doc read for dissolution + subscription expiry
+                val groupHealth = FirestoreService.getGroupHealthStatus(groupId)
+
+                // Check group dissolution (from single group doc read)
+                if (groupHealth.isDissolved) {
+                    GroupManager.leaveGroup(context, localOnly = true)
+                    isSyncConfigured = false
+                    syncGroupId = null
+                    isSyncAdmin = false
+                    syncStatus = "off"
+                    syncDevices = emptyList()
+                    return@launch
+                }
+
+                // Check device removal (separate doc)
+                if (FirestoreService.isDeviceRemoved(groupId, localDeviceId)) {
+                    GroupManager.leaveGroup(context, localOnly = true)
+                    isSyncConfigured = false
+                    syncGroupId = null
+                    isSyncAdmin = false
+                    syncStatus = "off"
+                    syncDevices = emptyList()
+                    return@launch
+                }
+
+                // Subscription expiry check (from same group doc read)
+                val expiry = groupHealth.subscriptionExpiry
+                if (expiry > 0L) {
+                    val gracePeriodMs = 7L * 24 * 60 * 60 * 1000
+                    val elapsed = System.currentTimeMillis() - expiry
+                    if (elapsed > gracePeriodMs) {
+                        if (!groupHealth.isDissolved) {
+                            GroupManager.dissolveGroup(context, groupId)
+                        }
+                        isSyncConfigured = false
+                        syncGroupId = null
+                        isSyncAdmin = false
+                        syncStatus = "off"
+                        syncDevices = emptyList()
+                        return@launch
+                    } else if (elapsed > 0) {
+                        syncErrorMessage = strings.sync.subscriptionExpiredNotice
+                        SubscriptionReminderReceiver.scheduleNextReminder(context)
+                    } else {
+                        SubscriptionReminderReceiver.cancelReminder(context)
+                    }
+                }
+
+                // Admin: post subscription expiry
+                if (isSyncAdmin && isSubscriber) {
+                    FirestoreService.updateSubscriptionExpiry(groupId, subscriptionExpiry)
+                }
+
+                // Update group activity timestamp (keeps group alive for TTL)
+                FirestoreService.updateGroupActivity(groupId)
+
+                // Clear stale dirty flag
                 if (syncPrefs.getBoolean("syncDirty", false)) {
                     syncPrefs.edit().putBoolean("syncDirty", false).apply()
                 }
 
-                // Ensure listeners are alive — restart if they died
+                // Ensure listeners are alive
                 val currentDocSync = docSync
                 if (currentDocSync != null && !currentDocSync.isListening) {
-                    try {
-                        currentDocSync.startListeners()
-                        android.util.Log.i("SyncLoop", "Restarted dead listeners")
-                    } catch (e: Exception) {
-                        android.util.Log.w("SyncLoop", "Failed to restart listeners: ${e.message}")
-                    }
+                    currentDocSync.startListeners()
+                    android.util.Log.i("SyncLoop", "Restarted dead listeners on startup")
                 }
 
-                // Light health check every ~60 seconds (12 * 5s)
-                if (healthCheckCounter % 12 == 0) {
-                    try {
-                        syncDevices = GroupManager.getDevices(groupId)
-                        // Receipt photo sync (paid users only)
-                        if (isPaidUser || isSubscriber) {
-                            try {
-                                val deviceRecords = FirestoreService.getDevices(groupId)
-                                val receiptSync = com.syncbudget.app.data.sync.ReceiptSyncManager(
-                                    context, groupId, localDeviceId, key
-                                )
-                                val updatedTxns = receiptSync.syncReceipts(transactions.toList(), deviceRecords)
-                                if (updatedTxns != transactions.toList()) {
-                                    transactions.clear()
-                                    transactions.addAll(updatedTxns)
-                                    TransactionRepository.save(context, updatedTxns)
+                // Integrity check: compare local records against Firestore local cache (free, no network)
+                // Listeners have delivered initial snapshots by now, so cache = Firestore state
+                try {
+                    val collections = mapOf(
+                        EncryptedDocSerializer.COLLECTION_TRANSACTIONS to
+                            transactions.filter { !it.deleted }.map { it.id.toString() }.toSet(),
+                        EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES to
+                            recurringExpenses.filter { !it.deleted }.map { it.id.toString() }.toSet(),
+                        EncryptedDocSerializer.COLLECTION_INCOME_SOURCES to
+                            incomeSources.filter { !it.deleted }.map { it.id.toString() }.toSet(),
+                        EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS to
+                            savingsGoals.filter { !it.deleted }.map { it.id.toString() }.toSet(),
+                        EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES to
+                            amortizationEntries.filter { !it.deleted }.map { it.id.toString() }.toSet(),
+                        EncryptedDocSerializer.COLLECTION_CATEGORIES to
+                            categories.filter { !it.deleted }.map { it.id.toString() }.toSet(),
+                        EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER to
+                            periodLedger.map { it.id.toString() }.toSet()
+                    )
+
+                    for ((collection, localIds) in collections) {
+                        val cacheIds = FirestoreDocService.readDocIdsFromCache(groupId, collection)
+                        if (cacheIds.isEmpty()) continue // Cache not populated — skip
+
+                        // Local records missing from Firestore — push them
+                        val missingFromFirestore = localIds - cacheIds
+                        if (missingFromFirestore.isNotEmpty()) {
+                            android.util.Log.w("Integrity",
+                                "$collection: ${missingFromFirestore.size} local records missing from Firestore — pushing")
+                            for (id in missingFromFirestore) {
+                                when (collection) {
+                                    EncryptedDocSerializer.COLLECTION_TRANSACTIONS ->
+                                        transactions.find { it.id.toString() == id }?.let { SyncWriteHelper.pushTransaction(it) }
+                                    EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES ->
+                                        recurringExpenses.find { it.id.toString() == id }?.let { SyncWriteHelper.pushRecurringExpense(it) }
+                                    EncryptedDocSerializer.COLLECTION_INCOME_SOURCES ->
+                                        incomeSources.find { it.id.toString() == id }?.let { SyncWriteHelper.pushIncomeSource(it) }
+                                    EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS ->
+                                        savingsGoals.find { it.id.toString() == id }?.let { SyncWriteHelper.pushSavingsGoal(it) }
+                                    EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES ->
+                                        amortizationEntries.find { it.id.toString() == id }?.let { SyncWriteHelper.pushAmortizationEntry(it) }
+                                    EncryptedDocSerializer.COLLECTION_CATEGORIES ->
+                                        categories.find { it.id.toString() == id }?.let { SyncWriteHelper.pushCategory(it) }
+                                    EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER ->
+                                        periodLedger.find { it.id.toString() == id }?.let { SyncWriteHelper.pushPeriodLedgerEntry(it) }
                                 }
-                            } catch (e: Exception) {
-                                android.util.Log.w("SyncLoop", "Receipt sync failed: ${e.message}")
                             }
                         }
-                        isSyncAdmin = GroupManager.isAdmin(context)
-                        // Update device metadata
-                        val receiptPrefs = context.getSharedPreferences("receipt_sync_prefs", Context.MODE_PRIVATE)
-                        val uploadSpeed = receiptPrefs.getLong("lastUploadSpeedBps", 0L)
-                        val speedMeasuredAt = receiptPrefs.getLong("lastSpeedMeasuredAt", 0L)
-                        FirestoreService.updateDeviceMetadata(
-                            groupId, localDeviceId,
-                            syncVersion = 0L,
-                            appSyncVersion = 2,
-                            minSyncVersion = 2,
-                            photoCapable = isPaidUser || isSubscriber,
-                            uploadSpeedBps = uploadSpeed,
-                            uploadSpeedMeasuredAt = speedMeasuredAt
-                        )
-                    } catch (e: Exception) {
-                        android.util.Log.w("SyncLoop", "Light health check failed", e)
                     }
+                    android.util.Log.i("Integrity", "Cache-based integrity check complete")
+                } catch (e: Exception) {
+                    android.util.Log.w("Integrity", "Cache integrity check failed: ${e.message}")
                 }
 
-                // Heavy health checks every ~5 minutes (60 * 5s = 300s)
-                if (healthCheckCounter % 60 == 0) {
-                    try {
-                        // Check group dissolution
-                        if (FirestoreService.isGroupDissolved(groupId)) {
-                            GroupManager.leaveGroup(context, localOnly = true)
-                            isSyncConfigured = false
-                            syncGroupId = null
-                            isSyncAdmin = false
-                            syncStatus = "off"
-                            syncDevices = emptyList()
-                            return@launch
-                        }
-                        // Check device removal
-                        if (FirestoreService.isDeviceRemoved(groupId, localDeviceId)) {
-                            GroupManager.leaveGroup(context, localOnly = true)
-                            isSyncConfigured = false
-                            syncGroupId = null
-                            isSyncAdmin = false
-                            syncStatus = "off"
-                            syncDevices = emptyList()
-                            return@launch
-                        }
-                        // Subscription expiry check
-                        val expiry = FirestoreService.getSubscriptionExpiry(groupId)
-                        if (expiry > 0L) {
-                            val gracePeriodMs = 7L * 24 * 60 * 60 * 1000
-                            val elapsed = System.currentTimeMillis() - expiry
-                            if (elapsed > gracePeriodMs) {
-                                if (!FirestoreService.isGroupDissolved(groupId)) {
-                                    GroupManager.dissolveGroup(context, groupId)
-                                }
-                                isSyncConfigured = false
-                                syncGroupId = null
-                                isSyncAdmin = false
-                                syncStatus = "off"
-                                syncDevices = emptyList()
-                                return@launch
-                            } else if (elapsed > 0) {
-                                syncErrorMessage = strings.sync.subscriptionExpiredNotice
-                                SubscriptionReminderReceiver.scheduleNextReminder(context)
-                            } else {
-                                SubscriptionReminderReceiver.cancelReminder(context)
-                            }
-                        }
-                        // Admin: post subscription expiry
-                        if (isSyncAdmin) {
-                            if (isSubscriber) {
-                                FirestoreService.updateSubscriptionExpiry(groupId, subscriptionExpiry)
-                            }
-                        }
-                        // Update group activity timestamp
-                        FirestoreService.updateGroupActivity(groupId)
-
-                        // ── Integrity check: compare local counts against Firestore ──
-                        val localCounts = mapOf(
-                            EncryptedDocSerializer.COLLECTION_TRANSACTIONS to transactions.count { !it.deleted },
-                            EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES to recurringExpenses.count { !it.deleted },
-                            EncryptedDocSerializer.COLLECTION_INCOME_SOURCES to incomeSources.count { !it.deleted },
-                            EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS to savingsGoals.count { !it.deleted },
-                            EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES to amortizationEntries.count { !it.deleted },
-                            EncryptedDocSerializer.COLLECTION_CATEGORIES to categories.count { !it.deleted },
-                            EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER to periodLedger.size
-                        )
-
-                        // IDs of categories remapped by tag dedup
-                        val remapJson = syncPrefs.getString("catIdRemap", null)
-                        val remappedCatIds = if (remapJson != null) {
-                            try {
-                                val json = org.json.JSONObject(remapJson)
-                                json.keys().asSequence().map { it }.toSet()
-                            } catch (_: Exception) { emptySet() }
-                        } else emptySet<String>()
-
-                        val divergent = mutableListOf<String>()
-                        for ((collection, localCount) in localCounts) {
-                            val firestoreDocs = FirestoreDocService.readAllDocs(groupId, collection)
-                            val firestoreCount = firestoreDocs.count { doc ->
-                                val isDeleted = doc.getBoolean("deleted") == true
-                                val isRemapped = collection == EncryptedDocSerializer.COLLECTION_CATEGORIES &&
-                                    doc.id in remappedCatIds
-                                !isDeleted && !isRemapped
-                            }
-                            if (localCount != firestoreCount) {
-                                if (localCount > firestoreCount) {
-                                    // Local has records Firestore doesn't — push missing ones
-                                    android.util.Log.w("Integrity",
-                                        "$collection: local=$localCount firestore=$firestoreCount — pushing missing records")
-                                    val firestoreIds = firestoreDocs.map { it.id }.toSet()
-                                    val missingRecords = when (collection) {
-                                        EncryptedDocSerializer.COLLECTION_TRANSACTIONS ->
-                                            transactions.filter { !it.deleted && it.id.toString() !in firestoreIds }
-                                        EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES ->
-                                            recurringExpenses.filter { !it.deleted && it.id.toString() !in firestoreIds }
-                                        EncryptedDocSerializer.COLLECTION_INCOME_SOURCES ->
-                                            incomeSources.filter { !it.deleted && it.id.toString() !in firestoreIds }
-                                        EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS ->
-                                            savingsGoals.filter { !it.deleted && it.id.toString() !in firestoreIds }
-                                        EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES ->
-                                            amortizationEntries.filter { !it.deleted && it.id.toString() !in firestoreIds }
-                                        EncryptedDocSerializer.COLLECTION_CATEGORIES ->
-                                            categories.filter { !it.deleted && it.id.toString() !in firestoreIds }
-                                        EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER ->
-                                            periodLedger.filter { it.id.toString() !in firestoreIds }
-                                        else -> emptyList()
-                                    }
-                                    for (record in missingRecords) {
-                                        when (record) {
-                                            is Transaction -> SyncWriteHelper.pushTransaction(record)
-                                            is RecurringExpense -> SyncWriteHelper.pushRecurringExpense(record)
-                                            is IncomeSource -> SyncWriteHelper.pushIncomeSource(record)
-                                            is SavingsGoal -> SyncWriteHelper.pushSavingsGoal(record)
-                                            is AmortizationEntry -> SyncWriteHelper.pushAmortizationEntry(record)
-                                            is Category -> SyncWriteHelper.pushCategory(record)
-                                            is PeriodLedgerEntry -> SyncWriteHelper.pushPeriodLedgerEntry(record)
-                                        }
-                                    }
-                                    android.util.Log.i("Integrity", "Pushed ${missingRecords.size} missing records for $collection")
-                                } else {
-                                    // Firestore has records we don't — reattach to receive them
-                                    android.util.Log.w("Integrity",
-                                        "$collection: local=$localCount firestore=$firestoreCount — reattaching")
-                                    docSync?.reattachListener(collection)
-                                }
-                                divergent.add(collection)
-                            }
-                        }
-                        if (divergent.isEmpty()) {
-                            android.util.Log.i("Integrity", "All collections match Firestore")
-                        } else {
-                            // Recompute cash after reattach settles
-                            recomputeCash()
-                        }
-
-                        // Log cash for cross-device comparison in diagnostic dumps
-                        android.util.Log.i("Integrity", "Cash: $availableCash")
-
-                        // Update device metadata (lastSeen + cash for diagnostic comparison)
-                        val cashJson = org.json.JSONObject().apply {
-                            put("cash", availableCash)
-                        }.toString()
-                        FirestoreService.updateDeviceMetadata(
-                            groupId, localDeviceId,
-                            syncVersion = 0L,
-                            fingerprintJson = cashJson,
-                            appSyncVersion = 2,
-                            minSyncVersion = 2,
-                            photoCapable = isPaidUser || isSubscriber
-                        )
-
-                        // Diagnostic: compare cash with other devices (log only, no repair)
-                        try {
-                            val allDevices = FirestoreService.getDevices(groupId)
-                            for (device in allDevices) {
-                                if (device.deviceId == localDeviceId) continue
-                                val fp = device.fingerprintData ?: continue
-                                val remoteCash = org.json.JSONObject(fp).optDouble("cash", Double.NaN)
-                                if (!remoteCash.isNaN()) {
-                                    val diff = kotlin.math.abs(availableCash - remoteCash)
-                                    if (diff > 0.01) {
-                                        android.util.Log.w("Integrity",
-                                            "Cash differs from ${device.deviceId.take(8)}: local=$availableCash remote=$remoteCash (diff=${"%.2f".format(diff)})")
-                                    }
-                                }
-                            }
-                        } catch (_: Exception) {}
-                    } catch (e: Exception) {
-                        android.util.Log.w("SyncLoop", "Health check failed", e)
-                    }
-                }
+                // Recompute cash from local data
+                recomputeCash()
+                android.util.Log.i("Integrity", "Startup cash verification: $availableCash")
+            } catch (e: Exception) {
+                android.util.Log.w("SyncLoop", "Startup health check failed", e)
             }
         }
     }
@@ -1747,5 +1782,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         docSync?.dispose()
         SyncWriteHelper.dispose()
+        com.syncbudget.app.data.sync.RealtimePresenceService.cleanup()
+        imageLedgerListener?.remove()
     }
 }

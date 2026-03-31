@@ -17,7 +17,8 @@ data class DeviceInfo(
     val deviceId: String,
     val deviceName: String,
     val isAdmin: Boolean,
-    val lastSeen: Long
+    val lastSeen: Long,
+    val online: Boolean = false
 )
 
 object GroupManager {

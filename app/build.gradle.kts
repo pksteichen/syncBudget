@@ -79,6 +79,7 @@ dependencies {
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-storage")
     implementation("com.google.firebase:firebase-messaging")
+    implementation("com.google.firebase:firebase-database")
 
     // WorkManager
     implementation("androidx.work:work-runtime-ktx:2.9.1")

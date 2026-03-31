@@ -121,26 +121,7 @@ class PeriodRefreshWorker(
                     pushSyncSideEffects(mergeResult, groupId, encryptionKey, deviceId)
                 }
 
-                // Update device metadata (including cash for cross-device comparison)
-                try {
-                    val currentCash = appPrefs.getString("availableCash", "0.0")
-                        ?.toDoubleOrNull() ?: 0.0
-                    val cashJson = JSONObject().apply {
-                        put("cash", currentCash)
-                    }.toString()
-                    val photoCapable = appPrefs.getBoolean("isPaidUser", false) ||
-                            appPrefs.getBoolean("isSubscriber", false)
-                    FirestoreService.updateDeviceMetadata(
-                        groupId, deviceId,
-                        syncVersion = 0L,
-                        fingerprintJson = cashJson,
-                        appSyncVersion = 2,
-                        minSyncVersion = 2,
-                        photoCapable = photoCapable
-                    )
-                } catch (e: Exception) {
-                    Log.w(TAG, "Metadata update failed: ${e.message}")
-                }
+                // Device presence handled by RTDB; no Firestore lastSeen needed
             }
 
             // ── Step 5: Update widget ──
