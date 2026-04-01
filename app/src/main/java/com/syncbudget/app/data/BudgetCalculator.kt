@@ -369,7 +369,7 @@ object BudgetCalculator {
         return roundCents(extra)
     }
 
-    /** Compute the full budgetAmount from synced data. Reusable in SyncWorker. */
+    /** Compute the full budgetAmount from synced data. Reusable in BackgroundSyncWorker. */
     fun computeFullBudgetAmount(
         incomeSources: List<IncomeSource>,
         recurringExpenses: List<RecurringExpense>,

@@ -504,9 +504,29 @@ fun FamilySyncScreen(
                             modifier = Modifier.padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // tick forces recomposition every 10s for live status updates
-                            val statusColor = remember(tick, device.online, device.lastSeen) { deviceSyncColor(device.online, device.lastSeen) }
-                            val relTime = remember(tick, device.online, device.lastSeen) { deviceRelativeTime(device.online, device.lastSeen) }
+                            // For own device: use syncStatus (reflects network + listener state)
+                            // For other devices: use RTDB presence
+                            val isOwnDevice = device.deviceId == localDeviceId
+                            val statusColor = if (isOwnDevice) {
+                                when (syncStatus) {
+                                    "synced", "syncing" -> Color(0xFF4CAF50) // green
+                                    "error" -> Color(0xFFFFEB3B)             // yellow
+                                    "offline" -> Color(0xFFF44336)           // red
+                                    else -> Color(0xFF9E9E9E)
+                                }
+                            } else {
+                                remember(tick, device.online, device.lastSeen) { deviceSyncColor(device.online, device.lastSeen) }
+                            }
+                            val relTime = if (isOwnDevice) {
+                                when (syncStatus) {
+                                    "synced", "syncing" -> "online now"
+                                    "error" -> "listeners down"
+                                    "offline" -> "no internet"
+                                    else -> null
+                                }
+                            } else {
+                                remember(tick, device.online, device.lastSeen) { deviceRelativeTime(device.online, device.lastSeen) }
+                            }
                             Canvas(modifier = Modifier.size(12.dp)) {
                                 drawCircle(color = statusColor)
                             }

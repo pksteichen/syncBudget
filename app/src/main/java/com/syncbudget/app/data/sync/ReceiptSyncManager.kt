@@ -13,6 +13,8 @@ import java.nio.ByteOrder
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 /**
  * Coordinates receipt photo sync: upload-first flow, recovery with snapshot
@@ -305,37 +307,37 @@ class ReceiptSyncManager(
             }
         }
 
-        // Batch recovery with 50/cycle cap
-        var count = 0
-        for (receiptId in missingIds) {
-            if (count >= BATCH_RECOVERY_CAP) {
-                syncLog("Receipt recovery: hit $BATCH_RECOVERY_CAP/cycle cap, ${missingIds.size - count} remaining")
-                break
-            }
+        // Batch recovery with 50/cycle cap, 5 concurrent downloads
+        val capped = missingIds.take(BATCH_RECOVERY_CAP)
+        if (capped.size < missingIds.size) {
+            syncLog("Receipt recovery: capped at $BATCH_RECOVERY_CAP, ${missingIds.size - capped.size} remaining")
+        }
 
-            val cloudData = ImageLedgerService.downloadFromCloud(groupId, receiptId)
-            if (cloudData != null) {
-                val saved = ReceiptManager.decryptAndSave(context, receiptId, cloudData, encryptionKey)
-                if (saved) {
-                    ImageLedgerService.markPossession(groupId, receiptId, deviceId)
-                    ImageLedgerService.pruneCheckTransaction(groupId, receiptId, photoCapableDeviceIds)
-                    syncLog("Receipt $receiptId: recovered from cloud")
-                    count++
-                    continue
+        capped.chunked(5).forEach { chunk ->
+            coroutineScope {
+                chunk.map { receiptId ->
+                    async {
+                        val cloudData = ImageLedgerService.downloadFromCloud(groupId, receiptId)
+                        if (cloudData != null) {
+                            val saved = ReceiptManager.decryptAndSave(context, receiptId, cloudData, encryptionKey)
+                            if (saved) {
+                                ImageLedgerService.markPossession(groupId, receiptId, deviceId)
+                                ImageLedgerService.pruneCheckTransaction(groupId, receiptId, photoCapableDeviceIds)
+                                syncLog("Receipt $receiptId: recovered from cloud")
+                                return@async
+                            }
+                        }
+
+                        val existing = ImageLedgerService.getLedgerEntry(groupId, receiptId)
+                        if (existing != null) return@async
+
+                        val created = ImageLedgerService.createRecoveryRequest(groupId, receiptId, deviceId)
+                        if (created) {
+                            syncLog("Receipt $receiptId: created recovery request")
+                        }
+                    }
                 }
             }
-
-            val existing = ImageLedgerService.getLedgerEntry(groupId, receiptId)
-            if (existing != null) {
-                count++
-                continue
-            }
-
-            val created = ImageLedgerService.createRecoveryRequest(groupId, receiptId, deviceId)
-            if (created) {
-                syncLog("Receipt $receiptId: created recovery request")
-            }
-            count++
         }
 
         return transactions

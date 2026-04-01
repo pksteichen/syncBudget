@@ -32,12 +32,12 @@ class FcmService : FirebaseMessagingService() {
                     val fcmPrefs = getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
                     // Mark that a debug request is pending so the next sync uploads files
                     fcmPrefs.edit().putBoolean("fcm_debug_requested", true).apply()
-                    // Trigger an immediate one-shot sync via WorkManager
-                    val request = androidx.work.OneTimeWorkRequestBuilder<SyncWorker>()
+                    // Trigger an immediate one-shot debug dump upload
+                    val request = androidx.work.OneTimeWorkRequestBuilder<DebugDumpWorker>()
                         .build()
                     androidx.work.WorkManager.getInstance(applicationContext)
                         .enqueue(request)
-                    Log.d(TAG, "Triggered one-shot sync for debug upload")
+                    Log.d(TAG, "Triggered one-shot DebugDumpWorker")
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to trigger debug sync: ${e.message}")
                 }

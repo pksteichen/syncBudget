@@ -12,7 +12,7 @@ import java.time.LocalDateTime
 /**
  * Generates a diagnostic state dump from disk data (SharedPrefs + JSON repos).
  *
- * Usable from both foreground (MainActivity) and background (SyncWorker).
+ * Usable from both foreground (MainViewModel) and background (BackgroundSyncWorker, DebugDumpWorker).
  * The foreground version in MainActivity can still override with live Compose
  * state if desired, but this provides a complete dump from persisted data.
  */

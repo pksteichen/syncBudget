@@ -10,14 +10,11 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.syncbudget.app.data.*
 import com.syncbudget.app.widget.BudgetWidgetProvider
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import java.time.LocalDate
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 /**
@@ -122,10 +119,37 @@ class BackgroundSyncWorker(
                     pushSyncSideEffects(mergeResult, groupId, encryptionKey, deviceId)
                 }
 
-                // Device presence handled by RTDB; no Firestore lastSeen needed
             }
 
-            // ── Step 5: Update widget ──
+            // ── Step 5: RTDB lastSeen ping (device roster freshness) ──
+            if (groupId != null && deviceId != null) {
+                try {
+                    val db = com.google.firebase.database.FirebaseDatabase.getInstance()
+                    db.reference.child("groups/$groupId/presence/$deviceId/lastSeen")
+                        .setValue(com.google.firebase.database.ServerValue.TIMESTAMP)
+                } catch (_: Exception) {}
+            }
+
+            // ── Step 6: Background receipt photo sync (paid users only) ──
+            if (groupId != null && encryptionKey != null && deviceId != null) {
+                try {
+                    val appPrefsReceipt = applicationContext.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+                    val photoCapable = appPrefsReceipt.getBoolean("isPaidUser", false) ||
+                            appPrefsReceipt.getBoolean("isSubscriber", false)
+                    if (photoCapable) {
+                        val txns = TransactionRepository.load(applicationContext)
+                        val devices = RealtimePresenceService.getDevices(groupId)
+                        val receiptSync = ReceiptSyncManager(
+                            applicationContext, groupId, deviceId, encryptionKey
+                        ) { msg -> Log.i(TAG, "Receipt: $msg") }
+                        receiptSync.syncReceipts(txns, devices)
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Background receipt sync failed: ${e.message}")
+                }
+            }
+
+            // ── Step 7: Update widget ──
             BudgetWidgetProvider.updateAllWidgets(applicationContext)
 
             return Result.success()
@@ -145,32 +169,19 @@ class BackgroundSyncWorker(
     ): SyncMergeProcessor.MergeResult? {
         val docSync = FirestoreDocSync(applicationContext, groupId, deviceId, encryptionKey)
 
-        // Track which collections have delivered their initial snapshot
-        val receivedCollections = ConcurrentHashMap.newKeySet<String>()
-        val allReceived = CompletableDeferred<Unit>()
         val accumulatedEvents = java.util.Collections.synchronizedList(mutableListOf<DataChangeEvent>())
 
-        // 7 standard collections + 1 shared settings = 8 total
-        val expectedCount = EncryptedDocSerializer.ALL_COLLECTIONS.size + 1
-
         docSync.onBatchChanged = { events ->
-            for (event in events) {
-                accumulatedEvents.add(event)
-                receivedCollections.add(event.collection)
-            }
-            if (receivedCollections.size >= expectedCount && !allReceived.isCompleted) {
-                allReceived.complete(Unit)
-            }
+            accumulatedEvents.addAll(events)
         }
 
         try {
             docSync.startListeners()
 
-            // Wait for collections to deliver. With filtered listeners, unchanged
-            // collections won't fire onBatchChanged, so this may time out when
-            // nothing changed — that's fine (line 178 handles empty results).
-            // Keep 60s for large imports (e.g. 200 bank transactions).
-            withTimeoutOrNull(60_000) { allReceived.await() }
+            // Wait for all 8 collections to deliver their initial snapshot.
+            // awaitInitialSync tracks via markCollectionDelivered() which fires
+            // even for empty filtered results — no more 60s timeout waste.
+            docSync.awaitInitialSync(60_000)
 
             docSync.stopListeners()
         } catch (e: Exception) {

@@ -23,9 +23,8 @@ developer. Always verify against the live console after major Firebase changes.
   [✓] Realtime Database enabled (presence system)
   [✓] RTDB security rules deployed
   [✓] Automatic Firestore indexes enabled
-  [✓] Firestore security rules published
   [✓] Firestore security rules published (all ops require request.auth != null)
-  [ ] Cloud Function for TTL cascade cleanup — NOT deployed (see Section 7)
+  [✓] Cloud Function cleanupGroupData deployed (cascade cleanup on TTL delete)
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -264,6 +263,32 @@ service firebase.storage {
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  5b. FIREBASE APP CHECK (enabled March 31, 2026)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Provider: Play Integrity
+  Token TTL: 1 hour (default)
+  Integrity level: MEETS_BASIC_INTEGRITY (development)
+
+  ENFORCEMENT STATUS:
+    Firestore        : ENFORCED
+    Realtime Database : ENFORCED
+    Cloud Storage    : ENFORCED
+    Authentication   : NOT enforced (must remain unenforced — anonymous auth
+                       needs to work before App Check can issue a token)
+
+  APP CODE: MainViewModel.init installs PlayIntegrityAppCheckProviderFactory
+  before any Firebase service calls.
+
+  DEBUG SHA-256: 7B:81:0C:42:2F:06:A4:05:82:44:2E:EF:50:45:63:FD:DD:40:A5:1C:31:D0:A1:22:1C:B1:4C:BB:EB:44:C5:41
+
+  PRODUCTION HARDENING (before Play Store launch):
+    - Set integrity level to MEETS_DEVICE_INTEGRITY (blocks emulators)
+    - Enable PLAY_RECOGNIZED (blocks sideloaded fakes)
+    - Register release signing key SHA-256 in Firebase Console
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   6. FIRESTORE DATA STRUCTURE REFERENCE (v2.4)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -352,10 +377,11 @@ service firebase.storage {
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  7. CLOUD FUNCTIONS (NOT deployed — recommended)
+  7. CLOUD FUNCTIONS (deployed March 31, 2026)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  Blaze plan is active. These functions can be deployed when ready.
+  Deployed via: firebase deploy --only functions (from Termux)
+  Runtime: Node.js 20 (1st Gen), us-central1
 
   ── Function 1: Cascade cleanup on group TTL deletion ────────────────────────
   Trigger: Firestore document delete on groups/{groupId}
@@ -487,8 +513,9 @@ service firebase.storage {
   [✓] App-side cleanup: tombstones (30d), orphans (30d), receipts (24h)
   [✓] Firestore security rules verified (March 31, 2026)
   [✓] Firebase Storage rules verified (March 31, 2026)
-  [ ] Cloud Function for TTL cascade cleanup — NOT deployed (see Section 7)
-  [ ] Firebase App Check — NOT configured (recommended before public launch)
+  [✓] Cloud Function cleanupGroupData deployed (March 31, 2026)
+  [✓] Firebase App Check enabled with Play Integrity (March 31, 2026)
+  [✓] App Check enforced on Firestore, RTDB, Cloud Storage (not Auth)
 
 
 ================================================================================

@@ -160,7 +160,7 @@ object GroupManager {
             .apply()
         // Also clear from encrypted prefs
         try { SecurePrefs.get(context).edit().remove("encryptionKey").commit() } catch (_: Exception) {}
-        SyncWorker.cancel(context)
+        BackgroundSyncWorker.cancel(context)
     }
 
     suspend fun dissolveGroup(context: Context, groupId: String, onProgress: ((String) -> Unit)? = null) {

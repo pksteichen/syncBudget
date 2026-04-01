@@ -252,10 +252,9 @@ internal fun deviceSyncColor(online: Boolean, lastSeen: Long): Color {
     if (lastSeen == 0L) return Color(0xFF9E9E9E)
     val age = System.currentTimeMillis() - lastSeen
     return when {
-        age < 2 * 60_000L -> Color(0xFF4CAF50)   // green: just went offline
-        age < 10 * 60_000L -> Color(0xFFFFEB3B)   // yellow: within 10 min
-        age < 24 * 3_600_000L -> Color(0xFFFF9800) // orange: within 24 hours
-        else -> Color(0xFFF44336)                   // red: older
+        age < 1 * 3_600_000L -> Color(0xFF1565C0)  // dark blue: last seen < 1 hour
+        age < 2 * 3_600_000L -> Color(0xFFFFEB3B)   // yellow: 1-2 hours
+        else -> Color(0xFFF44336)                     // red: > 2 hours
     }
 }
 
@@ -466,10 +465,10 @@ fun MainScreen(
                             @OptIn(ExperimentalFoundationApi::class)
                             if (syncStatus != "off") {
                                 val baseSyncColor = when (syncStatus) {
-                                    "synced" -> Color(0xFF4CAF50)
-                                    "syncing" -> Color(0xFFFFEB3B)
-                                    "stale" -> Color(0xFFFF9800)
-                                    "error" -> Color(0xFFF44336)
+                                    "synced" -> Color(0xFF4CAF50)     // green: online, listeners attached
+                                    "syncing" -> Color(0xFF4CAF50)    // green: actively syncing
+                                    "error" -> Color(0xFFFFEB3B)      // yellow: online but listeners down
+                                    "offline" -> Color(0xFFF44336)    // red: no internet
                                     else -> Color(0xFF9E9E9E)
                                 }
                                 val syncColor = if (syncRepairAlert) {

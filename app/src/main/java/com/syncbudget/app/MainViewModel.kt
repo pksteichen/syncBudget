@@ -59,7 +59,6 @@ import com.syncbudget.app.data.sync.PeriodLedgerRepository
 import com.syncbudget.app.data.sync.SyncIdGenerator
 import com.syncbudget.app.data.sync.SyncMergeProcessor
 import com.syncbudget.app.data.sync.SyncWriteHelper
-import com.syncbudget.app.data.sync.SyncWorker
 import com.syncbudget.app.data.sync.active
 import com.syncbudget.app.ui.screens.QuickStartStep
 import com.syncbudget.app.ui.strings.AppStrings
@@ -188,6 +187,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var syncGroupId by mutableStateOf(GroupManager.getGroupId(context))
     var isSyncAdmin by mutableStateOf(GroupManager.isAdmin(context))
     var syncStatus by mutableStateOf(if (GroupManager.isConfigured(context)) "synced" else "off")
+    var isNetworkAvailable by mutableStateOf(true)
     var syncDevices by mutableStateOf<List<DeviceInfo>>(emptyList())
     var generatedPairingCode by mutableStateOf<String?>(null)
     val localDeviceId: String = SyncIdGenerator.getOrCreateDeviceId(context)
@@ -786,16 +786,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         val currentGroupId = syncGroupId ?: return
                         val currentKey = GroupManager.getEncryptionKey(context) ?: return
                         viewModelScope.launch {
-                            for (receiptId in missingReceiptIds) {
-                                try {
-                                    val data = com.syncbudget.app.data.sync.ImageLedgerService.downloadFromCloud(currentGroupId, receiptId)
-                                    if (data != null) {
-                                        com.syncbudget.app.data.sync.ReceiptManager.decryptAndSave(context, receiptId, data, currentKey)
-                                        com.syncbudget.app.data.sync.ImageLedgerService.markPossession(currentGroupId, receiptId, localDeviceId)
-                                        android.util.Log.i("ReceiptSync", "Downloaded receipt $receiptId on transaction arrival")
+                            // Download up to 5 receipts in parallel
+                            missingReceiptIds.chunked(5).forEach { chunk ->
+                                kotlinx.coroutines.coroutineScope {
+                                    for (receiptId in chunk) {
+                                        launch {
+                                            try {
+                                                val data = com.syncbudget.app.data.sync.ImageLedgerService.downloadFromCloud(currentGroupId, receiptId)
+                                                if (data != null) {
+                                                    com.syncbudget.app.data.sync.ReceiptManager.decryptAndSave(context, receiptId, data, currentKey)
+                                                    com.syncbudget.app.data.sync.ImageLedgerService.markPossession(currentGroupId, receiptId, localDeviceId)
+                                                    android.util.Log.i("ReceiptSync", "Downloaded receipt $receiptId on transaction arrival")
+                                                }
+                                            } catch (e: Exception) {
+                                                android.util.Log.w("ReceiptSync", "Failed to download receipt $receiptId: ${e.message}")
+                                            }
+                                        }
                                     }
-                                } catch (e: Exception) {
-                                    android.util.Log.w("ReceiptSync", "Failed to download receipt $receiptId: ${e.message}")
                                 }
                             }
                         }
@@ -1334,6 +1341,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             android.util.Log.w("AppCheck", "App Check init failed: ${e.message}")
         }
 
+        // ── Network connectivity monitor ──
+        try {
+            val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+            // Set initial state
+            val activeNetwork = connectivityManager.activeNetwork
+            val capabilities = activeNetwork?.let { connectivityManager.getNetworkCapabilities(it) }
+            isNetworkAvailable = capabilities?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+
+            connectivityManager.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: android.net.Network) {
+                    isNetworkAvailable = true
+                    // Restore sync status if it was showing offline
+                    if (isSyncConfigured && syncStatus == "offline") {
+                        syncStatus = if (docSync?.isListening == true) "synced" else "error"
+                    }
+                }
+                override fun onLost(network: android.net.Network) {
+                    isNetworkAvailable = false
+                    if (isSyncConfigured) syncStatus = "offline"
+                }
+            })
+        } catch (e: Exception) {
+            android.util.Log.w("Network", "Connectivity monitor failed: ${e.message}")
+        }
+
         // ── Load data from repositories ──
         transactions.addAll(TransactionRepository.load(context))
 
@@ -1411,7 +1443,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         // ── Schedule background sync when configured ──
         if (isSyncConfigured) {
-            SyncWorker.schedule(context)
             com.syncbudget.app.data.sync.BackgroundSyncWorker.schedule(context)
         }
 

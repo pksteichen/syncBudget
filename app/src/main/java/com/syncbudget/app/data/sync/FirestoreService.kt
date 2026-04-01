@@ -48,12 +48,6 @@ object FirestoreService {
             .await()
     }
 
-    /** Read the admin subscription expiration date from the group doc. Returns 0 if not set. */
-    suspend fun getSubscriptionExpiry(groupId: String): Long = withTimeout(OP_TIMEOUT_MS) {
-        val doc = db.collection("groups").document(groupId).get().await()
-        doc.getLong("subscriptionExpiry") ?: 0L
-    }
-
     suspend fun updateDeviceMetadata(
         groupId: String,
         deviceId: String,
@@ -89,13 +83,6 @@ object FirestoreService {
             .await()
     }
 
-    /** Background-only: write lastSeen to Firestore as a fallback heartbeat (RTDB handles foreground presence). */
-    suspend fun updateDeviceLastSeen(groupId: String, deviceId: String) = withTimeout(OP_TIMEOUT_MS) {
-        db.collection("groups").document(groupId).collection("devices").document(deviceId)
-            .set(mapOf("lastSeen" to System.currentTimeMillis()), SetOptions.merge())
-            .await()
-    }
-
     suspend fun getDeviceRecord(groupId: String, deviceId: String): DeviceRecord? = withTimeout(OP_TIMEOUT_MS) {
         val doc = db.collection("groups")
             .document(groupId)
@@ -116,20 +103,6 @@ object FirestoreService {
             uploadSpeedBps = doc.getLong("uploadSpeedBps") ?: 0L,
             uploadSpeedMeasuredAt = doc.getLong("uploadSpeedMeasuredAt") ?: 0L
         )
-    }
-
-    /** Get the highest minSyncVersion posted by any device in the group.
-     *  Returns 0 if no device has posted a version (legacy devices). */
-    suspend fun getMaxMinSyncVersion(groupId: String): Int = withTimeout(OP_TIMEOUT_MS) {
-        val snapshot = db.collection("groups")
-            .document(groupId)
-            .collection("devices")
-            .get()
-            .await()
-        snapshot.documents
-            .filter { doc -> doc.getBoolean("removed") != true }
-            .maxOfOrNull { doc -> (doc.getLong("minSyncVersion") ?: 0L).toInt() }
-            ?: 0
     }
 
     /** Read group document once for all startup health checks. */
@@ -157,14 +130,7 @@ object FirestoreService {
         doc.exists() && doc.getBoolean("removed") == true
     }
 
-    /** Check if the group has been dissolved by the admin. */
-    suspend fun isGroupDissolved(groupId: String): Boolean = withTimeout(OP_TIMEOUT_MS) {
-        val doc = db.collection("groups")
-            .document(groupId)
-            .get()
-            .await()
-        doc.exists() && doc.getString("status") == "dissolved"
-    }
+
 
     suspend fun updateGroupActivity(groupId: String) = withTimeout(OP_TIMEOUT_MS) {
         db.collection("groups").document(groupId)
