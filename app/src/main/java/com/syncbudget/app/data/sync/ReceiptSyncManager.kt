@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.syncbudget.app.data.CryptoHelper
 import com.syncbudget.app.data.Transaction
+import com.syncbudget.app.data.TransactionRepository
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -151,6 +152,18 @@ class ReceiptSyncManager(
             when {
                 entry.uploadedAt == 0L && ReceiptManager.hasLocalFile(context, entry.receiptId) -> {
                     handleReuploadRequest(entry, photoCapableDeviceIds, allDevices)
+                }
+                entry.uploadedAt == 0L && !ReceiptManager.hasLocalFile(context, entry.receiptId) -> {
+                    // Recovery request and we don't have the file — mark non-possession
+                    if (entry.possessions[deviceId] != false) {
+                        ImageLedgerService.markNonPossession(groupId, entry.receiptId, deviceId)
+                    }
+                    // Check if all devices have reported non-possession (photo confirmed lost)
+                    val lost = ImageLedgerService.checkPhotoLost(groupId, entry.receiptId, photoCapableDeviceIds)
+                    if (lost) {
+                        clearLostReceiptSlot(transactions, entry.receiptId)
+                        syncLog("Receipt ${entry.receiptId}: confirmed lost, cleared slot")
+                    }
                 }
                 entry.uploadedAt > 0L && !ReceiptManager.hasLocalFile(context, entry.receiptId) -> {
                     handleDownload(entry, photoCapableDeviceIds)
@@ -333,6 +346,8 @@ class ReceiptSyncManager(
 
                         val created = ImageLedgerService.createRecoveryRequest(groupId, receiptId, deviceId)
                         if (created) {
+                            // Immediately mark self as non-possession (we're the one requesting)
+                            ImageLedgerService.markNonPossession(groupId, receiptId, deviceId)
                             syncLog("Receipt $receiptId: created recovery request")
                         }
                     }
@@ -562,6 +577,28 @@ class ReceiptSyncManager(
             syncLog("Snapshot: extraction failed: ${e.message}")
         } finally {
             archiveFile.delete()
+        }
+    }
+
+    // ── Helper: Clear receipt slot when photo is confirmed lost ──
+
+    private fun clearLostReceiptSlot(transactions: MutableList<Transaction>, receiptId: String) {
+        for (i in transactions.indices) {
+            val t = transactions[i]
+            val updated = ReceiptManager.clearReceiptSlot(t, receiptId)
+            if (updated !== t) {
+                transactions[i] = updated
+                // Persist + push to Firestore
+                try {
+                    TransactionRepository.save(context, transactions.toList())
+                    if (SyncWriteHelper.isInitialized()) {
+                        SyncWriteHelper.pushTransaction(updated)
+                    }
+                } catch (e: Exception) {
+                    syncLog("Failed to persist cleared receipt slot for $receiptId: ${e.message}")
+                }
+                return
+            }
         }
     }
 

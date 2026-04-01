@@ -13,6 +13,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.withContext
 import com.syncbudget.app.data.AmortizationEntry
 import com.syncbudget.app.data.AmortizationRepository
 import com.syncbudget.app.data.BackupManager
@@ -194,6 +197,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var syncErrorMessage by mutableStateOf<String?>(null)
     var syncProgressMessage by mutableStateOf<String?>(null)
     var pendingAdminClaim by mutableStateOf<AdminClaim?>(null)
+    var dataLoaded by mutableStateOf(false)
+        private set
     var syncRepairAlert by mutableStateOf(prefs.getBoolean("syncRepairAlert", false))
     var lastSyncTimeDisplay by mutableStateOf<String?>(null)
     private var imageLedgerListener: com.google.firebase.firestore.ListenerRegistration? = null
@@ -267,30 +272,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         BudgetCalculator.roundCents(maxOf(0.0, base - amortDeductions - savingsDeductions - acceleratedDeductions))
     }
 
-    // Simulation-adjusted available cash
-    val simAvailableCash by derivedStateOf {
-        val bsd = budgetStartDate
-        if (bsd == null) {
-            availableCash
-        } else {
-            val simTz = if (isSyncConfigured && sharedSettings.familyTimezone.isNotEmpty())
-                java.time.ZoneId.of(sharedSettings.familyTimezone) else null
-            val currentPeriod = BudgetCalculator.currentPeriodStart(
-                budgetPeriod, resetDayOfWeek, resetDayOfMonth, simTz, resetHour
-            )
-            val adjustedLedger = periodLedger.map { entry ->
-                if (entry.periodStartDate.toLocalDate() == currentPeriod) {
-                    entry.copy(appliedAmount = budgetAmount)
-                } else entry
-            }
-            BudgetCalculator.recomputeAvailableCash(
-                bsd, adjustedLedger,
-                activeTransactions,
-                activeRecurringExpenses,
-                incomeMode, activeIncomeSources
-            )
-        }
-    }
+    // Simulation-adjusted available cash (computed on background thread)
+    var simAvailableCash by mutableStateOf(availableCash)
+        private set
 
     // Percent tolerance for matching
     val percentTolerance by derivedStateOf { matchPercent / 100.0 }
@@ -446,14 +430,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // Deterministic cash recomputation from synced data.
     // All devices with the same synced data compute the same result.
+    // Runs on background thread to avoid blocking UI.
     fun recomputeCash() {
-        if (budgetStartDate == null) return
-        availableCash = BudgetCalculator.recomputeAvailableCash(
-            budgetStartDate!!, periodLedger.toList(),
-            activeTransactions, activeRecurringExpenses,
-            incomeMode, activeIncomeSources
-        )
-        persistAvailableCash()
+        val bsd = budgetStartDate ?: return
+        val ledger = periodLedger.toList()
+        val txns = activeTransactions
+        val re = activeRecurringExpenses
+        val mode = incomeMode
+        val is_ = activeIncomeSources
+        viewModelScope.launch(Dispatchers.Default) {
+            val cash = BudgetCalculator.recomputeAvailableCash(
+                bsd, ledger, txns, re, mode, is_
+            )
+            withContext(Dispatchers.Main) {
+                availableCash = cash
+                persistAvailableCash()
+            }
+        }
     }
 
     // Check if an expense transaction is fully accounted for in the budget
@@ -502,23 +495,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         recomputeCash()
     }
 
-    // Linking chain: recurring/amortization/income match (no duplicate check)
+    // Linking chain: recurring/amortization/income match (no duplicate check).
+    // Runs search on background thread to avoid blocking UI.
     fun runLinkingChain(txn: Transaction) {
         val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null || txn.linkedSavingsGoalId != null
         if (!alreadyLinked) {
-            val recurringMatch = findRecurringExpenseMatch(txn, activeRecurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
-            if (recurringMatch != null) {
-                dashPendingRecurringTxn = txn
-                dashPendingRecurringMatch = recurringMatch
-                dashShowRecurringDialog = true
-            } else {
-                val amortizationMatch = findAmortizationMatch(txn, activeAmortizationEntries, percentTolerance, matchDollar, matchChars)
+            val re = activeRecurringExpenses.toList()
+            val ae = activeAmortizationEntries.toList()
+            val is_ = activeIncomeSources.toList()
+            val pTol = percentTolerance; val dTol = matchDollar; val mChars = matchChars; val dWin = matchDays
+            viewModelScope.launch(Dispatchers.Default) {
+                val recurringMatch = findRecurringExpenseMatch(txn, re, pTol, dTol, mChars, dWin)
+                if (recurringMatch != null) {
+                    withContext(Dispatchers.Main) {
+                        dashPendingRecurringTxn = txn
+                        dashPendingRecurringMatch = recurringMatch
+                        dashShowRecurringDialog = true
+                    }
+                    return@launch
+                }
+                val amortizationMatch = findAmortizationMatch(txn, ae, pTol, dTol, mChars)
                 if (amortizationMatch != null) {
-                    dashPendingAmortizationTxn = txn
-                    dashPendingAmortizationMatch = amortizationMatch
-                    dashShowAmortizationDialog = true
-                } else {
-                    val budgetMatch = findBudgetIncomeMatch(txn, activeIncomeSources, matchChars, matchDays)
+                    withContext(Dispatchers.Main) {
+                        dashPendingAmortizationTxn = txn
+                        dashPendingAmortizationMatch = amortizationMatch
+                        dashShowAmortizationDialog = true
+                    }
+                    return@launch
+                }
+                val budgetMatch = findBudgetIncomeMatch(txn, is_, mChars, dWin)
+                withContext(Dispatchers.Main) {
                     if (budgetMatch != null) {
                         dashPendingBudgetIncomeTxn = txn
                         dashPendingBudgetIncomeMatch = budgetMatch
@@ -533,15 +539,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // Full matching chain: duplicate check first, then linking
+    // Full matching chain: duplicate check first, then linking.
+    // Runs search on background thread to avoid blocking UI.
     fun runMatchingChain(txn: Transaction) {
-        val dup = findDuplicate(txn, activeTransactions, percentTolerance, matchDollar, matchDays, matchChars)
-        if (dup != null) {
-            dashPendingManualSave = txn
-            dashManualDuplicateMatch = dup
-            dashShowManualDuplicateDialog = true
-        } else {
-            runLinkingChain(txn)
+        val txns = activeTransactions.toList()
+        val pTol = percentTolerance
+        val dTol = matchDollar
+        val dWin = matchDays
+        val mChars = matchChars
+        viewModelScope.launch(Dispatchers.Default) {
+            val dup = findDuplicate(txn, txns, pTol, dTol, dWin, mChars)
+            withContext(Dispatchers.Main) {
+                if (dup != null) {
+                    dashPendingManualSave = txn
+                    dashManualDuplicateMatch = dup
+                    dashShowManualDuplicateDialog = true
+                } else {
+                    runLinkingChain(txn)
+                }
+            }
         }
     }
 
@@ -571,6 +587,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // Set onBatchChanged callback
         newDocSync.onBatchChanged = { events ->
             onBatchChanged(events)
+        }
+
+        // Re-fetch device list and RTDB presence after listener recovery
+        newDocSync.onListenerRecovered = {
+            viewModelScope.launch {
+                try {
+                    syncDevices = GroupManager.getDevices(gid)
+                    android.util.Log.i("SyncLoop", "Device list refreshed after listener recovery")
+                } catch (e: Exception) {
+                    android.util.Log.w("SyncLoop", "Device list refresh after recovery failed: ${e.message}")
+                }
+                try {
+                    val deviceName = GroupManager.getDeviceName(context)
+                    com.syncbudget.app.data.sync.RealtimePresenceService.setupPresence(
+                        gid, localDeviceId, deviceName,
+                        photoCapable = isPaidUser || isSubscriber
+                    )
+                } catch (e: Exception) {
+                    android.util.Log.w("SyncLoop", "RTDB presence re-setup after recovery failed: ${e.message}")
+                }
+            }
         }
 
         // Start real-time listeners
@@ -831,11 +868,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val key = GroupManager.getEncryptionKey(context) ?: return@launch
             val ds = docSync ?: return@launch
 
-            // Initial device list fetch
+            // Initial device list fetch (retry once on failure)
             try {
                 syncDevices = GroupManager.getDevices(groupId)
             } catch (e: Exception) {
-                android.util.Log.w("SyncLoop", "Failed to fetch initial device list", e)
+                android.util.Log.w("SyncLoop", "Failed to fetch initial device list, retrying in 10s", e)
+                kotlinx.coroutines.delay(10_000)
+                try {
+                    syncDevices = GroupManager.getDevices(groupId)
+                } catch (e2: Exception) {
+                    android.util.Log.w("SyncLoop", "Device list retry also failed — will recover via listener callback", e2)
+                }
             }
 
             // Write device capabilities once on foreground launch
@@ -1332,14 +1375,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // ═══════════════════════════════════════════════════════════════════
 
     init {
-        // ── Firebase App Check (must run before any Firebase service calls) ──
-        try {
-            com.google.firebase.appcheck.FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
-                com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory.getInstance()
-            )
-        } catch (e: Exception) {
-            android.util.Log.w("AppCheck", "App Check init failed: ${e.message}")
-        }
+        // App Check is initialized in BudgeTrakApplication.onCreate() so it
+        // runs even when the process is started by WorkManager without an Activity.
 
         // ── Network connectivity monitor ──
         try {
@@ -1366,32 +1403,43 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             android.util.Log.w("Network", "Connectivity monitor failed: ${e.message}")
         }
 
-        // ── Load data from repositories ──
-        transactions.addAll(TransactionRepository.load(context))
+        // ── Load data from repositories (background IO) ──
+        viewModelScope.launch(Dispatchers.IO) {
+            val loadedTxns = TransactionRepository.load(context)
+            val loadedIS = IncomeSourceRepository.load(context)
+            val loadedRE = RecurringExpenseRepository.load(context)
+            val loadedAE = AmortizationRepository.load(context)
+            val loadedSG = SavingsGoalRepository.load(context)
+            val loadedPL = PeriodLedgerRepository.load(context)
 
-        val loadedCats = CategoryRepository.load(context).toMutableList()
-        var catsChanged = false
-        for (def in DEFAULT_CATEGORY_DEFS) {
-            val byTag = loadedCats.indexOfFirst { it.tag == def.tag }
-            if (byTag >= 0) continue
-            val usedIds = loadedCats.map { it.id }.toSet()
-            var id: Int
-            do { id = (0..65535).random() } while (id in usedIds)
-            val name = getDefaultCategoryName(def.tag, strings) ?: def.tag
-            val devId = SyncIdGenerator.getOrCreateDeviceId(context)
-            loadedCats.add(Category(id = id, name = name, iconName = def.iconName, tag = def.tag,
-                charted = def.charted, widgetVisible = def.widgetVisible,
-                deviceId = devId))
-            catsChanged = true
+            val loadedCats = CategoryRepository.load(context).toMutableList()
+            var catsChanged = false
+            for (def in DEFAULT_CATEGORY_DEFS) {
+                val byTag = loadedCats.indexOfFirst { it.tag == def.tag }
+                if (byTag >= 0) continue
+                val usedIds = loadedCats.map { it.id }.toSet()
+                var id: Int
+                do { id = (0..65535).random() } while (id in usedIds)
+                val name = getDefaultCategoryName(def.tag, strings) ?: def.tag
+                val devId = SyncIdGenerator.getOrCreateDeviceId(context)
+                loadedCats.add(Category(id = id, name = name, iconName = def.iconName, tag = def.tag,
+                    charted = def.charted, widgetVisible = def.widgetVisible,
+                    deviceId = devId))
+                catsChanged = true
+            }
+            if (catsChanged) CategoryRepository.save(context, loadedCats)
+
+            withContext(Dispatchers.Main) {
+                transactions.addAll(loadedTxns)
+                categories.addAll(loadedCats)
+                incomeSources.addAll(loadedIS)
+                recurringExpenses.addAll(loadedRE)
+                amortizationEntries.addAll(loadedAE)
+                savingsGoals.addAll(loadedSG)
+                periodLedger.addAll(loadedPL)
+                dataLoaded = true
+            }
         }
-        if (catsChanged) CategoryRepository.save(context, loadedCats)
-        categories.addAll(loadedCats)
-
-        incomeSources.addAll(IncomeSourceRepository.load(context))
-        recurringExpenses.addAll(RecurringExpenseRepository.load(context))
-        amortizationEntries.addAll(AmortizationRepository.load(context))
-        savingsGoals.addAll(SavingsGoalRepository.load(context))
-        periodLedger.addAll(PeriodLedgerRepository.load(context))
 
         // ── Firebase anonymous auth ──
         viewModelScope.launch {
@@ -1436,18 +1484,68 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // ── Sync group configuration ──
-        if (isSyncConfigured && syncGroupId != null) {
-            configureSyncGroup()
-        }
-
-        // ── Schedule background sync when configured ──
-        if (isSyncConfigured) {
-            com.syncbudget.app.data.sync.BackgroundSyncWorker.schedule(context)
-        }
-
-        // ── One-time migrations ──
+        // ── simAvailableCash: compute on background thread via snapshotFlow ──
         viewModelScope.launch {
+            snapshotFlow {
+                // Read all dependencies so changes trigger recomputation
+                data class SimInputs(
+                    val bsd: java.time.LocalDate?, val txns: List<Transaction>,
+                    val ledger: List<com.syncbudget.app.data.sync.PeriodLedgerEntry>,
+                    val re: List<RecurringExpense>, val iMode: IncomeMode,
+                    val iSrc: List<IncomeSource>, val bAmt: Double,
+                    val syncCfg: Boolean, val tz: String,
+                    val period: BudgetPeriod, val dow: Int, val dom: Int, val rh: Int,
+                    val cash: Double
+                )
+                SimInputs(
+                    budgetStartDate, activeTransactions.toList(), periodLedger.toList(),
+                    activeRecurringExpenses, incomeMode, activeIncomeSources, budgetAmount,
+                    isSyncConfigured, sharedSettings.familyTimezone,
+                    budgetPeriod, resetDayOfWeek, resetDayOfMonth, resetHour,
+                    availableCash
+                )
+            }.collectLatest { inputs ->
+                if (inputs.bsd == null) {
+                    simAvailableCash = inputs.cash
+                    return@collectLatest
+                }
+                val result = withContext(Dispatchers.Default) {
+                    val simTz = if (inputs.syncCfg && inputs.tz.isNotEmpty())
+                        java.time.ZoneId.of(inputs.tz) else null
+                    val currentPeriod = BudgetCalculator.currentPeriodStart(
+                        inputs.period, inputs.dow, inputs.dom, simTz, inputs.rh
+                    )
+                    val adjustedLedger = inputs.ledger.map { entry ->
+                        if (entry.periodStartDate.toLocalDate() == currentPeriod) {
+                            entry.copy(appliedAmount = inputs.bAmt)
+                        } else entry
+                    }
+                    BudgetCalculator.recomputeAvailableCash(
+                        inputs.bsd, adjustedLedger,
+                        inputs.txns, inputs.re,
+                        inputs.iMode, inputs.iSrc
+                    )
+                }
+                simAvailableCash = result
+            }
+        }
+
+        // ── Sync group configuration + migrations (wait for data) ──
+        viewModelScope.launch {
+            // Wait for async data loading to complete
+            snapshotFlow { dataLoaded }.collect { if (it) return@collect }
+        }.invokeOnCompletion {
+            if (isSyncConfigured && syncGroupId != null) {
+                configureSyncGroup()
+            }
+            if (isSyncConfigured) {
+                com.syncbudget.app.data.sync.BackgroundSyncWorker.schedule(context)
+            }
+        }
+
+        // ── One-time migrations (wait for data) ──
+        viewModelScope.launch {
+            snapshotFlow { dataLoaded }.collect { if (it) return@collect }
             // Wait for all listeners to deliver before running migrations.
             if (isSyncConfigured && !initialSyncReceived) {
                 val synced = docSync?.awaitInitialSync(30_000) ?: false

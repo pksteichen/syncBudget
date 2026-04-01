@@ -334,6 +334,21 @@ object ReceiptManager {
     }
 
     /**
+     * Clear a specific receiptId from whichever slot it occupies on a transaction.
+     * Returns the updated transaction, or the original if the receiptId wasn't found.
+     */
+    fun clearReceiptSlot(t: com.syncbudget.app.data.Transaction, receiptId: String): com.syncbudget.app.data.Transaction {
+        return when (receiptId) {
+            t.receiptId1 -> t.copy(receiptId1 = null)
+            t.receiptId2 -> t.copy(receiptId2 = null)
+            t.receiptId3 -> t.copy(receiptId3 = null)
+            t.receiptId4 -> t.copy(receiptId4 = null)
+            t.receiptId5 -> t.copy(receiptId5 = null)
+            else -> t
+        }
+    }
+
+    /**
      * Compress a bitmap to a target file size in bytes.
      * Iterates on the ORIGINAL bitmap (never re-compresses compressed data).
      * Starts at Q=92, uses log-linear interpolation from accumulated data points.

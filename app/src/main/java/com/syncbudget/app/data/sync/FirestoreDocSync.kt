@@ -74,6 +74,12 @@ class FirestoreDocSync(
     // Active snapshot listeners — keyed by collection name, detached on stop
     private val listeners = ConcurrentHashMap<String, ListenerRegistration>()
 
+    // Track listener error state for recovery detection
+    @Volatile private var hasListenerError = false
+
+    /** Called when listeners recover from errors (e.g., PERMISSION_DENIED → success). */
+    var onListenerRecovered: (() -> Unit)? = null
+
     // Track which collections have delivered their initial snapshot (even if empty).
     // Completes when all 8 (7 data + sharedSettings) have reported.
     private val deliveredCollections = ConcurrentHashMap.newKeySet<String>()
@@ -218,6 +224,7 @@ class FirestoreDocSync(
         val cursor = loadCursor(collection)
         val errorHandler = { e: Exception ->
             syncLog("Listener error: $collection — ${e.message}")
+            hasListenerError = true
             deserializeScope.launch {
                 kotlinx.coroutines.delay(5_000)
                 if (isListening) {
@@ -255,6 +262,7 @@ class FirestoreDocSync(
             onChange = { doc -> handleSharedSettingsChange(doc) },
             onError = { e ->
                 syncLog("Listener error: sharedSettings — ${e.message}")
+                hasListenerError = true
                 deserializeScope.launch {
                     kotlinx.coroutines.delay(5_000)
                     if (isListening) {
@@ -469,6 +477,12 @@ class FirestoreDocSync(
     // ── internal: listener handlers ─────────────────────────────────────
 
     private fun handleCollectionChanges(collection: String, changes: List<DocumentChange>) {
+        // Detect recovery from listener errors (e.g., PERMISSION_DENIED resolved)
+        if (hasListenerError) {
+            hasListenerError = false
+            syncLog("Listener recovered — notifying callback")
+            onListenerRecovered?.invoke()
+        }
         markCollectionDelivered(collection)
         pruneExpiredEchoKeys()
 

@@ -222,6 +222,63 @@ object ImageLedgerService {
     }
 
     /**
+     * Mark that this device does NOT have the file locally.
+     * Used for recovery requests: when all photo-capable devices mark false,
+     * the photo is confirmed lost and the ledger entry can be removed.
+     */
+    suspend fun markNonPossession(groupId: String, receiptId: String, deviceId: String): Boolean {
+        return try {
+            withTimeout(TIMEOUT_MS) {
+                ledgerRef(groupId).document(receiptId)
+                    .update("possessions.$deviceId", false)
+                    .await()
+            }
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "Mark non-possession failed for $receiptId: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Check if all active photo-capable devices have reported non-possession.
+     * If so, the photo is confirmed lost — deletes the ledger entry.
+     * Returns true if the photo was confirmed lost, false otherwise.
+     */
+    suspend fun checkPhotoLost(
+        groupId: String,
+        receiptId: String,
+        photoCapableDeviceIds: Set<String>
+    ): Boolean {
+        return try {
+            val isLost = withTimeout(TIMEOUT_MS) {
+                firestore.runTransaction { tx ->
+                    val snap = tx.get(ledgerRef(groupId).document(receiptId))
+                    @Suppress("UNCHECKED_CAST")
+                    val possessions = snap.get("possessions") as? Map<String, Any> ?: emptyMap()
+                    // Check: all active photo-capable devices have responded
+                    val allResponded = possessions.keys.containsAll(photoCapableDeviceIds)
+                    // Check: none of them have it (all values are false or non-true)
+                    val noneHaveIt = photoCapableDeviceIds.none { possessions[it] == true }
+                    if (allResponded && noneHaveIt) {
+                        tx.delete(ledgerRef(groupId).document(receiptId))
+                        true
+                    } else {
+                        false
+                    }
+                }.await()
+            }
+            if (isLost) {
+                Log.i(TAG, "Photo $receiptId confirmed lost — all devices reported non-possession")
+            }
+            isLost
+        } catch (e: Exception) {
+            Log.w(TAG, "Check photo lost failed for $receiptId: ${e.message}")
+            false
+        }
+    }
+
+    /**
      * Prune check: if all group devices have the file, delete ledger entry.
      * Returns true if pruned, false otherwise.
      */
