@@ -200,6 +200,8 @@ class BackgroundSyncWorker(
             // even for empty filtered results — no more 60s timeout waste.
             docSync.awaitInitialSync(60_000)
 
+            // Wait for in-flight deserialization to complete before stopping
+            docSync.awaitDeserializationComplete()
             docSync.stopListeners()
         } catch (e: Exception) {
             Log.w(TAG, "Firestore sync failed: ${e.message}")
@@ -344,7 +346,11 @@ class BackgroundSyncWorker(
             incomeMode = incomeMode,
             isManualBudgetEnabled = appPrefs.getBoolean("isManualBudgetEnabled", false),
             manualBudgetAmount = appPrefs.getString("manualBudgetAmount", "0.0")
-                ?.toDoubleOrNull() ?: 0.0
+                ?.toDoubleOrNull() ?: 0.0,
+            carryForwardBalance = sharedSettings.carryForwardBalance,
+            archiveCutoffDate = sharedSettings.archiveCutoffDate?.let {
+                try { java.time.LocalDate.parse(it) } catch (_: Exception) { null }
+            }
         )
 
         return PeriodRefreshService.refreshIfNeeded(applicationContext, config)

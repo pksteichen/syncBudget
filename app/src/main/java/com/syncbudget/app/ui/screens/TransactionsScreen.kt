@@ -1075,7 +1075,7 @@ fun TransactionsScreen(
 
             // Transaction list
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-                items(filteredTransactions, key = { it.id }) { transaction ->
+                items(filteredTransactions, key = { "${it.id}_${if (archiveCutoffDate != null && it.date.isBefore(archiveCutoffDate)) "a" else "c"}" }) { transaction ->
                     val isArchived = archiveCutoffDate != null && transaction.date.isBefore(archiveCutoffDate)
                     val rowAlpha = if (isArchived) 0.5f else 1f
                     Box(modifier = Modifier.alpha(rowAlpha)) {

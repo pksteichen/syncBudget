@@ -32,7 +32,9 @@ object PeriodRefreshService {
         val localDeviceId: String,
         val incomeMode: IncomeMode,
         val isManualBudgetEnabled: Boolean,
-        val manualBudgetAmount: Double
+        val manualBudgetAmount: Double,
+        val carryForwardBalance: Double = 0.0,
+        val archiveCutoffDate: LocalDate? = null
     )
 
     data class RefreshResult(
@@ -220,7 +222,8 @@ object PeriodRefreshService {
         val newCash = BudgetCalculator.recomputeAvailableCash(
             config.budgetStartDate, periodLedger,
             activeTxn, activeREAfter,
-            config.incomeMode, activeIS
+            config.incomeMode, activeIS,
+            config.carryForwardBalance, config.archiveCutoffDate
         )
 
         // ── Persist availableCash and lastRefreshDate to SharedPrefs ──

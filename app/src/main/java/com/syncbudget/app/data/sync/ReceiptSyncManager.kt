@@ -718,7 +718,12 @@ class ReceiptSyncManager(
 
     private fun readInt(inp: InputStream): Int {
         val buf = ByteArray(4)
-        inp.read(buf)
+        var read = 0
+        while (read < 4) {
+            val n = inp.read(buf, read, 4 - read)
+            if (n < 0) throw java.io.EOFException("Unexpected end of stream reading int")
+            read += n
+        }
         return ByteBuffer.wrap(buf).order(ByteOrder.BIG_ENDIAN).int
     }
 }

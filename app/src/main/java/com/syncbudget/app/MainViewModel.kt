@@ -303,6 +303,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // ── docSync ──
     var docSync: FirestoreDocSync? = null
+    private var networkCallback: android.net.ConnectivityManager.NetworkCallback? = null
         private set
 
     // ── Save Caches (private) ──
@@ -660,61 +661,56 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             recomputeCash()
         }
 
-        // ── Receipt orphan cleanup ──
+        // ── Receipt orphan cleanup + pruning (snapshot to avoid index corruption) ──
         try {
+            val txnSnapshot = transactions.toList()
+            val mutations = mutableMapOf<Int, Transaction>() // id -> updated txn
             // Clean orphaned receiptIds (transaction references a file that doesn't exist)
             if (!isSyncConfigured) {
-                var orphansCleaned = 0
                 val receiptDir = java.io.File(context.filesDir, "receipts")
-                transactions.forEachIndexed { idx, txn ->
-                    var changed = false
+                for (txn in txnSnapshot) {
                     var t = txn
+                    var changed = false
                     fun fileExists(rid: String?) = rid != null && java.io.File(receiptDir, "$rid.jpg").exists()
                     if (t.receiptId1 != null && !fileExists(t.receiptId1)) { t = t.copy(receiptId1 = null); changed = true }
                     if (t.receiptId2 != null && !fileExists(t.receiptId2)) { t = t.copy(receiptId2 = null); changed = true }
                     if (t.receiptId3 != null && !fileExists(t.receiptId3)) { t = t.copy(receiptId3 = null); changed = true }
                     if (t.receiptId4 != null && !fileExists(t.receiptId4)) { t = t.copy(receiptId4 = null); changed = true }
                     if (t.receiptId5 != null && !fileExists(t.receiptId5)) { t = t.copy(receiptId5 = null); changed = true }
-                    if (changed) { transactions[idx] = t; orphansCleaned++ }
+                    if (changed) mutations[txn.id] = t
                 }
-                if (orphansCleaned > 0) {
-                    saveTransactions()
-                    android.util.Log.i("Maintenance", "Cleaned $orphansCleaned orphaned receiptId references")
+            }
+            // Receipt local storage pruning
+            val pruneAge = sharedSettings.receiptPruneAgeDays
+            if (pruneAge != null) {
+                val pruneDate = java.time.LocalDate.now().minusDays(pruneAge.toLong())
+                for (txn in txnSnapshot) {
+                    if (txn.date.isBefore(pruneDate)) {
+                        val ids = com.syncbudget.app.data.sync.ReceiptManager.getReceiptIds(txn)
+                        if (ids.isNotEmpty()) {
+                            for (rid in ids) com.syncbudget.app.data.sync.ReceiptManager.deleteLocalReceipt(context, rid)
+                            mutations[txn.id] = txn.copy(
+                                receiptId1 = null, receiptId2 = null, receiptId3 = null,
+                                receiptId4 = null, receiptId5 = null
+                            )
+                        }
+                    }
                 }
+            }
+            // Apply mutations atomically
+            if (mutations.isNotEmpty()) {
+                for ((id, updated) in mutations) {
+                    val idx = transactions.indexOfFirst { it.id == id }
+                    if (idx >= 0) transactions[idx] = updated
+                }
+                saveTransactions()
+                android.util.Log.i("Maintenance", "Receipt cleanup: ${mutations.size} transactions updated")
             }
             // Clean orphaned files (on disk but not referenced by any transaction)
             val allReceiptIds = com.syncbudget.app.data.sync.ReceiptManager.collectAllReceiptIds(transactions)
             com.syncbudget.app.data.sync.ReceiptManager.cleanOrphans(context, allReceiptIds)
         } catch (e: Exception) {
-            android.util.Log.w("Maintenance", "Receipt orphan cleanup failed: ${e.message}")
-        }
-
-        // ── Receipt local storage pruning ──
-        try {
-            val pruneAge = sharedSettings.receiptPruneAgeDays
-            if (pruneAge != null) {
-                val pruneDate = java.time.LocalDate.now().minusDays(pruneAge.toLong())
-                var pruned = 0
-                transactions.forEachIndexed { idx, txn ->
-                    if (txn.date.isBefore(pruneDate)) {
-                        val ids = com.syncbudget.app.data.sync.ReceiptManager.getReceiptIds(txn)
-                        if (ids.isNotEmpty()) {
-                            for (rid in ids) com.syncbudget.app.data.sync.ReceiptManager.deleteLocalReceipt(context, rid)
-                            transactions[idx] = txn.copy(
-                                receiptId1 = null, receiptId2 = null, receiptId3 = null,
-                                receiptId4 = null, receiptId5 = null
-                            )
-                            pruned += ids.size
-                        }
-                    }
-                }
-                if (pruned > 0) {
-                    saveTransactions()
-                    android.util.Log.i("Maintenance", "Pruned $pruned receipt references older than $pruneAge days")
-                }
-            }
-        } catch (e: Exception) {
-            android.util.Log.w("Maintenance", "Receipt pruning failed: ${e.message}")
+            android.util.Log.w("Maintenance", "Receipt cleanup failed: ${e.message}")
         }
 
         // ── Admin: tombstone + cloud orphan cleanup (30-day sub-gate) ──
@@ -1067,7 +1063,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * The onBatchChanged callback: update in-memory state when remote changes arrive.
      */
-    private fun onBatchChanged(events: List<com.syncbudget.app.data.sync.DataChangeEvent>) {
+    private suspend fun onBatchChanged(events: List<com.syncbudget.app.data.sync.DataChangeEvent>) {
         try {
             // Build catIdRemap from sync prefs
             val remapJson = syncPrefs.getString("catIdRemap", null)
@@ -1196,7 +1192,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
-            // Save changed collections to JSON on background thread
+            // Save changed collections to JSON — awaited so cursor advances only after persist
             val txnSnap = result.transactions
             val reSnap = result.recurringExpenses
             val isSnap = result.incomeSources
@@ -1205,7 +1201,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val catSnap = result.categories
             val pleSnap = result.periodLedger
             val ssSnap = result.sharedSettings
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            withContext(Dispatchers.IO) {
                 txnSnap?.let { TransactionRepository.save(context, it) }
                 reSnap?.let { RecurringExpenseRepository.save(context, it) }
                 isSnap?.let { IncomeSourceRepository.save(context, it) }
@@ -1624,15 +1620,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         syncTrigger++
         android.util.Log.i("OnResume", "onResume called: dataLoaded=$dataLoaded txns=${transactions.size} pl=${periodLedger.size} availableCash=$availableCash")
         // Reload transactions from disk on resume to pick up widget-added entries
-        val diskTransactions = TransactionRepository.load(context)
-        if (diskTransactions.size != transactions.size ||
-            diskTransactions.map { it.id }.toSet() != transactions.map { it.id }.toSet()) {
-            android.util.Log.i("OnResume", "Transaction mismatch: memory=${transactions.size} disk=${diskTransactions.size}, reloading")
-            transactions.clear()
-            transactions.addAll(diskTransactions)
-            recomputeCash()
-        } else {
-            android.util.Log.i("OnResume", "Transactions match disk, no reload needed")
+        viewModelScope.launch {
+            val diskTransactions = withContext(Dispatchers.IO) { TransactionRepository.load(context) }
+            if (diskTransactions.size != transactions.size ||
+                diskTransactions.map { it.id }.toSet() != transactions.map { it.id }.toSet()) {
+                android.util.Log.i("OnResume", "Transaction mismatch: memory=${transactions.size} disk=${diskTransactions.size}, reloading")
+                transactions.clear()
+                transactions.addAll(diskTransactions)
+                recomputeCash()
+            } else {
+                android.util.Log.i("OnResume", "Transactions match disk, no reload needed")
+            }
         }
 
         // Periodic maintenance (time-gated) — keeps long-lived ViewModels healthy
@@ -1727,10 +1725,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // Set initial sync status based on actual network state
             if (!isNetworkAvailable && isSyncConfigured) syncStatus = "offline"
 
-            connectivityManager.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
+            networkCallback = object : android.net.ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: android.net.Network) {
                     isNetworkAvailable = true
-                    // Restore sync status if it was showing offline
                     if (isSyncConfigured && syncStatus == "offline") {
                         syncStatus = if (docSync?.isListening == true) "synced" else "error"
                     }
@@ -1739,7 +1736,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     isNetworkAvailable = false
                     if (isSyncConfigured) syncStatus = "offline"
                 }
-            })
+            }
+            connectivityManager.registerDefaultNetworkCallback(networkCallback!!)
         } catch (e: Exception) {
             android.util.Log.w("Network", "Connectivity monitor failed: ${e.message}")
         }
@@ -2099,10 +2097,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // Wait for initial sync if needed
             while (!initialSyncReceived) { delay(200) }
             while (true) {
-                if (budgetStartDate != null && lastRefreshDate != null) {
+                val bsd = budgetStartDate
+                val lrd = lastRefreshDate
+                if (bsd != null && lrd != null) {
                     val config = PeriodRefreshService.RefreshConfig(
-                        budgetStartDate = budgetStartDate!!,
-                        lastRefreshDate = lastRefreshDate!!,
+                        budgetStartDate = bsd,
+                        lastRefreshDate = lrd,
                         budgetPeriod = budgetPeriod,
                         resetHour = resetHour,
                         resetDayOfWeek = resetDayOfWeek,
@@ -2112,7 +2112,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         localDeviceId = localDeviceId,
                         incomeMode = incomeMode,
                         isManualBudgetEnabled = isManualBudgetEnabled,
-                        manualBudgetAmount = manualBudgetAmount
+                        manualBudgetAmount = manualBudgetAmount,
+                        carryForwardBalance = carryForwardBalance,
+                        archiveCutoffDate = archiveCutoffDate
                     )
                     val result = PeriodRefreshService.refreshIfNeeded(context, config)
                     if (result != null) {
@@ -2167,5 +2169,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SyncWriteHelper.dispose()
         com.syncbudget.app.data.sync.RealtimePresenceService.cleanup()
         imageLedgerListener?.remove()
+        try {
+            networkCallback?.let {
+                val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+                cm.unregisterNetworkCallback(it)
+            }
+        } catch (_: Exception) {}
     }
 }

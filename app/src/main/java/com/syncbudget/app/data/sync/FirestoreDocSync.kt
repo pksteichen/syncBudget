@@ -76,6 +76,7 @@ class FirestoreDocSync(
 
     // Track listener error state for recovery detection
     @Volatile private var hasListenerError = false
+    private val reconnectAttempts = ConcurrentHashMap<String, Int>()
 
     /** Called when listeners recover from errors (e.g., PERMISSION_DENIED → success). */
     var onListenerRecovered: (() -> Unit)? = null
@@ -92,6 +93,7 @@ class FirestoreDocSync(
     }
 
     private fun markCollectionDelivered(collection: String) {
+        reconnectAttempts.remove(collection) // reset backoff on successful delivery
         if (deliveredCollections.add(collection) && deliveredCollections.size >= expectedCollections) {
             if (!allDelivered.isCompleted) allDelivered.complete(Unit)
         }
@@ -190,7 +192,7 @@ class FirestoreDocSync(
 
     /** Callback fired with a batch of incoming remote changes per collection.
      *  Always invoked on the MAIN thread. */
-    var onBatchChanged: ((List<DataChangeEvent>) -> Unit)? = null
+    var onBatchChanged: (suspend (List<DataChangeEvent>) -> Unit)? = null
 
     /** Whether listeners are currently active. */
     @Volatile var isListening: Boolean = false
@@ -225,14 +227,20 @@ class FirestoreDocSync(
         val errorHandler = { e: Exception ->
             syncLog("Listener error: $collection — ${e.message}")
             hasListenerError = true
-            deserializeScope.launch {
-                kotlinx.coroutines.delay(5_000)
-                if (isListening) {
-                    syncLog("Reconnecting listener: $collection")
-                    kotlinx.coroutines.withContext(Dispatchers.Main) {
-                        attachCollectionListener(collection)
+            val attempts = reconnectAttempts.merge(collection, 1) { old, _ -> old + 1 } ?: 1
+            if (attempts <= 10) {
+                val delayMs = minOf(5_000L * (1L shl minOf(attempts - 1, 5)), 300_000L)
+                deserializeScope.launch {
+                    syncLog("Reconnecting $collection in ${delayMs/1000}s (attempt $attempts)")
+                    kotlinx.coroutines.delay(delayMs)
+                    if (isListening) {
+                        kotlinx.coroutines.withContext(Dispatchers.Main) {
+                            attachCollectionListener(collection)
+                        }
                     }
                 }
+            } else {
+                syncLog("Listener $collection failed $attempts times, giving up")
             }
             Unit
         }
@@ -263,14 +271,20 @@ class FirestoreDocSync(
             onError = { e ->
                 syncLog("Listener error: sharedSettings — ${e.message}")
                 hasListenerError = true
-                deserializeScope.launch {
-                    kotlinx.coroutines.delay(5_000)
-                    if (isListening) {
-                        syncLog("Reconnecting listener: sharedSettings")
-                        kotlinx.coroutines.withContext(Dispatchers.Main) {
-                            attachSettingsListener()
+                val attempts = reconnectAttempts.merge("sharedSettings", 1) { old, _ -> old + 1 } ?: 1
+                if (attempts <= 10) {
+                    val delayMs = minOf(5_000L * (1L shl minOf(attempts - 1, 5)), 300_000L)
+                    deserializeScope.launch {
+                        syncLog("Reconnecting sharedSettings in ${delayMs/1000}s (attempt $attempts)")
+                        kotlinx.coroutines.delay(delayMs)
+                        if (isListening) {
+                            kotlinx.coroutines.withContext(Dispatchers.Main) {
+                                attachSettingsListener()
+                            }
                         }
                     }
+                } else {
+                    syncLog("Listener sharedSettings failed $attempts times, giving up")
                 }
             }
         )
@@ -280,6 +294,13 @@ class FirestoreDocSync(
     /**
      * Stop all listeners. Call on group leave or activity dispose.
      */
+    /** Wait for all in-flight deserialization coroutines to finish (up to 5s). */
+    suspend fun awaitDeserializationComplete(timeoutMs: Long = 5_000) {
+        kotlinx.coroutines.withTimeoutOrNull(timeoutMs) {
+            deserializeScope.coroutineContext[kotlinx.coroutines.Job]?.children?.forEach { it.join() }
+        }
+    }
+
     fun stopListeners() {
         syncLog("Stopping ${listeners.size} listeners")
         for (reg in listeners.values) {
