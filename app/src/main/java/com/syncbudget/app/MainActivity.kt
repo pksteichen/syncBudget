@@ -200,6 +200,7 @@ class MainActivity : ComponentActivity() {
             val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
             DisposableEffect(lifecycleOwner) {
                 val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                    android.util.Log.i("Lifecycle", "Event: $event, dataLoaded=${vm.dataLoaded}, txns=${vm.transactions.size}")
                     if (event == androidx.lifecycle.Lifecycle.Event.ON_START) isAppActive = true
                     else if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) isAppActive = false
                     if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) vm.onResume()

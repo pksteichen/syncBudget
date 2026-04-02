@@ -352,8 +352,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // Simulation-adjusted available cash
     val simAvailableCash by derivedStateOf {
-        if (!dataLoaded) return@derivedStateOf availableCash
-        val bsd = budgetStartDate ?: return@derivedStateOf availableCash
+        if (!dataLoaded) {
+            android.util.Log.w("SimCash", "derivedStateOf: dataLoaded=false, returning availableCash=$availableCash")
+            return@derivedStateOf availableCash
+        }
+        val bsd = budgetStartDate
+        if (bsd == null) {
+            android.util.Log.w("SimCash", "derivedStateOf: bsd=null, returning availableCash=$availableCash")
+            return@derivedStateOf availableCash
+        }
         val simTz = if (isSyncConfigured && sharedSettings.familyTimezone.isNotEmpty())
             java.time.ZoneId.of(sharedSettings.familyTimezone) else null
         val currentPeriod = BudgetCalculator.currentPeriodStart(
@@ -364,12 +371,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 entry.copy(appliedAmount = budgetAmount)
             } else entry
         }
-        BudgetCalculator.recomputeAvailableCash(
+        val txnCount = activeTransactions.size
+        val ledgerCount = adjustedLedger.size
+        val result = BudgetCalculator.recomputeAvailableCash(
             bsd, adjustedLedger,
             activeTransactions, activeRecurringExpenses,
             incomeMode, activeIncomeSources,
             carryForwardBalance, archiveCutoffDate
         )
+        android.util.Log.i("SimCash", "derivedStateOf: bsd=$bsd txns=$txnCount ledger=$ledgerCount cfb=$carryForwardBalance acd=$archiveCutoffDate → result=$result (availableCash=$availableCash)")
+        result
     }
 
     // Percent tolerance for matching
@@ -520,6 +531,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun persistAvailableCash() {
         if (availableCash.isNaN() || availableCash.isInfinite()) availableCash = 0.0
         availableCash = BudgetCalculator.roundCents(availableCash)
+        android.util.Log.i("PersistCash", "Persisting availableCash=$availableCash")
         prefs.edit().putString("availableCash", availableCash.toString()).apply()
         com.syncbudget.app.widget.BudgetWidgetProvider.updateAllWidgets(context)
     }
@@ -613,7 +625,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // All devices with the same synced data compute the same result.
     // Runs on background thread to avoid blocking UI.
     fun recomputeCash() {
-        val bsd = budgetStartDate ?: return
+        val bsd = budgetStartDate ?: run {
+            android.util.Log.w("RecomputeCash", "SKIPPED: budgetStartDate is null")
+            return
+        }
         val ledger = periodLedger.toList()
         val txns = activeTransactions
         val re = activeRecurringExpenses
@@ -621,10 +636,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val is_ = activeIncomeSources
         val cfb = carryForwardBalance
         val acd = archiveCutoffDate
+        val caller = Thread.currentThread().stackTrace.getOrNull(3)?.let { "${it.className.substringAfterLast('.')}.${it.methodName}" } ?: "unknown"
+        android.util.Log.i("RecomputeCash", "CALLED from $caller: bsd=$bsd txns=${txns.size} ledger=${ledger.size} cfb=$cfb acd=$acd")
         viewModelScope.launch(Dispatchers.Default) {
             val cash = BudgetCalculator.recomputeAvailableCash(
                 bsd, ledger, txns, re, mode, is_, cfb, acd
             )
+            android.util.Log.i("RecomputeCash", "RESULT: $cash (was $availableCash) txns=${txns.size} ledger=${ledger.size}")
             withContext(Dispatchers.Main) {
                 availableCash = cash
                 persistAvailableCash()
@@ -1526,13 +1544,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun onResume() {
         syncTrigger++
+        android.util.Log.i("OnResume", "onResume called: dataLoaded=$dataLoaded txns=${transactions.size} pl=${periodLedger.size} availableCash=$availableCash")
         // Reload transactions from disk on resume to pick up widget-added entries
         val diskTransactions = TransactionRepository.load(context)
         if (diskTransactions.size != transactions.size ||
             diskTransactions.map { it.id }.toSet() != transactions.map { it.id }.toSet()) {
+            android.util.Log.i("OnResume", "Transaction mismatch: memory=${transactions.size} disk=${diskTransactions.size}, reloading")
             transactions.clear()
             transactions.addAll(diskTransactions)
             recomputeCash()
+        } else {
+            android.util.Log.i("OnResume", "Transactions match disk, no reload needed")
         }
     }
 
@@ -1636,7 +1658,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         // ── Load data from repositories ──
+        android.util.Log.i("DataLoad", "START: loading repos synchronously on ${Thread.currentThread().name}")
         transactions.addAll(TransactionRepository.load(context))
+        android.util.Log.i("DataLoad", "transactions: ${transactions.size}")
 
         val loadedCats = CategoryRepository.load(context).toMutableList()
         var catsChanged = false
@@ -1661,7 +1685,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         amortizationEntries.addAll(AmortizationRepository.load(context))
         savingsGoals.addAll(SavingsGoalRepository.load(context))
         periodLedger.addAll(PeriodLedgerRepository.load(context))
+        android.util.Log.i("DataLoad", "DONE: txns=${transactions.size} cats=${categories.size} re=${recurringExpenses.size} is=${incomeSources.size} ae=${amortizationEntries.size} sg=${savingsGoals.size} pl=${periodLedger.size}")
         dataLoaded = true
+        android.util.Log.i("DataLoad", "dataLoaded=true, availableCash=$availableCash")
 
         // ── Firebase anonymous auth ──
         viewModelScope.launch {
