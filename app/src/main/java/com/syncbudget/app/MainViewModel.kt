@@ -192,7 +192,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var isSyncAdmin by mutableStateOf(GroupManager.isAdmin(context))
     var syncStatus by mutableStateOf(if (GroupManager.isConfigured(context)) "synced" else "off")
     var isNetworkAvailable by mutableStateOf(true)
-    var syncDevices by mutableStateOf<List<DeviceInfo>>(emptyList())
+    var syncDevices by mutableStateOf(loadCachedDevices())
     var generatedPairingCode by mutableStateOf<String?>(null)
     val localDeviceId: String = SyncIdGenerator.getOrCreateDeviceId(context)
     var syncErrorMessage by mutableStateOf<String?>(null)
@@ -246,6 +246,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (com.syncbudget.app.data.sync.SyncWriteHelper.isInitialized()) {
             com.syncbudget.app.data.sync.SyncWriteHelper.pushTransaction(updated)
         }
+    }
+
+    private fun loadCachedDevices(): List<DeviceInfo> {
+        val json = syncPrefs.getString("cachedDeviceRoster", null) ?: return emptyList()
+        return try {
+            val arr = org.json.JSONArray(json)
+            (0 until arr.length()).map { i ->
+                val obj = arr.getJSONObject(i)
+                DeviceInfo(
+                    deviceId = obj.getString("id"),
+                    deviceName = obj.optString("name", ""),
+                    isAdmin = obj.optBoolean("admin", false),
+                    lastSeen = 0L
+                )
+            }
+        } catch (_: Exception) { emptyList() }
+    }
+
+    private fun cacheDeviceRoster(devices: List<DeviceInfo>) {
+        if (devices.isEmpty() || devices.all { it.deviceName.isEmpty() }) return
+        val arr = org.json.JSONArray()
+        for (d in devices) {
+            arr.put(org.json.JSONObject().apply {
+                put("id", d.deviceId)
+                put("name", d.deviceName)
+                put("admin", d.isAdmin)
+            })
+        }
+        syncPrefs.edit().putString("cachedDeviceRoster", arr.toString()).apply()
     }
 
     var syncRepairAlert by mutableStateOf(prefs.getBoolean("syncRepairAlert", false))
@@ -733,6 +762,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             viewModelScope.launch {
                 try {
                     syncDevices = GroupManager.getDevices(gid)
+                    cacheDeviceRoster(syncDevices)
                     android.util.Log.i("SyncLoop", "Device list refreshed after listener recovery")
                 } catch (e: Exception) {
                     android.util.Log.w("SyncLoop", "Device list refresh after recovery failed: ${e.message}")
@@ -796,6 +826,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         online = it.online, photoCapable = it.photoCapable,
                         uploadSpeedBps = it.uploadSpeedBps, uploadSpeedMeasuredAt = it.uploadSpeedMeasuredAt) }
                 syncDevices = updatedDevices + newDevices
+                cacheDeviceRoster(syncDevices)
             }
         } catch (e: Exception) {
             android.util.Log.w("SyncLoop", "RTDB presence setup failed (may not be configured): ${e.message}")
@@ -1042,11 +1073,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // Initial device list fetch (retry once on failure)
             try {
                 syncDevices = GroupManager.getDevices(groupId)
+                cacheDeviceRoster(syncDevices)
             } catch (e: Exception) {
                 android.util.Log.w("SyncLoop", "Failed to fetch initial device list, retrying in 10s", e)
                 kotlinx.coroutines.delay(10_000)
                 try {
                     syncDevices = GroupManager.getDevices(groupId)
+                    cacheDeviceRoster(syncDevices)
                 } catch (e2: Exception) {
                     android.util.Log.w("SyncLoop", "Device list retry also failed — will recover via listener callback", e2)
                 }
@@ -1300,7 +1333,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     syncGroupId = null
                     isSyncAdmin = false
                     syncStatus = "off"
-                    syncDevices = emptyList()
+                    syncDevices = emptyList(); syncPrefs.edit().remove("cachedDeviceRoster").apply()
                     return@launch
                 }
 
@@ -1311,7 +1344,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     syncGroupId = null
                     isSyncAdmin = false
                     syncStatus = "off"
-                    syncDevices = emptyList()
+                    syncDevices = emptyList(); syncPrefs.edit().remove("cachedDeviceRoster").apply()
                     return@launch
                 }
 
@@ -1328,7 +1361,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         syncGroupId = null
                         isSyncAdmin = false
                         syncStatus = "off"
-                        syncDevices = emptyList()
+                        syncDevices = emptyList(); syncPrefs.edit().remove("cachedDeviceRoster").apply()
                         return@launch
                     } else if (elapsed > 0) {
                         syncErrorMessage = strings.sync.subscriptionExpiredNotice
