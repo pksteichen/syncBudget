@@ -121,6 +121,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
@@ -181,6 +182,7 @@ class MainActivity : ComponentActivity() {
             defaultHandler?.uncaughtException(thread, throwable)
         }
 
+        isAppActive = true
         enableEdgeToEdge()
         setContent {
             val vm: MainViewModel = viewModel()
@@ -196,7 +198,14 @@ class MainActivity : ComponentActivity() {
                 vm.handleWidgetIntent(intent?.action)
             }
 
-            // Lifecycle observer
+            // ── Loading gate: block all UI until data is ready ──
+            if (!vm.dataLoaded) {
+                LoadingScreen(vm.loadProgress)
+                return@setContent
+            }
+
+            // Lifecycle observer — registered AFTER data loads so the initial
+            // ON_RESUME during Activity creation is missed (we don't need it).
             val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
             DisposableEffect(lifecycleOwner) {
                 val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
@@ -236,7 +245,9 @@ class MainActivity : ComponentActivity() {
 
                 // Screen content
                 Box(modifier = Modifier.weight(1f)) {
-                if (vm.currentScreen != "main") {
+                if (vm.currentScreen == "main") {
+                    BackHandler { moveTaskToBack(true) }
+                } else {
                     BackHandler {
                         vm.currentScreen = when (vm.currentScreen) {
                             "settings_help" -> "settings"
@@ -2271,5 +2282,46 @@ class MainActivity : ComponentActivity() {
                 vm.currentScreen = "settings"
             }
         )
+    }
+}
+
+@Composable
+private fun LoadingScreen(progress: Float) {
+    val darkTheme = androidx.compose.foundation.isSystemInDarkTheme()
+    val bgColor = if (darkTheme) Color(0xFF2A3A2F) else Color(0xFFBDD5CC)
+    val textColor = if (darkTheme) Color(0xFFE8D5A0) else Color(0xFF2E5C80)
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(bgColor)
+            .statusBarsPadding(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            androidx.compose.foundation.Image(
+                painter = androidx.compose.ui.res.painterResource(R.mipmap.ic_launcher_foreground),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(192.dp)
+                    .clip(RoundedCornerShape(24.dp))
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "BudgeTrak",
+                fontSize = 28.sp,
+                color = textColor,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier
+                    .width(200.dp)
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp)),
+                color = textColor,
+                trackColor = textColor.copy(alpha = 0.2f)
+            )
+        }
     }
 }

@@ -55,10 +55,27 @@ class BackgroundSyncWorker(
 
     override suspend fun doWork(): Result {
         try {
-            // Skip if the app is active — foreground handles sync + refresh
+            // Skip if the app is visible — foreground handles everything
             if (com.syncbudget.app.MainActivity.isAppActive) {
                 return Result.success()
             }
+
+            // If foreground ViewModel is alive (stopped but in memory), only check listener health
+            val vm = com.syncbudget.app.MainViewModel.instance?.get()
+            if (vm != null) {
+                if (vm.isSyncConfigured) {
+                    val ds = vm.docSync
+                    if (ds != null && !ds.isListening) {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            ds.startListeners()
+                        }
+                        Log.i(TAG, "Restarted dead foreground listeners")
+                    }
+                }
+                return Result.success()
+            }
+
+            // ViewModel is dead (process restarted) — run full background sync
 
             // Ensure Firebase anonymous auth
             if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {

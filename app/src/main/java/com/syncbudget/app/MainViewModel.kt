@@ -7,6 +7,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -78,6 +79,12 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
+
+    companion object {
+        @Volatile
+        var instance: java.lang.ref.WeakReference<MainViewModel>? = null
+            private set
+    }
 
     private val context: Context = application.applicationContext
     val prefs: SharedPreferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
@@ -199,6 +206,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var syncProgressMessage by mutableStateOf<String?>(null)
     var pendingAdminClaim by mutableStateOf<AdminClaim?>(null)
     var dataLoaded by mutableStateOf(false)
+        private set
+    var loadProgress by mutableFloatStateOf(0f)
         private set
 
     // ── Archive State ──
@@ -624,6 +633,58 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Deterministic cash recomputation from synced data.
     // All devices with the same synced data compute the same result.
     // Runs on background thread to avoid blocking UI.
+    private suspend fun runIntegrityCheck() {
+        val groupId = syncGroupId ?: return
+        try {
+            val collections = mapOf(
+                EncryptedDocSerializer.COLLECTION_TRANSACTIONS to
+                    transactions.filter { !it.deleted }.map { it.id.toString() }.toSet(),
+                EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES to
+                    recurringExpenses.filter { !it.deleted }.map { it.id.toString() }.toSet(),
+                EncryptedDocSerializer.COLLECTION_INCOME_SOURCES to
+                    incomeSources.filter { !it.deleted }.map { it.id.toString() }.toSet(),
+                EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS to
+                    savingsGoals.filter { !it.deleted }.map { it.id.toString() }.toSet(),
+                EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES to
+                    amortizationEntries.filter { !it.deleted }.map { it.id.toString() }.toSet(),
+                EncryptedDocSerializer.COLLECTION_CATEGORIES to
+                    categories.filter { !it.deleted }.map { it.id.toString() }.toSet(),
+                EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER to
+                    periodLedger.map { it.id.toString() }.toSet()
+            )
+            for ((collection, localIds) in collections) {
+                val cacheIds = FirestoreDocService.readDocIdsFromCache(groupId, collection)
+                if (cacheIds.isEmpty()) continue
+                val missingFromFirestore = localIds - cacheIds
+                if (missingFromFirestore.isNotEmpty()) {
+                    android.util.Log.w("Integrity",
+                        "$collection: ${missingFromFirestore.size} local records missing from Firestore — pushing")
+                    for (id in missingFromFirestore) {
+                        when (collection) {
+                            EncryptedDocSerializer.COLLECTION_TRANSACTIONS ->
+                                transactions.find { it.id.toString() == id }?.let { SyncWriteHelper.pushTransaction(it) }
+                            EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES ->
+                                recurringExpenses.find { it.id.toString() == id }?.let { SyncWriteHelper.pushRecurringExpense(it) }
+                            EncryptedDocSerializer.COLLECTION_INCOME_SOURCES ->
+                                incomeSources.find { it.id.toString() == id }?.let { SyncWriteHelper.pushIncomeSource(it) }
+                            EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS ->
+                                savingsGoals.find { it.id.toString() == id }?.let { SyncWriteHelper.pushSavingsGoal(it) }
+                            EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES ->
+                                amortizationEntries.find { it.id.toString() == id }?.let { SyncWriteHelper.pushAmortizationEntry(it) }
+                            EncryptedDocSerializer.COLLECTION_CATEGORIES ->
+                                categories.find { it.id.toString() == id }?.let { SyncWriteHelper.pushCategory(it) }
+                            EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER ->
+                                periodLedger.find { it.id.toString() == id }?.let { SyncWriteHelper.pushPeriodLedgerEntry(it) }
+                        }
+                    }
+                }
+            }
+            android.util.Log.i("Integrity", "Cache-based integrity check complete")
+        } catch (e: Exception) {
+            android.util.Log.w("Integrity", "Cache integrity check failed: ${e.message}")
+        }
+    }
+
     fun recomputeCash() {
         val bsd = budgetStartDate ?: run {
             android.util.Log.w("RecomputeCash", "SKIPPED: budgetStartDate is null")
@@ -638,16 +699,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val acd = archiveCutoffDate
         val caller = Thread.currentThread().stackTrace.getOrNull(3)?.let { "${it.className.substringAfterLast('.')}.${it.methodName}" } ?: "unknown"
         android.util.Log.i("RecomputeCash", "CALLED from $caller: bsd=$bsd txns=${txns.size} ledger=${ledger.size} cfb=$cfb acd=$acd")
-        viewModelScope.launch(Dispatchers.Default) {
-            val cash = BudgetCalculator.recomputeAvailableCash(
-                bsd, ledger, txns, re, mode, is_, cfb, acd
-            )
-            android.util.Log.i("RecomputeCash", "RESULT: $cash (was $availableCash) txns=${txns.size} ledger=${ledger.size}")
-            withContext(Dispatchers.Main) {
-                availableCash = cash
-                persistAvailableCash()
-            }
-        }
+        val cash = BudgetCalculator.recomputeAvailableCash(
+            bsd, ledger, txns, re, mode, is_, cfb, acd
+        )
+        android.util.Log.i("RecomputeCash", "RESULT: $cash (was $availableCash) txns=${txns.size} ledger=${ledger.size}")
+        availableCash = cash
+        persistAvailableCash()
     }
 
     // Check if an expense transaction is fully accounted for in the budget
@@ -1420,68 +1477,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     syncPrefs.edit().putBoolean("syncDirty", false).apply()
                 }
 
-                // Ensure listeners are alive
-                val currentDocSync = docSync
-                if (currentDocSync != null && !currentDocSync.isListening) {
-                    currentDocSync.startListeners()
-                    android.util.Log.i("SyncLoop", "Restarted dead listeners on startup")
-                }
-
-                // Integrity check: compare local records against Firestore local cache (free, no network)
-                // Listeners have delivered initial snapshots by now, so cache = Firestore state
-                try {
-                    val collections = mapOf(
-                        EncryptedDocSerializer.COLLECTION_TRANSACTIONS to
-                            transactions.filter { !it.deleted }.map { it.id.toString() }.toSet(),
-                        EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES to
-                            recurringExpenses.filter { !it.deleted }.map { it.id.toString() }.toSet(),
-                        EncryptedDocSerializer.COLLECTION_INCOME_SOURCES to
-                            incomeSources.filter { !it.deleted }.map { it.id.toString() }.toSet(),
-                        EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS to
-                            savingsGoals.filter { !it.deleted }.map { it.id.toString() }.toSet(),
-                        EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES to
-                            amortizationEntries.filter { !it.deleted }.map { it.id.toString() }.toSet(),
-                        EncryptedDocSerializer.COLLECTION_CATEGORIES to
-                            categories.filter { !it.deleted }.map { it.id.toString() }.toSet(),
-                        EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER to
-                            periodLedger.map { it.id.toString() }.toSet()
-                    )
-
-                    for ((collection, localIds) in collections) {
-                        val cacheIds = FirestoreDocService.readDocIdsFromCache(groupId, collection)
-                        if (cacheIds.isEmpty()) continue // Cache not populated — skip
-
-                        // Local records missing from Firestore — push them
-                        val missingFromFirestore = localIds - cacheIds
-                        if (missingFromFirestore.isNotEmpty()) {
-                            android.util.Log.w("Integrity",
-                                "$collection: ${missingFromFirestore.size} local records missing from Firestore — pushing")
-                            for (id in missingFromFirestore) {
-                                when (collection) {
-                                    EncryptedDocSerializer.COLLECTION_TRANSACTIONS ->
-                                        transactions.find { it.id.toString() == id }?.let { SyncWriteHelper.pushTransaction(it) }
-                                    EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES ->
-                                        recurringExpenses.find { it.id.toString() == id }?.let { SyncWriteHelper.pushRecurringExpense(it) }
-                                    EncryptedDocSerializer.COLLECTION_INCOME_SOURCES ->
-                                        incomeSources.find { it.id.toString() == id }?.let { SyncWriteHelper.pushIncomeSource(it) }
-                                    EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS ->
-                                        savingsGoals.find { it.id.toString() == id }?.let { SyncWriteHelper.pushSavingsGoal(it) }
-                                    EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES ->
-                                        amortizationEntries.find { it.id.toString() == id }?.let { SyncWriteHelper.pushAmortizationEntry(it) }
-                                    EncryptedDocSerializer.COLLECTION_CATEGORIES ->
-                                        categories.find { it.id.toString() == id }?.let { SyncWriteHelper.pushCategory(it) }
-                                    EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER ->
-                                        periodLedger.find { it.id.toString() == id }?.let { SyncWriteHelper.pushPeriodLedgerEntry(it) }
-                                }
-                            }
-                        }
-                    }
-                    android.util.Log.i("Integrity", "Cache-based integrity check complete")
-                } catch (e: Exception) {
-                    android.util.Log.w("Integrity", "Cache integrity check failed: ${e.message}")
-                }
-
-                // Recompute cash from local data
+                runIntegrityCheck()
                 recomputeCash()
                 android.util.Log.i("Integrity", "Startup cash verification: $availableCash")
 
@@ -1543,6 +1539,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // ═══════════════════════════════════════════════════════════════════
 
     fun onResume() {
+        if (!dataLoaded) return  // Initial async load in progress
         syncTrigger++
         android.util.Log.i("OnResume", "onResume called: dataLoaded=$dataLoaded txns=${transactions.size} pl=${periodLedger.size} availableCash=$availableCash")
         // Reload transactions from disk on resume to pick up widget-added entries
@@ -1555,6 +1552,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             recomputeCash()
         } else {
             android.util.Log.i("OnResume", "Transactions match disk, no reload needed")
+        }
+
+        // Time-gated maintenance (once per 24h) — keeps long-lived ViewModels healthy
+        val now = System.currentTimeMillis()
+        val lastMaintenance = prefs.getLong("lastMaintenanceCheck", 0L)
+        if (now - lastMaintenance > 24 * 60 * 60 * 1000L) {
+            prefs.edit().putLong("lastMaintenanceCheck", now).apply()
+            viewModelScope.launch {
+                // Backup check
+                if (BackupManager.isBackupDue(context)) {
+                    val pwd = BackupManager.getPassword(context)
+                    if (pwd != null) {
+                        withContext(Dispatchers.IO) { BackupManager.performBackup(context, pwd) }
+                        lastBackupDate = backupPrefs.getString("last_backup_date", null)
+                    }
+                }
+                // Integrity check
+                if (isSyncConfigured && syncGroupId != null) {
+                    runIntegrityCheck()
+                    recomputeCash()
+                }
+            }
         }
     }
 
@@ -1627,6 +1646,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // ═══════════════════════════════════════════════════════════════════
 
     init {
+        instance = java.lang.ref.WeakReference(this)
+
         // App Check is initialized in BudgeTrakApplication.onCreate() so it
         // runs even when the process is started by WorkManager without an Activity.
 
@@ -1657,37 +1678,119 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             android.util.Log.w("Network", "Connectivity monitor failed: ${e.message}")
         }
 
-        // ── Load data from repositories ──
-        android.util.Log.i("DataLoad", "START: loading repos synchronously on ${Thread.currentThread().name}")
-        transactions.addAll(TransactionRepository.load(context))
-        android.util.Log.i("DataLoad", "transactions: ${transactions.size}")
+        // ── Load data from repositories (async on IO, learned-timing progress) ──
+        viewModelScope.launch(Dispatchers.IO) {
+            android.util.Log.i("DataLoad", "START: loading repos on ${Thread.currentThread().name}")
 
-        val loadedCats = CategoryRepository.load(context).toMutableList()
-        var catsChanged = false
-        for (def in DEFAULT_CATEGORY_DEFS) {
-            val byTag = loadedCats.indexOfFirst { it.tag == def.tag }
-            if (byTag >= 0) continue
-            val usedIds = loadedCats.map { it.id }.toSet()
-            var id: Int
-            do { id = (0..65535).random() } while (id in usedIds)
-            val name = getDefaultCategoryName(def.tag, strings) ?: def.tag
-            val devId = SyncIdGenerator.getOrCreateDeviceId(context)
-            loadedCats.add(Category(id = id, name = name, iconName = def.iconName, tag = def.tag,
-                charted = def.charted, widgetVisible = def.widgetVisible,
-                deviceId = devId))
-            catsChanged = true
+            // Read stored segment times (EMA-smoothed from previous launches)
+            // Defaults based on measured times: txns ~50ms, cats ~10ms, others ~5ms each
+            val defaultTimes = floatArrayOf(50f, 10f, 5f, 5f, 5f, 5f, 5f)
+            val hasStoredTimes = prefs.contains("loadSegTime_0")
+            val storedTimes = FloatArray(7) { prefs.getFloat("loadSegTime_$it", defaultTimes[it]) }
+            val segTimes = storedTimes.clone()
+            val total = segTimes.sum().coerceAtLeast(1f)
+            val boundaries = FloatArray(8)
+            var cum = 0f
+            for (i in segTimes.indices) { boundaries[i] = cum / total; cum += segTimes[i] }
+            boundaries[7] = 1f
+
+            val actualTimes = FloatArray(7)
+            val loadStartNanos = System.nanoTime()
+            var segIdx = 0
+            var segStartNanos = loadStartNanos
+
+            // Ticker: interpolate progress within current segment at ~60fps
+            val ticker = launch {
+                while (true) {
+                    val i = segIdx
+                    val elapsed = (System.nanoTime() - segStartNanos) / 1_000_000f
+                    val fraction = (elapsed / segTimes[i].coerceAtLeast(1f)).coerceAtMost(1f)
+                    loadProgress = boundaries[i] + (boundaries[i + 1] - boundaries[i]) * fraction
+                    delay(16)
+                }
+            }
+
+            // Segment 0: Transactions
+            val loadedTxns = TransactionRepository.load(context)
+            actualTimes[0] = (System.nanoTime() - segStartNanos) / 1_000_000f
+            android.util.Log.i("DataLoad", "transactions: ${loadedTxns.size}")
+
+            // Segment 1: Categories
+            segIdx = 1; segStartNanos = System.nanoTime()
+            val loadedCats = CategoryRepository.load(context).toMutableList()
+            var catsChanged = false
+            for (def in DEFAULT_CATEGORY_DEFS) {
+                val byTag = loadedCats.indexOfFirst { it.tag == def.tag }
+                if (byTag >= 0) continue
+                val usedIds = loadedCats.map { it.id }.toSet()
+                var id: Int
+                do { id = (0..65535).random() } while (id in usedIds)
+                val name = getDefaultCategoryName(def.tag, strings) ?: def.tag
+                val devId = SyncIdGenerator.getOrCreateDeviceId(context)
+                loadedCats.add(Category(id = id, name = name, iconName = def.iconName, tag = def.tag,
+                    charted = def.charted, widgetVisible = def.widgetVisible,
+                    deviceId = devId))
+                catsChanged = true
+            }
+            if (catsChanged) CategoryRepository.save(context, loadedCats)
+            actualTimes[1] = (System.nanoTime() - segStartNanos) / 1_000_000f
+
+            // Segment 2: Income Sources
+            segIdx = 2; segStartNanos = System.nanoTime()
+            val loadedIs = IncomeSourceRepository.load(context)
+            actualTimes[2] = (System.nanoTime() - segStartNanos) / 1_000_000f
+
+            // Segment 3: Recurring Expenses
+            segIdx = 3; segStartNanos = System.nanoTime()
+            val loadedRe = RecurringExpenseRepository.load(context)
+            actualTimes[3] = (System.nanoTime() - segStartNanos) / 1_000_000f
+
+            // Segment 4: Amortization Entries
+            segIdx = 4; segStartNanos = System.nanoTime()
+            val loadedAe = AmortizationRepository.load(context)
+            actualTimes[4] = (System.nanoTime() - segStartNanos) / 1_000_000f
+
+            // Segment 5: Savings Goals
+            segIdx = 5; segStartNanos = System.nanoTime()
+            val loadedSg = SavingsGoalRepository.load(context)
+            actualTimes[5] = (System.nanoTime() - segStartNanos) / 1_000_000f
+
+            // Segment 6: Period Ledger
+            segIdx = 6; segStartNanos = System.nanoTime()
+            val loadedPl = PeriodLedgerRepository.load(context)
+            actualTimes[6] = (System.nanoTime() - segStartNanos) / 1_000_000f
+
+            // Minimum display time so the loading screen doesn't just flash
+            val totalMs = (System.nanoTime() - loadStartNanos) / 1_000_000L
+            val minDisplayMs = 500L
+            if (totalMs < minDisplayMs) delay(minDisplayMs - totalMs)
+
+            ticker.cancel()
+            loadProgress = 1f
+
+            // Update stored times: first run saves actual directly, subsequent uses EMA
+            prefs.edit().apply {
+                for (i in 0 until 7) {
+                    val updated = if (hasStoredTimes) (4 * storedTimes[i] + actualTimes[i]) / 5f else actualTimes[i]
+                    putFloat("loadSegTime_$i", updated)
+                }
+                apply()
+            }
+            android.util.Log.i("DataLoad", "segment ms: ${actualTimes.map { "%.1f".format(it) }}")
+
+            withContext(Dispatchers.Main) {
+                transactions.addAll(loadedTxns)
+                categories.addAll(loadedCats)
+                incomeSources.addAll(loadedIs)
+                recurringExpenses.addAll(loadedRe)
+                amortizationEntries.addAll(loadedAe)
+                savingsGoals.addAll(loadedSg)
+                periodLedger.addAll(loadedPl)
+                android.util.Log.i("DataLoad", "DONE: txns=${transactions.size} cats=${categories.size} re=${recurringExpenses.size} is=${incomeSources.size} ae=${amortizationEntries.size} sg=${savingsGoals.size} pl=${periodLedger.size}")
+                dataLoaded = true
+                android.util.Log.i("DataLoad", "dataLoaded=true, availableCash=$availableCash")
+            }
         }
-        if (catsChanged) CategoryRepository.save(context, loadedCats)
-        categories.addAll(loadedCats)
-
-        incomeSources.addAll(IncomeSourceRepository.load(context))
-        recurringExpenses.addAll(RecurringExpenseRepository.load(context))
-        amortizationEntries.addAll(AmortizationRepository.load(context))
-        savingsGoals.addAll(SavingsGoalRepository.load(context))
-        periodLedger.addAll(PeriodLedgerRepository.load(context))
-        android.util.Log.i("DataLoad", "DONE: txns=${transactions.size} cats=${categories.size} re=${recurringExpenses.size} is=${incomeSources.size} ae=${amortizationEntries.size} sg=${savingsGoals.size} pl=${periodLedger.size}")
-        dataLoaded = true
-        android.util.Log.i("DataLoad", "dataLoaded=true, availableCash=$availableCash")
 
         // ── Firebase anonymous auth ──
         viewModelScope.launch {
@@ -1732,16 +1835,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // ── Sync group configuration ──
-        if (isSyncConfigured && syncGroupId != null) {
-            configureSyncGroup()
-        }
-        if (isSyncConfigured) {
-            com.syncbudget.app.data.sync.BackgroundSyncWorker.schedule(context)
+        // ── Sync group configuration (waits for data) ──
+        viewModelScope.launch {
+            snapshotFlow { dataLoaded }.first { it }
+            if (isSyncConfigured && syncGroupId != null) {
+                configureSyncGroup()
+            }
+            if (isSyncConfigured) {
+                com.syncbudget.app.data.sync.BackgroundSyncWorker.schedule(context)
+            }
         }
 
         // ── One-time migrations ──
         viewModelScope.launch {
+            snapshotFlow { dataLoaded }.first { it }
             // Wait for all listeners to deliver before running migrations.
             if (isSyncConfigured && !initialSyncReceived) {
                 val synced = docSync?.awaitInitialSync(30_000) ?: false
@@ -2011,21 +2118,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // ── Backup check (one-time) ──
-        viewModelScope.launch {
-            if (BackupManager.isBackupDue(context)) {
-                val pwd = BackupManager.getPassword(context)
-                if (pwd != null) {
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        BackupManager.performBackup(context, pwd)
-                    }
-                    lastBackupDate = backupPrefs.getString("last_backup_date", null)
-                }
-            }
-        }
-
         // ── Quick start auto-launch (one-time) ──
         viewModelScope.launch {
+            snapshotFlow { dataLoaded }.first { it }
             if (incomeSources.isEmpty() && !isSyncConfigured &&
                 !prefs.getBoolean("quickStartCompleted", false)) {
                 quickStartStep = QuickStartStep.WELCOME
@@ -2034,6 +2129,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         // ── One-time simulation trace on startup ──
         viewModelScope.launch {
+            snapshotFlow { dataLoaded }.first { it }
             try {
                 val trace = SavingsSimulator.traceSimulation(
                     incomeSources = activeIncomeSources,
@@ -2055,6 +2151,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         // ── Period refresh loop (every 30s, waits for initialSyncReceived) ──
         viewModelScope.launch {
+            snapshotFlow { dataLoaded }.first { it }
             // Wait for initial sync if needed
             while (!initialSyncReceived) { delay(200) }
             while (true) {
@@ -2101,15 +2198,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         // ── Debug dump (one-time, debug builds only) ──
         if (BuildConfig.DEBUG) {
-            try {
-                val diagText = DiagDumpBuilder.build(context, simAvailableCash = simAvailableCash)
-                DiagDumpBuilder.writeDiagToMediaStore(context, "sync_diag.txt", diagText)
-                val devName = DiagDumpBuilder.sanitizeDeviceName(GroupManager.getDeviceName(context))
-                if (devName.isNotEmpty()) {
-                    DiagDumpBuilder.writeDiagToMediaStore(context, "sync_diag_${devName}.txt", diagText)
+            viewModelScope.launch {
+                snapshotFlow { dataLoaded }.first { it }
+                try {
+                    val diagText = DiagDumpBuilder.build(context, simAvailableCash = simAvailableCash)
+                    DiagDumpBuilder.writeDiagToMediaStore(context, "sync_diag.txt", diagText)
+                    val devName = DiagDumpBuilder.sanitizeDeviceName(GroupManager.getDeviceName(context))
+                    if (devName.isNotEmpty()) {
+                        DiagDumpBuilder.writeDiagToMediaStore(context, "sync_diag_${devName}.txt", diagText)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("DiagDump", "Diag write failed: ${e.message}")
                 }
-            } catch (e: Exception) {
-                android.util.Log.e("DiagDump", "Diag write failed: ${e.message}")
             }
         }
     }
@@ -2119,6 +2219,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // ═══════════════════════════════════════════════════════════════════
 
     override fun onCleared() {
+        instance = null
         docSync?.dispose()
         SyncWriteHelper.dispose()
         com.syncbudget.app.data.sync.RealtimePresenceService.cleanup()
