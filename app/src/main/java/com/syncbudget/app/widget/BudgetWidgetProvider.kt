@@ -251,7 +251,7 @@ class BudgetWidgetProvider : AppWidgetProvider() {
             val rightPad = (widthPx - result.rightCardEdge).coerceAtLeast(0)
             views.setViewPadding(R.id.widget_button_bar, leftPad, 0, rightPad, 0)
 
-            // Tap Solari display or logo → open app
+            // Tap Solari display or logo → open app (singleTask reuses existing)
             val openIntent = Intent(context, MainActivity::class.java)
             val openPending = PendingIntent.getActivity(
                 context, 0, openIntent,
