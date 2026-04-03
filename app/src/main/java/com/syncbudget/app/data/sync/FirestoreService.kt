@@ -30,8 +30,8 @@ data class AdminClaim(
     val claimantName: String,
     val claimedAt: Long,
     val expiresAt: Long,
-    val objections: List<String> = emptyList(),
-    val status: String = "pending"
+    val votes: Map<String, String> = emptyMap(), // deviceId → "accept"|"reject"
+    val status: String = "pending" // "pending"|"approved"|"rejected"
 )
 
 object FirestoreService {
@@ -344,7 +344,7 @@ object FirestoreService {
             "claimantName" to claim.claimantName,
             "claimedAt" to claim.claimedAt,
             "expiresAt" to claim.expiresAt,
-            "objections" to claim.objections,
+            "votes" to claim.votes,
             "status" to claim.status
         )
         withTimeout(OP_TIMEOUT_MS) {
@@ -371,12 +371,14 @@ object FirestoreService {
             claimantName = doc.getString("claimantName") ?: "",
             claimedAt = doc.getLong("claimedAt") ?: 0L,
             expiresAt = doc.getLong("expiresAt") ?: 0L,
-            objections = (doc.get("objections") as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
+            votes = (doc.get("votes") as? Map<*, *>)?.mapNotNull { (k, v) ->
+                if (k is String && v is String) k to v else null
+            }?.toMap() ?: emptyMap(),
             status = doc.getString("status") ?: "pending"
         )
     }
 
-    suspend fun addObjection(groupId: String, deviceId: String) {
+    suspend fun castVote(groupId: String, deviceId: String, vote: String) {
         val ref = db.collection("groups")
             .document(groupId)
             .collection("adminClaim")
@@ -384,11 +386,14 @@ object FirestoreService {
         withTimeout(OP_TIMEOUT_MS) {
             db.runTransaction { transaction ->
                 val snapshot = transaction.get(ref)
-                val objections = (snapshot.get("objections") as? List<*>)?.filterIsInstance<String>()?.toMutableList() ?: mutableListOf()
-                if (!objections.contains(deviceId)) {
-                    objections.add(deviceId)
-                }
-                transaction.update(ref, "objections", objections)
+                if (snapshot.getString("status") != "pending") return@runTransaction // already resolved
+                @Suppress("UNCHECKED_CAST")
+                val votes = (snapshot.get("votes") as? Map<String, String>)?.toMutableMap() ?: mutableMapOf()
+                votes[deviceId] = vote
+                val updates = mutableMapOf<String, Any>("votes" to votes)
+                // Immediate rejection on any reject vote
+                if (vote == "reject") updates["status"] = "rejected"
+                transaction.update(ref, updates)
             }.await()
         }
     }

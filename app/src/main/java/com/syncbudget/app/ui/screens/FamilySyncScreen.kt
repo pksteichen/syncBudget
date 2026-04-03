@@ -137,7 +137,8 @@ fun FamilySyncScreen(
     onPurgeStaleRoster: () -> Unit = {},
     pendingAdminClaim: AdminClaim? = null,
     onClaimAdmin: () -> Unit = {},
-    onObjectClaim: () -> Unit = {},
+    onAcceptClaim: () -> Unit = {},
+    onRejectClaim: () -> Unit = {},
     syncErrorMessage: String? = null,
     syncProgressMessage: String? = null,
     onCreateGroup: (nickname: String) -> Unit,
@@ -599,11 +600,22 @@ fun FamilySyncScreen(
                                         fontWeight = FontWeight.Bold
                                     )
                                     Spacer(modifier = Modifier.height(8.dp))
-                                    OutlinedButton(
-                                        onClick = onObjectClaim,
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Text(S.sync.objectClaim)
+                                        OutlinedButton(
+                                            onClick = onAcceptClaim,
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text(S.sync.claimAccept)
+                                        }
+                                        OutlinedButton(
+                                            onClick = onRejectClaim,
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text(S.sync.claimReject)
+                                        }
                                     }
                                 }
                             }

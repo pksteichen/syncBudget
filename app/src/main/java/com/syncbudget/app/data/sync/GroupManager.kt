@@ -57,6 +57,11 @@ object GroupManager {
         return prefs.getBoolean("isAdmin", false)
     }
 
+    fun setAdmin(context: Context, isAdmin: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putBoolean("isAdmin", isAdmin).apply()
+    }
+
     fun getDeviceName(context: Context): String {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         return prefs.getString("deviceName", android.os.Build.MODEL) ?: android.os.Build.MODEL

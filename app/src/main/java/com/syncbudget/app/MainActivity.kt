@@ -281,6 +281,40 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
+                // Admin claim vote popup — shown on dashboard when another device claims admin
+                if (vm.currentScreen == "main" && vm.adminClaimVoteNeeded != null) {
+                    val claim = vm.adminClaimVoteNeeded!!
+                    AdAwareAlertDialog(
+                        onDismissRequest = { vm.adminClaimVoteNeeded = null },
+                        title = { DialogHeader("Sync") },
+                        text = { Text(vm.strings.sync.claimVotePrompt(claim.claimantName)) },
+                        confirmButton = {
+                            DialogPrimaryButton(onClick = { vm.voteOnAdminClaim("accept") }) {
+                                Text(vm.strings.sync.claimAccept)
+                            }
+                        },
+                        dismissButton = {
+                            DialogDangerButton(onClick = { vm.voteOnAdminClaim("reject") }) {
+                                Text(vm.strings.sync.claimReject)
+                            }
+                        }
+                    )
+                }
+
+                // Admin claim result popup — shown on dashboard for claimant
+                if (vm.currentScreen == "main" && vm.adminClaimMessage != null) {
+                    AdAwareAlertDialog(
+                        onDismissRequest = { vm.adminClaimMessage = null },
+                        title = { DialogHeader("Sync") },
+                        text = { Text(vm.adminClaimMessage ?: "") },
+                        confirmButton = {
+                            DialogPrimaryButton(onClick = { vm.adminClaimMessage = null }) {
+                                Text(vm.strings.common.ok)
+                            }
+                        }
+                    )
+                }
+
                 when (vm.currentScreen) {
                     "main" -> MainScreen(
                         soundPlayer = soundPlayer,
@@ -2002,15 +2036,8 @@ class MainActivity : ComponentActivity() {
                     } catch (_: Exception) {}
                 }
             },
-            onObjectClaim = {
-                coroutineScope.launch {
-                    try {
-                        val gId = vm.syncGroupId ?: return@launch
-                        FirestoreService.addObjection(gId, vm.localDeviceId)
-                        vm.pendingAdminClaim = FirestoreService.getAdminClaim(gId)
-                    } catch (_: Exception) {}
-                }
-            },
+            onAcceptClaim = { vm.voteOnAdminClaim("accept") },
+            onRejectClaim = { vm.voteOnAdminClaim("reject") },
             syncErrorMessage = vm.syncErrorMessage,
             syncProgressMessage = vm.syncProgressMessage,
             onCreateGroup = { nickname ->

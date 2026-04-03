@@ -290,7 +290,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var lastSyncTimeDisplay by mutableStateOf<String?>(null)
     private var imageLedgerListener: com.google.firebase.firestore.ListenerRegistration? = null
     private var deviceDocListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private var adminClaimListener: com.google.firebase.firestore.ListenerRegistration? = null
     var syncEvictionMessage by mutableStateOf<String?>(null)
+    var adminClaimMessage by mutableStateOf<String?>(null)  // dashboard popup for vote or result
+    var adminClaimVoteNeeded by mutableStateOf<AdminClaim?>(null)  // non-null = show vote dialog
 
     // Gate for sync-dependent code: true immediately for solo users,
     // set to true after initial Firestore listener snapshot for synced users.
@@ -1041,6 +1044,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         com.syncbudget.app.data.sync.RealtimePresenceService.cleanup()
         imageLedgerListener?.remove(); imageLedgerListener = null
         deviceDocListener?.remove(); deviceDocListener = null
+        adminClaimListener?.remove(); adminClaimListener = null
     }
 
     /**
@@ -1060,6 +1064,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         // Dispose all sync resources
         deviceDocListener?.remove(); deviceDocListener = null
+        adminClaimListener?.remove(); adminClaimListener = null
         docSync?.dispose(); docSync = null
         SyncWriteHelper.dispose()
         com.syncbudget.app.data.sync.RealtimePresenceService.cleanup()
@@ -1080,6 +1085,98 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         // If currently on sync screen, stay — it shows join/create when not configured
         // (no navigation needed)
+    }
+
+    /** Handle admin claim document changes. */
+    private fun onAdminClaimChanged(claim: AdminClaim?) {
+        if (claim == null || claim.status != "pending") {
+            // Claim resolved or deleted — check if we're the claimant and show result
+            if (claim != null && claim.claimantDeviceId == localDeviceId) {
+                adminClaimMessage = when (claim.status) {
+                    "approved" -> strings.sync.claimApproved
+                    "rejected" -> strings.sync.claimRejected
+                    else -> null
+                }
+            }
+            pendingAdminClaim = if (claim?.status == "pending") claim else null
+            adminClaimVoteNeeded = null
+            return
+        }
+        pendingAdminClaim = claim
+        // If we're NOT the claimant and haven't voted yet, prompt for vote
+        if (claim.claimantDeviceId != localDeviceId && !claim.votes.containsKey(localDeviceId)) {
+            adminClaimVoteNeeded = claim
+        }
+        // Only the claimant's device resolves — prevents race between multiple devices
+        if (claim.claimantDeviceId == localDeviceId) {
+            // Auto-resolve if expired
+            if (System.currentTimeMillis() > claim.expiresAt) {
+                resolveExpiredClaim(claim)
+                return
+            }
+            // Check if all non-claimant devices in roster have voted → resolve immediately
+            val otherDeviceIds = syncDevices
+                .map { it.deviceId }
+                .filter { it != claim.claimantDeviceId }
+                .toSet()
+            if (otherDeviceIds.isNotEmpty() && otherDeviceIds.all { claim.votes.containsKey(it) }) {
+                resolveExpiredClaim(claim)
+            }
+        }
+    }
+
+    /** Resolve an expired admin claim. Any reject = rejected. All accepts (ignoring non-voters) = approved. */
+    private fun resolveExpiredClaim(claim: AdminClaim) {
+        val gid = syncGroupId ?: return
+        viewModelScope.launch {
+            try {
+                val hasReject = claim.votes.values.any { it == "reject" }
+                val newStatus = if (hasReject) "rejected" else "approved"
+                FirestoreService.resolveAdminClaim(gid, newStatus)
+                if (newStatus == "approved") {
+                    val oldAdmin = syncDevices.find { it.isAdmin }?.deviceId
+                    if (oldAdmin != null) {
+                        // transferAdmin also deletes the claim doc
+                        FirestoreService.transferAdmin(gid, oldAdmin, claim.claimantDeviceId)
+                    } else {
+                        FirestoreService.deleteAdminClaim(gid)
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("AdminClaim", "Resolve failed: ${e.message}")
+            }
+        }
+    }
+
+    /** Cast a vote on the pending admin claim. */
+    fun voteOnAdminClaim(vote: String) {
+        val gid = syncGroupId ?: return
+        adminClaimVoteNeeded = null
+        viewModelScope.launch {
+            try {
+                FirestoreService.castVote(gid, localDeviceId, vote)
+                // Listener (adminClaimListener) will update pendingAdminClaim via onAdminClaimChanged
+            } catch (e: Exception) {
+                android.util.Log.w("AdminClaim", "Vote failed: ${e.message}")
+            }
+        }
+    }
+
+    /** Handle isAdmin change from device doc listener. */
+    private fun onAdminStatusChanged(newIsAdmin: Boolean) {
+        if (newIsAdmin != isSyncAdmin) {
+            android.util.Log.i("SyncAdmin", "Admin status changed: $isSyncAdmin → $newIsAdmin")
+            isSyncAdmin = newIsAdmin
+            GroupManager.setAdmin(context, newIsAdmin)
+            // Refresh device list to update roster
+            val gid = syncGroupId ?: return
+            viewModelScope.launch {
+                try {
+                    syncDevices = GroupManager.getDevices(gid)
+                    lastPresenceRecords?.let { mergePresenceIntoRoster(it) }
+                } catch (_: Exception) {}
+            }
+        }
     }
 
     /** Merge RTDB presence records into the current syncDevices roster. */
@@ -1399,7 +1496,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 android.util.Log.w("SyncLoop", "Device metadata write failed: ${e.message}")
             }
 
-            // Listen to own device doc for removal/dissolution (after doc is confirmed to exist)
+            // Listen to own device doc for removal/dissolution + admin status changes
             deviceDocListener?.remove()
             deviceDocListener = com.google.firebase.firestore.FirebaseFirestore.getInstance()
                 .collection("groups").document(groupId)
@@ -1413,6 +1510,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         evictFromSync(strings.sync.evictionDissolved)
                     } else if (snapshot.getBoolean("removed") == true) {
                         evictFromSync(strings.sync.evictionRemoved)
+                    } else {
+                        // Detect admin status changes (from admin claim transfer)
+                        val newIsAdmin = snapshot.getBoolean("isAdmin") ?: false
+                        onAdminStatusChanged(newIsAdmin)
+                    }
+                }
+
+            // Listen to admin claim doc for vote requests and results
+            adminClaimListener?.remove()
+            adminClaimListener = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                .collection("groups").document(groupId)
+                .collection("adminClaim").document("current")
+                .addSnapshotListener { snapshot, err ->
+                    if (err != null) return@addSnapshotListener
+                    if (snapshot == null || !snapshot.exists()) {
+                        onAdminClaimChanged(null)
+                    } else {
+                        val claim = AdminClaim(
+                            claimantDeviceId = snapshot.getString("claimantDeviceId") ?: "",
+                            claimantName = snapshot.getString("claimantName") ?: "",
+                            claimedAt = snapshot.getLong("claimedAt") ?: 0L,
+                            expiresAt = snapshot.getLong("expiresAt") ?: 0L,
+                            votes = (snapshot.get("votes") as? Map<*, *>)?.mapNotNull { (k, v) ->
+                                if (k is String && v is String) k to v else null
+                            }?.toMap() ?: emptyMap(),
+                            status = snapshot.getString("status") ?: "pending"
+                        )
+                        onAdminClaimChanged(claim)
                     }
                 }
 
@@ -2262,6 +2387,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         com.syncbudget.app.data.sync.RealtimePresenceService.cleanup()
         imageLedgerListener?.remove()
         deviceDocListener?.remove()
+        adminClaimListener?.remove()
         try {
             networkCallback?.let {
                 val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
