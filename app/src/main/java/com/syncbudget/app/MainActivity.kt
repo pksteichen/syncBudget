@@ -1224,7 +1224,7 @@ class MainActivity : ComponentActivity() {
                 confirmButton = {
                     DialogPrimaryButton(onClick = {
                         vm.showSavePhotosDialog = false
-                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                        vm.launchIO {
                             try {
                                 val photosDir = java.io.File(BackupManager.getBudgetrakDir(), "photos")
                                 photosDir.mkdirs()
@@ -1336,7 +1336,7 @@ class MainActivity : ComponentActivity() {
                                         restoring = true
                                         val backup = selectedBackup!!
                                         val pwd = restorePassword.toCharArray()
-                                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                        vm.launchIO {
                                             val sysResult = BackupManager.restoreSystemBackup(context, backup.systemFile, pwd)
                                             if (sysResult.isSuccess && backup.photosFile != null) {
                                                 val photosResult = BackupManager.restorePhotosBackup(context, backup.photosFile, pwd)
@@ -1581,7 +1581,7 @@ class MainActivity : ComponentActivity() {
             onBackupNow = {
                 val pwd = BackupManager.getPassword(context)
                 if (pwd != null) {
-                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    vm.launchIO {
                         BackupManager.performBackup(context, pwd)
                         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                             vm.lastBackupDate = vm.backupPrefs.getString("last_backup_date", null)

@@ -1198,6 +1198,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Launch a coroutine on IO, scoped to ViewModel lifecycle. */
+    fun launchIO(block: suspend kotlinx.coroutines.CoroutineScope.() -> Unit) {
+        viewModelScope.launch(Dispatchers.IO, block = block)
+    }
+
     /** Reset all sync-related state to "off" (used by leave, dissolve, evict). */
     fun resetSyncState() {
         syncPrefs.edit().remove("catIdRemap").remove("lastSuccessfulSync").apply()
