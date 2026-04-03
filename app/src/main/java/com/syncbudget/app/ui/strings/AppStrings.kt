@@ -578,6 +578,8 @@ data class SyncStrings(
     val joinGroupDescription: String,
     val leaveGroup: String,
     val dissolveGroup: String,
+    val evictionRemoved: String,
+    val evictionDissolved: String,
     val syncNow: String,
     val syncCashToAdmin: String,
     val lastSynced: (String) -> String,

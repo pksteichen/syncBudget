@@ -51,6 +51,7 @@ object FirestoreService {
     suspend fun updateDeviceMetadata(
         groupId: String,
         deviceId: String,
+        deviceName: String = "",
         syncVersion: Long,
         fingerprintJson: String? = null,
         appSyncVersion: Int = 0,
@@ -60,9 +61,11 @@ object FirestoreService {
         uploadSpeedMeasuredAt: Long = 0L
     ) = withTimeout(OP_TIMEOUT_MS) {
         val data = mutableMapOf<String, Any>(
+            "deviceId" to deviceId,
             "lastSyncVersion" to syncVersion,
             "photoCapable" to photoCapable
         )
+        if (deviceName.isNotEmpty()) data["deviceName"] = deviceName
         if (appSyncVersion > 0) {
             data["appSyncVersion"] = appSyncVersion
             data["minSyncVersion"] = minSyncVersion
@@ -114,7 +117,7 @@ object FirestoreService {
     suspend fun getGroupHealthStatus(groupId: String): GroupHealthStatus = withTimeout(OP_TIMEOUT_MS) {
         val doc = db.collection("groups").document(groupId).get().await()
         GroupHealthStatus(
-            isDissolved = doc.exists() && doc.getString("status") == "dissolved",
+            isDissolved = !doc.exists() || doc.getString("status") == "dissolved",
             subscriptionExpiry = doc.getLong("subscriptionExpiry") ?: 0L
         )
     }

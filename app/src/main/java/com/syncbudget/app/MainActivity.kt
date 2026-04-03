@@ -267,6 +267,20 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                // Sync eviction popup — shown once when dashboard is displayed
+                if (vm.currentScreen == "main" && vm.syncEvictionMessage != null) {
+                    AdAwareAlertDialog(
+                        onDismissRequest = { vm.syncEvictionMessage = null },
+                        title = { DialogHeader("Sync") },
+                        text = { Text(vm.syncEvictionMessage ?: "") },
+                        confirmButton = {
+                            DialogPrimaryButton(onClick = { vm.syncEvictionMessage = null }) {
+                                Text(vm.strings.common.ok)
+                            }
+                        }
+                    )
+                }
+
                 when (vm.currentScreen) {
                     "main" -> MainScreen(
                         soundPlayer = soundPlayer,
@@ -1861,10 +1875,12 @@ class MainActivity : ComponentActivity() {
                             vm.isSyncConfigured = true
                             vm.syncGroupId = newGroup.groupId
                             vm.isSyncAdmin = true
-                            vm.syncStatus = "synced"
                             vm.lastSyncActivity = 0L
                             vm.syncDevices = emptyList()
                             vm.generatedPairingCode = null
+                            vm.syncEvictionMessage = null
+                            vm.configureSyncGroup()
+                            com.syncbudget.app.data.sync.BackgroundSyncWorker.schedule(context)
                         }
                     }
                 }
@@ -2062,7 +2078,9 @@ class MainActivity : ComponentActivity() {
                         }
                         vm.saveIncomeSources(null)
 
-                        vm.syncStatus = "synced"
+                        vm.syncEvictionMessage = null
+                        vm.configureSyncGroup()
+                        com.syncbudget.app.data.sync.BackgroundSyncWorker.schedule(context)
                     } catch (_: Exception) {
                         vm.syncStatus = "error"
                     }
@@ -2135,8 +2153,10 @@ class MainActivity : ComponentActivity() {
                             vm.syncGroupId = GroupManager.getGroupId(context)
                             vm.isSyncAdmin = false
                             vm.isSyncConfigured = true
-                            vm.syncStatus = "synced"
                             vm.syncProgressMessage = null
+                            vm.syncEvictionMessage = null // clear any pending eviction popup
+                            vm.configureSyncGroup()
+                            com.syncbudget.app.data.sync.BackgroundSyncWorker.schedule(context)
                         } else {
                             vm.syncProgressMessage = null
                             vm.syncErrorMessage = "Invalid or expired pairing code"
@@ -2150,6 +2170,8 @@ class MainActivity : ComponentActivity() {
             },
             onLeaveGroup = {
                 coroutineScope.launch {
+                    // Dispose listeners BEFORE leaveGroup to prevent onDisconnect re-writing RTDB
+                    vm.disposeSyncListeners()
                     GroupManager.leaveGroup(context)
                     vm.syncPrefs.edit()
                         .remove("catIdRemap")
@@ -2172,6 +2194,7 @@ class MainActivity : ComponentActivity() {
                     coroutineScope.launch {
                         try {
                             android.util.Log.d("Sync", "Dissolving group $gId")
+                            vm.disposeSyncListeners()
                             GroupManager.dissolveGroup(context, gId) { msg ->
                                 vm.syncProgressMessage = msg
                             }
@@ -2189,6 +2212,7 @@ class MainActivity : ComponentActivity() {
                             vm.pendingAdminClaim = null
                             vm.syncErrorMessage = null
                             vm.syncProgressMessage = null
+                            vm.syncEvictionMessage = null // admin initiated — no popup needed
                         } catch (e: Exception) {
                             android.util.Log.e("Sync", "Dissolve failed, falling back to local leave", e)
                             try {
@@ -2272,6 +2296,7 @@ class MainActivity : ComponentActivity() {
                 coroutineScope.launch {
                     try {
                         FirestoreService.removeDevice(gId, targetDeviceId)
+                        com.syncbudget.app.data.sync.RealtimePresenceService.deletePresenceNode(gId, targetDeviceId)
                         vm.syncDevices = GroupManager.getDevices(gId)
                     } catch (_: Exception) {}
                 }

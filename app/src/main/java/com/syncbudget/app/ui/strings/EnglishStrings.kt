@@ -551,6 +551,8 @@ object EnglishStrings : AppStrings {
         joinGroupDescription = "Enter a pairing code from a family member to join their sync group.",
         leaveGroup = "Leave Group",
         dissolveGroup = "Dissolve Group",
+        evictionRemoved = "The administrator of your Sync group has removed your device. You can rejoin on the Sync page in Settings.",
+        evictionDissolved = "The administrator of your Sync group has dissolved the group. You can create or join a new group on the Sync page in Settings.",
         syncNow = "Sync Now",
         syncCashToAdmin = "Sync Available Cash to Admin",
         lastSynced = { time -> "Last data sent/received: $time" },

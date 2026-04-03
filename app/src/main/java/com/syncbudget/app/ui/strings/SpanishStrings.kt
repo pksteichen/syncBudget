@@ -551,6 +551,8 @@ object SpanishStrings : AppStrings {
         joinGroupDescription = "Ingresa un c\u00f3digo de emparejamiento de un familiar para unirte a su grupo.",
         leaveGroup = "Salir del Grupo",
         dissolveGroup = "Disolver Grupo",
+        evictionRemoved = "El administrador de tu grupo de sincronizaci\u00f3n ha eliminado tu dispositivo. Puedes volver a unirte en la p\u00e1gina de Sincronizaci\u00f3n en Configuraci\u00f3n.",
+        evictionDissolved = "El administrador de tu grupo de sincronizaci\u00f3n ha disuelto el grupo. Puedes crear o unirte a un nuevo grupo en la p\u00e1gina de Sincronizaci\u00f3n en Configuraci\u00f3n.",
         syncNow = "Sincronizar Ahora",
         syncCashToAdmin = "Sincronizar Efectivo con Admin",
         lastSynced = { time -> "\u00daltima sincronizaci\u00f3n: $time" },

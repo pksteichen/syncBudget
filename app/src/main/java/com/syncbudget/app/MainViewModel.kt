@@ -289,6 +289,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var syncRepairAlert by mutableStateOf(prefs.getBoolean("syncRepairAlert", false))
     var lastSyncTimeDisplay by mutableStateOf<String?>(null)
     private var imageLedgerListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private var deviceDocListener: com.google.firebase.firestore.ListenerRegistration? = null
+    var syncEvictionMessage by mutableStateOf<String?>(null)
 
     // Gate for sync-dependent code: true immediately for solo users,
     // set to true after initial Firestore listener snapshot for synced users.
@@ -304,6 +306,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // ── docSync ──
     var docSync: FirestoreDocSync? = null
     private var networkCallback: android.net.ConnectivityManager.NetworkCallback? = null
+    private var lastPresenceRecords: List<com.syncbudget.app.data.sync.PresenceRecord>? = null
+    private var isRefreshingDeviceList = false
         private set
 
     // ── Save Caches (private) ──
@@ -978,6 +982,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             viewModelScope.launch {
                 try {
                     syncDevices = GroupManager.getDevices(gid)
+                    lastPresenceRecords?.let { mergePresenceIntoRoster(it) }
                     cacheDeviceRoster(syncDevices)
                     android.util.Log.i("SyncLoop", "Device list refreshed after listener recovery")
                 } catch (e: Exception) {
@@ -1003,7 +1008,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             android.util.Log.e("SyncLoop", "Failed to start listeners", e)
         }
 
-        // Launch sync setup coroutine
+        // Launch sync setup coroutine (attaches device doc listener after registration)
         startSyncSetup()
 
         // Set up RTDB presence (foreground only)
@@ -1019,30 +1024,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 uploadSpeedMeasuredAt = speedMeasuredAt
             )
             com.syncbudget.app.data.sync.RealtimePresenceService.listenToGroupPresence(gid) { presenceRecords ->
-                // Merge RTDB presence with existing syncDevices metadata (admin status)
-                val currentDevices = syncDevices
-                val updatedDevices = currentDevices.map { device ->
-                    val presence = presenceRecords.find { it.deviceId == device.deviceId }
-                    if (presence != null) {
-                        device.copy(
-                            online = presence.online,
-                            lastSeen = maxOf(device.lastSeen, presence.lastSeen),
-                            deviceName = if (presence.deviceName.isNotEmpty()) presence.deviceName else device.deviceName,
-                            photoCapable = presence.photoCapable,
-                            uploadSpeedBps = presence.uploadSpeedBps,
-                            uploadSpeedMeasuredAt = presence.uploadSpeedMeasuredAt
-                        )
-                    } else device
-                }
-                // Add devices in RTDB not yet in Firestore device list
-                val existingIds = updatedDevices.map { it.deviceId }.toSet()
-                val newDevices = presenceRecords
-                    .filter { it.deviceId !in existingIds }
-                    .map { DeviceInfo(it.deviceId, it.deviceName, isAdmin = false, lastSeen = it.lastSeen,
-                        online = it.online, photoCapable = it.photoCapable,
-                        uploadSpeedBps = it.uploadSpeedBps, uploadSpeedMeasuredAt = it.uploadSpeedMeasuredAt) }
-                syncDevices = updatedDevices + newDevices
-                cacheDeviceRoster(syncDevices)
+                lastPresenceRecords = presenceRecords
+                mergePresenceIntoRoster(presenceRecords)
             }
         } catch (e: Exception) {
             android.util.Log.w("SyncLoop", "RTDB presence setup failed (may not be configured): ${e.message}")
@@ -1056,14 +1039,96 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         docSync?.dispose()
         SyncWriteHelper.dispose()
         com.syncbudget.app.data.sync.RealtimePresenceService.cleanup()
-        imageLedgerListener?.remove()
-        imageLedgerListener = null
+        imageLedgerListener?.remove(); imageLedgerListener = null
+        deviceDocListener?.remove(); deviceDocListener = null
+    }
+
+    /**
+     * Evict this device from sync — called when the device doc is removed or
+     * marked removed=true. Disables all sync immediately; app continues as solo.
+     * No local data is deleted.
+     */
+    private fun evictFromSync(reason: String) {
+        if (!isSyncConfigured) return // already evicted or never synced
+        val gid = syncGroupId
+        android.util.Log.w("SyncEviction", "Evicted: $reason (group=$gid)")
+
+        // Clean up RTDB presence
+        if (gid != null) {
+            try { com.syncbudget.app.data.sync.RealtimePresenceService.deletePresenceNode(gid, localDeviceId) } catch (_: Exception) {}
+        }
+
+        // Dispose all sync resources
+        deviceDocListener?.remove(); deviceDocListener = null
+        docSync?.dispose(); docSync = null
+        SyncWriteHelper.dispose()
+        com.syncbudget.app.data.sync.RealtimePresenceService.cleanup()
+        imageLedgerListener?.remove(); imageLedgerListener = null
+
+        // Clear sync state — app now functions as solo device
+        viewModelScope.launch { GroupManager.leaveGroup(context, localOnly = true) }
+        isSyncConfigured = false
+        syncGroupId = null
+        isSyncAdmin = false
+        syncStatus = "off"
+        syncDevices = emptyList()
+        syncPrefs.edit().remove("cachedDeviceRoster").apply()
+        initialSyncReceived = true // unblock any waiting coroutines
+
+        // Set eviction message for dashboard popup
+        syncEvictionMessage = reason
+
+        // If currently on sync screen, stay — it shows join/create when not configured
+        // (no navigation needed)
+    }
+
+    /** Merge RTDB presence records into the current syncDevices roster. */
+    private fun mergePresenceIntoRoster(presenceRecords: List<com.syncbudget.app.data.sync.PresenceRecord>) {
+        val currentDevices = syncDevices
+        val rtdbIds = presenceRecords.map { it.deviceId }.toSet()
+        val updatedDevices = currentDevices.map { device ->
+            val presence = presenceRecords.find { it.deviceId == device.deviceId }
+            if (presence != null) {
+                device.copy(
+                    online = presence.online,
+                    lastSeen = maxOf(device.lastSeen, presence.lastSeen),
+                    deviceName = if (presence.deviceName.isNotEmpty()) presence.deviceName else device.deviceName,
+                    photoCapable = presence.photoCapable,
+                    uploadSpeedBps = presence.uploadSpeedBps,
+                    uploadSpeedMeasuredAt = presence.uploadSpeedMeasuredAt
+                )
+            } else device.copy(online = false) // not in RTDB = offline
+        }
+        val existingIds = updatedDevices.map { it.deviceId }.toSet()
+        val newDevices = presenceRecords
+            .filter { it.deviceId !in existingIds }
+            .map { DeviceInfo(it.deviceId, it.deviceName, isAdmin = false, lastSeen = it.lastSeen,
+                online = it.online, photoCapable = it.photoCapable,
+                uploadSpeedBps = it.uploadSpeedBps, uploadSpeedMeasuredAt = it.uploadSpeedMeasuredAt) }
+        syncDevices = updatedDevices + newDevices
+        cacheDeviceRoster(syncDevices)
+
+        // If a device disappeared from RTDB (left/removed), refresh Firestore device list
+        val missingFromRtdb = currentDevices.filter { it.deviceId !in rtdbIds && it.deviceId != localDeviceId }
+        if (missingFromRtdb.isNotEmpty() && !isRefreshingDeviceList) {
+            val gid = syncGroupId ?: return
+            isRefreshingDeviceList = true
+            viewModelScope.launch {
+                try {
+                    syncDevices = GroupManager.getDevices(gid)
+                    lastPresenceRecords?.let { mergePresenceIntoRoster(it) }
+                    cacheDeviceRoster(syncDevices)
+                } catch (_: Exception) {}
+                isRefreshingDeviceList = false
+            }
+        }
     }
 
     /**
      * The onBatchChanged callback: update in-memory state when remote changes arrive.
      */
     private suspend fun onBatchChanged(events: List<com.syncbudget.app.data.sync.DataChangeEvent>) {
+        if (!isSyncConfigured) return // evicted — skip merge
         try {
             // Build catIdRemap from sync prefs
             val remapJson = syncPrefs.getString("catIdRemap", null)
@@ -1289,22 +1354,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // Initial device list fetch (retry once on failure)
             try {
                 syncDevices = GroupManager.getDevices(groupId)
+                lastPresenceRecords?.let { mergePresenceIntoRoster(it) } // re-apply RTDB data
                 cacheDeviceRoster(syncDevices)
             } catch (e: Exception) {
                 android.util.Log.w("SyncLoop", "Failed to fetch initial device list, retrying in 10s", e)
                 kotlinx.coroutines.delay(10_000)
                 try {
                     syncDevices = GroupManager.getDevices(groupId)
+                    lastPresenceRecords?.let { mergePresenceIntoRoster(it) }
                     cacheDeviceRoster(syncDevices)
                 } catch (e2: Exception) {
                     android.util.Log.w("SyncLoop", "Device list retry also failed — will recover via listener callback", e2)
                 }
             }
 
+            // Early dissolution/removal check BEFORE writing to Firestore
+            // (prevents recreating docs in a dead group)
+            try {
+                val groupHealth = FirestoreService.getGroupHealthStatus(groupId)
+                if (groupHealth.isDissolved) {
+                    evictFromSync(strings.sync.evictionDissolved)
+                    return@launch
+                }
+                if (FirestoreService.isDeviceRemoved(groupId, localDeviceId)) {
+                    evictFromSync(strings.sync.evictionRemoved)
+                    return@launch
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("SyncLoop", "Early health check failed: ${e.message}")
+                // Continue — will check again after initial sync
+            }
+
             // Write device capabilities once on foreground launch
             try {
                 FirestoreService.updateDeviceMetadata(
                     groupId, localDeviceId,
+                    deviceName = GroupManager.getDeviceName(context),
                     syncVersion = 0L,
                     appSyncVersion = 2,
                     minSyncVersion = 2,
@@ -1313,6 +1398,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: Exception) {
                 android.util.Log.w("SyncLoop", "Device metadata write failed: ${e.message}")
             }
+
+            // Listen to own device doc for removal/dissolution (after doc is confirmed to exist)
+            deviceDocListener?.remove()
+            deviceDocListener = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                .collection("groups").document(groupId)
+                .collection("devices").document(localDeviceId)
+                .addSnapshotListener { snapshot, err ->
+                    if (err != null) {
+                        android.util.Log.w("SyncEviction", "Device doc listener error: ${err.message}")
+                        return@addSnapshotListener
+                    }
+                    if (snapshot == null || !snapshot.exists()) {
+                        evictFromSync(strings.sync.evictionDissolved)
+                    } else if (snapshot.getBoolean("removed") == true) {
+                        evictFromSync(strings.sync.evictionRemoved)
+                    }
+                }
 
             // Register FCM token for push notifications (always fetch fresh — token
             // can become stale after app update without uninstall)
@@ -1498,23 +1600,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 // Check group dissolution (from single group doc read)
                 if (groupHealth.isDissolved) {
-                    GroupManager.leaveGroup(context, localOnly = true)
-                    isSyncConfigured = false
-                    syncGroupId = null
-                    isSyncAdmin = false
-                    syncStatus = "off"
-                    syncDevices = emptyList(); syncPrefs.edit().remove("cachedDeviceRoster").apply()
+                    evictFromSync(strings.sync.evictionDissolved)
                     return@launch
                 }
 
                 // Check device removal (separate doc)
                 if (FirestoreService.isDeviceRemoved(groupId, localDeviceId)) {
-                    GroupManager.leaveGroup(context, localOnly = true)
-                    isSyncConfigured = false
-                    syncGroupId = null
-                    isSyncAdmin = false
-                    syncStatus = "off"
-                    syncDevices = emptyList(); syncPrefs.edit().remove("cachedDeviceRoster").apply()
+                    evictFromSync(strings.sync.evictionRemoved)
                     return@launch
                 }
 
@@ -2169,6 +2261,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SyncWriteHelper.dispose()
         com.syncbudget.app.data.sync.RealtimePresenceService.cleanup()
         imageLedgerListener?.remove()
+        deviceDocListener?.remove()
         try {
             networkCallback?.let {
                 val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager

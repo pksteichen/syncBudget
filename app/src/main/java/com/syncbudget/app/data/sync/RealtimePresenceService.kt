@@ -185,6 +185,8 @@ object RealtimePresenceService {
      * Clean up all RTDB listeners and references.
      */
     fun cleanup() {
+        // Cancel onDisconnect handler so it doesn't re-write after deletion
+        myPresenceRef?.onDisconnect()?.cancel()
         connectedListener?.let { connectedRef?.removeEventListener(it) }
         presenceListener?.let { presenceRef?.removeEventListener(it) }
         connectedListener = null
