@@ -366,7 +366,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             activeSavingsGoals, budgetPeriod, budgetToday, resetDayOfWeek
         )
         val acceleratedDeductions = BudgetCalculator.acceleratedREExtraDeductions(
-            activeRecurringExpenses, budgetPeriod, budgetToday
+            activeRecurringExpenses, budgetPeriod, budgetToday, resetDayOfWeek
         )
         BudgetCalculator.roundCents(maxOf(0.0, base - amortDeductions - savingsDeductions - acceleratedDeductions))
     }

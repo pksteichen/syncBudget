@@ -350,27 +350,29 @@ object BudgetCalculator {
      *  Returns max(1, periods) when nextDue is after today (avoids div-by-zero
      *  when nextDue falls within the current period). */
     fun periodsUntilNextOccurrence(
-        re: RecurringExpense, budgetPeriod: BudgetPeriod, today: LocalDate
+        re: RecurringExpense, budgetPeriod: BudgetPeriod, today: LocalDate,
+        resetDayOfWeek: Int = 1
     ): Int {
         val nextDue = generateOccurrences(
             re.repeatType, re.repeatInterval, re.startDate,
             re.monthDay1, re.monthDay2, today, today.plusYears(2)
         ).firstOrNull() ?: return 0
         if (!nextDue.isAfter(today)) return 0
-        return maxOf(1, countPeriodsCompleted(today, nextDue, budgetPeriod))
+        return maxOf(1, countElapsedPeriods(today, nextDue, budgetPeriod, resetDayOfWeek))
     }
 
     /** Extra per-period deduction for accelerated REs beyond what safeBudgetAmount handles. */
     fun acceleratedREExtraDeductions(
         recurringExpenses: List<RecurringExpense>,
         budgetPeriod: BudgetPeriod,
-        today: LocalDate = LocalDate.now()
+        today: LocalDate = LocalDate.now(),
+        resetDayOfWeek: Int = 1
     ): Double {
         var extra = 0.0
         for (re in recurringExpenses) {
             if (!re.isAccelerated || re.deleted) continue
             val normalRate = normalPerPeriodDeduction(re, budgetPeriod, today)
-            val periodsLeft = periodsUntilNextOccurrence(re, budgetPeriod, today)
+            val periodsLeft = periodsUntilNextOccurrence(re, budgetPeriod, today, resetDayOfWeek)
             if (periodsLeft <= 0) continue
             val remaining = maxOf(0.0, re.amount - re.setAsideSoFar)
             val acceleratedRate = remaining / periodsLeft
@@ -395,7 +397,7 @@ object BudgetCalculator {
                    else calculateSafeBudgetAmount(incomeSources, recurringExpenses, budgetPeriod, today)
         val amortDed = activeAmortizationDeductions(amortizationEntries, budgetPeriod, today, resetDayOfWeek)
         val savingsDed = activeSavingsGoalDeductions(savingsGoals, budgetPeriod, today, resetDayOfWeek)
-        val accelDed = acceleratedREExtraDeductions(recurringExpenses, budgetPeriod, today)
+        val accelDed = acceleratedREExtraDeductions(recurringExpenses, budgetPeriod, today, resetDayOfWeek)
         return roundCents(maxOf(0.0, base - amortDed - savingsDed - accelDed))
     }
 

@@ -165,7 +165,7 @@ object PeriodRefreshService {
                 } else {
                     val increment = if (re.isAccelerated) {
                         val periodsLeft = BudgetCalculator.periodsUntilNextOccurrence(
-                            re, config.budgetPeriod, periodDate
+                            re, config.budgetPeriod, periodDate, config.resetDayOfWeek
                         )
                         if (periodsLeft > 0) BudgetCalculator.roundCents(
                             (re.amount - re.setAsideSoFar) / periodsLeft
