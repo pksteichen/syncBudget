@@ -272,6 +272,26 @@ object FirestoreService {
         updateGroupActivity(groupId)
     }
 
+    /** Register auth.uid as a group member (for security rules). */
+    suspend fun registerMembership(groupId: String, authUid: String, deviceId: String) {
+        withTimeout(OP_TIMEOUT_MS) {
+            db.collection("groups").document(groupId)
+                .collection("members").document(authUid)
+                .set(mapOf("deviceId" to deviceId, "joinedAt" to System.currentTimeMillis()))
+                .await()
+        }
+    }
+
+    /** Remove auth.uid membership (on leave/eviction). */
+    suspend fun removeMembership(groupId: String, authUid: String) {
+        withTimeout(OP_TIMEOUT_MS) {
+            db.collection("groups").document(groupId)
+                .collection("members").document(authUid)
+                .delete()
+                .await()
+        }
+    }
+
     suspend fun deleteGroup(groupId: String, onProgress: ((String) -> Unit)? = null) {
         val groupRef = db.collection("groups").document(groupId)
 
@@ -288,7 +308,7 @@ object FirestoreService {
             "savingsGoals", "amortizationEntries", "categories",
             "periodLedger", "sharedSettings",
             // Group management
-            "devices", "imageLedger", "adminClaim",
+            "devices", "members", "imageLedger", "adminClaim",
             // Legacy CRDT (may still exist from old groups)
             "deltas", "snapshots"
         )

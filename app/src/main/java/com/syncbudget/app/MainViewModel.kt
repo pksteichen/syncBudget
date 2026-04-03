@@ -1062,9 +1062,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         android.util.Log.w("SyncEviction", "Evicted: $reason (group=$gid)")
         BudgeTrakApplication.tokenLog("EVICTED: $reason (group=$gid) caller=${Thread.currentThread().stackTrace.getOrNull(3)?.let { "${it.className.substringAfterLast('.')}.${it.methodName}" } ?: "unknown"}")
 
-        // Clean up RTDB presence
+        // Clean up RTDB presence + membership
         if (gid != null) {
             try { com.syncbudget.app.data.sync.RealtimePresenceService.deletePresenceNode(gid, localDeviceId) } catch (_: Exception) {}
+            try {
+                val authUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                if (authUid != null) viewModelScope.launch {
+                    try { FirestoreService.removeMembership(gid, authUid) } catch (_: Exception) {}
+                }
+            } catch (_: Exception) {}
         }
 
         // Dispose all sync resources

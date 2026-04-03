@@ -25,7 +25,7 @@ exports.cleanupGroupData = functions.firestore
       'transactions', 'recurringExpenses', 'incomeSources',
       'savingsGoals', 'amortizationEntries', 'categories',
       'periodLedger', 'sharedSettings',
-      'devices', 'imageLedger', 'adminClaim',
+      'devices', 'members', 'imageLedger', 'adminClaim',
       'deltas', 'snapshots'  // Legacy CRDT (may exist on old groups)
     ];
 

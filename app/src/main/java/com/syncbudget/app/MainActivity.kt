@@ -1899,6 +1899,10 @@ class MainActivity : ComponentActivity() {
                                 GroupManager.dissolveGroup(context, oldGroupId)
                             } catch (_: Exception) {}
                             val newGroup = GroupManager.createGroup(context)
+                            // Register membership FIRST (self-registration allowed by rules)
+                            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
+                                FirestoreService.registerMembership(newGroup.groupId, uid, vm.localDeviceId)
+                            }
                             val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
                             db.collection("groups").document(newGroup.groupId)
                                 .set(mapOf("createdAt" to System.currentTimeMillis(), "lastActivity" to System.currentTimeMillis()))
@@ -2052,6 +2056,10 @@ class MainActivity : ComponentActivity() {
                         vm.isSyncConfigured = true
                         vm.syncStatus = "syncing"
 
+                        // Register membership FIRST (self-registration allowed by rules)
+                        com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
+                            FirestoreService.registerMembership(info.groupId, uid, vm.localDeviceId)
+                        }
                         val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
                         db.collection("groups").document(info.groupId)
                             .set(mapOf("createdAt" to System.currentTimeMillis(), "lastActivity" to System.currentTimeMillis()))

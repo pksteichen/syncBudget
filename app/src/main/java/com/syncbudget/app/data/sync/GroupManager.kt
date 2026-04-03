@@ -126,8 +126,14 @@ object GroupManager {
             .putString("encryptionKey", keyBase64)
             .commit()
 
-        // Register this device in the group
+        // Register membership FIRST (self-registration allowed by rules)
         val deviceId = SyncIdGenerator.getOrCreateDeviceId(context)
+        val authUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        if (authUid != null) {
+            FirestoreService.registerMembership(pairingData.groupId, authUid, deviceId)
+        }
+
+        // Then register device (requires membership)
         val deviceName = getDeviceName(context)
         FirestoreService.registerDevice(pairingData.groupId, deviceId, deviceName)
 
@@ -147,6 +153,10 @@ object GroupManager {
             } catch (_: Exception) {}
             try {
                 RealtimePresenceService.deletePresenceNode(groupId, deviceId)
+            } catch (_: Exception) {}
+            try {
+                val authUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                if (authUid != null) FirestoreService.removeMembership(groupId, authUid)
             } catch (_: Exception) {}
         }
         prefs.edit()
