@@ -2,13 +2,17 @@ package com.syncbudget.app
 
 import android.app.Application
 import android.util.Log
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 
 class BudgeTrakApplication : Application() {
 
     companion object {
-        /** Persistent file-based log for token/auth events (survives logcat rotation). */
+        private val crashlytics: FirebaseCrashlytics? get() = try { FirebaseCrashlytics.getInstance() } catch (_: Exception) { null }
+
+        /** Log to file + Crashlytics custom log (attached to next crash/non-fatal). */
         fun tokenLog(msg: String) {
             Log.i("TokenDebug", msg)
+            crashlytics?.log(msg)
             try {
                 val dir = com.syncbudget.app.data.BackupManager.getSupportDir()
                 val file = java.io.File(dir, "token_log.txt")
@@ -16,6 +20,12 @@ class BudgeTrakApplication : Application() {
                 val ts = java.time.LocalDateTime.now().toString()
                 file.appendText("[$ts] $msg\n")
             } catch (_: Exception) {}
+        }
+
+        /** Record a non-fatal exception in Crashlytics (shows in dashboard without crash). */
+        fun recordNonFatal(tag: String, message: String, exception: Exception? = null) {
+            tokenLog("$tag: $message")
+            crashlytics?.recordException(exception ?: RuntimeException("$tag: $message"))
         }
     }
 
@@ -35,6 +45,7 @@ class BudgeTrakApplication : Application() {
             appCheck.addAppCheckListener { token ->
                 val expiresIn = (token.expireTimeMillis - System.currentTimeMillis()) / 1000
                 tokenLog("AppCheck token refreshed: expires in ${expiresIn}s (${expiresIn / 60}m)")
+                crashlytics?.setCustomKey("lastTokenExpiry", token.expireTimeMillis)
             }
         } catch (e: Exception) {
             tokenLog("AppCheck init failed: ${e.message}")
@@ -44,6 +55,8 @@ class BudgeTrakApplication : Application() {
                 .addAuthStateListener { auth ->
                     val user = auth.currentUser
                     tokenLog("Auth state: uid=${user?.uid ?: "null"} anon=${user?.isAnonymous}")
+                    crashlytics?.setUserId(user?.uid ?: "none")
+                    crashlytics?.setCustomKey("authAnonymous", user?.isAnonymous == true)
                 }
         } catch (e: Exception) {
             tokenLog("Auth listener failed: ${e.message}")

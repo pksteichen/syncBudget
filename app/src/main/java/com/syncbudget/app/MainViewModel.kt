@@ -966,6 +966,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * and whenever syncGroupId changes.
      */
     fun configureSyncGroup() {
+        // Set Crashlytics context for sync diagnostics
+        try {
+            val c = com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance()
+            c.setCustomKey("isSyncConfigured", isSyncConfigured)
+            c.setCustomKey("isSyncAdmin", isSyncAdmin)
+            c.setCustomKey("syncGroupId", syncGroupId ?: "none")
+        } catch (_: Exception) {}
+
         // Dispose old docSync if any
         docSync?.dispose()
         SyncWriteHelper.dispose()

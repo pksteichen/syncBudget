@@ -228,7 +228,7 @@ class FirestoreDocSync(
             val authUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
             syncLog("Listener error: $collection — ${e.message} (authUid=$authUid)")
             if (e.message?.contains("PERMISSION_DENIED") == true) {
-                com.syncbudget.app.BudgeTrakApplication.tokenLog("PERMISSION_DENIED on $collection (authUid=$authUid)")
+                com.syncbudget.app.BudgeTrakApplication.recordNonFatal("PERMISSION_DENIED", "$collection (authUid=$authUid)", e)
             }
             hasListenerError = true
             val attempts = reconnectAttempts.merge(collection, 1) { old, _ -> old + 1 } ?: 1
