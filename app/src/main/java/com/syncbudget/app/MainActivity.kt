@@ -503,14 +503,12 @@ class MainActivity : ComponentActivity() {
                         onDeleteEntry = { entry ->
                             val idx = vm.amortizationEntries.indexOfFirst { it.id == entry.id }
                             if (idx >= 0) {
-                                val today = java.time.LocalDate.now()
-                                val elapsed = when (vm.budgetPeriod) {
-                                    BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(entry.startDate, today).toInt()
-                                    BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(entry.startDate, today).toInt()
-                                    BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(entry.startDate, today).toInt()
-                                }.coerceIn(0, entry.totalPeriods)
-                                val perPeriod = BudgetCalculator.roundCents(entry.amount / entry.totalPeriods.toDouble())
-                                val appliedAmount = BudgetCalculator.roundCents(perPeriod * elapsed)
+                                val elapsed = BudgetCalculator.countElapsedPeriods(
+                                    entry.startDate, vm.budgetToday, vm.budgetPeriod, vm.resetDayOfWeek
+                                ).coerceIn(0, entry.totalPeriods)
+                                val appliedAmount = BudgetCalculator.roundCents(
+                                    entry.amount * elapsed.toDouble() / entry.totalPeriods
+                                )
 
                                 vm.amortizationEntries[idx] = vm.amortizationEntries[idx].copy(deleted = true)
                                 vm.saveAmortizationEntries(listOf(vm.amortizationEntries[idx]))
