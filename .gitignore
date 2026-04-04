@@ -13,4 +13,5 @@
 app/src/debug/assets/service-account.json
 app/src/main/assets/service-account.json
 local.properties
+node_modules/
 functions/node_modules/
