@@ -418,90 +418,51 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // SAVE FUNCTIONS
     // ═══════════════════════════════════════════════════════════════════
 
-    fun saveIncomeSources(hint: List<IncomeSource>? = null) {
-        val current = incomeSources.toList()
-        IncomeSourceRepository.save(context, current)
+    /** Generic save: persist to disk, diff against cache, batch push to Firestore. */
+    private fun <T : Any> saveCollection(
+        current: List<T>,
+        saveToDisk: (Context, List<T>) -> Unit,
+        cache: MutableMap<Int, T>,
+        getId: (T) -> Int,
+        hint: List<T>?
+    ) {
+        saveToDisk(context, current)
         if (SyncWriteHelper.isInitialized()) {
-            val toPush = hint ?: current.filter { lastSavedIs[it.id] != it }
+            val toPush = hint ?: current.filter { cache[getId(it)] != it }
             if (toPush.isNotEmpty()) SyncWriteHelper.pushBatch(toPush)
-            current.associateByTo(lastSavedIs) { it.id }
+            current.associateByTo(cache) { getId(it) }
             if (hint == null || hint.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
         }
     }
 
-    fun saveRecurringExpenses(hint: List<RecurringExpense>? = null) {
-        val current = recurringExpenses.toList()
-        RecurringExpenseRepository.save(context, current)
-        if (SyncWriteHelper.isInitialized()) {
-            val toPush = hint ?: current.filter { lastSavedRe[it.id] != it }
-            if (toPush.isNotEmpty()) SyncWriteHelper.pushBatch(toPush)
-            current.associateByTo(lastSavedRe) { it.id }
-            if (hint == null || hint.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
-        }
-    }
+    fun saveIncomeSources(hint: List<IncomeSource>? = null) =
+        saveCollection(incomeSources.toList(), IncomeSourceRepository::save, lastSavedIs, { it.id }, hint)
 
-    fun saveAmortizationEntries(hint: List<AmortizationEntry>? = null) {
-        val current = amortizationEntries.toList()
-        AmortizationRepository.save(context, current)
-        if (SyncWriteHelper.isInitialized()) {
-            val toPush = hint ?: current.filter { lastSavedAe[it.id] != it }
-            if (toPush.isNotEmpty()) SyncWriteHelper.pushBatch(toPush)
-            current.associateByTo(lastSavedAe) { it.id }
-            if (hint == null || hint.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
-        }
-    }
+    fun saveRecurringExpenses(hint: List<RecurringExpense>? = null) =
+        saveCollection(recurringExpenses.toList(), RecurringExpenseRepository::save, lastSavedRe, { it.id }, hint)
 
-    fun saveSavingsGoals(hint: List<SavingsGoal>? = null) {
-        val current = savingsGoals.toList()
-        SavingsGoalRepository.save(context, current)
-        if (SyncWriteHelper.isInitialized()) {
-            val toPush = hint ?: current.filter { lastSavedSg[it.id] != it }
-            if (toPush.isNotEmpty()) SyncWriteHelper.pushBatch(toPush)
-            current.associateByTo(lastSavedSg) { it.id }
-            if (hint == null || hint.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
-        }
-    }
+    fun saveAmortizationEntries(hint: List<AmortizationEntry>? = null) =
+        saveCollection(amortizationEntries.toList(), AmortizationRepository::save, lastSavedAe, { it.id }, hint)
+
+    fun saveSavingsGoals(hint: List<SavingsGoal>? = null) =
+        saveCollection(savingsGoals.toList(), SavingsGoalRepository::save, lastSavedSg, { it.id }, hint)
 
     fun saveTransactions(hint: List<Transaction>? = null) {
         // Dedup by ID before saving
-        val deduped = transactions.groupBy { it.id }
-            .values.map { group -> group.first() }
+        val deduped = transactions.groupBy { it.id }.values.map { it.first() }
         if (deduped.size < transactions.size) {
             android.util.Log.w("MainViewModel", "Deduped ${transactions.size - deduped.size} duplicate transactions")
             transactions.clear()
             transactions.addAll(deduped)
         }
-        val current = transactions.toList()
-        TransactionRepository.save(context, current)
-        if (SyncWriteHelper.isInitialized()) {
-            val toPush = hint ?: current.filter { lastSavedTxns[it.id] != it }
-            if (toPush.isNotEmpty()) SyncWriteHelper.pushBatch(toPush)
-            current.associateByTo(lastSavedTxns) { it.id }
-            if (hint == null || hint.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
-        }
+        saveCollection(transactions.toList(), TransactionRepository::save, lastSavedTxns, { it.id }, hint)
     }
 
-    fun saveCategories(hint: List<Category>? = null) {
-        val current = categories.toList()
-        CategoryRepository.save(context, current)
-        if (SyncWriteHelper.isInitialized()) {
-            val toPush = hint ?: current.filter { lastSavedCat[it.id] != it }
-            if (toPush.isNotEmpty()) SyncWriteHelper.pushBatch(toPush)
-            current.associateByTo(lastSavedCat) { it.id }
-            if (hint == null || hint.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
-        }
-    }
+    fun saveCategories(hint: List<Category>? = null) =
+        saveCollection(categories.toList(), CategoryRepository::save, lastSavedCat, { it.id }, hint)
 
-    fun savePeriodLedger(hint: List<PeriodLedgerEntry>? = null) {
-        val current = periodLedger.toList()
-        PeriodLedgerRepository.save(context, current)
-        if (SyncWriteHelper.isInitialized()) {
-            val toPush = hint ?: current.filter { lastSavedPle[it.id] != it }
-            if (toPush.isNotEmpty()) SyncWriteHelper.pushBatch(toPush)
-            current.associateByTo(lastSavedPle) { it.id }
-            if (hint == null || hint.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
-        }
-    }
+    fun savePeriodLedger(hint: List<PeriodLedgerEntry>? = null) =
+        saveCollection(periodLedger.toList(), PeriodLedgerRepository::save, lastSavedPle, { it.id }, hint)
 
     fun saveSharedSettings() {
         SharedSettingsRepository.save(context, sharedSettings)
