@@ -63,6 +63,12 @@ class BackgroundSyncWorker(
             // If foreground ViewModel is alive (stopped but in memory), only check listener health
             val vm = com.syncbudget.app.MainViewModel.instance?.get()
             if (vm != null) {
+                // Refresh App Check token to prevent PERMISSION_DENIED on long-lived listeners
+                try {
+                    com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
+                        .getAppCheckToken(false).await()
+                } catch (_: Exception) {}
+
                 if (vm.isSyncConfigured) {
                     val ds = vm.docSync
                     if (ds != null && !ds.isListening) {
