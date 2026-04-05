@@ -19,7 +19,7 @@ developer. Always verify against the live console after major Firebase changes.
   [✓] Blaze plan active
   [✓] Firebase Anonymous Auth enabled
   [✓] Firebase Storage enabled with membership-based rules
-  [✓] TTL policies active: groups/lastActivity (90d), pairing_codes/expiresAt
+  [✓] TTL policies active: groups/expiresAt (now+90d), pairing_codes/expiresAt
   [✓] Realtime Database enabled (presence system)
   [✓] RTDB security rules deployed (auth-required reads, validated writes)
   [✓] Automatic Firestore indexes enabled
@@ -212,9 +212,12 @@ service firebase.storage {
 
   ── POLICY 1: Orphaned group cleanup ──────────────────────────────────────────
   Collection group : groups
-  TTL field        : lastActivity  (Firestore Timestamp via serverTimestamp())
-  Delete after     : 90 days of inactivity
+  TTL field        : expiresAt  (Firestore Timestamp, set to now + 90 days)
+  Deletes when     : expiresAt timestamp is in the past
   Status           : ACTIVE
+  NOTE: Previously used lastActivity (serverTimestamp), which caused
+        immediate TTL eligibility. Fixed 2026-04-04 to use expiresAt
+        with an absolute future timestamp (now + 90 days).
 
   ── POLICY 2: Expired pairing code cleanup ────────────────────────────────────
   Collection group : pairing_codes
@@ -229,9 +232,9 @@ service firebase.storage {
   - For full cascade cleanup, deploy the Cloud Function in Section 7
   - TTL deletions are not instantaneous — 24-72 hours after expiry
 
-  lastActivity is updated by:
-  - FirestoreService.updateGroupActivity() — called once per app launch
-  - FirestoreService.registerDevice() — on group join
+  expiresAt is updated by:
+  - FirestoreService.updateGroupActivity() — called once per app launch (sets now + 90 days)
+  - FirestoreService.registerDevice() — on group join (via updateGroupActivity)
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -281,7 +284,8 @@ service firebase.storage {
 
   groups/
     {groupId}/                              # 12-char hex group document
-      lastActivity     : Timestamp          # Server timestamp (for TTL)
+      lastActivity     : Timestamp          # Server timestamp (informational)
+      expiresAt        : Timestamp          # now + 90 days (TTL field)
       status           : string?            # "dissolved" when group deleted
       subscriptionExpiry : number?          # Epoch millis, admin subscription
       imageLedgerFlagClock : number?        # Counter, bumped on ledger changes
@@ -497,7 +501,7 @@ service firebase.storage {
   [✓] RTDB security rules deployed
   [✓] Firebase Anonymous Auth enabled
   [✓] Firebase Storage enabled
-  [✓] TTL policy on groups/lastActivity — ACTIVE (90 days)
+  [✓] TTL policy on groups/expiresAt — ACTIVE (now + 90 days)
   [✓] TTL policy on pairing_codes/expiresAt — ACTIVE
   [✓] lastActivity uses FieldValue.serverTimestamp()
   [✓] expiresAt stored as Firestore Timestamp

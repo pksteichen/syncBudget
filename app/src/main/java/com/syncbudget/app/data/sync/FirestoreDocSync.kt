@@ -229,6 +229,19 @@ class FirestoreDocSync(
             syncLog("Listener error: $collection — ${e.message} (authUid=$authUid)")
             if (e.message?.contains("PERMISSION_DENIED") == true) {
                 com.syncbudget.app.BudgeTrakApplication.recordNonFatal("PERMISSION_DENIED", "$collection (authUid=$authUid)", e)
+                // Token may have expired — force-refresh before reconnect
+                deserializeScope.launch {
+                    try {
+                        com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
+                            .getAppCheckToken(true)
+                            .addOnSuccessListener { result ->
+                                val expiresIn = (result.expireTimeMillis - System.currentTimeMillis()) / 1000
+                                com.syncbudget.app.BudgeTrakApplication.tokenLog(
+                                    "AppCheck token force-refreshed after PERMISSION_DENIED on $collection: expires in ${expiresIn}s (${expiresIn/60}m)"
+                                )
+                            }
+                    } catch (_: Exception) {}
+                }
             }
             hasListenerError = true
             val attempts = reconnectAttempts.merge(collection, 1) { old, _ -> old + 1 } ?: 1
@@ -277,6 +290,19 @@ class FirestoreDocSync(
                 syncLog("Listener error: sharedSettings — ${e.message} (authUid=$authUid)")
                 if (e.message?.contains("PERMISSION_DENIED") == true) {
                     com.syncbudget.app.BudgeTrakApplication.tokenLog("PERMISSION_DENIED on sharedSettings (authUid=$authUid)")
+                    // Token may have expired — force-refresh before reconnect
+                    deserializeScope.launch {
+                        try {
+                            com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
+                                .getAppCheckToken(true)
+                                .addOnSuccessListener { result ->
+                                    val expiresIn = (result.expireTimeMillis - System.currentTimeMillis()) / 1000
+                                    com.syncbudget.app.BudgeTrakApplication.tokenLog(
+                                        "AppCheck token force-refreshed after PERMISSION_DENIED on sharedSettings: expires in ${expiresIn}s (${expiresIn/60}m)"
+                                    )
+                                }
+                        } catch (_: Exception) {}
+                    }
                 }
                 hasListenerError = true
                 val attempts = reconnectAttempts.merge("sharedSettings", 1) { old, _ -> old + 1 } ?: 1

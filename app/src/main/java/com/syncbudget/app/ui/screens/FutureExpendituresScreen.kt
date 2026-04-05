@@ -120,7 +120,8 @@ fun FutureExpendituresScreen(
     isSubscriber: Boolean = false,
     onBack: () -> Unit,
     onHelpClick: () -> Unit = {},
-    onViewChart: () -> Unit = {}
+    onViewChart: () -> Unit = {},
+    autoCapitalize: Boolean = true
 ) {
     val S = LocalStrings.current
     val customColors = LocalSyncBudgetColors.current
@@ -477,7 +478,8 @@ fun FutureExpendituresScreen(
                     )
                 )
                 showAddDialog = false
-            }
+            },
+            autoCapitalize = autoCapitalize
         )
     }
 
@@ -508,7 +510,8 @@ fun FutureExpendituresScreen(
                     )
                 )
                 editingGoal = null
-            }
+            },
+            autoCapitalize = autoCapitalize
         )
     }
 
@@ -600,7 +603,8 @@ private fun AddEditSavingsGoalDialog(
     currencySymbol: String,
     dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd"),
     onDismiss: () -> Unit,
-    onSave: (String, Double, Double, Double) -> Unit
+    onSave: (String, Double, Double, Double) -> Unit,
+    autoCapitalize: Boolean = true
 ) {
     val S = LocalStrings.current
     val maxDecimalPlaces = CURRENCY_DECIMALS[currencySymbol] ?: 2
@@ -652,7 +656,7 @@ private fun AddEditSavingsGoalDialog(
                 ) {
                     OutlinedTextField(
                         value = name,
-                        onValueChange = { name = it },
+                        onValueChange = { name = if (autoCapitalize) com.syncbudget.app.data.toApaTitleCase(it) else it },
                         label = { Text(S.futureExpenditures.name) },
                         singleLine = true,
                         isError = showValidation && !isNameValid,

@@ -77,10 +77,10 @@ import com.syncbudget.app.data.RecurringExpenseRepository
 import com.syncbudget.app.data.Transaction
 import com.syncbudget.app.data.TransactionRepository
 import com.syncbudget.app.data.TransactionType
-import com.syncbudget.app.data.findAmortizationMatch
-import com.syncbudget.app.data.findBudgetIncomeMatch
-import com.syncbudget.app.data.findDuplicate
-import com.syncbudget.app.data.findRecurringExpenseMatch
+import com.syncbudget.app.data.findAmortizationMatches
+import com.syncbudget.app.data.findBudgetIncomeMatches
+import com.syncbudget.app.data.findDuplicates
+import com.syncbudget.app.data.findRecurringExpenseMatches
 import com.syncbudget.app.data.generateTransactionId
 import com.syncbudget.app.data.getCategoryIcon
 import com.syncbudget.app.data.sync.SyncIdGenerator
@@ -167,10 +167,10 @@ class WidgetTransactionActivity : ComponentActivity() {
                 // Matching dialog state
                 var pendingTxn by remember { mutableStateOf<Transaction?>(null) }
                 var pendingCatAmounts by remember { mutableStateOf<List<CategoryAmount>>(emptyList()) }
-                var duplicateMatch by remember { mutableStateOf<Transaction?>(null) }
-                var recurringMatch by remember { mutableStateOf<RecurringExpense?>(null) }
-                var amortizationMatch by remember { mutableStateOf<AmortizationEntry?>(null) }
-                var budgetIncomeMatch by remember { mutableStateOf<IncomeSource?>(null) }
+                var duplicateMatches by remember { mutableStateOf<List<Transaction>>(emptyList()) }
+                var recurringMatches by remember { mutableStateOf<List<RecurringExpense>>(emptyList()) }
+                var amortizationMatches by remember { mutableStateOf<List<AmortizationEntry>>(emptyList()) }
+                var budgetIncomeMatches by remember { mutableStateOf<List<IncomeSource>>(emptyList()) }
 
                 val headerBg = if (isExpense) Color(0xFFB71C1C) else Color(0xFF1B5E20)
                 val headerText = Color.White
@@ -195,29 +195,29 @@ class WidgetTransactionActivity : ComponentActivity() {
                         if (txn.type == TransactionType.INCOME) {
                             // Income: check budget income match only
                             val activeIncome = IncomeSourceRepository.load(context).active
-                            val incMatch = findBudgetIncomeMatch(txn, activeIncome, matchChars, matchDays)
-                            if (incMatch != null) {
+                            val incMatches = findBudgetIncomeMatches(txn, activeIncome, matchChars, matchDays)
+                            if (incMatches.isNotEmpty()) {
                                 pendingTxn = txn
                                 pendingCatAmounts = catAmounts
-                                budgetIncomeMatch = incMatch
+                                budgetIncomeMatches = incMatches
                                 return
                             }
                         } else {
                             // Expense: check RE → amortization
                             val activeRecurring = RecurringExpenseRepository.load(context).active
-                            val reMatch = findRecurringExpenseMatch(txn, activeRecurring, percentTolerance, matchDollar, matchChars, matchDays)
-                            if (reMatch != null) {
+                            val reMatches = findRecurringExpenseMatches(txn, activeRecurring, percentTolerance, matchDollar, matchChars, matchDays)
+                            if (reMatches.isNotEmpty()) {
                                 pendingTxn = txn
                                 pendingCatAmounts = catAmounts
-                                recurringMatch = reMatch
+                                recurringMatches = reMatches
                                 return
                             }
                             val activeAmort = AmortizationRepository.load(context).active
-                            val amMatch = findAmortizationMatch(txn, activeAmort, percentTolerance, matchDollar, matchChars)
-                            if (amMatch != null) {
+                            val amMatches = findAmortizationMatches(txn, activeAmort, percentTolerance, matchDollar, matchChars)
+                            if (amMatches.isNotEmpty()) {
                                 pendingTxn = txn
                                 pendingCatAmounts = catAmounts
-                                amortizationMatch = amMatch
+                                amortizationMatches = amMatches
                                 return
                             }
                         }
@@ -234,11 +234,11 @@ class WidgetTransactionActivity : ComponentActivity() {
                 // Full matching chain: duplicate check first, then linking
                 fun runMatchingChain(txn: Transaction, catAmounts: List<CategoryAmount>) {
                     val existingTransactions = TransactionRepository.load(context).active
-                    val dup = findDuplicate(txn, existingTransactions, percentTolerance, matchDollar, matchDays, matchChars)
-                    if (dup != null) {
+                    val dups = findDuplicates(txn, existingTransactions, percentTolerance, matchDollar, matchDays, matchChars)
+                    if (dups.isNotEmpty()) {
                         pendingTxn = txn
                         pendingCatAmounts = catAmounts
-                        duplicateMatch = dup
+                        duplicateMatches = dups
                         return
                     }
                     runLinkingChain(txn, catAmounts)
@@ -569,12 +569,12 @@ class WidgetTransactionActivity : ComponentActivity() {
                 val dialogShape = RoundedCornerShape(16.dp)
 
                 // Duplicate match dialog (3 options: Keep Old, Keep New, Keep Both)
-                if (duplicateMatch != null && pendingTxn != null) {
-                    val dup = duplicateMatch!!
+                if (duplicateMatches.isNotEmpty() && pendingTxn != null) {
+                    val dup = duplicateMatches.first()
                     val txn = pendingTxn!!
                     Dialog(
                         onDismissRequest = {
-                            duplicateMatch = null
+                            duplicateMatches = emptyList()
                             pendingTxn = null
                         }
                     ) {
@@ -635,7 +635,7 @@ class WidgetTransactionActivity : ComponentActivity() {
                                     // Keep Old — discard new, finish
                                     Button(
                                         onClick = {
-                                            duplicateMatch = null
+                                            duplicateMatches = emptyList()
                                             pendingTxn = null
                                             finish()
                                         },
@@ -654,7 +654,7 @@ class WidgetTransactionActivity : ComponentActivity() {
                                             }
                                             val t = pendingTxn!!
                                             val c = pendingCatAmounts
-                                            duplicateMatch = null
+                                            duplicateMatches = emptyList()
                                             runLinkingChain(t, c)
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF388E3C)),
@@ -665,7 +665,7 @@ class WidgetTransactionActivity : ComponentActivity() {
                                         onClick = {
                                             val t = pendingTxn!!
                                             val c = pendingCatAmounts
-                                            duplicateMatch = null
+                                            duplicateMatches = emptyList()
                                             runLinkingChain(t, c)
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF388E3C)),
@@ -678,11 +678,11 @@ class WidgetTransactionActivity : ComponentActivity() {
                 }
 
                 // Recurring expense match dialog
-                if (recurringMatch != null && pendingTxn != null) {
-                    val re = recurringMatch!!
+                if (recurringMatches.isNotEmpty() && pendingTxn != null) {
+                    val re = recurringMatches.first()
                     Dialog(
                         onDismissRequest = {
-                            recurringMatch = null
+                            recurringMatches = emptyList()
                             saveTransaction(context, pendingTxn!!)
                             prefs.edit()
                                 .putString("widgetTxDate", today)
@@ -726,7 +726,7 @@ class WidgetTransactionActivity : ComponentActivity() {
                                                 .putString("widgetTxDate", today)
                                                 .putInt("widgetTxCount", widgetTxCount + 1)
                                                 .apply()
-                                            recurringMatch = null
+                                            recurringMatches = emptyList()
                                             pendingTxn = null
                                             finish()
                                         },
@@ -742,7 +742,7 @@ class WidgetTransactionActivity : ComponentActivity() {
                                                 .putString("widgetTxDate", today)
                                                 .putInt("widgetTxCount", widgetTxCount + 1)
                                                 .apply()
-                                            recurringMatch = null
+                                            recurringMatches = emptyList()
                                             pendingTxn = null
                                             finish()
                                         },
@@ -755,11 +755,11 @@ class WidgetTransactionActivity : ComponentActivity() {
                 }
 
                 // Amortization match dialog
-                if (amortizationMatch != null && pendingTxn != null) {
-                    val am = amortizationMatch!!
+                if (amortizationMatches.isNotEmpty() && pendingTxn != null) {
+                    val am = amortizationMatches.first()
                     Dialog(
                         onDismissRequest = {
-                            amortizationMatch = null
+                            amortizationMatches = emptyList()
                             saveTransaction(context, pendingTxn!!)
                             prefs.edit()
                                 .putString("widgetTxDate", today)
@@ -803,7 +803,7 @@ class WidgetTransactionActivity : ComponentActivity() {
                                                 .putString("widgetTxDate", today)
                                                 .putInt("widgetTxCount", widgetTxCount + 1)
                                                 .apply()
-                                            amortizationMatch = null
+                                            amortizationMatches = emptyList()
                                             pendingTxn = null
                                             finish()
                                         },
@@ -818,7 +818,7 @@ class WidgetTransactionActivity : ComponentActivity() {
                                                 .putString("widgetTxDate", today)
                                                 .putInt("widgetTxCount", widgetTxCount + 1)
                                                 .apply()
-                                            amortizationMatch = null
+                                            amortizationMatches = emptyList()
                                             pendingTxn = null
                                             finish()
                                         },
@@ -831,11 +831,11 @@ class WidgetTransactionActivity : ComponentActivity() {
                 }
 
                 // Budget income match dialog
-                if (budgetIncomeMatch != null && pendingTxn != null) {
-                    val inc = budgetIncomeMatch!!
+                if (budgetIncomeMatches.isNotEmpty() && pendingTxn != null) {
+                    val inc = budgetIncomeMatches.first()
                     Dialog(
                         onDismissRequest = {
-                            budgetIncomeMatch = null
+                            budgetIncomeMatches = emptyList()
                             saveTransaction(context, pendingTxn!!)
                             prefs.edit()
                                 .putString("widgetTxDate", today)
@@ -879,7 +879,7 @@ class WidgetTransactionActivity : ComponentActivity() {
                                                 .putString("widgetTxDate", today)
                                                 .putInt("widgetTxCount", widgetTxCount + 1)
                                                 .apply()
-                                            budgetIncomeMatch = null
+                                            budgetIncomeMatches = emptyList()
                                             pendingTxn = null
                                             finish()
                                         },
@@ -904,7 +904,7 @@ class WidgetTransactionActivity : ComponentActivity() {
                                                 .putString("widgetTxDate", today)
                                                 .putInt("widgetTxCount", widgetTxCount + 1)
                                                 .apply()
-                                            budgetIncomeMatch = null
+                                            budgetIncomeMatches = emptyList()
                                             pendingTxn = null
                                             finish()
                                         },

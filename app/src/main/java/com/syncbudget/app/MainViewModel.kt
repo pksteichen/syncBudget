@@ -44,10 +44,10 @@ import com.syncbudget.app.data.SharedSettingsRepository
 import com.syncbudget.app.data.Transaction
 import com.syncbudget.app.data.TransactionRepository
 import com.syncbudget.app.data.TransactionType
-import com.syncbudget.app.data.findAmortizationMatch
-import com.syncbudget.app.data.findBudgetIncomeMatch
-import com.syncbudget.app.data.findDuplicate
-import com.syncbudget.app.data.findRecurringExpenseMatch
+import com.syncbudget.app.data.findAmortizationMatches
+import com.syncbudget.app.data.findBudgetIncomeMatches
+import com.syncbudget.app.data.findDuplicates
+import com.syncbudget.app.data.findRecurringExpenseMatches
 import com.syncbudget.app.data.generateTransactionId
 import com.syncbudget.app.data.getDefaultCategoryName
 import com.syncbudget.app.data.getDoubleCompat
@@ -104,19 +104,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // Dashboard matching state
     var dashPendingManualSave by mutableStateOf<Transaction?>(null)
-    var dashManualDuplicateMatch by mutableStateOf<Transaction?>(null)
+    var dashManualDuplicateMatches by mutableStateOf<List<Transaction>>(emptyList())
     var dashShowManualDuplicateDialog by mutableStateOf(false)
 
     var dashPendingRecurringTxn by mutableStateOf<Transaction?>(null)
-    var dashPendingRecurringMatch by mutableStateOf<RecurringExpense?>(null)
+    var dashPendingRecurringMatches by mutableStateOf<List<RecurringExpense>>(emptyList())
     var dashShowRecurringDialog by mutableStateOf(false)
 
     var dashPendingAmortizationTxn by mutableStateOf<Transaction?>(null)
-    var dashPendingAmortizationMatch by mutableStateOf<AmortizationEntry?>(null)
+    var dashPendingAmortizationMatches by mutableStateOf<List<AmortizationEntry>>(emptyList())
     var dashShowAmortizationDialog by mutableStateOf(false)
 
     var dashPendingBudgetIncomeTxn by mutableStateOf<Transaction?>(null)
-    var dashPendingBudgetIncomeMatch by mutableStateOf<IncomeSource?>(null)
+    var dashPendingBudgetIncomeMatches by mutableStateOf<List<IncomeSource>>(emptyList())
     var dashShowBudgetIncomeDialog by mutableStateOf(false)
 
     // Pending amount-change confirmations (apply to past transactions?)
@@ -136,6 +136,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         prefs.getLong("subscriptionExpiry", System.currentTimeMillis() + 30L * 24 * 60 * 60 * 1000)
     )
     var showWidgetLogo by mutableStateOf(prefs.getBoolean("showWidgetLogo", true))
+    var autoCapitalize by mutableStateOf(prefs.getBoolean("autoCapitalize", true))
 
     // ── Backup State ──
     var backupsEnabled by mutableStateOf(backupPrefs.getBoolean("backups_enabled", false))
@@ -829,11 +830,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // Income: check budget income match only
             val is_ = activeIncomeSources.toList()
             viewModelScope.launch(Dispatchers.Default) {
-                val budgetMatch = findBudgetIncomeMatch(txn, is_, mChars, dWin)
+                val budgetMatches = findBudgetIncomeMatches(txn, is_, mChars, dWin)
                 withContext(Dispatchers.Main) {
-                    if (budgetMatch != null) {
+                    if (budgetMatches.isNotEmpty()) {
                         dashPendingBudgetIncomeTxn = txn
-                        dashPendingBudgetIncomeMatch = budgetMatch
+                        dashPendingBudgetIncomeMatches = budgetMatches
                         dashShowBudgetIncomeDialog = true
                     } else {
                         addTransactionWithBudgetEffect(txn)
@@ -845,20 +846,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val re = activeRecurringExpenses.toList()
             val ae = activeAmortizationEntries.toList()
             viewModelScope.launch(Dispatchers.Default) {
-                val recurringMatch = findRecurringExpenseMatch(txn, re, pTol, dTol, mChars, dWin)
-                if (recurringMatch != null) {
+                val recurringMatches = findRecurringExpenseMatches(txn, re, pTol, dTol, mChars, dWin)
+                if (recurringMatches.isNotEmpty()) {
                     withContext(Dispatchers.Main) {
                         dashPendingRecurringTxn = txn
-                        dashPendingRecurringMatch = recurringMatch
+                        dashPendingRecurringMatches = recurringMatches
                         dashShowRecurringDialog = true
                     }
                     return@launch
                 }
-                val amortizationMatch = findAmortizationMatch(txn, ae, pTol, dTol, mChars)
+                val amortizationMatches = findAmortizationMatches(txn, ae, pTol, dTol, mChars)
                 withContext(Dispatchers.Main) {
-                    if (amortizationMatch != null) {
+                    if (amortizationMatches.isNotEmpty()) {
                         dashPendingAmortizationTxn = txn
-                        dashPendingAmortizationMatch = amortizationMatch
+                        dashPendingAmortizationMatches = amortizationMatches
                         dashShowAmortizationDialog = true
                     } else {
                         addTransactionWithBudgetEffect(txn)
@@ -877,11 +878,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val dWin = matchDays
         val mChars = matchChars
         viewModelScope.launch(Dispatchers.Default) {
-            val dup = findDuplicate(txn, txns, pTol, dTol, dWin, mChars)
+            val dups = findDuplicates(txn, txns, pTol, dTol, dWin, mChars)
             withContext(Dispatchers.Main) {
-                if (dup != null) {
+                if (dups.isNotEmpty()) {
                     dashPendingManualSave = txn
-                    dashManualDuplicateMatch = dup
+                    dashManualDuplicateMatches = dups
                     dashShowManualDuplicateDialog = true
                 } else {
                     runLinkingChain(txn)
@@ -1443,10 +1444,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val groupHealth = FirestoreService.getGroupHealthStatus(groupId)
                 if (groupHealth.isDissolved) {
+                    BudgeTrakApplication.tokenLog("Evicting (path=earlyHealthCheck.dissolved)")
                     evictFromSync(strings.sync.evictionDissolved)
                     return@launch
                 }
                 if (FirestoreService.isDeviceRemoved(groupId, localDeviceId)) {
+                    BudgeTrakApplication.tokenLog("Evicting (path=earlyHealthCheck.removed)")
                     evictFromSync(strings.sync.evictionRemoved)
                     return@launch
                 }
@@ -1465,7 +1468,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     minSyncVersion = 2,
                     photoCapable = isPaidUser || isSubscriber
                 )
+                BudgeTrakApplication.tokenLog("Device metadata written to group=$groupId device=$localDeviceId")
             } catch (e: Exception) {
+                BudgeTrakApplication.tokenLog("Device metadata write FAILED: ${e.message} group=$groupId")
                 android.util.Log.w("SyncLoop", "Device metadata write failed: ${e.message}")
             }
 
@@ -1476,7 +1481,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 .collection("devices").document(localDeviceId)
                 .addSnapshotListener { snapshot, err ->
                     if (err != null) {
-                        android.util.Log.w("SyncEviction", "Device doc listener error: ${err.message}")
+                        val msg = err.message ?: ""
+                        BudgeTrakApplication.tokenLog("Device doc listener error: $msg")
+                        if (msg.contains("PERMISSION_DENIED", ignoreCase = true)) {
+                            // Token may have expired — refresh and re-attach
+                            viewModelScope.launch {
+                                try {
+                                    com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
+                                        .getAppCheckToken(true).await()
+                                    BudgeTrakApplication.tokenLog("Device doc listener: token refreshed after PERMISSION_DENIED")
+                                } catch (e: Exception) {
+                                    BudgeTrakApplication.tokenLog("Device doc listener: token refresh failed: ${e.message}")
+                                }
+                            }
+                        }
                         return@addSnapshotListener
                     }
                     if (snapshot == null) {
@@ -1484,12 +1502,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     } else if (!snapshot.exists()) {
                         // Only trust "not exists" from server — cache miss is not dissolution
                         if (!snapshot.metadata.isFromCache) {
-                            BudgeTrakApplication.tokenLog("Device doc deleted (server-confirmed) → evicting")
+                            BudgeTrakApplication.tokenLog("Device doc deleted (server-confirmed) — evicting (path=deviceDocListener.notExists)")
                             evictFromSync(strings.sync.evictionDissolved)
                         } else {
                             BudgeTrakApplication.tokenLog("Device doc not in cache (fromCache=true) — ignoring, not evicting")
                         }
                     } else if (snapshot.getBoolean("removed") == true) {
+                        BudgeTrakApplication.tokenLog("Device doc marked removed=true — evicting (path=deviceDocListener.removed)")
                         evictFromSync(strings.sync.evictionRemoved)
                     } else {
                         // Detect admin status changes (from admin claim transfer)
@@ -1706,12 +1725,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 // Check group dissolution (from single group doc read)
                 if (groupHealth.isDissolved) {
+                    BudgeTrakApplication.tokenLog("Evicting (path=postSyncHealthCheck.dissolved)")
                     evictFromSync(strings.sync.evictionDissolved)
                     return@launch
                 }
 
                 // Check device removal (separate doc)
                 if (FirestoreService.isDeviceRemoved(groupId, localDeviceId)) {
+                    BudgeTrakApplication.tokenLog("Evicting (path=postSyncHealthCheck.removed)")
                     evictFromSync(strings.sync.evictionRemoved)
                     return@launch
                 }
@@ -1723,6 +1744,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val elapsed = System.currentTimeMillis() - expiry
                     if (elapsed > gracePeriodMs) {
                         // Grace period over — admin dissolves, non-admin evicts locally
+                        BudgeTrakApplication.tokenLog("Evicting (path=postSyncHealthCheck.subscriptionExpiry, elapsed=${elapsed/1000}s)")
                         if (isSyncAdmin && !groupHealth.isDissolved) {
                             try { disposeSyncListeners() } catch (_: Exception) {}
                             GroupManager.dissolveGroup(context, groupId)

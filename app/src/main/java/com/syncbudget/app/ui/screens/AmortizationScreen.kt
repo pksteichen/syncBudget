@@ -114,7 +114,8 @@ fun AmortizationScreen(
     onUpdateEntry: (AmortizationEntry) -> Unit,
     onDeleteEntry: (AmortizationEntry) -> Unit,
     onBack: () -> Unit,
-    onHelpClick: () -> Unit = {}
+    onHelpClick: () -> Unit = {},
+    autoCapitalize: Boolean = true
 ) {
     val customColors = LocalSyncBudgetColors.current
     val S = LocalStrings.current
@@ -356,7 +357,8 @@ fun AmortizationScreen(
                 val id = generateAmortizationEntryId(amortizationEntries.map { it.id }.toSet())
                 onAddEntry(AmortizationEntry(id = id, source = source, description = description, amount = amount, totalPeriods = totalPeriods, startDate = startDate))
                 showAddDialog = false
-            }
+            },
+            autoCapitalize = autoCapitalize
         )
     }
 
@@ -375,7 +377,8 @@ fun AmortizationScreen(
             onSave = { source, description, amount, totalPeriods, startDate ->
                 onUpdateEntry(entry.copy(source = source, description = description, amount = amount, totalPeriods = totalPeriods, startDate = startDate))
                 editingEntry = null
-            }
+            },
+            autoCapitalize = autoCapitalize
         )
     }
 
@@ -453,7 +456,8 @@ internal fun AddEditAmortizationDialog(
     budgetPeriod: BudgetPeriod,
     dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd"),
     onDismiss: () -> Unit,
-    onSave: (String, String, Double, Int, LocalDate) -> Unit
+    onSave: (String, String, Double, Int, LocalDate) -> Unit,
+    autoCapitalize: Boolean = true
 ) {
     val S = LocalStrings.current
 
@@ -512,7 +516,7 @@ internal fun AddEditAmortizationDialog(
                 ) {
                     OutlinedTextField(
                         value = source,
-                        onValueChange = { source = it },
+                        onValueChange = { source = if (autoCapitalize) com.syncbudget.app.data.toApaTitleCase(it) else it },
                         label = { Text(S.amortization.sourceName) },
                         singleLine = true,
                         isError = showValidation && !isSourceValid,
@@ -524,7 +528,7 @@ internal fun AddEditAmortizationDialog(
                     )
                     OutlinedTextField(
                         value = description,
-                        onValueChange = { description = it },
+                        onValueChange = { description = if (autoCapitalize) com.syncbudget.app.data.toApaTitleCase(it) else it },
                         label = { Text(S.common.descriptionFieldLabel) },
                         colors = textFieldColors,
                         singleLine = true,

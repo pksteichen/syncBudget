@@ -65,8 +65,8 @@ import kotlinx.coroutines.launch
 import com.syncbudget.app.data.BackupManager
 import com.syncbudget.app.data.DiagDumpBuilder
 import com.syncbudget.app.data.FullBackupSerializer
-import com.syncbudget.app.data.findAmortizationMatch
-import com.syncbudget.app.data.findBudgetIncomeMatch
+import com.syncbudget.app.data.findAmortizationMatches
+import com.syncbudget.app.data.findBudgetIncomeMatches
 import com.syncbudget.app.data.isRecurringDateCloseEnough
 import com.syncbudget.app.sound.FlipSoundPlayer
 import com.syncbudget.app.ui.screens.AmortizationConfirmDialog
@@ -461,7 +461,8 @@ class MainActivity : ComponentActivity() {
                         },
                         onBack = { vm.currentScreen = "main" },
                         onHelpClick = { vm.currentScreen = "future_expenditures_help" },
-                        onViewChart = { vm.currentScreen = "simulation_graph" }
+                        onViewChart = { vm.currentScreen = "simulation_graph" },
+                        autoCapitalize = vm.autoCapitalize
                     )
                     "simulation_graph" -> SimulationGraphScreen(
                         incomeSources = vm.activeIncomeSources,
@@ -527,7 +528,8 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         onBack = { vm.currentScreen = "main" },
-                        onHelpClick = { vm.currentScreen = "amortization_help" }
+                        onHelpClick = { vm.currentScreen = "amortization_help" },
+                        autoCapitalize = vm.autoCapitalize
                     )
                     "recurring_expenses" -> RecurringExpensesScreen(
                         recurringExpenses = vm.activeRecurringExpenses,
@@ -574,7 +576,8 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         onBack = { vm.currentScreen = "main" },
-                        onHelpClick = { vm.currentScreen = "recurring_expenses_help" }
+                        onHelpClick = { vm.currentScreen = "recurring_expenses_help" },
+                        autoCapitalize = vm.autoCapitalize
                     )
                     "budget_config" -> BudgetConfigScreen(
                         incomeSources = vm.activeIncomeSources,
@@ -733,7 +736,8 @@ class MainActivity : ComponentActivity() {
                             vm.recomputeCash()
                         },
                         onBack = { vm.currentScreen = "settings" },
-                        onHelpClick = { vm.currentScreen = "budget_config_help" }
+                        onHelpClick = { vm.currentScreen = "budget_config_help" },
+                        autoCapitalize = vm.autoCapitalize
                     )
                     "family_sync" -> FamilySyncScreenBranch(vm, toastState)
                     "dashboard_help" -> DashboardHelpScreen(
@@ -840,6 +844,8 @@ class MainActivity : ComponentActivity() {
                 incomeSources = vm.activeIncomeSources,
                 savingsGoals = vm.activeSavingsGoals,
                 pastSources = vm.activeTransactions.groupingBy { it.source }.eachCount().entries.sortedByDescending { it.value }.map { it.key },
+                allTransactions = vm.activeTransactions,
+                matchChars = vm.matchChars,
                 budgetPeriod = vm.budgetPeriod,
                 isPaidUser = vm.isPaidUser || vm.isSubscriber,
                 onDismiss = { vm.dashboardShowAddIncome = false },
@@ -858,7 +864,8 @@ class MainActivity : ComponentActivity() {
                         vm.amortizationEntries[idx] = vm.amortizationEntries[idx].copy(deleted = true)
                         vm.saveAmortizationEntries(listOf(vm.amortizationEntries[idx]))
                     }
-                }
+                },
+                autoCapitalize = vm.autoCapitalize
             )
         }
 
@@ -877,6 +884,8 @@ class MainActivity : ComponentActivity() {
                 incomeSources = vm.activeIncomeSources,
                 savingsGoals = vm.activeSavingsGoals,
                 pastSources = vm.activeTransactions.groupingBy { it.source }.eachCount().entries.sortedByDescending { it.value }.map { it.key },
+                allTransactions = vm.activeTransactions,
+                matchChars = vm.matchChars,
                 budgetPeriod = vm.budgetPeriod,
                 isPaidUser = vm.isPaidUser || vm.isSubscriber,
                 onDismiss = { vm.dashboardShowAddExpense = false },
@@ -895,14 +904,15 @@ class MainActivity : ComponentActivity() {
                         vm.amortizationEntries[idx] = vm.amortizationEntries[idx].copy(deleted = true)
                         vm.saveAmortizationEntries(listOf(vm.amortizationEntries[idx]))
                     }
-                }
+                },
+                autoCapitalize = vm.autoCapitalize
             )
         }
 
         // Dashboard duplicate resolution dialog
-        if (vm.dashShowManualDuplicateDialog && vm.dashPendingManualSave != null && vm.dashManualDuplicateMatch != null) {
+        if (vm.dashShowManualDuplicateDialog && vm.dashPendingManualSave != null && vm.dashManualDuplicateMatches.isNotEmpty()) {
             DuplicateResolutionDialog(
-                existingTransaction = vm.dashManualDuplicateMatch!!,
+                existingTransactions = vm.dashManualDuplicateMatches,
                 newTransaction = vm.dashPendingManualSave!!,
                 currencySymbol = vm.currencySymbol,
                 dateFormatter = vm.dateFormatter,
@@ -911,26 +921,25 @@ class MainActivity : ComponentActivity() {
                 onIgnore = {
                     val txn = vm.dashPendingManualSave!!
                     vm.dashPendingManualSave = null
-                    vm.dashManualDuplicateMatch = null
+                    vm.dashManualDuplicateMatches = emptyList()
                     vm.dashShowManualDuplicateDialog = false
                     vm.runLinkingChain(txn)
                 },
-                onKeepNew = {
-                    val dup = vm.dashManualDuplicateMatch!!
-                    val dupIdx = vm.transactions.indexOfFirst { it.id == dup.id }
+                onKeepNew = { selectedExisting ->
+                    val dupIdx = vm.transactions.indexOfFirst { it.id == selectedExisting.id }
                     if (dupIdx >= 0) {
                         vm.transactions[dupIdx] = vm.transactions[dupIdx].copy(deleted = true)
                     }
                     vm.saveTransactions(if (dupIdx >= 0) listOf(vm.transactions[dupIdx]) else emptyList())
                     val txn = vm.dashPendingManualSave!!
                     vm.dashPendingManualSave = null
-                    vm.dashManualDuplicateMatch = null
+                    vm.dashManualDuplicateMatches = emptyList()
                     vm.dashShowManualDuplicateDialog = false
                     vm.runLinkingChain(txn)
                 },
                 onKeepExisting = {
                     vm.dashPendingManualSave = null
-                    vm.dashManualDuplicateMatch = null
+                    vm.dashManualDuplicateMatches = emptyList()
                     vm.dashShowManualDuplicateDialog = false
                 },
                 onIgnoreAll = {}
@@ -938,35 +947,33 @@ class MainActivity : ComponentActivity() {
         }
 
         // Dashboard recurring expense match dialog
-        if (vm.dashShowRecurringDialog && vm.dashPendingRecurringTxn != null && vm.dashPendingRecurringMatch != null) {
-            val dateCloseEnough = isRecurringDateCloseEnough(vm.dashPendingRecurringTxn!!.date, vm.dashPendingRecurringMatch!!)
+        if (vm.dashShowRecurringDialog && vm.dashPendingRecurringTxn != null && vm.dashPendingRecurringMatches.isNotEmpty()) {
             RecurringExpenseConfirmDialog(
                 transaction = vm.dashPendingRecurringTxn!!,
-                recurringExpense = vm.dashPendingRecurringMatch!!,
+                recurringExpenses = vm.dashPendingRecurringMatches,
                 currencySymbol = vm.currencySymbol,
                 dateFormatter = vm.dateFormatter,
-                showDateAdvisory = !dateCloseEnough,
-                onConfirmRecurring = {
+                onConfirmRecurring = { selectedRE ->
                     val txn = vm.dashPendingRecurringTxn!!
                     val updatedTxn = txn.copy(
-                        linkedRecurringExpenseId = vm.dashPendingRecurringMatch!!.id,
-                        linkedRecurringExpenseAmount = vm.dashPendingRecurringMatch!!.amount
+                        linkedRecurringExpenseId = selectedRE.id,
+                        linkedRecurringExpenseAmount = selectedRE.amount
                     )
                     vm.addTransactionWithBudgetEffect(updatedTxn)
                     vm.dashPendingRecurringTxn = null
-                    vm.dashPendingRecurringMatch = null
+                    vm.dashPendingRecurringMatches = emptyList()
                     vm.dashShowRecurringDialog = false
                 },
                 onNotRecurring = {
                     val txn = vm.dashPendingRecurringTxn!!
                     vm.dashPendingRecurringTxn = null
-                    vm.dashPendingRecurringMatch = null
+                    vm.dashPendingRecurringMatches = emptyList()
                     vm.dashShowRecurringDialog = false
                     // Continue expense chain: check amortization only
-                    val amortizationMatch = findAmortizationMatch(txn, vm.activeAmortizationEntries, vm.percentTolerance, vm.matchDollar, vm.matchChars)
-                    if (amortizationMatch != null) {
+                    val amortizationMatches = findAmortizationMatches(txn, vm.activeAmortizationEntries, vm.percentTolerance, vm.matchDollar, vm.matchChars)
+                    if (amortizationMatches.isNotEmpty()) {
                         vm.dashPendingAmortizationTxn = txn
-                        vm.dashPendingAmortizationMatch = amortizationMatch
+                        vm.dashPendingAmortizationMatches = amortizationMatches
                         vm.dashShowAmortizationDialog = true
                     } else {
                         vm.addTransactionWithBudgetEffect(txn)
@@ -976,43 +983,43 @@ class MainActivity : ComponentActivity() {
         }
 
         // Dashboard amortization match dialog
-        if (vm.dashShowAmortizationDialog && vm.dashPendingAmortizationTxn != null && vm.dashPendingAmortizationMatch != null) {
+        if (vm.dashShowAmortizationDialog && vm.dashPendingAmortizationTxn != null && vm.dashPendingAmortizationMatches.isNotEmpty()) {
             AmortizationConfirmDialog(
                 transaction = vm.dashPendingAmortizationTxn!!,
-                amortizationEntry = vm.dashPendingAmortizationMatch!!,
+                amortizationEntries = vm.dashPendingAmortizationMatches,
                 currencySymbol = vm.currencySymbol,
                 dateFormatter = vm.dateFormatter,
-                onConfirmAmortization = {
+                onConfirmAmortization = { selectedEntry ->
                     val txn = vm.dashPendingAmortizationTxn!!
-                    val updatedTxn = txn.copy(linkedAmortizationEntryId = vm.dashPendingAmortizationMatch!!.id)
+                    val updatedTxn = txn.copy(linkedAmortizationEntryId = selectedEntry.id)
                     vm.addTransactionWithBudgetEffect(updatedTxn)
                     vm.dashPendingAmortizationTxn = null
-                    vm.dashPendingAmortizationMatch = null
+                    vm.dashPendingAmortizationMatches = emptyList()
                     vm.dashShowAmortizationDialog = false
                 },
                 onNotAmortized = {
                     vm.addTransactionWithBudgetEffect(vm.dashPendingAmortizationTxn!!)
                     vm.dashPendingAmortizationTxn = null
-                    vm.dashPendingAmortizationMatch = null
+                    vm.dashPendingAmortizationMatches = emptyList()
                     vm.dashShowAmortizationDialog = false
                 }
             )
         }
 
         // Dashboard budget income match dialog
-        if (vm.dashShowBudgetIncomeDialog && vm.dashPendingBudgetIncomeTxn != null && vm.dashPendingBudgetIncomeMatch != null) {
+        if (vm.dashShowBudgetIncomeDialog && vm.dashPendingBudgetIncomeTxn != null && vm.dashPendingBudgetIncomeMatches.isNotEmpty()) {
             BudgetIncomeConfirmDialog(
                 transaction = vm.dashPendingBudgetIncomeTxn!!,
-                incomeSource = vm.dashPendingBudgetIncomeMatch!!,
+                incomeSources = vm.dashPendingBudgetIncomeMatches,
                 currencySymbol = vm.currencySymbol,
                 dateFormatter = vm.dateFormatter,
-                onConfirmBudgetIncome = {
+                onConfirmBudgetIncome = { selectedIS ->
                     val recurringIncomeCatId = vm.categories.find { it.tag == "recurring_income" }?.id
                     val baseTxn = vm.dashPendingBudgetIncomeTxn!!
                     val txn = baseTxn.copy(
                         isBudgetIncome = true,
-                        linkedIncomeSourceId = vm.dashPendingBudgetIncomeMatch!!.id,
-                        linkedIncomeSourceAmount = vm.dashPendingBudgetIncomeMatch!!.amount,
+                        linkedIncomeSourceId = selectedIS.id,
+                        linkedIncomeSourceAmount = selectedIS.amount,
                         categoryAmounts = if (recurringIncomeCatId != null)
                             listOf(CategoryAmount(recurringIncomeCatId, baseTxn.amount))
                         else baseTxn.categoryAmounts,
@@ -1020,7 +1027,7 @@ class MainActivity : ComponentActivity() {
                     )
                     // ACTUAL_ADJUST: update the income source BEFORE adding txn
                     if (vm.incomeMode == IncomeMode.ACTUAL_ADJUST) {
-                        val srcId = vm.dashPendingBudgetIncomeMatch!!.id
+                        val srcId = selectedIS.id
                         val idx = vm.incomeSources.indexOfFirst { it.id == srcId }
                         if (idx >= 0 && vm.incomeSources[idx].amount != baseTxn.amount) {
                             vm.incomeSources[idx] = vm.incomeSources[idx].copy(amount = baseTxn.amount)
@@ -1029,13 +1036,13 @@ class MainActivity : ComponentActivity() {
                     }
                     vm.addTransactionWithBudgetEffect(txn)
                     vm.dashPendingBudgetIncomeTxn = null
-                    vm.dashPendingBudgetIncomeMatch = null
+                    vm.dashPendingBudgetIncomeMatches = emptyList()
                     vm.dashShowBudgetIncomeDialog = false
                 },
                 onNotBudgetIncome = {
                     vm.addTransactionWithBudgetEffect(vm.dashPendingBudgetIncomeTxn!!)
                     vm.dashPendingBudgetIncomeTxn = null
-                    vm.dashPendingBudgetIncomeMatch = null
+                    vm.dashPendingBudgetIncomeMatches = emptyList()
                     vm.dashShowBudgetIncomeDialog = false
                 }
             )
@@ -1477,6 +1484,11 @@ class MainActivity : ComponentActivity() {
                 vm.showWidgetLogo = newValue
                 vm.prefs.edit().putBoolean("showWidgetLogo", newValue).apply()
                 com.syncbudget.app.widget.BudgetWidgetProvider.updateAllWidgets(context)
+            },
+            autoCapitalize = vm.autoCapitalize,
+            onAutoCapitalizeChange = { newValue ->
+                vm.autoCapitalize = newValue
+                vm.prefs.edit().putBoolean("autoCapitalize", newValue).apply()
             },
             categories = vm.activeCategories,
             transactions = vm.activeTransactions,
@@ -1945,7 +1957,8 @@ class MainActivity : ComponentActivity() {
             archivedTransactions = vm.loadedArchivedTransactions,
             onRequestArchived = { vm.loadArchivedTransactionsAsync() },
             archiveCutoffDate = vm.archiveCutoffDate,
-            onUpdateArchivedTransaction = { vm.updateArchivedTransaction(it) }
+            onUpdateArchivedTransaction = { vm.updateArchivedTransaction(it) },
+            autoCapitalize = vm.autoCapitalize
         )
     }
 

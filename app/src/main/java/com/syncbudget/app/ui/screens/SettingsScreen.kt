@@ -120,6 +120,8 @@ fun SettingsScreen(
     onSubscriptionExpiryChange: (Long) -> Unit = {},
     showWidgetLogo: Boolean = true,
     onWidgetLogoChange: (Boolean) -> Unit = {},
+    autoCapitalize: Boolean = true,
+    onAutoCapitalizeChange: (Boolean) -> Unit = {},
     matchDays: Int = 7,
     onMatchDaysChange: (Int) -> Unit = {},
     matchPercent: Double = 1.0,
@@ -265,7 +267,7 @@ fun SettingsScreen(
                 }
             }
 
-            if (isSyncConfigured && com.syncbudget.app.BuildConfig.DEBUG) {
+            if (com.syncbudget.app.BuildConfig.DEBUG) {
                 item {
                     OutlinedButton(
                         onClick = onDumpDebug,
@@ -735,6 +737,25 @@ fun SettingsScreen(
                     )
                     Text(
                         text = S.settings.showWidgetLogo,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                }
+            }
+
+            // Auto Capitalize checkbox
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(
+                        checked = autoCapitalize,
+                        onCheckedChange = onAutoCapitalizeChange,
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = MaterialTheme.colorScheme.primary,
+                            uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                        )
+                    )
+                    Text(
+                        text = S.settings.autoCapitalize,
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onBackground
                     )

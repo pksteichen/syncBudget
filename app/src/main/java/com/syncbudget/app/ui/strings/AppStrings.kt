@@ -161,6 +161,7 @@ data class SettingsStrings(
     val subscribeToAccess: String,
     val administratorOnly: String,
     val showWidgetLogo: String,
+    val autoCapitalize: String,
     val categories: String,
     val charted: String,
     val widget: String,

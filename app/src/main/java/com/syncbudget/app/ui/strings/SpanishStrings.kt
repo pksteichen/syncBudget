@@ -138,6 +138,7 @@ object SpanishStrings : AppStrings {
         subscribeToAccess = "Suscr\u00edbete para acceder a esta funci\u00f3n",
         administratorOnly = "Solo administrador",
         showWidgetLogo = "Mostrar logo en el widget",
+        autoCapitalize = "Auto Capitalizar",
         categories = "Categor\u00edas",
         charted = "Gr\u00e1fica",
         widget = "Widget",

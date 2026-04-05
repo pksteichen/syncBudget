@@ -120,66 +120,76 @@ fun isRecurringDateCloseEnough(transactionDate: LocalDate, re: RecurringExpense)
     return distance == null || distance <= 2
 }
 
-fun findRecurringExpenseMatch(
+/** Return all matching recurring expenses, ranked by closest date then closest amount. */
+fun findRecurringExpenseMatches(
     incoming: Transaction,
     recurringExpenses: List<RecurringExpense>,
     percentTolerance: Double = 0.01,
     dollarTolerance: Int = 1,
     minChars: Int = 5,
     dayWindow: Int = 7
-): RecurringExpense? {
-    return recurringExpenses.find { re ->
+): List<RecurringExpense> {
+    return recurringExpenses.filter { re ->
         amountMatches(incoming.amount, re.amount, percentTolerance, dollarTolerance) &&
         merchantMatches(incoming.source, re.source, minChars) &&
         dateNearOccurrence(
             incoming.date, re.repeatType, re.repeatInterval,
             re.startDate, re.monthDay1, re.monthDay2, dayWindow
         )
-    }
+    }.sortedWith(compareBy<RecurringExpense> {
+        nearestOccurrenceDistance(incoming.date, it.repeatType, it.repeatInterval, it.startDate, it.monthDay1, it.monthDay2) ?: Long.MAX_VALUE
+    }.thenBy { abs(incoming.amount - it.amount) })
 }
 
-fun findAmortizationMatch(
+/** Return all matching amortization entries, ranked by closest amount. */
+fun findAmortizationMatches(
     incoming: Transaction,
     entries: List<AmortizationEntry>,
     percentTolerance: Double = 0.01,
     dollarTolerance: Int = 1,
     minChars: Int = 5
-): AmortizationEntry? {
-    return entries.find { entry ->
+): List<AmortizationEntry> {
+    return entries.filter { entry ->
         amountMatches(incoming.amount, entry.amount, percentTolerance, dollarTolerance) &&
         merchantMatches(incoming.source, entry.source, minChars)
-    }
+    }.sortedBy { abs(incoming.amount - it.amount) }
 }
 
-fun findBudgetIncomeMatch(
+/** Return all matching income sources, ranked by closest date then closest amount. */
+fun findBudgetIncomeMatches(
     incoming: Transaction,
     incomeSources: List<IncomeSource>,
     minChars: Int = 5,
     dayWindow: Int = 7
-): IncomeSource? {
-    if (incoming.type != TransactionType.INCOME) return null
-    return incomeSources.find { source ->
+): List<IncomeSource> {
+    if (incoming.type != TransactionType.INCOME) return emptyList()
+    return incomeSources.filter { source ->
         merchantMatches(incoming.source, source.source, minChars) &&
         dateNearOccurrence(
             incoming.date, source.repeatType, source.repeatInterval,
             source.startDate, source.monthDay1, source.monthDay2, dayWindow
         )
-    }
+    }.sortedWith(compareBy<IncomeSource> {
+        nearestOccurrenceDistance(incoming.date, it.repeatType, it.repeatInterval, it.startDate, it.monthDay1, it.monthDay2) ?: Long.MAX_VALUE
+    }.thenBy { abs(incoming.amount - it.amount) })
 }
 
-fun findDuplicate(
+/** Return all matching duplicates, ranked by closest amount then closest date. */
+fun findDuplicates(
     incoming: Transaction,
     existing: List<Transaction>,
     percentTolerance: Double = 0.01,
     dollarTolerance: Int = 1,
     dayWindow: Int = 7,
     minChars: Int = 5
-): Transaction? {
-    return existing.find { ex ->
+): List<Transaction> {
+    return existing.filter { ex ->
         amountMatches(incoming.amount, ex.amount, percentTolerance, dollarTolerance) &&
         dateMatches(incoming, ex, dayWindow) &&
         merchantMatches(incoming.source, ex.source, minChars)
-    }
+    }.sortedWith(compareBy<Transaction> {
+        abs(incoming.amount - it.amount)
+    }.thenBy { abs(ChronoUnit.DAYS.between(incoming.date, it.date)) })
 }
 
 internal fun amountMatches(
@@ -201,8 +211,9 @@ private fun dateMatches(t1: Transaction, t2: Transaction, dayWindow: Int = 7): B
 }
 
 internal fun merchantMatches(s1: String, s2: String, minChars: Int = 5): Boolean {
-    val a = s1.lowercase()
-    val b = s2.lowercase()
+    // Strip non-alphanumeric characters so "Wal-Mart"/"Walmart" and "O'Riley"/"ORiley" match
+    val a = s1.lowercase().replace(Regex("[^a-z0-9]"), "")
+    val b = s2.lowercase().replace(Regex("[^a-z0-9]"), "")
     if (a.length < minChars || b.length < minChars) {
         return a == b
     }

@@ -133,7 +133,8 @@ fun BudgetConfigScreen(
     incomeMode: String = "FIXED",
     onIncomeModeChange: (String) -> Unit = {},
     onBack: () -> Unit,
-    onHelpClick: () -> Unit = {}
+    onHelpClick: () -> Unit = {},
+    autoCapitalize: Boolean = true
 ) {
     val customColors = LocalSyncBudgetColors.current
     val S = LocalStrings.current
@@ -494,7 +495,8 @@ fun BudgetConfigScreen(
                 val id = generateIncomeSourceId(incomeSources.map { it.id }.toSet())
                 onAddIncomeSource(incomeSource.copy(id = id))
                 showAddDialog = false
-            }
+            },
+            autoCapitalize = autoCapitalize
         )
     }
 
@@ -507,7 +509,8 @@ fun BudgetConfigScreen(
             onSave = { updated ->
                 onUpdateIncomeSource(updated)
                 editingSource = null
-            }
+            },
+            autoCapitalize = autoCapitalize
         )
     }
 
@@ -573,7 +576,8 @@ private fun AddEditIncomeDialog(
     currencySymbol: String,
     dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd"),
     onDismiss: () -> Unit,
-    onSave: (IncomeSource) -> Unit
+    onSave: (IncomeSource) -> Unit,
+    autoCapitalize: Boolean = true
 ) {
     val S = LocalStrings.current
     val context = LocalContext.current
@@ -655,7 +659,7 @@ private fun AddEditIncomeDialog(
                 ) {
                     OutlinedTextField(
                         value = sourceName,
-                        onValueChange = { sourceName = it },
+                        onValueChange = { sourceName = if (autoCapitalize) com.syncbudget.app.data.toApaTitleCase(it) else it },
                         label = { Text(S.common.sourceName) },
                         singleLine = true,
                         isError = showValidation && !isSourceValid,
@@ -667,7 +671,7 @@ private fun AddEditIncomeDialog(
                     )
                     OutlinedTextField(
                         value = description,
-                        onValueChange = { description = it },
+                        onValueChange = { description = if (autoCapitalize) com.syncbudget.app.data.toApaTitleCase(it) else it },
                         label = { Text(S.common.descriptionFieldLabel) },
                         colors = textFieldColors,
                         singleLine = true,

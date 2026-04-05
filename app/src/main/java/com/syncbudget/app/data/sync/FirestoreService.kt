@@ -43,6 +43,12 @@ object FirestoreService {
 
     /** Update the admin subscription expiration date on the group doc. */
     suspend fun updateSubscriptionExpiry(groupId: String, expiryTimestamp: Long) = withTimeout(OP_TIMEOUT_MS) {
+        val elapsedMs = System.currentTimeMillis() - expiryTimestamp
+        val elapsedDays = elapsedMs / (24 * 60 * 60 * 1000.0)
+        com.syncbudget.app.BudgeTrakApplication.tokenLog(
+            "updateSubscriptionExpiry: group=$groupId expiry=$expiryTimestamp elapsedDays=${"%.1f".format(elapsedDays)} " +
+            "(${if (elapsedMs > 0) "PAST" else "FUTURE"}, grace triggers at >7d)"
+        )
         db.collection("groups").document(groupId)
             .set(mapOf("subscriptionExpiry" to expiryTimestamp), SetOptions.merge())
             .await()
@@ -121,11 +127,10 @@ object FirestoreService {
         val fromCache = doc.metadata.isFromCache
         // Only trust "not exists" from server — cache miss is not dissolution
         val isDissolved = if (!exists) !fromCache else status == "dissolved"
-        if (isDissolved) {
-            com.syncbudget.app.BudgeTrakApplication.tokenLog(
-                "getGroupHealthStatus: isDissolved=$isDissolved exists=$exists status=$status fromCache=$fromCache groupId=$groupId"
-            )
-        }
+        val subExpiry = doc.getLong("subscriptionExpiry") ?: 0L
+        com.syncbudget.app.BudgeTrakApplication.tokenLog(
+            "getGroupHealthStatus: isDissolved=$isDissolved exists=$exists status=$status fromCache=$fromCache subExpiry=$subExpiry groupId=$groupId"
+        )
         GroupHealthStatus(
             isDissolved = isDissolved,
             subscriptionExpiry = doc.getLong("subscriptionExpiry") ?: 0L
@@ -146,8 +151,14 @@ object FirestoreService {
 
 
     suspend fun updateGroupActivity(groupId: String) = withTimeout(OP_TIMEOUT_MS) {
+        val expiresAt = com.google.firebase.Timestamp(
+            (System.currentTimeMillis() / 1000) + (90L * 24 * 60 * 60), 0
+        )
         db.collection("groups").document(groupId)
-            .set(mapOf("lastActivity" to FieldValue.serverTimestamp()), SetOptions.merge())
+            .set(mapOf(
+                "lastActivity" to FieldValue.serverTimestamp(),
+                "expiresAt" to expiresAt
+            ), SetOptions.merge())
             .await()
     }
 
@@ -293,6 +304,9 @@ object FirestoreService {
     }
 
     suspend fun deleteGroup(groupId: String, onProgress: ((String) -> Unit)? = null) {
+        val caller = Thread.currentThread().stackTrace.drop(2).take(5)
+            .joinToString(" → ") { "${it.className.substringAfterLast('.')}.${it.methodName}:${it.lineNumber}" }
+        com.syncbudget.app.BudgeTrakApplication.tokenLog("deleteGroup CALLED for group=$groupId caller=$caller")
         val groupRef = db.collection("groups").document(groupId)
 
         // Write dissolved flag BEFORE deleting anything — gives non-admin

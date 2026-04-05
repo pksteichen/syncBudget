@@ -155,10 +155,10 @@ import com.syncbudget.app.data.autoCategorize
 import com.syncbudget.app.data.IncomeSource
 import com.syncbudget.app.data.SavingsGoal
 import com.syncbudget.app.data.filterAlreadyLoadedDays
-import com.syncbudget.app.data.findAmortizationMatch
-import com.syncbudget.app.data.findBudgetIncomeMatch
-import com.syncbudget.app.data.findDuplicate
-import com.syncbudget.app.data.findRecurringExpenseMatch
+import com.syncbudget.app.data.findAmortizationMatches
+import com.syncbudget.app.data.findBudgetIncomeMatches
+import com.syncbudget.app.data.findDuplicates
+import com.syncbudget.app.data.findRecurringExpenseMatches
 import com.syncbudget.app.data.generateTransactionId
 import com.syncbudget.app.data.getCategoryIcon
 import com.syncbudget.app.data.isRecurringDateCloseEnough
@@ -287,7 +287,8 @@ fun TransactionsScreen(
     archivedTransactions: List<Transaction> = emptyList(),
     onRequestArchived: () -> Unit = {},
     archiveCutoffDate: java.time.LocalDate? = null,
-    onUpdateArchivedTransaction: (Transaction) -> Unit = {}
+    onUpdateArchivedTransaction: (Transaction) -> Unit = {},
+    autoCapitalize: Boolean = true
 ) {
     val S = LocalStrings.current
     val customColors = LocalSyncBudgetColors.current
@@ -364,30 +365,30 @@ fun TransactionsScreen(
 
     // Manual duplicate check state
     var pendingManualSave by remember { mutableStateOf<Transaction?>(null) }
-    var manualDuplicateMatch by remember { mutableStateOf<Transaction?>(null) }
+    var manualDuplicateMatches by remember { mutableStateOf<List<Transaction>>(emptyList()) }
     var showManualDuplicateDialog by remember { mutableStateOf(false) }
     var pendingManualIsEdit by remember { mutableStateOf(false) }
 
     // Recurring expense match state
     var pendingRecurringTxn by remember { mutableStateOf<Transaction?>(null) }
-    var pendingRecurringMatch by remember { mutableStateOf<RecurringExpense?>(null) }
+    var pendingRecurringMatches by remember { mutableStateOf<List<RecurringExpense>>(emptyList()) }
     var pendingRecurringIsEdit by remember { mutableStateOf(false) }
     var showRecurringDialog by remember { mutableStateOf(false) }
-    var currentImportRecurring by remember { mutableStateOf<RecurringExpense?>(null) }
+    var currentImportRecurring by remember { mutableStateOf<List<RecurringExpense>>(emptyList()) }
 
     // Amortization match state
     var pendingAmortizationTxn by remember { mutableStateOf<Transaction?>(null) }
-    var pendingAmortizationMatch by remember { mutableStateOf<AmortizationEntry?>(null) }
+    var pendingAmortizationMatches by remember { mutableStateOf<List<AmortizationEntry>>(emptyList()) }
     var pendingAmortizationIsEdit by remember { mutableStateOf(false) }
     var showAmortizationDialog by remember { mutableStateOf(false) }
-    var currentImportAmortization by remember { mutableStateOf<AmortizationEntry?>(null) }
+    var currentImportAmortization by remember { mutableStateOf<List<AmortizationEntry>>(emptyList()) }
 
     // Budget income match state
     var pendingBudgetIncomeTxn by remember { mutableStateOf<Transaction?>(null) }
-    var pendingBudgetIncomeMatch by remember { mutableStateOf<IncomeSource?>(null) }
+    var pendingBudgetIncomeMatches by remember { mutableStateOf<List<IncomeSource>>(emptyList()) }
     var pendingBudgetIncomeIsEdit by remember { mutableStateOf(false) }
     var showBudgetIncomeDialog by remember { mutableStateOf(false) }
-    var currentImportBudgetIncome by remember { mutableStateOf<IncomeSource?>(null) }
+    var currentImportBudgetIncome by remember { mutableStateOf<List<IncomeSource>>(emptyList()) }
 
     // CSV Import state
     val context = LocalContext.current
@@ -400,7 +401,7 @@ fun TransactionsScreen(
     var importIndex by remember { mutableIntStateOf(0) }
     var ignoreAllDuplicates by remember { mutableStateOf(false) }
     var skipDupForIndex by remember { mutableIntStateOf(-1) }  // skip dup check for this index (Keep Both)
-    var currentImportDup by remember { mutableStateOf<Transaction?>(null) }
+    var currentImportDups by remember { mutableStateOf<List<Transaction>>(emptyList()) }
     var importError by remember { mutableStateOf<String?>(null) }
     var importSkippedRows by remember { mutableIntStateOf(0) }
     var importTotalDataRows by remember { mutableIntStateOf(0) }
@@ -557,7 +558,7 @@ fun TransactionsScreen(
             } else {
                 // Auto-categorize only for bank imports (they lack categories)
                 val processed = if (selectedBankFormat == BankFormat.US_BANK || selectedBankFormat == BankFormat.GENERIC_CSV) {
-                    parsedTransactions.map { txn -> autoCategorize(txn, transactions, categories) }
+                    parsedTransactions.map { txn -> autoCategorize(txn, transactions, categories, matchChars) }
                 } else {
                     parsedTransactions.toList()
                 }
@@ -586,9 +587,9 @@ fun TransactionsScreen(
     }
 
     // Duplicate check loop
-    LaunchedEffect(importStage, importIndex, ignoreAllDuplicates, currentImportDup, currentImportRecurring, currentImportAmortization, currentImportBudgetIncome) {
+    LaunchedEffect(importStage, importIndex, ignoreAllDuplicates, currentImportDups, currentImportRecurring, currentImportAmortization, currentImportBudgetIncome) {
         if (importStage != ImportStage.DUPLICATE_CHECK) return@LaunchedEffect
-        if (currentImportDup != null || currentImportRecurring != null || currentImportAmortization != null || currentImportBudgetIncome != null) return@LaunchedEffect
+        if (currentImportDups.isNotEmpty() || currentImportRecurring.isNotEmpty() || currentImportAmortization.isNotEmpty() || currentImportBudgetIncome.isNotEmpty()) return@LaunchedEffect
         if (importIndex >= parsedTransactions.size) {
             // All done — add approved transactions
             importApproved.forEach { txn -> onAddTransaction(txn) }
@@ -617,30 +618,30 @@ fun TransactionsScreen(
         if (skipDupForIndex == importIndex) skipDupForIndex = -1  // one-shot
 
         if (!skipDup) {
-            val dup = findDuplicate(txn, transactions, percentTolerance, matchDollar, matchDays, matchChars)
-            if (dup != null) {
-                currentImportDup = dup
+            val dups = findDuplicates(txn, transactions, percentTolerance, matchDollar, matchDays, matchChars)
+            if (dups.isNotEmpty()) {
+                currentImportDups = dups
                 return@LaunchedEffect
             }
         }
 
         // Linking chain: income → budget income only; expense → RE → amortization only
         if (txn.type == TransactionType.INCOME) {
-            val budgetIncomeMatch = findBudgetIncomeMatch(txn, incomeSources, matchChars, matchDays)
-            if (budgetIncomeMatch != null) {
-                currentImportBudgetIncome = budgetIncomeMatch
+            val budgetIncomeMatches = findBudgetIncomeMatches(txn, incomeSources, matchChars, matchDays)
+            if (budgetIncomeMatches.isNotEmpty()) {
+                currentImportBudgetIncome = budgetIncomeMatches
             } else {
                 importApproved.add(txn)
                 importIndex++
             }
         } else {
-            val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
-            if (recurringMatch != null) {
-                currentImportRecurring = recurringMatch
+            val recurringMatches = findRecurringExpenseMatches(txn, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
+            if (recurringMatches.isNotEmpty()) {
+                currentImportRecurring = recurringMatches
             } else {
-                val amortizationMatch = findAmortizationMatch(txn, amortizationEntries, percentTolerance, matchDollar, matchChars)
-                if (amortizationMatch != null) {
-                    currentImportAmortization = amortizationMatch
+                val amortizationMatches = findAmortizationMatches(txn, amortizationEntries, percentTolerance, matchDollar, matchChars)
+                if (amortizationMatches.isNotEmpty()) {
+                    currentImportAmortization = amortizationMatches
                 } else {
                     importApproved.add(txn)
                     importIndex++
@@ -1252,25 +1253,27 @@ fun TransactionsScreen(
             incomeSources = incomeSources,
             savingsGoals = savingsGoals,
             pastSources = pastSources,
+            allTransactions = transactions,
+            matchChars = matchChars,
             budgetPeriod = budgetPeriod,
             isPaidUser = isPaidUser,
             onDismiss = { showAddIncome = false },
             onSave = { txn ->
                 val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null || txn.linkedSavingsGoalId != null
-                val dup = findDuplicate(txn, transactions, percentTolerance, matchDollar, matchDays, matchChars)
-                if (dup != null) {
+                val dups = findDuplicates(txn, transactions, percentTolerance, matchDollar, matchDays, matchChars)
+                if (dups.isNotEmpty()) {
                     pendingManualSave = txn
-                    manualDuplicateMatch = dup
+                    manualDuplicateMatches = dups
                     pendingManualIsEdit = false
                     showManualDuplicateDialog = true
                 } else if (alreadyLinked) {
                     addAndScroll(txn)
                 } else {
                     // Income: check budget income match only
-                    val budgetMatch = findBudgetIncomeMatch(txn, incomeSources, matchChars, matchDays)
-                    if (budgetMatch != null) {
+                    val budgetMatches = findBudgetIncomeMatches(txn, incomeSources, matchChars, matchDays)
+                    if (budgetMatches.isNotEmpty()) {
                         pendingBudgetIncomeTxn = txn
-                        pendingBudgetIncomeMatch = budgetMatch
+                        pendingBudgetIncomeMatches = budgetMatches
                         pendingBudgetIncomeIsEdit = false
                         showBudgetIncomeDialog = true
                     } else {
@@ -1280,7 +1283,8 @@ fun TransactionsScreen(
                 showAddIncome = false
             },
             onAddAmortization = onAddAmortization,
-            onDeleteAmortization = onDeleteAmortization
+            onDeleteAmortization = onDeleteAmortization,
+            autoCapitalize = autoCapitalize
         )
     }
 
@@ -1300,31 +1304,33 @@ fun TransactionsScreen(
             incomeSources = incomeSources,
             savingsGoals = savingsGoals,
             pastSources = pastSources,
+            allTransactions = transactions,
+            matchChars = matchChars,
             budgetPeriod = budgetPeriod,
             isPaidUser = isPaidUser,
             onDismiss = { showAddExpense = false },
             onSave = { txn ->
                 val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null || txn.linkedSavingsGoalId != null
-                val dup = findDuplicate(txn, transactions, percentTolerance, matchDollar, matchDays, matchChars)
-                if (dup != null) {
+                val dups = findDuplicates(txn, transactions, percentTolerance, matchDollar, matchDays, matchChars)
+                if (dups.isNotEmpty()) {
                     pendingManualSave = txn
-                    manualDuplicateMatch = dup
+                    manualDuplicateMatches = dups
                     pendingManualIsEdit = false
                     showManualDuplicateDialog = true
                 } else if (alreadyLinked) {
                     addAndScroll(txn)
                 } else {
-                    val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
-                    if (recurringMatch != null) {
+                    val recurringMatches = findRecurringExpenseMatches(txn, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
+                    if (recurringMatches.isNotEmpty()) {
                         pendingRecurringTxn = txn
-                        pendingRecurringMatch = recurringMatch
+                        pendingRecurringMatches = recurringMatches
                         pendingRecurringIsEdit = false
                         showRecurringDialog = true
                     } else {
-                        val amortizationMatch = findAmortizationMatch(txn, amortizationEntries, percentTolerance, matchDollar, matchChars)
-                        if (amortizationMatch != null) {
+                        val amortizationMatches = findAmortizationMatches(txn, amortizationEntries, percentTolerance, matchDollar, matchChars)
+                        if (amortizationMatches.isNotEmpty()) {
                             pendingAmortizationTxn = txn
-                            pendingAmortizationMatch = amortizationMatch
+                            pendingAmortizationMatches = amortizationMatches
                             pendingAmortizationIsEdit = false
                             showAmortizationDialog = true
                         } else {
@@ -1335,7 +1341,8 @@ fun TransactionsScreen(
                 showAddExpense = false
             },
             onAddAmortization = onAddAmortization,
-            onDeleteAmortization = onDeleteAmortization
+            onDeleteAmortization = onDeleteAmortization,
+            autoCapitalize = autoCapitalize
         )
     }
 
@@ -1356,6 +1363,8 @@ fun TransactionsScreen(
             incomeSources = incomeSources,
             savingsGoals = savingsGoals,
             pastSources = pastSources,
+            allTransactions = transactions,
+            matchChars = matchChars,
             budgetPeriod = budgetPeriod,
             isPaidUser = isPaidUser,
             onDismiss = { editingTransaction = null },
@@ -1373,20 +1382,20 @@ fun TransactionsScreen(
                     onUpdateTransaction(updated)
                 } else {
                     val alreadyLinked = updated.linkedRecurringExpenseId != null || updated.linkedAmortizationEntryId != null || updated.linkedIncomeSourceId != null || updated.linkedSavingsGoalId != null
-                    val dup = findDuplicate(updated, transactions.filter { it.id != updated.id }, percentTolerance, matchDollar, matchDays, matchChars)
-                    if (dup != null) {
+                    val dups = findDuplicates(updated, transactions.filter { it.id != updated.id }, percentTolerance, matchDollar, matchDays, matchChars)
+                    if (dups.isNotEmpty()) {
                         pendingManualSave = updated
-                        manualDuplicateMatch = dup
+                        manualDuplicateMatches = dups
                         pendingManualIsEdit = true
                         showManualDuplicateDialog = true
                     } else if (alreadyLinked) {
                         onUpdateTransaction(updated)
                     } else if (updated.type == TransactionType.INCOME) {
                         // Income edit: check budget income match only
-                        val budgetMatch = findBudgetIncomeMatch(updated, incomeSources, matchChars, matchDays)
-                        if (budgetMatch != null) {
+                        val budgetMatches = findBudgetIncomeMatches(updated, incomeSources, matchChars, matchDays)
+                        if (budgetMatches.isNotEmpty()) {
                             pendingBudgetIncomeTxn = updated
-                            pendingBudgetIncomeMatch = budgetMatch
+                            pendingBudgetIncomeMatches = budgetMatches
                             pendingBudgetIncomeIsEdit = true
                             showBudgetIncomeDialog = true
                         } else {
@@ -1394,17 +1403,17 @@ fun TransactionsScreen(
                         }
                     } else {
                         // Expense edit: check RE → amortization
-                        val recurringMatch = findRecurringExpenseMatch(updated, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
-                        if (recurringMatch != null) {
+                        val recurringMatches = findRecurringExpenseMatches(updated, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
+                        if (recurringMatches.isNotEmpty()) {
                             pendingRecurringTxn = updated
-                            pendingRecurringMatch = recurringMatch
+                            pendingRecurringMatches = recurringMatches
                             pendingRecurringIsEdit = true
                             showRecurringDialog = true
                         } else {
-                            val amortizationMatch = findAmortizationMatch(updated, amortizationEntries, percentTolerance, matchDollar, matchChars)
-                            if (amortizationMatch != null) {
+                            val amortizationMatches = findAmortizationMatches(updated, amortizationEntries, percentTolerance, matchDollar, matchChars)
+                            if (amortizationMatches.isNotEmpty()) {
                                 pendingAmortizationTxn = updated
-                                pendingAmortizationMatch = amortizationMatch
+                                pendingAmortizationMatches = amortizationMatches
                                 pendingAmortizationIsEdit = true
                                 showAmortizationDialog = true
                             } else {
@@ -1417,7 +1426,8 @@ fun TransactionsScreen(
             },
             onDelete = { onDeleteTransaction(txn); editingTransaction = null },
             onAddAmortization = onAddAmortization,
-            onDeleteAmortization = onDeleteAmortization
+            onDeleteAmortization = onDeleteAmortization,
+            autoCapitalize = autoCapitalize
         )
     }
 
@@ -1915,7 +1925,7 @@ fun TransactionsScreen(
         },
         onKeepParsed = {
             val categorized = parsedTransactions.map { txn ->
-                autoCategorize(txn, transactions, categories)
+                autoCategorize(txn, transactions, categories, matchChars)
             }
             parsedTransactions.clear()
             parsedTransactions.addAll(categorized)
@@ -1937,11 +1947,10 @@ fun TransactionsScreen(
     )
 
     // Import duplicate resolution dialog
-    if (importStage == ImportStage.DUPLICATE_CHECK && currentImportDup != null && importIndex < parsedTransactions.size) {
+    if (importStage == ImportStage.DUPLICATE_CHECK && currentImportDups.isNotEmpty() && importIndex < parsedTransactions.size) {
         val newTxn = parsedTransactions[importIndex]
-        val existingDup = currentImportDup!!
         DuplicateResolutionDialog(
-            existingTransaction = existingDup,
+            existingTransactions = currentImportDups,
             newTransaction = newTxn,
             currencySymbol = currencySymbol,
             dateFormatter = dateFormatter,
@@ -1950,22 +1959,22 @@ fun TransactionsScreen(
             onIgnore = {
                 // Keep Both — skip dup check, continue to linking chain
                 skipDupForIndex = importIndex
-                currentImportDup = null
+                currentImportDups = emptyList()
             },
-            onKeepNew = {
-                onDeleteTransaction(existingDup)
+            onKeepNew = { selectedExisting ->
+                onDeleteTransaction(selectedExisting)
                 // Skip dup check on re-run, continue to linking chain
                 skipDupForIndex = importIndex
-                currentImportDup = null
+                currentImportDups = emptyList()
             },
             onKeepExisting = {
-                currentImportDup = null
+                currentImportDups = emptyList()
                 importIndex++
             },
             onIgnoreAll = {
                 // Skip dup check on re-run, continue to linking chain
                 skipDupForIndex = importIndex
-                currentImportDup = null
+                currentImportDups = emptyList()
                 ignoreAllDuplicates = true
             }
         )
@@ -1975,37 +1984,37 @@ fun TransactionsScreen(
     ManualDuplicateDialog(
         showManualDuplicateDialog = showManualDuplicateDialog,
         pendingManualSave = pendingManualSave,
-        manualDuplicateMatch = manualDuplicateMatch,
+        manualDuplicateMatches = manualDuplicateMatches,
         currencySymbol = currencySymbol,
         dateFormatter = dateFormatter,
         categoryMap = categoryMap,
         onKeepBothOrKeepNew = { deleteExisting ->
-            if (deleteExisting) onDeleteTransaction(manualDuplicateMatch!!)
+            if (deleteExisting != null) onDeleteTransaction(deleteExisting)
             val txn = pendingManualSave!!
             val isEdit = pendingManualIsEdit
             pendingManualSave = null
-            manualDuplicateMatch = null
+            manualDuplicateMatches = emptyList()
             showManualDuplicateDialog = false
             val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null || txn.linkedSavingsGoalId != null
             if (!alreadyLinked) {
-                val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
-                if (recurringMatch != null) {
+                val recurringMatches = findRecurringExpenseMatches(txn, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
+                if (recurringMatches.isNotEmpty()) {
                     pendingRecurringTxn = txn
-                    pendingRecurringMatch = recurringMatch
+                    pendingRecurringMatches = recurringMatches
                     pendingRecurringIsEdit = isEdit
                     showRecurringDialog = true
                 } else {
-                    val amortizationMatch = findAmortizationMatch(txn, amortizationEntries, percentTolerance, matchDollar, matchChars)
-                    if (amortizationMatch != null) {
+                    val amortizationMatches = findAmortizationMatches(txn, amortizationEntries, percentTolerance, matchDollar, matchChars)
+                    if (amortizationMatches.isNotEmpty()) {
                         pendingAmortizationTxn = txn
-                        pendingAmortizationMatch = amortizationMatch
+                        pendingAmortizationMatches = amortizationMatches
                         pendingAmortizationIsEdit = isEdit
                         showAmortizationDialog = true
                     } else {
-                        val budgetMatch = findBudgetIncomeMatch(txn, incomeSources, matchChars, matchDays)
-                        if (budgetMatch != null) {
+                        val budgetMatches = findBudgetIncomeMatches(txn, incomeSources, matchChars, matchDays)
+                        if (budgetMatches.isNotEmpty()) {
                             pendingBudgetIncomeTxn = txn
-                            pendingBudgetIncomeMatch = budgetMatch
+                            pendingBudgetIncomeMatches = budgetMatches
                             pendingBudgetIncomeIsEdit = isEdit
                             showBudgetIncomeDialog = true
                         } else {
@@ -2019,71 +2028,66 @@ fun TransactionsScreen(
         },
         onKeepExisting = {
             pendingManualSave = null
-            manualDuplicateMatch = null
+            manualDuplicateMatches = emptyList()
             showManualDuplicateDialog = false
         }
     )
 
     // Import recurring expense match dialog
-    if (importStage == ImportStage.DUPLICATE_CHECK && currentImportRecurring != null && importIndex < parsedTransactions.size) {
+    if (importStage == ImportStage.DUPLICATE_CHECK && currentImportRecurring.isNotEmpty() && importIndex < parsedTransactions.size) {
         val importTxn = parsedTransactions[importIndex]
-        val recurringMatch = currentImportRecurring!!
-        val dateCloseEnough = isRecurringDateCloseEnough(importTxn.date, recurringMatch)
         RecurringExpenseConfirmDialog(
             transaction = importTxn,
-            recurringExpense = recurringMatch,
+            recurringExpenses = currentImportRecurring,
             currencySymbol = currencySymbol,
             dateFormatter = dateFormatter,
-            showDateAdvisory = !dateCloseEnough,
-            onConfirmRecurring = {
+            onConfirmRecurring = { selectedRE ->
                 val updatedTxn = importTxn.copy(
-                    linkedRecurringExpenseId = recurringMatch.id,
-                    linkedRecurringExpenseAmount = recurringMatch.amount
+                    linkedRecurringExpenseId = selectedRE.id,
+                    linkedRecurringExpenseAmount = selectedRE.amount
                 )
                 importApproved.add(updatedTxn)
-                currentImportRecurring = null
+                currentImportRecurring = emptyList()
                 importIndex++
             },
             onNotRecurring = {
                 importApproved.add(importTxn)
-                currentImportRecurring = null
+                currentImportRecurring = emptyList()
                 importIndex++
             }
         )
     }
 
     // Manual recurring expense match dialog
-    if (showRecurringDialog && pendingRecurringTxn != null && pendingRecurringMatch != null) {
-        val dateCloseEnough = isRecurringDateCloseEnough(pendingRecurringTxn!!.date, pendingRecurringMatch!!)
+    if (showRecurringDialog && pendingRecurringTxn != null && pendingRecurringMatches.isNotEmpty()) {
         RecurringExpenseConfirmDialog(
             transaction = pendingRecurringTxn!!,
-            recurringExpense = pendingRecurringMatch!!,
+            recurringExpenses = pendingRecurringMatches,
             currencySymbol = currencySymbol,
             dateFormatter = dateFormatter,
-            showDateAdvisory = !dateCloseEnough,
-            onConfirmRecurring = {
+            onConfirmRecurring = { selectedRE ->
                 val txn = pendingRecurringTxn!!
                 val updatedTxn = txn.copy(
-                    linkedRecurringExpenseId = pendingRecurringMatch!!.id,
-                    linkedRecurringExpenseAmount = pendingRecurringMatch!!.amount
+                    linkedRecurringExpenseId = selectedRE.id,
+                    linkedRecurringExpenseAmount = selectedRE.amount
                 )
                 if (pendingRecurringIsEdit) onUpdateTransaction(updatedTxn)
                 else addAndScroll(updatedTxn)
                 pendingRecurringTxn = null
-                pendingRecurringMatch = null
+                pendingRecurringMatches = emptyList()
                 showRecurringDialog = false
             },
             onNotRecurring = {
                 val txn = pendingRecurringTxn!!
                 val isEdit = pendingRecurringIsEdit
                 pendingRecurringTxn = null
-                pendingRecurringMatch = null
+                pendingRecurringMatches = emptyList()
                 showRecurringDialog = false
                 // Continue expense chain: check amortization
-                val amortMatch = findAmortizationMatch(txn, amortizationEntries, percentTolerance, matchDollar, matchChars)
-                if (amortMatch != null) {
+                val amortMatches = findAmortizationMatches(txn, amortizationEntries, percentTolerance, matchDollar, matchChars)
+                if (amortMatches.isNotEmpty()) {
                     pendingAmortizationTxn = txn
-                    pendingAmortizationMatch = amortMatch
+                    pendingAmortizationMatches = amortMatches
                     pendingAmortizationIsEdit = isEdit
                     showAmortizationDialog = true
                 } else {
@@ -2095,76 +2099,74 @@ fun TransactionsScreen(
     }
 
     // Import amortization match dialog
-    if (importStage == ImportStage.DUPLICATE_CHECK && currentImportAmortization != null && importIndex < parsedTransactions.size) {
+    if (importStage == ImportStage.DUPLICATE_CHECK && currentImportAmortization.isNotEmpty() && importIndex < parsedTransactions.size) {
         val importTxn = parsedTransactions[importIndex]
-        val amortizationMatch = currentImportAmortization!!
         AmortizationConfirmDialog(
             transaction = importTxn,
-            amortizationEntry = amortizationMatch,
+            amortizationEntries = currentImportAmortization,
             currencySymbol = currencySymbol,
             dateFormatter = dateFormatter,
-            onConfirmAmortization = {
-                val updatedTxn = importTxn.copy(linkedAmortizationEntryId = amortizationMatch.id)
+            onConfirmAmortization = { selectedEntry ->
+                val updatedTxn = importTxn.copy(linkedAmortizationEntryId = selectedEntry.id)
                 importApproved.add(updatedTxn)
-                currentImportAmortization = null
+                currentImportAmortization = emptyList()
                 importIndex++
             },
             onNotAmortized = {
                 importApproved.add(importTxn)
-                currentImportAmortization = null
+                currentImportAmortization = emptyList()
                 importIndex++
             }
         )
     }
 
     // Import budget income match dialog
-    if (importStage == ImportStage.DUPLICATE_CHECK && currentImportBudgetIncome != null && importIndex < parsedTransactions.size) {
+    if (importStage == ImportStage.DUPLICATE_CHECK && currentImportBudgetIncome.isNotEmpty() && importIndex < parsedTransactions.size) {
         val importTxn = parsedTransactions[importIndex]
-        val incomeMatch = currentImportBudgetIncome!!
         BudgetIncomeConfirmDialog(
             transaction = importTxn,
-            incomeSource = incomeMatch,
+            incomeSources = currentImportBudgetIncome,
             currencySymbol = currencySymbol,
             dateFormatter = dateFormatter,
-            onConfirmBudgetIncome = {
+            onConfirmBudgetIncome = { selectedIS ->
                 val recurringIncomeCatId = categories.find { it.tag == "recurring_income" }?.id
                 val updatedTxn = importTxn.copy(
                     isBudgetIncome = true,
-                    linkedIncomeSourceId = incomeMatch.id,
-                    linkedIncomeSourceAmount = incomeMatch.amount,
+                    linkedIncomeSourceId = selectedIS.id,
+                    linkedIncomeSourceAmount = selectedIS.amount,
                     categoryAmounts = if (recurringIncomeCatId != null)
                         listOf(CategoryAmount(recurringIncomeCatId, importTxn.amount))
                     else importTxn.categoryAmounts
                 )
                 if (incomeMode == IncomeMode.ACTUAL_ADJUST) {
-                    onAdjustIncomeAmount(incomeMatch.id, importTxn.amount)
+                    onAdjustIncomeAmount(selectedIS.id, importTxn.amount)
                 }
                 importApproved.add(updatedTxn)
-                currentImportBudgetIncome = null
+                currentImportBudgetIncome = emptyList()
                 importIndex++
             },
             onNotBudgetIncome = {
                 importApproved.add(importTxn)
-                currentImportBudgetIncome = null
+                currentImportBudgetIncome = emptyList()
                 importIndex++
             }
         )
     }
 
     // Manual amortization match dialog
-    if (showAmortizationDialog && pendingAmortizationTxn != null && pendingAmortizationMatch != null) {
+    if (showAmortizationDialog && pendingAmortizationTxn != null && pendingAmortizationMatches.isNotEmpty()) {
         AmortizationConfirmDialog(
             transaction = pendingAmortizationTxn!!,
-            amortizationEntry = pendingAmortizationMatch!!,
+            amortizationEntries = pendingAmortizationMatches,
             currencySymbol = currencySymbol,
             dateFormatter = dateFormatter,
-            onConfirmAmortization = {
+            onConfirmAmortization = { selectedEntry ->
                 val txn = pendingAmortizationTxn!!
-                val updatedTxn = txn.copy(linkedAmortizationEntryId = pendingAmortizationMatch!!.id)
+                val updatedTxn = txn.copy(linkedAmortizationEntryId = selectedEntry.id)
                 if (pendingAmortizationIsEdit) onUpdateTransaction(updatedTxn)
                 else addAndScroll(updatedTxn)
                 pendingAmortizationTxn = null
-                pendingAmortizationMatch = null
+                pendingAmortizationMatches = emptyList()
                 showAmortizationDialog = false
             },
             onNotAmortized = {
@@ -2172,26 +2174,26 @@ fun TransactionsScreen(
                 if (pendingAmortizationIsEdit) onUpdateTransaction(txn)
                 else addAndScroll(txn)
                 pendingAmortizationTxn = null
-                pendingAmortizationMatch = null
+                pendingAmortizationMatches = emptyList()
                 showAmortizationDialog = false
             }
         )
     }
 
     // Budget income confirm dialog
-    if (showBudgetIncomeDialog && pendingBudgetIncomeTxn != null && pendingBudgetIncomeMatch != null) {
+    if (showBudgetIncomeDialog && pendingBudgetIncomeTxn != null && pendingBudgetIncomeMatches.isNotEmpty()) {
         BudgetIncomeConfirmDialog(
             transaction = pendingBudgetIncomeTxn!!,
-            incomeSource = pendingBudgetIncomeMatch!!,
+            incomeSources = pendingBudgetIncomeMatches,
             currencySymbol = currencySymbol,
             dateFormatter = dateFormatter,
-            onConfirmBudgetIncome = {
+            onConfirmBudgetIncome = { selectedIS ->
                 val recurringIncomeCatId = categories.find { it.tag == "recurring_income" }?.id
                 val baseTxn = pendingBudgetIncomeTxn!!
                 val txn = baseTxn.copy(
                     isBudgetIncome = true,
-                    linkedIncomeSourceId = pendingBudgetIncomeMatch!!.id,
-                    linkedIncomeSourceAmount = pendingBudgetIncomeMatch!!.amount,
+                    linkedIncomeSourceId = selectedIS.id,
+                    linkedIncomeSourceAmount = selectedIS.amount,
                     categoryAmounts = if (recurringIncomeCatId != null)
                         listOf(CategoryAmount(recurringIncomeCatId, baseTxn.amount))
                     else baseTxn.categoryAmounts,
@@ -2199,12 +2201,12 @@ fun TransactionsScreen(
                 )
                 // ACTUAL_ADJUST: update source BEFORE adding txn so cash delta = 0
                 if (incomeMode == IncomeMode.ACTUAL_ADJUST) {
-                    onAdjustIncomeAmount(pendingBudgetIncomeMatch!!.id, baseTxn.amount)
+                    onAdjustIncomeAmount(selectedIS.id, baseTxn.amount)
                 }
                 if (pendingBudgetIncomeIsEdit) onUpdateTransaction(txn)
                 else addAndScroll(txn)
                 pendingBudgetIncomeTxn = null
-                pendingBudgetIncomeMatch = null
+                pendingBudgetIncomeMatches = emptyList()
                 showBudgetIncomeDialog = false
             },
             onNotBudgetIncome = {
@@ -2212,7 +2214,7 @@ fun TransactionsScreen(
                 if (pendingBudgetIncomeIsEdit) onUpdateTransaction(txn)
                 else addAndScroll(txn)
                 pendingBudgetIncomeTxn = null
-                pendingBudgetIncomeMatch = null
+                pendingBudgetIncomeMatches = emptyList()
                 showBudgetIncomeDialog = false
             }
         )
@@ -2337,13 +2339,14 @@ private fun TransactionCard(
 @Composable
 fun BudgetIncomeConfirmDialog(
     transaction: Transaction,
-    incomeSource: IncomeSource,
+    incomeSources: List<IncomeSource>,
     currencySymbol: String,
     dateFormatter: DateTimeFormatter,
-    onConfirmBudgetIncome: () -> Unit,
+    onConfirmBudgetIncome: (IncomeSource) -> Unit,
     onNotBudgetIncome: () -> Unit
 ) {
     val S = LocalStrings.current
+    var selectedIndex by remember { mutableIntStateOf(0) }
     MatchDialogCard(
         title = S.transactions.budgetIncomeMatchTitle(transaction.source),
         onDismiss = onNotBudgetIncome,
@@ -2351,7 +2354,7 @@ fun BudgetIncomeConfirmDialog(
             FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 DialogSecondaryButton(onClick = onNotBudgetIncome) { Text(S.transactions.noExtraIncome, maxLines = 1) }
                 Spacer(modifier = Modifier.width(8.dp))
-                DialogPrimaryButton(onClick = onConfirmBudgetIncome) { Text(S.transactions.yesBudgetIncome, maxLines = 1) }
+                DialogPrimaryButton(onClick = { onConfirmBudgetIncome(incomeSources[selectedIndex]) }) { Text(S.transactions.yesBudgetIncome, maxLines = 1) }
             }
         }
     ) {
@@ -2363,29 +2366,33 @@ fun BudgetIncomeConfirmDialog(
         )
         Spacer(modifier = Modifier.height(12.dp))
         SectionLabel(S.transactions.incomeSourceLabel)
-        TransactionCard(
-            source = incomeSource.source,
-            amount = formatCurrency(incomeSource.amount, currencySymbol),
-            date = ""
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            S.transactions.budgetIncomeMatchBody(transaction.source, incomeSource.source),
-            style = MaterialTheme.typography.bodyMedium
-        )
+        incomeSources.forEachIndexed { idx, src ->
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { selectedIndex = idx }) {
+                RadioButton(selected = idx == selectedIndex, onClick = { selectedIndex = idx })
+                Column(modifier = Modifier.weight(1f)) {
+                    TransactionCard(
+                        source = src.source,
+                        amount = formatCurrency(src.amount, currencySymbol),
+                        date = ""
+                    )
+                }
+            }
+            if (idx < incomeSources.lastIndex) Spacer(modifier = Modifier.height(4.dp))
+        }
     }
 }
 
 @Composable
 fun AmortizationConfirmDialog(
     transaction: Transaction,
-    amortizationEntry: AmortizationEntry,
+    amortizationEntries: List<AmortizationEntry>,
     currencySymbol: String,
     dateFormatter: DateTimeFormatter,
-    onConfirmAmortization: () -> Unit,
+    onConfirmAmortization: (AmortizationEntry) -> Unit,
     onNotAmortized: () -> Unit
 ) {
     val S = LocalStrings.current
+    var selectedIndex by remember { mutableIntStateOf(0) }
     MatchDialogCard(
         title = S.transactions.amortizationMatchTitle(transaction.source),
         onDismiss = onNotAmortized,
@@ -2393,7 +2400,7 @@ fun AmortizationConfirmDialog(
             FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 DialogSecondaryButton(onClick = onNotAmortized) { Text(S.transactions.noRegularAmort, maxLines = 1) }
                 Spacer(modifier = Modifier.width(8.dp))
-                DialogPrimaryButton(onClick = onConfirmAmortization) { Text(S.transactions.yesAmortization, maxLines = 1) }
+                DialogPrimaryButton(onClick = { onConfirmAmortization(amortizationEntries[selectedIndex]) }) { Text(S.transactions.yesAmortization, maxLines = 1) }
             }
         }
     ) {
@@ -2405,30 +2412,33 @@ fun AmortizationConfirmDialog(
         )
         Spacer(modifier = Modifier.height(12.dp))
         SectionLabel(S.transactions.amortizationEntryLabel)
-        TransactionCard(
-            source = amortizationEntry.source,
-            amount = formatCurrency(amortizationEntry.amount, currencySymbol),
-            date = ""
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            S.transactions.amortizationMatchBody(transaction.source, amortizationEntry.source),
-            style = MaterialTheme.typography.bodyMedium
-        )
+        amortizationEntries.forEachIndexed { idx, entry ->
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { selectedIndex = idx }) {
+                RadioButton(selected = idx == selectedIndex, onClick = { selectedIndex = idx })
+                Column(modifier = Modifier.weight(1f)) {
+                    TransactionCard(
+                        source = entry.source,
+                        amount = formatCurrency(entry.amount, currencySymbol),
+                        date = ""
+                    )
+                }
+            }
+            if (idx < amortizationEntries.lastIndex) Spacer(modifier = Modifier.height(4.dp))
+        }
     }
 }
 
 @Composable
 fun RecurringExpenseConfirmDialog(
     transaction: Transaction,
-    recurringExpense: RecurringExpense,
+    recurringExpenses: List<RecurringExpense>,
     currencySymbol: String,
     dateFormatter: DateTimeFormatter,
-    showDateAdvisory: Boolean,
-    onConfirmRecurring: () -> Unit,
+    onConfirmRecurring: (RecurringExpense) -> Unit,
     onNotRecurring: () -> Unit
 ) {
     val S = LocalStrings.current
+    var selectedIndex by remember { mutableIntStateOf(0) }
     MatchDialogCard(
         title = S.transactions.recurringMatchTitle(transaction.source),
         onDismiss = onNotRecurring,
@@ -2436,7 +2446,7 @@ fun RecurringExpenseConfirmDialog(
             FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 DialogSecondaryButton(onClick = onNotRecurring) { Text(S.transactions.noRegularExpense, maxLines = 1) }
                 Spacer(modifier = Modifier.width(8.dp))
-                DialogPrimaryButton(onClick = onConfirmRecurring) { Text(S.transactions.yesRecurring, maxLines = 1) }
+                DialogPrimaryButton(onClick = { onConfirmRecurring(recurringExpenses[selectedIndex]) }) { Text(S.transactions.yesRecurring, maxLines = 1) }
             }
         }
     ) {
@@ -2448,41 +2458,45 @@ fun RecurringExpenseConfirmDialog(
         )
         Spacer(modifier = Modifier.height(12.dp))
         SectionLabel(S.transactions.recurringExpenseLabel)
-        TransactionCard(
-            source = recurringExpense.source,
-            amount = formatCurrency(recurringExpense.amount, currencySymbol),
-            date = ""
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            S.transactions.recurringMatchBody(transaction.source, recurringExpense.source),
-            style = MaterialTheme.typography.bodyMedium
-        )
-        if (showDateAdvisory) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                S.transactions.dateAdvisory,
-                style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFFFF9800)
-            )
+        recurringExpenses.forEachIndexed { idx, re ->
+            val dateCloseEnough = isRecurringDateCloseEnough(transaction.date, re)
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { selectedIndex = idx }) {
+                RadioButton(selected = idx == selectedIndex, onClick = { selectedIndex = idx })
+                Column(modifier = Modifier.weight(1f)) {
+                    TransactionCard(
+                        source = re.source,
+                        amount = formatCurrency(re.amount, currencySymbol),
+                        date = ""
+                    )
+                    if (!dateCloseEnough) {
+                        Text(
+                            S.transactions.dateAdvisory,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFFF9800)
+                        )
+                    }
+                }
+            }
+            if (idx < recurringExpenses.lastIndex) Spacer(modifier = Modifier.height(4.dp))
         }
     }
 }
 
 @Composable
 fun DuplicateResolutionDialog(
-    existingTransaction: Transaction,
+    existingTransactions: List<Transaction>,
     newTransaction: Transaction,
     currencySymbol: String,
     dateFormatter: DateTimeFormatter,
     categoryMap: Map<Int, Category>,
     showIgnoreAll: Boolean,
     onIgnore: () -> Unit,
-    onKeepNew: () -> Unit,
+    onKeepNew: (Transaction) -> Unit,
     onKeepExisting: () -> Unit,
     onIgnoreAll: () -> Unit
 ) {
     val S = LocalStrings.current
+    var selectedIndex by remember { mutableIntStateOf(0) }
     MatchDialogCard(
         title = S.transactions.duplicateDetected,
         onDismiss = onKeepExisting,
@@ -2492,9 +2506,8 @@ fun DuplicateResolutionDialog(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // Build label/action list: 3 buttons normally, 4 during import
                 val labels = mutableListOf(S.transactions.keepExisting, S.transactions.keepNew, S.transactions.keepBoth)
-                val actions = mutableListOf(onKeepExisting, onKeepNew, onIgnore)
+                val actions = mutableListOf<() -> Unit>(onKeepExisting, { onKeepNew(existingTransactions[selectedIndex]) }, onIgnore)
                 if (showIgnoreAll) {
                     labels.add(S.transactions.ignoreAll)
                     actions.add(onIgnoreAll)
@@ -2515,18 +2528,6 @@ fun DuplicateResolutionDialog(
             }
         }
     ) {
-        SectionLabel(S.transactions.duplicateExisting)
-        TransactionCard(
-            source = existingTransaction.source,
-            amount = formatCurrency(existingTransaction.amount, currencySymbol),
-            date = existingTransaction.date.format(dateFormatter),
-            extra = if (existingTransaction.categoryAmounts.isNotEmpty()) {
-                existingTransaction.categoryAmounts.mapNotNull { ca ->
-                    categoryMap[ca.categoryId]?.name
-                }.joinToString(", ")
-            } else null
-        )
-        Spacer(modifier = Modifier.height(12.dp))
         SectionLabel(S.transactions.duplicateNew)
         TransactionCard(
             source = newTransaction.source,
@@ -2538,6 +2539,26 @@ fun DuplicateResolutionDialog(
                 }.joinToString(", ")
             } else null
         )
+        Spacer(modifier = Modifier.height(12.dp))
+        SectionLabel(S.transactions.duplicateExisting)
+        existingTransactions.forEachIndexed { idx, ex ->
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { selectedIndex = idx }) {
+                RadioButton(selected = idx == selectedIndex, onClick = { selectedIndex = idx })
+                Column(modifier = Modifier.weight(1f)) {
+                    TransactionCard(
+                        source = ex.source,
+                        amount = formatCurrency(ex.amount, currencySymbol),
+                        date = ex.date.format(dateFormatter),
+                        extra = if (ex.categoryAmounts.isNotEmpty()) {
+                            ex.categoryAmounts.mapNotNull { ca ->
+                                categoryMap[ca.categoryId]?.name
+                            }.joinToString(", ")
+                        } else null
+                    )
+                }
+            }
+            if (idx < existingTransactions.lastIndex) Spacer(modifier = Modifier.height(4.dp))
+        }
     }
 }
 
@@ -2914,6 +2935,8 @@ fun TransactionDialog(
     incomeSources: List<IncomeSource> = emptyList(),
     savingsGoals: List<SavingsGoal> = emptyList(),
     pastSources: List<String> = emptyList(),
+    allTransactions: List<Transaction> = emptyList(),
+    matchChars: Int = 5,
     budgetPeriod: BudgetPeriod = BudgetPeriod.DAILY,
     isPaidUser: Boolean = false,
     onDismiss: () -> Unit,
@@ -2921,7 +2944,8 @@ fun TransactionDialog(
     onUpdatePhoto: ((Transaction) -> Unit)? = null,  // update transaction without closing dialog
     onDelete: (() -> Unit)? = null,
     onAddAmortization: ((AmortizationEntry) -> Unit)? = null,
-    onDeleteAmortization: ((AmortizationEntry) -> Unit)? = null
+    onDeleteAmortization: ((AmortizationEntry) -> Unit)? = null,
+    autoCapitalize: Boolean = true
 ) {
     val S = LocalStrings.current
     val maxDecimals = CURRENCY_DECIMALS[currencySymbol] ?: 2
@@ -3508,6 +3532,9 @@ fun TransactionDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
 
+                    // Auto-categorize: fire once when source reaches matchChars length and no category selected
+                    var autoCategorizeFired by remember { mutableStateOf(editTransaction != null) }
+
                     // Source/Merchant field with autocomplete
                     var sourceHasFocus by remember { mutableStateOf(false) }
                     val sourceSuggestions = remember(source, pastSources, sourceHasFocus) {
@@ -3521,7 +3548,22 @@ fun TransactionDialog(
                     Column(modifier = Modifier.fillMaxWidth()) {
                         OutlinedTextField(
                             value = source,
-                            onValueChange = { source = it },
+                            onValueChange = { newVal ->
+                                source = if (autoCapitalize) com.syncbudget.app.data.toApaTitleCase(newVal) else newVal
+                                if (newVal.isBlank()) autoCategorizeFired = false
+                                val stripped = newVal.lowercase().replace(Regex("[^a-z0-9]"), "")
+                                if (!autoCategorizeFired && stripped.length >= matchChars && selectedCategoryIds.isEmpty()) {
+                                    autoCategorizeFired = true
+                                    val temp = Transaction(id = 0, source = source, amount = 0.0, date = selectedDate, type = if (isExpense) TransactionType.EXPENSE else TransactionType.INCOME)
+                                    val result = com.syncbudget.app.data.autoCategorize(temp, allTransactions, categories, matchChars)
+                                    if (result.categoryAmounts.isNotEmpty()) {
+                                        val catId = result.categoryAmounts.first().categoryId
+                                        if (categories.none { it.id == catId && it.tag == "other" }) {
+                                            selectedCategoryIds[catId] = true
+                                        }
+                                    }
+                                }
+                            },
                             label = { Text(sourceLabel) },
                             enabled = !isSupercharge,
                             isError = showValidation && source.isBlank(),
@@ -3563,7 +3605,7 @@ fun TransactionDialog(
                     // Description field
                     OutlinedTextField(
                         value = description,
-                        onValueChange = { description = it },
+                        onValueChange = { description = if (autoCapitalize) com.syncbudget.app.data.toApaTitleCase(it) else it },
                         label = { Text(S.common.descriptionFieldLabel) },
                         colors = textFieldColors,
                         singleLine = true,
@@ -4263,6 +4305,7 @@ fun TransactionDialog(
                                     linkedRecurringExpenseAmount = reAmount,
                                     linkedIncomeSourceAmount = isAmount,
                                     linkedSavingsGoalAmount = sgAmount,
+                                    isUserCategorized = verified,
                                     excludeFromBudget = excludeFromBudget,
                                     receiptId1 = addModeReceiptId1,
                                     receiptId2 = addModeReceiptId2,
@@ -5443,16 +5486,16 @@ private fun ImportParseErrorDialog(
 private fun ManualDuplicateDialog(
     showManualDuplicateDialog: Boolean,
     pendingManualSave: Transaction?,
-    manualDuplicateMatch: Transaction?,
+    manualDuplicateMatches: List<Transaction>,
     currencySymbol: String,
     dateFormatter: DateTimeFormatter,
     categoryMap: Map<Int, Category>,
-    onKeepBothOrKeepNew: (deleteExisting: Boolean) -> Unit,
+    onKeepBothOrKeepNew: (deleteExisting: Transaction?) -> Unit,
     onKeepExisting: () -> Unit
 ) {
-    if (!showManualDuplicateDialog || pendingManualSave == null || manualDuplicateMatch == null) return
+    if (!showManualDuplicateDialog || pendingManualSave == null || manualDuplicateMatches.isEmpty()) return
     DuplicateResolutionDialog(
-        existingTransaction = manualDuplicateMatch,
+        existingTransactions = manualDuplicateMatches,
         newTransaction = pendingManualSave,
         currencySymbol = currencySymbol,
         dateFormatter = dateFormatter,
@@ -5460,11 +5503,11 @@ private fun ManualDuplicateDialog(
         showIgnoreAll = false,
         onIgnore = {
             // Keep Both — continue to linking chain
-            onKeepBothOrKeepNew(false)
+            onKeepBothOrKeepNew(null)
         },
-        onKeepNew = {
+        onKeepNew = { selectedExisting ->
             // Delete existing, continue to linking chain
-            onKeepBothOrKeepNew(true)
+            onKeepBothOrKeepNew(selectedExisting)
         },
         onKeepExisting = onKeepExisting,
         onIgnoreAll = {}

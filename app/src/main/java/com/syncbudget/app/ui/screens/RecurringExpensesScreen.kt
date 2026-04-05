@@ -105,7 +105,8 @@ fun RecurringExpensesScreen(
     onDeleteRecurringExpense: (RecurringExpense) -> Unit,
     transactions: List<Transaction> = emptyList(),
     onBack: () -> Unit,
-    onHelpClick: () -> Unit = {}
+    onHelpClick: () -> Unit = {},
+    autoCapitalize: Boolean = true
 ) {
     val S = LocalStrings.current
     val customColors = LocalSyncBudgetColors.current
@@ -421,7 +422,8 @@ fun RecurringExpensesScreen(
                 val id = generateRecurringExpenseId(recurringExpenses.map { it.id }.toSet())
                 onAddRecurringExpense(expense.copy(id = id))
                 showAddDialog = false
-            }
+            },
+            autoCapitalize = autoCapitalize
         )
     }
 
@@ -434,7 +436,8 @@ fun RecurringExpensesScreen(
             onSave = { updated ->
                 onUpdateRecurringExpense(updated)
                 editingExpense = null
-            }
+            },
+            autoCapitalize = autoCapitalize
         )
     }
 
@@ -587,7 +590,8 @@ private fun AddEditExpenseDialog(
     currencySymbol: String,
     dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd"),
     onDismiss: () -> Unit,
-    onSave: (RecurringExpense) -> Unit
+    onSave: (RecurringExpense) -> Unit,
+    autoCapitalize: Boolean = true
 ) {
     val S = LocalStrings.current
     val context = LocalContext.current
@@ -677,7 +681,7 @@ private fun AddEditExpenseDialog(
                 ) {
                     OutlinedTextField(
                         value = sourceName,
-                        onValueChange = { sourceName = it },
+                        onValueChange = { sourceName = if (autoCapitalize) com.syncbudget.app.data.toApaTitleCase(it) else it },
                         label = { Text(S.recurringExpenses.descriptionLabel) },
                         singleLine = true,
                         isError = showValidation && !isSourceValid,
@@ -689,7 +693,7 @@ private fun AddEditExpenseDialog(
                     )
                     OutlinedTextField(
                         value = description,
-                        onValueChange = { description = it },
+                        onValueChange = { description = if (autoCapitalize) com.syncbudget.app.data.toApaTitleCase(it) else it },
                         label = { Text(S.common.descriptionFieldLabel) },
                         colors = textFieldColors,
                         singleLine = true,
