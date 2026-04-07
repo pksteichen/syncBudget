@@ -86,6 +86,7 @@ import androidx.compose.ui.layout.positionInWindow
 import com.syncbudget.app.ui.strings.LocalStrings
 import com.syncbudget.app.ui.theme.LocalAppToast
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
+import com.syncbudget.app.ui.theme.PulsingScrollArrow
 
 private val COMMON_TIMEZONES = listOf(
     "America/New_York",
@@ -1065,6 +1066,7 @@ fun FamilySyncScreen(
                     color = MaterialTheme.colorScheme.surface,
                     tonalElevation = 6.dp
                 ) {
+                    Box {
                     Column(
                         modifier = Modifier.clickable(
                             interactionSource = remember { MutableInteractionSource() },
@@ -1160,6 +1162,13 @@ fun FamilySyncScreen(
                                 }
                             }
                         }
+                    }
+                    PulsingScrollArrow(
+                        scrollState = scrollState,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 12.dp, bottom = 50.dp)
+                    )
                     }
                 }
             }

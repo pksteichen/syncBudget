@@ -63,13 +63,13 @@ class BackgroundSyncWorker(
             // If foreground ViewModel is alive (stopped but in memory), only check listener health
             val vm = com.syncbudget.app.MainViewModel.instance?.get()
             if (vm != null) {
-                // Refresh App Check token to prevent PERMISSION_DENIED on long-lived listeners
-                try {
-                    com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
-                        .getAppCheckToken(false).await()
-                } catch (_: Exception) {}
-
                 if (vm.isSyncConfigured) {
+                    // Refresh App Check token to prevent PERMISSION_DENIED on long-lived listeners
+                    try {
+                        com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
+                            .getAppCheckToken(false).await()
+                    } catch (_: Exception) {}
+
                     val ds = vm.docSync
                     if (ds != null && !ds.isListening) {
                         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
@@ -77,14 +77,22 @@ class BackgroundSyncWorker(
                         }
                         Log.i(TAG, "Restarted dead foreground listeners")
                     }
+
+                    // Ping RTDB lastSeen so device roster stays fresh
+                    pingRtdbLastSeen(applicationContext)
                 }
+
                 return Result.success()
             }
 
             // ViewModel is dead (process restarted) — run full background sync
 
-            // Ensure Firebase anonymous auth
-            if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
+            val syncPrefs = applicationContext.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
+            val groupId = syncPrefs.getString("groupId", null)
+
+            // Only sign in to Firebase when sync is configured — solo users
+            // don't need auth and this saves a network round-trip every 15 min.
+            if (groupId != null && com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
                 try {
                     com.google.firebase.auth.FirebaseAuth.getInstance()
                         .signInAnonymously()
@@ -94,9 +102,6 @@ class BackgroundSyncWorker(
                     // Continue without sync — period refresh can still run from local data
                 }
             }
-
-            val syncPrefs = applicationContext.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
-            val groupId = syncPrefs.getString("groupId", null)
 
             var mergeResult: SyncMergeProcessor.MergeResult? = null
             var encryptionKey: ByteArray? = null
@@ -145,13 +150,7 @@ class BackgroundSyncWorker(
             }
 
             // ── Step 5: RTDB lastSeen ping (device roster freshness) ──
-            if (groupId != null && deviceId != null) {
-                try {
-                    val db = com.google.firebase.database.FirebaseDatabase.getInstance()
-                    db.reference.child("groups/$groupId/presence/$deviceId/lastSeen")
-                        .setValue(com.google.firebase.database.ServerValue.TIMESTAMP)
-                } catch (_: Exception) {}
-            }
+            pingRtdbLastSeen(applicationContext)
 
             // ── Step 6: Background receipt photo sync (paid users only) ──
             if (groupId != null && encryptionKey != null && deviceId != null) {
@@ -206,9 +205,17 @@ class BackgroundSyncWorker(
             // even for empty filtered results — no more 60s timeout waste.
             docSync.awaitInitialSync(60_000)
 
-            // Wait for in-flight deserialization to complete before stopping
+            // Wait for in-flight deserialization to complete before stopping.
             docSync.awaitDeserializationComplete()
-            docSync.stopListeners()
+
+            // Graceful stop: detach Firestore listeners but do NOT cancel
+            // deserializeScope children. Firestore can fire in-flight callbacks
+            // ~10-20ms after remove(), and we want those (e.g. sharedSettings)
+            // to complete so their events land in accumulatedEvents.
+            docSync.stopListeners(graceful = true)
+
+            // Drain any late callbacks that fired after remove() (up to 1s).
+            docSync.awaitDeserializationComplete(1_000)
         } catch (e: Exception) {
             Log.w(TAG, "Firestore sync failed: ${e.message}")
             try { docSync.stopListeners() } catch (_: Exception) {}
@@ -490,6 +497,22 @@ class BackgroundSyncWorker(
                     Log.w(TAG, "Push conflicted transaction failed: ${e.message}")
                 }
             }
+        }
+    }
+
+    // ── RTDB lastSeen ping ────────────────────────────────────────────
+
+    private suspend fun pingRtdbLastSeen(context: Context) {
+        val syncPrefs = context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
+        val groupId = syncPrefs.getString("groupId", null) ?: return
+        val deviceId = SyncIdGenerator.getOrCreateDeviceId(context)
+        try {
+            val db = com.google.firebase.database.FirebaseDatabase.getInstance()
+            db.reference.child("groups/$groupId/presence/$deviceId/lastSeen")
+                .setValue(com.google.firebase.database.ServerValue.TIMESTAMP)
+                .await()
+        } catch (e: Exception) {
+            Log.w(TAG, "RTDB lastSeen ping failed: ${e.message}")
         }
     }
 }

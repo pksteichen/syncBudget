@@ -651,6 +651,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             android.util.Log.w("Maintenance", "Receipt cleanup failed: ${e.message}")
         }
 
+        // ── Solo user: purge tombstoned records (synced users need them for propagation) ──
+        if (!isSyncConfigured) {
+            var purged = 0
+            purged += transactions.count { it.deleted }.also { if (it > 0) transactions.removeAll { t -> t.deleted } }
+            purged += recurringExpenses.count { it.deleted }.also { if (it > 0) recurringExpenses.removeAll { r -> r.deleted } }
+            purged += incomeSources.count { it.deleted }.also { if (it > 0) incomeSources.removeAll { s -> s.deleted } }
+            purged += savingsGoals.count { it.deleted }.also { if (it > 0) savingsGoals.removeAll { s -> s.deleted } }
+            purged += amortizationEntries.count { it.deleted }.also { if (it > 0) amortizationEntries.removeAll { a -> a.deleted } }
+            purged += categories.count { it.deleted }.also { if (it > 0) categories.removeAll { c -> c.deleted } }
+            if (purged > 0) {
+                saveTransactions(); saveRecurringExpenses(); saveIncomeSources()
+                saveSavingsGoals(); saveAmortizationEntries(); saveCategories()
+                android.util.Log.i("Maintenance", "Purged $purged tombstoned records (solo user)")
+            }
+        }
+
         // ── Admin: tombstone + cloud orphan cleanup (30-day sub-gate) ──
         if (isSyncAdmin && isSyncConfigured) {
             val groupId = syncGroupId ?: return
@@ -1033,6 +1049,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         syncDevices = emptyList()
         syncPrefs.edit().remove("cachedDeviceRoster").apply()
         initialSyncReceived = true // unblock any waiting coroutines
+        showAttribution = false
+        prefs.edit().putBoolean("showAttribution", false).apply()
 
         // Set eviction message for dashboard popup
         syncEvictionMessage = reason
@@ -1150,6 +1168,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         pendingAdminClaim = null
         syncErrorMessage = null
         syncProgressMessage = null
+        showAttribution = false
+        prefs.edit().putBoolean("showAttribution", false).apply()
     }
 
     /** Merge RTDB presence records into the current syncDevices roster. */
@@ -1855,11 +1875,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         // Force App Check token refresh on resume — prevents PERMISSION_DENIED from stale token
-        try {
-            com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
-                .getAppCheckToken(false) // false = use cached if valid, force refresh if expired
-                .addOnSuccessListener { /* token refreshed, listeners will reconnect */ }
-        } catch (_: Exception) {}
+        if (isSyncConfigured) {
+            try {
+                com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
+                    .getAppCheckToken(false) // false = use cached if valid, force refresh if expired
+                    .addOnSuccessListener { /* token refreshed, listeners will reconnect */ }
+            } catch (_: Exception) {}
+        }
 
         // Refresh RTDB presence on resume — ensures we show online after Doze/network loss
         if (isSyncConfigured && syncGroupId != null) {
@@ -1974,7 +1996,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 override fun onAvailable(network: android.net.Network) {
                     isNetworkAvailable = true
                     // Refresh App Check token on network recovery (may have expired during outage)
-                    try { com.google.firebase.appcheck.FirebaseAppCheck.getInstance().getAppCheckToken(false) } catch (_: Exception) {}
+                    if (isSyncConfigured) {
+                        try { com.google.firebase.appcheck.FirebaseAppCheck.getInstance().getAppCheckToken(false) } catch (_: Exception) {}
+                    }
                     if (isSyncConfigured && syncStatus == "offline") {
                         syncStatus = if (docSync?.isListening == true) "synced" else "error"
                     }

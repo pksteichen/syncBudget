@@ -60,6 +60,18 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
+        <!-- Opportunistic wake triggers: fires when user interacts with device
+             in ways Android lets us detect via manifest. Rate-limited to 5 min
+             in the receiver itself. -->
+        <receiver
+            android:name=".data.sync.WakeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
+                <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

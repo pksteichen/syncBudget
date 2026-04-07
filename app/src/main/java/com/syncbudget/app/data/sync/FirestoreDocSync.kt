@@ -7,6 +7,7 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.ListenerRegistration
 import com.syncbudget.app.data.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.tasks.await
 import java.util.concurrent.ConcurrentHashMap
 import java.time.LocalDateTime
 
@@ -36,6 +37,8 @@ class FirestoreDocSync(
         private const val ECHO_SUPPRESS_MS = 5_000L
         private const val LOG_FILE = "native_sync_log.txt"
         private const val MAX_LOG_SIZE = 512_000L // 512KB
+        /** Minimum gap between full PERMISSION_DENIED restarts (ms). */
+        private const val PERMISSION_DENIED_RESTART_COOLDOWN_MS = 30_000L
 
         /**
          * Set all per-collection sync cursors from a snapshot timestamp.
@@ -120,6 +123,10 @@ class FirestoreDocSync(
     private val localPendingEdits = ConcurrentHashMap<String, Long>()
     private val pendingEditsPrefs = context.getSharedPreferences("pending_edits", Context.MODE_PRIVATE)
 
+    // Debounce: when PERMISSION_DENIED triggers a full listener restart,
+    // don't restart again for at least PERMISSION_DENIED_RESTART_COOLDOWN_MS.
+    @Volatile private var lastPermDeniedRestart = 0L
+
     // Per-collection sync cursors: the latest updatedAt timestamp processed per collection.
     // Each collection tracks independently so a partial delivery (app killed mid-sync)
     // never advances one collection's cursor past another's undelivered changes.
@@ -176,6 +183,20 @@ class FirestoreDocSync(
         }
     }
 
+    /**
+     * Compute the enc hash for a field map we're about to push to Firestore.
+     * Must match the hash logic in handleCollectionChanges/handleSharedSettingsChange
+     * so that listener deliveries for the same doc skip decryption.
+     */
+    private fun computeEncHash(fields: Map<String, Any>): String? {
+        val enc = fields.filterKeys { it.startsWith("enc_") }
+        if (enc.isEmpty()) return null
+        return enc.entries
+            .sortedBy { it.key }
+            .joinToString("|") { "${it.key}=${it.value}" }
+            .hashCode().toString()
+    }
+
     private fun persistPendingEdits() {
         try {
             val obj = org.json.JSONObject()
@@ -229,35 +250,30 @@ class FirestoreDocSync(
             syncLog("Listener error: $collection — ${e.message} (authUid=$authUid)")
             if (e.message?.contains("PERMISSION_DENIED") == true) {
                 com.syncbudget.app.BudgeTrakApplication.recordNonFatal("PERMISSION_DENIED", "$collection (authUid=$authUid)", e)
-                // Token may have expired — force-refresh before reconnect
-                deserializeScope.launch {
-                    try {
-                        com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
-                            .getAppCheckToken(true)
-                            .addOnSuccessListener { result ->
-                                val expiresIn = (result.expireTimeMillis - System.currentTimeMillis()) / 1000
-                                com.syncbudget.app.BudgeTrakApplication.tokenLog(
-                                    "AppCheck token force-refreshed after PERMISSION_DENIED on $collection: expires in ${expiresIn}s (${expiresIn/60}m)"
-                                )
+                com.syncbudget.app.BudgeTrakApplication.tokenLog("PERMISSION_DENIED: $collection (authUid=$authUid)")
+                hasListenerError = true
+                // Instead of reconnecting individual listeners (which reuse the
+                // same SDK session and its cached expired auth), stop everything,
+                // force-refresh the App Check token, and restart all listeners
+                // fresh. Debounced to avoid 8 concurrent restart triggers.
+                triggerFullRestart()
+            } else {
+                hasListenerError = true
+                val attempts = reconnectAttempts.merge(collection, 1) { old, _ -> old + 1 } ?: 1
+                if (attempts <= 10) {
+                    val delayMs = minOf(5_000L * (1L shl minOf(attempts - 1, 5)), 300_000L)
+                    deserializeScope.launch {
+                        syncLog("Reconnecting $collection in ${delayMs/1000}s (attempt $attempts)")
+                        kotlinx.coroutines.delay(delayMs)
+                        if (isListening) {
+                            kotlinx.coroutines.withContext(Dispatchers.Main) {
+                                attachCollectionListener(collection)
                             }
-                    } catch (_: Exception) {}
-                }
-            }
-            hasListenerError = true
-            val attempts = reconnectAttempts.merge(collection, 1) { old, _ -> old + 1 } ?: 1
-            if (attempts <= 10) {
-                val delayMs = minOf(5_000L * (1L shl minOf(attempts - 1, 5)), 300_000L)
-                deserializeScope.launch {
-                    syncLog("Reconnecting $collection in ${delayMs/1000}s (attempt $attempts)")
-                    kotlinx.coroutines.delay(delayMs)
-                    if (isListening) {
-                        kotlinx.coroutines.withContext(Dispatchers.Main) {
-                            attachCollectionListener(collection)
                         }
                     }
+                } else {
+                    syncLog("Listener $collection failed $attempts times, giving up")
                 }
-            } else {
-                syncLog("Listener $collection failed $attempts times, giving up")
             }
             Unit
         }
@@ -289,36 +305,26 @@ class FirestoreDocSync(
                 val authUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
                 syncLog("Listener error: sharedSettings — ${e.message} (authUid=$authUid)")
                 if (e.message?.contains("PERMISSION_DENIED") == true) {
-                    com.syncbudget.app.BudgeTrakApplication.tokenLog("PERMISSION_DENIED on sharedSettings (authUid=$authUid)")
-                    // Token may have expired — force-refresh before reconnect
-                    deserializeScope.launch {
-                        try {
-                            com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
-                                .getAppCheckToken(true)
-                                .addOnSuccessListener { result ->
-                                    val expiresIn = (result.expireTimeMillis - System.currentTimeMillis()) / 1000
-                                    com.syncbudget.app.BudgeTrakApplication.tokenLog(
-                                        "AppCheck token force-refreshed after PERMISSION_DENIED on sharedSettings: expires in ${expiresIn}s (${expiresIn/60}m)"
-                                    )
+                    com.syncbudget.app.BudgeTrakApplication.tokenLog("PERMISSION_DENIED: sharedSettings (authUid=$authUid)")
+                    hasListenerError = true
+                    triggerFullRestart()
+                } else {
+                    hasListenerError = true
+                    val attempts = reconnectAttempts.merge("sharedSettings", 1) { old, _ -> old + 1 } ?: 1
+                    if (attempts <= 10) {
+                        val delayMs = minOf(5_000L * (1L shl minOf(attempts - 1, 5)), 300_000L)
+                        deserializeScope.launch {
+                            syncLog("Reconnecting sharedSettings in ${delayMs/1000}s (attempt $attempts)")
+                            kotlinx.coroutines.delay(delayMs)
+                            if (isListening) {
+                                kotlinx.coroutines.withContext(Dispatchers.Main) {
+                                    attachSettingsListener()
                                 }
-                        } catch (_: Exception) {}
-                    }
-                }
-                hasListenerError = true
-                val attempts = reconnectAttempts.merge("sharedSettings", 1) { old, _ -> old + 1 } ?: 1
-                if (attempts <= 10) {
-                    val delayMs = minOf(5_000L * (1L shl minOf(attempts - 1, 5)), 300_000L)
-                    deserializeScope.launch {
-                        syncLog("Reconnecting sharedSettings in ${delayMs/1000}s (attempt $attempts)")
-                        kotlinx.coroutines.delay(delayMs)
-                        if (isListening) {
-                            kotlinx.coroutines.withContext(Dispatchers.Main) {
-                                attachSettingsListener()
                             }
                         }
+                    } else {
+                        syncLog("Listener sharedSettings failed $attempts times, giving up")
                     }
-                } else {
-                    syncLog("Listener sharedSettings failed $attempts times, giving up")
                 }
             }
         )
@@ -335,7 +341,13 @@ class FirestoreDocSync(
         }
     }
 
-    fun stopListeners() {
+    /**
+     * Stop all listeners. [graceful] = true skips cancelChildren so any in-flight
+     * Firestore callbacks that fire after remove() can still complete their
+     * deserialization. The caller is responsible for calling awaitDeserializationComplete()
+     * afterwards to drain late callbacks before processing events.
+     */
+    fun stopListeners(graceful: Boolean = false) {
         syncLog("Stopping ${listeners.size} listeners")
         for (reg in listeners.values) {
             reg.remove()
@@ -347,7 +359,9 @@ class FirestoreDocSync(
         // DisposableEffect recomposition). These caches are scoped to
         // this FirestoreDocSync instance, which is scoped to the group —
         // so they're naturally cleared when a new group is joined.
-        deserializeScope.coroutineContext[kotlinx.coroutines.Job]?.cancelChildren()
+        if (!graceful) {
+            deserializeScope.coroutineContext[kotlinx.coroutines.Job]?.cancelChildren()
+        }
         isListening = false
     }
 
@@ -362,6 +376,47 @@ class FirestoreDocSync(
         localPendingEdits.clear()
         pendingEditsPrefs.edit().remove("edits").apply()
         encCacheFile.delete()
+    }
+
+    /**
+     * When any listener gets PERMISSION_DENIED, stop ALL listeners,
+     * force-refresh the App Check token, and restart everything fresh.
+     * Debounced to 30s to avoid 8 listeners triggering 8 concurrent restarts.
+     */
+    private fun triggerFullRestart() {
+        val now = System.currentTimeMillis()
+        if (now - lastPermDeniedRestart < PERMISSION_DENIED_RESTART_COOLDOWN_MS) return
+        lastPermDeniedRestart = now
+
+        deserializeScope.launch {
+            syncLog("PERMISSION_DENIED → full listener restart (stop all, refresh token, restart)")
+            // Stop all existing listeners (stale connections with expired auth)
+            kotlinx.coroutines.withContext(Dispatchers.Main) { stopListeners() }
+
+            // Force-refresh App Check token and AWAIT it
+            try {
+                val result = com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
+                    .getAppCheckToken(true)
+                    .await()
+                val expiresIn = (result.expireTimeMillis - System.currentTimeMillis()) / 1000
+                com.syncbudget.app.BudgeTrakApplication.tokenLog(
+                    "AppCheck token force-refreshed for full restart: expires in ${expiresIn}s (${expiresIn/60}m)"
+                )
+            } catch (e: Exception) {
+                syncLog("AppCheck token refresh failed during full restart: ${e.message}")
+                // Don't restart listeners with a bad token — next BackgroundSyncWorker will try
+                return@launch
+            }
+
+            // Small delay so Firestore SDK picks up the new token
+            kotlinx.coroutines.delay(500)
+
+            // Restart all listeners fresh with the new token
+            reconnectAttempts.clear()
+            kotlinx.coroutines.withContext(Dispatchers.Main) { startListeners() }
+            syncLog("Full listener restart complete")
+            onListenerRecovered?.invoke()
+        }
     }
 
     /**
@@ -403,6 +458,14 @@ class FirestoreDocSync(
             docId to EncryptedDocSerializer.toFieldMap(record, encryptionKey, deviceId)
         }
         FirestoreDocService.writeBatch(groupId, collection, docs)
+        // After a successful full-doc batch write we know exactly what's on the server.
+        // Populate lastSeenEnc so later listener deliveries (e.g., on background worker
+        // cold start) skip decryption of these unchanged docs.
+        for ((docId, fields) in docs) {
+            val hash = computeEncHash(fields) ?: continue
+            lastSeenEnc["$collection:$docId"] = hash
+        }
+        persistEncCache()
         persistPendingEdits()
         syncLog("Batch pushed ${docs.size} records to $collection")
     }
@@ -438,6 +501,7 @@ class FirestoreDocSync(
                 val created = FirestoreDocService.createDocIfAbsent(groupId, collection, docId, data)
                 if (created) {
                     syncLog("Created (new) $stateKey")
+                    computeEncHash(data)?.let { lastSeenEnc[stateKey] = it; persistEncCache() }
                 } else {
                     syncLog("Skipped $stateKey (already exists in Firestore)")
                     recentPushes.remove(stateKey)
@@ -449,6 +513,7 @@ class FirestoreDocSync(
                 FirestoreDocService.writeDoc(groupId, collection, docId, data)
                 recentPushes[stateKey] = System.currentTimeMillis()  // refresh after write
                 syncLog("Set (new) $stateKey")
+                computeEncHash(data)?.let { lastSeenEnc[stateKey] = it; persistEncCache() }
             }
             localPendingEdits[stateKey] = System.currentTimeMillis()
             persistPendingEdits()
@@ -466,6 +531,7 @@ class FirestoreDocSync(
                     localPendingEdits[stateKey] = System.currentTimeMillis()
                     persistPendingEdits()
                     syncLog("Fallback set() succeeded for $stateKey")
+                    computeEncHash(data)?.let { lastSeenEnc[stateKey] = it; persistEncCache() }
                 } catch (e2: Exception) {
                     syncLog("Fallback set() also failed for $stateKey: ${e2.message}")
                     throw e2
@@ -532,6 +598,10 @@ class FirestoreDocSync(
             EncryptedDocSerializer.SHARED_SETTINGS_DOC_ID,
             ssData
         )
+        computeEncHash(ssData)?.let {
+            lastSeenEnc["${EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS}:${EncryptedDocSerializer.SHARED_SETTINGS_DOC_ID}"] = it
+        }
+        persistEncCache()
 
         // Populate lastKnownState so subsequent pushRecord() calls use diffs
         for (t in liveTxns) lastKnownState["${EncryptedDocSerializer.COLLECTION_TRANSACTIONS}:${t.id}"] = t
@@ -565,7 +635,19 @@ class FirestoreDocSync(
         val toProcess = changes.filter { change ->
             !recentPushes.containsKey("$collection:${change.document.id}")
         }
-        if (toProcess.isEmpty()) return
+        if (toProcess.isEmpty()) {
+            // Pure echo batch — still advance the cursor so a fresh listener
+            // later (e.g., background worker cold start) doesn't re-deliver
+            // these docs. Echoes are server-confirmed; we already have the data.
+            val echoLatest = changes.mapNotNull { it.document.getTimestamp("updatedAt") }.maxOrNull()
+            if (echoLatest != null) {
+                val currentCursor = loadCursor(collection)
+                if (currentCursor == null || echoLatest > currentCursor) {
+                    saveCursor(collection, echoLatest)
+                }
+            }
+            return
+        }
 
         // Heavy work (decrypt + JSON parse) on background thread,
         // then deliver batch to UI on main thread.
@@ -651,7 +733,10 @@ class FirestoreDocSync(
             // Update per-collection cursor AFTER onBatchChanged has applied the data.
             // Each collection's cursor is independent, so partial delivery (app killed
             // before all collections report) only re-reads the incomplete collections.
-            val latestTimestamp = toProcess.mapNotNull { change ->
+            // Use full `changes` (not toProcess) so echoes in a mixed batch also
+            // advance the cursor past themselves — preventing re-delivery on a
+            // fresh listener (e.g., background worker cold start).
+            val latestTimestamp = changes.mapNotNull { change ->
                 change.document.getTimestamp("updatedAt")
             }.maxOrNull()
             if (latestTimestamp != null) {
@@ -764,6 +849,12 @@ class FirestoreDocSync(
         }
 
         FirestoreDocService.writeBatch(groupId, collection, docs)
+        // Populate lastSeenEnc so later listener deliveries skip decryption.
+        for ((docId, fields) in docs) {
+            val hash = computeEncHash(fields) ?: continue
+            lastSeenEnc["$collection:$docId"] = hash
+        }
+        persistEncCache()
     }
 
     // ── internal: echo key maintenance ──────────────────────────────────
