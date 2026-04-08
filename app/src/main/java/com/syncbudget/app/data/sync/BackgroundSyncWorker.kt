@@ -64,10 +64,21 @@ class BackgroundSyncWorker(
             val vm = com.syncbudget.app.MainViewModel.instance?.get()
             if (vm != null) {
                 if (vm.isSyncConfigured) {
-                    // Refresh App Check token to prevent PERMISSION_DENIED on long-lived listeners
+                    // Proactively refresh App Check token before it expires.
+                    // getAppCheckToken(false) returns cached token even if about to expire.
+                    // Check expiry and force-refresh if within 5 min of expiration.
                     try {
-                        com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
+                        val token = com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
                             .getAppCheckToken(false).await()
+                        val remainingMs = token.expireTimeMillis - System.currentTimeMillis()
+                        if (remainingMs < 35 * 60 * 1000L) {
+                            // Token within 35 min of expiry — force-refresh now.
+                            // Threshold > max worker interval (30 min in Doze) so at least
+                            // one worker run catches it before the 60-min token expires.
+                            com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
+                                .getAppCheckToken(true).await()
+                            Log.i(TAG, "Proactive App Check token refresh (was ${remainingMs/1000}s from expiry)")
+                        }
                     } catch (_: Exception) {}
 
                     val ds = vm.docSync

@@ -63,18 +63,20 @@ class FirestoreDocSync(
         }
     }
 
-    /** File-based sync log for debugging (readable via dump button). */
+    /** Sync log — always logs to logcat; file output only in debug builds. */
     private fun syncLog(msg: String) {
         Log.i(TAG, msg)
-        try {
-            val dir = BackupManager.getSupportDir()
-            val file = java.io.File(dir, LOG_FILE)
-            if (file.exists() && file.length() > MAX_LOG_SIZE) {
-                val prev = java.io.File(dir, "native_sync_log_prev.txt")
-                file.renameTo(prev)
-            }
-            java.io.File(dir, LOG_FILE).appendText("[${LocalDateTime.now()}] $msg\n")
-        } catch (_: Exception) {}
+        if (com.syncbudget.app.BuildConfig.DEBUG) {
+            try {
+                val dir = BackupManager.getSupportDir()
+                val file = java.io.File(dir, LOG_FILE)
+                if (file.exists() && file.length() > MAX_LOG_SIZE) {
+                    val prev = java.io.File(dir, "native_sync_log_prev.txt")
+                    file.renameTo(prev)
+                }
+                java.io.File(dir, LOG_FILE).appendText("[${LocalDateTime.now()}] $msg\n")
+            } catch (_: Exception) {}
+        }
     }
 
     // Active snapshot listeners — keyed by collection name, detached on stop

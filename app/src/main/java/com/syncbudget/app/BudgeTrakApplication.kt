@@ -9,17 +9,20 @@ class BudgeTrakApplication : Application() {
     companion object {
         private val crashlytics: FirebaseCrashlytics? get() = try { FirebaseCrashlytics.getInstance() } catch (_: Exception) { null }
 
-        /** Log to file + Crashlytics custom log (attached to next crash/non-fatal). */
+        /** Log to Crashlytics custom log (attached to next crash/non-fatal).
+         *  File output only in debug builds. */
         fun tokenLog(msg: String) {
             Log.i("TokenDebug", msg)
             crashlytics?.log(msg)
-            try {
-                val dir = com.syncbudget.app.data.BackupManager.getSupportDir()
-                val file = java.io.File(dir, "token_log.txt")
-                if (file.exists() && file.length() > 100_000) file.writeText("")
-                val ts = java.time.LocalDateTime.now().toString()
-                file.appendText("[$ts] $msg\n")
-            } catch (_: Exception) {}
+            if (BuildConfig.DEBUG) {
+                try {
+                    val dir = com.syncbudget.app.data.BackupManager.getSupportDir()
+                    val file = java.io.File(dir, "token_log.txt")
+                    if (file.exists() && file.length() > 100_000) file.writeText("")
+                    val ts = java.time.LocalDateTime.now().toString()
+                    file.appendText("[$ts] $msg\n")
+                } catch (_: Exception) {}
+            }
         }
 
         /** Record a non-fatal exception in Crashlytics (shows in dashboard without crash). */

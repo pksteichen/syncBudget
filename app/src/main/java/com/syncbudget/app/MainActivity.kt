@@ -156,28 +156,30 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Crash logger — writes stack trace to Download/crash_log.txt
+        // Crash logger — file output in debug builds only (Crashlytics handles production)
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            try {
-                val sb = StringBuilder()
-                sb.appendLine("=== Crash ${java.time.LocalDateTime.now()} ===")
-                sb.appendLine("Thread: ${thread.name}")
-                sb.appendLine("Android: ${android.os.Build.VERSION.SDK_INT} (${android.os.Build.VERSION.RELEASE})")
-                sb.appendLine("Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
-                sb.appendLine()
-                var t: Throwable? = throwable
-                while (t != null) {
-                    sb.appendLine("${t.javaClass.name}: ${t.message}")
-                    for (el in t.stackTrace) sb.appendLine("  at $el")
-                    t = t.cause
-                    if (t != null) sb.appendLine("Caused by:")
-                }
-                val dir = BackupManager.getSupportDir()
-                val crashFile = java.io.File(dir, "crash_log.txt")
-                if (crashFile.exists() && crashFile.length() > 100_000) crashFile.writeText("")
-                crashFile.appendText(sb.toString())
-            } catch (_: Exception) {}
+            if (BuildConfig.DEBUG) {
+                try {
+                    val sb = StringBuilder()
+                    sb.appendLine("=== Crash ${java.time.LocalDateTime.now()} ===")
+                    sb.appendLine("Thread: ${thread.name}")
+                    sb.appendLine("Android: ${android.os.Build.VERSION.SDK_INT} (${android.os.Build.VERSION.RELEASE})")
+                    sb.appendLine("Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
+                    sb.appendLine()
+                    var t: Throwable? = throwable
+                    while (t != null) {
+                        sb.appendLine("${t.javaClass.name}: ${t.message}")
+                        for (el in t.stackTrace) sb.appendLine("  at $el")
+                        t = t.cause
+                        if (t != null) sb.appendLine("Caused by:")
+                    }
+                    val dir = BackupManager.getSupportDir()
+                    val crashFile = java.io.File(dir, "crash_log.txt")
+                    if (crashFile.exists() && crashFile.length() > 100_000) crashFile.writeText("")
+                    crashFile.appendText(sb.toString())
+                } catch (_: Exception) {}
+            }
             defaultHandler?.uncaughtException(thread, throwable)
         }
 
