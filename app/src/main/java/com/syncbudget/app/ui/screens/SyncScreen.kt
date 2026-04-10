@@ -118,7 +118,7 @@ private val COMMON_TIMEZONES = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FamilySyncScreen(
+fun SyncScreen(
     isConfigured: Boolean,
     isSubscriber: Boolean = false,
     groupId: String?,
@@ -243,7 +243,7 @@ fun FamilySyncScreen(
                 // Not configured state
                 item {
                     Text(
-                        text = S.sync.familySyncDescription,
+                        text = S.sync.syncDescription,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                     )

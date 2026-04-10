@@ -396,7 +396,7 @@ object EnglishStrings : AppStrings {
         fullRestoreWarning = "Warning: A full restore will delete any transactions or changes made since this save was created. Transactions entered after that point will need to be re-entered or reloaded from a bank CSV.",
         fullBackupRestored = "Full backup restored successfully",
         fullBackupSaved = "Full backup saved successfully",
-        fullBackupSyncWarning = "Restoring a full backup will dissolve the current family sync group. You will need to create a new group and share a new pairing code with family members.",
+        fullBackupSyncWarning = "Restoring a full backup will dissolve the current SYNC group. You will need to create a new group and share a new pairing code with the other devices.",
         fullBackupNonAdminBlock = "Only the group admin can restore a full backup. A full restore would corrupt sync state for all devices.",
         fullBackupGroupRecreated = "Backup restored. New family group created \u2014 share the pairing code with family members.",
         fullBackupGroupDissolved = "Backup restored. Family group dissolved.",
@@ -437,7 +437,7 @@ object EnglishStrings : AppStrings {
         clearDescriptionConfirm = { count -> "This will clear the description on all $count selected transactions. Continue?" }
     )
 
-    override val futureExpenditures = FutureExpendituresStrings(
+    override val savingsGoals = SavingsGoalsStrings(
         title = "Savings Goals",
         description = "Plan and save for future expenses or financial targets. The app automatically deducts a small amount each budget period.",
         addSavingsGoal = "Add Savings Goal",
@@ -543,9 +543,9 @@ object EnglishStrings : AppStrings {
     )
 
     override val sync = SyncStrings(
-        title = "Sync",
-        familySync = "Sync",
-        familySyncDescription = "Sync your budget across up to 5 devices in your household.",
+        title = "SYNC",
+        syncButton = "SYNC",
+        syncDescription = "Share your budget with up to 5 devices in your household.",
         createGroup = "Create Family Group",
         createGroupDescription = "Start a new sync group and invite family members with a pairing code.",
         joinGroup = "Join Family Group",
@@ -622,7 +622,7 @@ object EnglishStrings : AppStrings {
         createGroupTitle = "Create Group",
         renameDevice = "Rename Device",
         removeDeviceTitle = "Remove Device",
-        removeDeviceMessage = { name -> "Remove \"$name\" from this group? The device will be disconnected from family sync." },
+        removeDeviceMessage = { name -> "Remove \"$name\" from this group? The device will be disconnected from SYNC." },
         removeDeviceConfirm = "Remove",
         subscriptionExpiredNotice = "Admin subscription expired. Group will be dissolved soon. Subscribe and claim admin to keep the group active.",
         updateRequiredNotice = "A family member updated BudgeTrak. Please update from the Play Store to continue syncing.",
@@ -1296,7 +1296,7 @@ object EnglishStrings : AppStrings {
         tip6 = "Only include reliable, recurring income. Don't add one-time windfalls \u2014 record those as extra income in Transactions."
     )
 
-    override val futureExpendituresHelp = FutureExpendituresHelpStrings(
+    override val savingsGoalsHelp = SavingsGoalsHelpStrings(
         title = "Savings Goals Help",
         whatTitle = "What Are Savings Goals?",
         whatBody = "Savings Goals let you plan and save for future expenses or financial " +
@@ -1552,7 +1552,7 @@ object EnglishStrings : AppStrings {
         tip6 = "Check your bank statements to make sure you haven't missed any recurring charges."
     )
 
-    override val familySyncHelp = FamilySyncHelpStrings(
+    override val syncHelp = SyncHelpStrings(
         title = "Sync Help",
         whatTitle = "What is Sync?",
         whatBody = "Sync lets you share a single household budget across up to 5 devices. " +

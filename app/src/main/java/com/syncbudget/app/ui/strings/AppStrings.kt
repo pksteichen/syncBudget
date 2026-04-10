@@ -20,7 +20,7 @@ interface AppStrings {
     val settings: SettingsStrings
     val budgetConfig: BudgetConfigStrings
     val transactions: TransactionsStrings
-    val futureExpenditures: FutureExpendituresStrings
+    val savingsGoals: SavingsGoalsStrings
     val amortization: AmortizationStrings
     val recurringExpenses: RecurringExpensesStrings
     val sync: SyncStrings
@@ -28,10 +28,10 @@ interface AppStrings {
     val settingsHelp: SettingsHelpStrings
     val transactionsHelp: TransactionsHelpStrings
     val budgetConfigHelp: BudgetConfigHelpStrings
-    val futureExpendituresHelp: FutureExpendituresHelpStrings
+    val savingsGoalsHelp: SavingsGoalsHelpStrings
     val amortizationHelp: AmortizationHelpStrings
     val recurringExpensesHelp: RecurringExpensesHelpStrings
-    val familySyncHelp: FamilySyncHelpStrings
+    val syncHelp: SyncHelpStrings
     val simulationGraphHelp: SimulationGraphHelpStrings
     val budgetCalendar: BudgetCalendarStrings
     val budgetCalendarHelp: BudgetCalendarHelpStrings
@@ -464,7 +464,7 @@ data class TransactionsStrings(
     val clearDescriptionConfirm: (Int) -> String
 )
 
-data class FutureExpendituresStrings(
+data class SavingsGoalsStrings(
     val title: String,
     val description: String,
     val addSavingsGoal: String,
@@ -571,8 +571,8 @@ data class RecurringExpensesStrings(
 
 data class SyncStrings(
     val title: String,
-    val familySync: String,
-    val familySyncDescription: String,
+    val syncButton: String,
+    val syncDescription: String,
     val createGroup: String,
     val createGroupDescription: String,
     val joinGroup: String,
@@ -1129,7 +1129,7 @@ data class BudgetConfigHelpStrings(
     val tip6: String
 )
 
-data class FutureExpendituresHelpStrings(
+data class SavingsGoalsHelpStrings(
     val title: String,
     val whatTitle: String,
     val whatBody: String,
@@ -1318,7 +1318,7 @@ data class RecurringExpensesHelpStrings(
     val tip6: String
 )
 
-data class FamilySyncHelpStrings(
+data class SyncHelpStrings(
     val title: String,
     val whatTitle: String,
     val whatBody: String,

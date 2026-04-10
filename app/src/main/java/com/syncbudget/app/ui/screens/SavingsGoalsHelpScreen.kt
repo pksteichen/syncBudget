@@ -45,7 +45,7 @@ import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FutureExpendituresHelpScreen(onBack: () -> Unit) {
+fun SavingsGoalsHelpScreen(onBack: () -> Unit) {
     val customColors = LocalSyncBudgetColors.current
     val S = LocalStrings.current
 
@@ -54,7 +54,7 @@ fun FutureExpendituresHelpScreen(onBack: () -> Unit) {
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = S.futureExpendituresHelp.title,
+                        text = S.savingsGoalsHelp.title,
                         style = MaterialTheme.typography.titleLarge,
                         color = customColors.headerText
                     )
@@ -89,8 +89,8 @@ fun FutureExpendituresHelpScreen(onBack: () -> Unit) {
             val headerBg = customColors.headerBackground
 
             // ─── SECTION 1: WHAT ARE SAVINGS GOALS ───
-            HelpSectionTitle(S.futureExpendituresHelp.whatTitle)
-            HelpBodyText(S.futureExpendituresHelp.whatBody)
+            HelpSectionTitle(S.savingsGoalsHelp.whatTitle)
+            HelpBodyText(S.savingsGoalsHelp.whatBody)
             Spacer(modifier = Modifier.height(10.dp))
 
             // Example box
@@ -104,13 +104,13 @@ fun FutureExpendituresHelpScreen(onBack: () -> Unit) {
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        S.futureExpendituresHelp.exampleTitle,
+                        S.savingsGoalsHelp.exampleTitle,
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.titleSmall,
                         color = textColor
                     )
                     Text(
-                        S.futureExpendituresHelp.exampleBody,
+                        S.savingsGoalsHelp.exampleBody,
                         style = MaterialTheme.typography.bodySmall,
                         color = textColor,
                         lineHeight = 18.sp
@@ -122,23 +122,23 @@ fun FutureExpendituresHelpScreen(onBack: () -> Unit) {
             HelpDividerLine()
 
             // ─── SECTION 2: TWO GOAL TYPES ───
-            HelpSectionTitle(S.futureExpendituresHelp.twoTypesTitle)
-            HelpBodyText(S.futureExpendituresHelp.twoTypesBody)
+            HelpSectionTitle(S.savingsGoalsHelp.twoTypesTitle)
+            HelpBodyText(S.savingsGoalsHelp.twoTypesBody)
             Spacer(modifier = Modifier.height(8.dp))
 
-            HelpSubSectionTitle(S.futureExpendituresHelp.targetDateTitle)
-            HelpBodyText(S.futureExpendituresHelp.targetDateBody)
+            HelpSubSectionTitle(S.savingsGoalsHelp.targetDateTitle)
+            HelpBodyText(S.savingsGoalsHelp.targetDateBody)
             Spacer(modifier = Modifier.height(8.dp))
 
-            HelpSubSectionTitle(S.futureExpendituresHelp.fixedContribTitle)
-            HelpBodyText(S.futureExpendituresHelp.fixedContribBody)
+            HelpSubSectionTitle(S.savingsGoalsHelp.fixedContribTitle)
+            HelpBodyText(S.savingsGoalsHelp.fixedContribBody)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
             // ─── SECTION 3: HEADER BAR ───
-            HelpSectionTitle(S.futureExpendituresHelp.headerTitle)
-            HelpBodyText(S.futureExpendituresHelp.headerBody)
+            HelpSectionTitle(S.savingsGoalsHelp.headerTitle)
+            HelpBodyText(S.savingsGoalsHelp.headerBody)
             Spacer(modifier = Modifier.height(8.dp))
 
             Box(
@@ -163,12 +163,12 @@ fun FutureExpendituresHelpScreen(onBack: () -> Unit) {
             }
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpIconRow(Icons.AutoMirrored.Filled.ArrowBack, S.common.back, S.futureExpendituresHelp.backDesc)
-            HelpIconRow(Icons.Filled.Pause, S.futureExpenditures.pauseAll, S.futureExpendituresHelp.pauseAllDesc)
-            HelpIconRow(Icons.AutoMirrored.Filled.Help, S.common.help, S.futureExpendituresHelp.helpDesc)
+            HelpIconRow(Icons.AutoMirrored.Filled.ArrowBack, S.common.back, S.savingsGoalsHelp.backDesc)
+            HelpIconRow(Icons.Filled.Pause, S.savingsGoals.pauseAll, S.savingsGoalsHelp.pauseAllDesc)
+            HelpIconRow(Icons.AutoMirrored.Filled.Help, S.common.help, S.savingsGoalsHelp.helpDesc)
             Spacer(modifier = Modifier.height(8.dp))
             HelpBodyText(
-                S.futureExpendituresHelp.pauseAllNote,
+                S.savingsGoalsHelp.pauseAllNote,
                 italic = true
             )
             Spacer(modifier = Modifier.height(16.dp))
@@ -176,28 +176,28 @@ fun FutureExpendituresHelpScreen(onBack: () -> Unit) {
             HelpDividerLine()
 
             // ─── SECTION 4: ADDING A GOAL ───
-            HelpSectionTitle(S.futureExpendituresHelp.addingTitle)
-            HelpBodyText(S.futureExpendituresHelp.addingBody)
+            HelpSectionTitle(S.savingsGoalsHelp.addingTitle)
+            HelpBodyText(S.savingsGoalsHelp.addingBody)
             Spacer(modifier = Modifier.height(8.dp))
-            HelpNumberedItem(1, S.futureExpendituresHelp.addStep1, S.futureExpendituresHelp.addStep1Desc)
+            HelpNumberedItem(1, S.savingsGoalsHelp.addStep1, S.savingsGoalsHelp.addStep1Desc)
             Spacer(modifier = Modifier.height(4.dp))
-            HelpNumberedItem(2, S.futureExpendituresHelp.addStep2, S.futureExpendituresHelp.addStep2Desc)
+            HelpNumberedItem(2, S.savingsGoalsHelp.addStep2, S.savingsGoalsHelp.addStep2Desc)
             Spacer(modifier = Modifier.height(4.dp))
-            HelpNumberedItem(3, S.futureExpendituresHelp.addStep3, S.futureExpendituresHelp.addStep3Desc)
+            HelpNumberedItem(3, S.savingsGoalsHelp.addStep3, S.savingsGoalsHelp.addStep3Desc)
             Spacer(modifier = Modifier.height(4.dp))
-            HelpNumberedItem(4, S.futureExpendituresHelp.addStep4, S.futureExpendituresHelp.addStep4Desc)
+            HelpNumberedItem(4, S.savingsGoalsHelp.addStep4, S.savingsGoalsHelp.addStep4Desc)
             Spacer(modifier = Modifier.height(4.dp))
-            HelpNumberedItem(5, S.futureExpendituresHelp.addStep5, S.futureExpendituresHelp.addStep5Desc)
+            HelpNumberedItem(5, S.savingsGoalsHelp.addStep5, S.savingsGoalsHelp.addStep5Desc)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
             // ─── SECTION 5: HOW DEDUCTIONS WORK ───
-            HelpSectionTitle(S.futureExpendituresHelp.deductionsTitle)
-            HelpBodyText(S.futureExpendituresHelp.deductionsBody)
+            HelpSectionTitle(S.savingsGoalsHelp.deductionsTitle)
+            HelpBodyText(S.savingsGoalsHelp.deductionsBody)
             Spacer(modifier = Modifier.height(8.dp))
 
-            HelpSubSectionTitle(S.futureExpendituresHelp.targetDateDeductionTitle)
+            HelpSubSectionTitle(S.savingsGoalsHelp.targetDateDeductionTitle)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -207,7 +207,7 @@ fun FutureExpendituresHelpScreen(onBack: () -> Unit) {
                     .padding(14.dp)
             ) {
                 Text(
-                    S.futureExpendituresHelp.targetDateDeductionFormula,
+                    S.savingsGoalsHelp.targetDateDeductionFormula,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = textColor,
@@ -216,12 +216,12 @@ fun FutureExpendituresHelpScreen(onBack: () -> Unit) {
             }
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpSubSectionTitle(S.futureExpendituresHelp.fixedDeductionTitle)
-            HelpBodyText(S.futureExpendituresHelp.fixedDeductionBody)
+            HelpSubSectionTitle(S.savingsGoalsHelp.fixedDeductionTitle)
+            HelpBodyText(S.savingsGoalsHelp.fixedDeductionBody)
             Spacer(modifier = Modifier.height(10.dp))
 
             HelpBodyText(
-                S.futureExpendituresHelp.deductionNote,
+                S.savingsGoalsHelp.deductionNote,
                 italic = true
             )
             Spacer(modifier = Modifier.height(16.dp))
@@ -229,59 +229,59 @@ fun FutureExpendituresHelpScreen(onBack: () -> Unit) {
             HelpDividerLine()
 
             // ─── SECTION 6: PROGRESS TRACKING ───
-            HelpSectionTitle(S.futureExpendituresHelp.progressTitle)
-            HelpBodyText(S.futureExpendituresHelp.progressBody)
+            HelpSectionTitle(S.savingsGoalsHelp.progressTitle)
+            HelpBodyText(S.savingsGoalsHelp.progressBody)
             Spacer(modifier = Modifier.height(6.dp))
-            HelpBulletText(S.futureExpendituresHelp.progressName)
-            HelpBulletText(S.futureExpendituresHelp.progressTarget)
-            HelpBulletText(S.futureExpendituresHelp.progressDeduction)
-            HelpBulletText(S.futureExpendituresHelp.progressBar)
-            HelpBulletText(S.futureExpendituresHelp.progressSaved)
-            HelpBulletText(S.futureExpendituresHelp.progressGoalReached)
+            HelpBulletText(S.savingsGoalsHelp.progressName)
+            HelpBulletText(S.savingsGoalsHelp.progressTarget)
+            HelpBulletText(S.savingsGoalsHelp.progressDeduction)
+            HelpBulletText(S.savingsGoalsHelp.progressBar)
+            HelpBulletText(S.savingsGoalsHelp.progressSaved)
+            HelpBulletText(S.savingsGoalsHelp.progressGoalReached)
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpSubSectionTitle(S.futureExpendituresHelp.actionsTitle)
-            HelpIconRow(Icons.Filled.Pause, S.futureExpenditures.pause, S.futureExpendituresHelp.pauseDesc)
-            HelpIconRow(Icons.Filled.PlayArrow, S.futureExpenditures.resume, S.futureExpendituresHelp.resumeDesc)
-            HelpIconRow(Icons.Filled.Delete, S.common.delete, S.futureExpendituresHelp.deleteDesc, Color(0xFFF44336))
+            HelpSubSectionTitle(S.savingsGoalsHelp.actionsTitle)
+            HelpIconRow(Icons.Filled.Pause, S.savingsGoals.pause, S.savingsGoalsHelp.pauseDesc)
+            HelpIconRow(Icons.Filled.PlayArrow, S.savingsGoals.resume, S.savingsGoalsHelp.resumeDesc)
+            HelpIconRow(Icons.Filled.Delete, S.common.delete, S.savingsGoalsHelp.deleteDesc, Color(0xFFF44336))
             Spacer(modifier = Modifier.height(8.dp))
-            HelpBodyText(S.futureExpendituresHelp.editNote)
+            HelpBodyText(S.savingsGoalsHelp.editNote)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
             // ─── SECTION 7: STATUSES ───
-            HelpSectionTitle(S.futureExpendituresHelp.statusTitle)
+            HelpSectionTitle(S.savingsGoalsHelp.statusTitle)
 
-            HelpSubSectionTitle(S.futureExpendituresHelp.activeTitle)
-            HelpBodyText(S.futureExpendituresHelp.activeBody)
+            HelpSubSectionTitle(S.savingsGoalsHelp.activeTitle)
+            HelpBodyText(S.savingsGoalsHelp.activeBody)
             Spacer(modifier = Modifier.height(8.dp))
 
-            HelpSubSectionTitle(S.futureExpendituresHelp.pausedTitle)
-            HelpBodyText(S.futureExpendituresHelp.pausedBody)
+            HelpSubSectionTitle(S.savingsGoalsHelp.pausedTitle)
+            HelpBodyText(S.savingsGoalsHelp.pausedBody)
             Spacer(modifier = Modifier.height(8.dp))
 
-            HelpSubSectionTitle(S.futureExpendituresHelp.goalReachedTitle)
-            HelpBodyText(S.futureExpendituresHelp.goalReachedBody)
+            HelpSubSectionTitle(S.savingsGoalsHelp.goalReachedTitle)
+            HelpBodyText(S.savingsGoalsHelp.goalReachedBody)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
             // ─── SECTION 8: MANUAL OVERRIDE WARNING ───
-            HelpSectionTitle(S.futureExpendituresHelp.manualOverrideTitle)
-            HelpBodyText(S.futureExpendituresHelp.manualOverrideBody)
+            HelpSectionTitle(S.savingsGoalsHelp.manualOverrideTitle)
+            HelpBodyText(S.savingsGoalsHelp.manualOverrideBody)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
 
             // ─── SECTION 9: TIPS ───
-            HelpSectionTitle(S.futureExpendituresHelp.tipsTitle)
-            HelpBulletText(S.futureExpendituresHelp.tip1)
-            HelpBulletText(S.futureExpendituresHelp.tip2)
-            HelpBulletText(S.futureExpendituresHelp.tip3)
-            HelpBulletText(S.futureExpendituresHelp.tip4)
-            HelpBulletText(S.futureExpendituresHelp.tip5)
-            HelpBulletText(S.futureExpendituresHelp.tip6)
+            HelpSectionTitle(S.savingsGoalsHelp.tipsTitle)
+            HelpBulletText(S.savingsGoalsHelp.tip1)
+            HelpBulletText(S.savingsGoalsHelp.tip2)
+            HelpBulletText(S.savingsGoalsHelp.tip3)
+            HelpBulletText(S.savingsGoalsHelp.tip4)
+            HelpBulletText(S.savingsGoalsHelp.tip5)
+            HelpBulletText(S.savingsGoalsHelp.tip6)
 
             Spacer(modifier = Modifier.height(32.dp))
         }

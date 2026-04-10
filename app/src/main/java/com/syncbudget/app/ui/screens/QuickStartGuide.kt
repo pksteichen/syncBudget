@@ -291,7 +291,7 @@ private fun englishSteps(): Map<QuickStartStep, StepContent> = mapOf(
         body = "Your budget is ready to go. The Solari display shows your available cash " +
             "and updates automatically each period.\n\n" +
             "Explore the app to discover more features like savings goals, " +
-            "amortization tracking, and family sync.\n\n" +
+            "amortization tracking, and SYNC across your devices.\n\n" +
             "Tap the ? icon on any page for detailed help and tips.",
         targetScreen = "main",
         buttonLabel = "Done"

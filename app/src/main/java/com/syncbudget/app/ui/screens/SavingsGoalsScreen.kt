@@ -97,7 +97,7 @@ import kotlin.math.ceil
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FutureExpendituresScreen(
+fun SavingsGoalsScreen(
     savingsGoals: List<SavingsGoal>,
     transactions: List<Transaction> = emptyList(),
     currencySymbol: String,
@@ -148,7 +148,7 @@ fun FutureExpendituresScreen(
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = S.futureExpenditures.title,
+                        text = S.savingsGoals.title,
                         style = MaterialTheme.typography.titleLarge,
                         color = customColors.headerText
                     )
@@ -172,7 +172,7 @@ fun FutureExpendituresScreen(
                             }) {
                                 Icon(
                                     imageVector = if (allPaused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
-                                    contentDescription = if (allPaused) S.futureExpenditures.resumeAll else S.futureExpenditures.pauseAll,
+                                    contentDescription = if (allPaused) S.savingsGoals.resumeAll else S.savingsGoals.pauseAll,
                                     tint = customColors.headerText
                                 )
                             }
@@ -204,7 +204,7 @@ fun FutureExpendituresScreen(
         ) {
             item {
                 Text(
-                    text = S.futureExpenditures.description,
+                    text = S.savingsGoals.description,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                     modifier = Modifier.padding(bottom = 12.dp)
@@ -244,19 +244,19 @@ fun FutureExpendituresScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = S.futureExpenditures.savingsRequiredMessage(formattedAmount, periodText),
+                                    text = S.savingsGoals.savingsRequiredMessage(formattedAmount, periodText),
                                     style = MaterialTheme.typography.bodyMedium,
                                     modifier = Modifier
                                         .weight(1f)
                                         .onGloballyPositioned { savingsTextYPx = it.positionInWindow().y.toInt() }
                                         .clickable {
                                             if (lowPointDateStr.isNotEmpty()) {
-                                                toastState.show(S.futureExpenditures.savingsLowPointToast(lowPointDateStr), savingsTextYPx)
+                                                toastState.show(S.savingsGoals.savingsLowPointToast(lowPointDateStr), savingsTextYPx)
                                             }
                                         }
                                 )
                                 Text(
-                                    text = S.futureExpenditures.savingsWhyLink,
+                                    text = S.savingsGoals.savingsWhyLink,
                                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                                     color = Color(0xFF4CAF50),
                                     modifier = Modifier
@@ -284,7 +284,7 @@ fun FutureExpendituresScreen(
                             modifier = Modifier.size(16.dp).padding(end = 2.dp)
                         )
                         Text(
-                            S.futureExpenditures.addSavingsGoal,
+                            S.savingsGoals.addSavingsGoal,
                             fontSize = buttonFontSize,
                             maxLines = 1
                         )
@@ -304,7 +304,7 @@ fun FutureExpendituresScreen(
                             modifier = Modifier.size(16.dp).padding(end = 2.dp)
                         )
                         Text(
-                            S.futureExpenditures.viewSimulationChart,
+                            S.savingsGoals.viewSimulationChart,
                             fontSize = buttonFontSize,
                             maxLines = 1
                         )
@@ -332,7 +332,7 @@ fun FutureExpendituresScreen(
                                     .sortedByDescending { it.date }
                                     .take(10)
                                 if (linked.isEmpty()) {
-                                    toastState.show(S.futureExpenditures.noLinkedTransactions, savingsTextYPx)
+                                    toastState.show(S.savingsGoals.noLinkedTransactions, savingsTextYPx)
                                 } else {
                                     linkedTransactionsGoal = goal
                                 }
@@ -347,7 +347,7 @@ fun FutureExpendituresScreen(
                     ) {
                         Icon(
                             imageVector = if (goal.isPaused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
-                            contentDescription = if (goal.isPaused) S.futureExpenditures.resume else S.futureExpenditures.pause,
+                            contentDescription = if (goal.isPaused) S.savingsGoals.resume else S.savingsGoals.pause,
                             tint = MaterialTheme.colorScheme.onBackground.copy(alpha = contentAlpha)
                         )
                     }
@@ -359,12 +359,12 @@ fun FutureExpendituresScreen(
                         )
                         Text(
                             text = if (goal.targetDate != null) {
-                                S.futureExpenditures.targetAmountBy(
+                                S.savingsGoals.targetAmountBy(
                                     formatCurrency(goal.targetAmount, currencySymbol),
                                     goal.targetDate.format(dateFormatter)
                                 )
                             } else {
-                                S.futureExpenditures.targetLabel(
+                                S.savingsGoals.targetLabel(
                                     formatCurrency(goal.targetAmount, currencySymbol)
                                 )
                             },
@@ -383,7 +383,7 @@ fun FutureExpendituresScreen(
                                     BudgetPeriod.MONTHLY -> today.plusMonths(periodsRemaining)
                                 }
                                 Text(
-                                    text = S.futureExpenditures.payoffDate(payoffDate.format(dateFormatter)),
+                                    text = S.savingsGoals.payoffDate(payoffDate.format(dateFormatter)),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f * contentAlpha)
                                 )
@@ -391,25 +391,25 @@ fun FutureExpendituresScreen(
                         }
                         if (goalReached) {
                             Text(
-                                text = S.futureExpenditures.goalReached,
+                                text = S.savingsGoals.goalReached,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color(0xFF4CAF50)
                             )
                         } else if (goal.isPaused) {
                             Text(
-                                text = S.futureExpenditures.paused,
+                                text = S.savingsGoals.paused,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
                             )
                         } else {
                             Text(
                                 text = if (goal.targetDate != null) {
-                                    S.futureExpenditures.contributionLabel(
+                                    S.savingsGoals.contributionLabel(
                                         formatCurrency(deduction, currencySymbol),
                                         periodLabel
                                     )
                                 } else {
-                                    S.futureExpenditures.contributionLabel(
+                                    S.savingsGoals.contributionLabel(
                                         formatCurrency(goal.contributionPerPeriod, currencySymbol),
                                         periodLabel
                                     )
@@ -434,7 +434,7 @@ fun FutureExpendituresScreen(
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = S.futureExpenditures.savedOf(
+                            text = S.savingsGoals.savedOf(
                                 formatCurrency(goal.totalSavedSoFar, currencySymbol),
                                 formatCurrency(goal.targetAmount, currencySymbol)
                             ),
@@ -456,7 +456,7 @@ fun FutureExpendituresScreen(
 
     if (showAddDialog) {
         AddEditSavingsGoalDialog(
-            title = S.futureExpenditures.addSavingsGoal,
+            title = S.savingsGoals.addSavingsGoal,
             initialName = "",
             initialTargetAmount = "",
             initialStartingSaved = "",
@@ -489,7 +489,7 @@ fun FutureExpendituresScreen(
             calculatePerPeriodDeduction(goal, budgetPeriod)
         } else goal.contributionPerPeriod
         AddEditSavingsGoalDialog(
-            title = S.futureExpenditures.editSavingsGoal,
+            title = S.savingsGoals.editSavingsGoal,
             initialName = goal.name,
             initialTargetAmount = "%.${CURRENCY_DECIMALS[currencySymbol] ?: 2}f".format(goal.targetAmount),
             initialStartingSaved = "",
@@ -518,8 +518,8 @@ fun FutureExpendituresScreen(
     deletingGoal?.let { goal ->
         AdAwareAlertDialog(
             onDismissRequest = { deletingGoal = null },
-            title = { Text(S.futureExpenditures.deleteSavingsGoal) },
-            text = { Text(S.futureExpenditures.deleteGoalConfirm(goal.name)) },
+            title = { Text(S.savingsGoals.deleteSavingsGoal) },
+            text = { Text(S.savingsGoals.deleteGoalConfirm(goal.name)) },
             style = DialogStyle.DANGER,
             confirmButton = {
                 DialogDangerButton(onClick = {
@@ -536,9 +536,9 @@ fun FutureExpendituresScreen(
     if (showSavingsWhyDialog) {
         AdAwareAlertDialog(
             onDismissRequest = { showSavingsWhyDialog = false },
-            title = { Text(S.futureExpenditures.savingsWhyTitle) },
+            title = { Text(S.savingsGoals.savingsWhyTitle) },
             text = {
-                Text(S.futureExpenditures.savingsWhyBody)
+                Text(S.savingsGoals.savingsWhyBody)
             },
             confirmButton = {
                 DialogPrimaryButton(onClick = { showSavingsWhyDialog = false }) { Text(S.common.ok) }
@@ -558,7 +558,7 @@ fun FutureExpendituresScreen(
             text = {
                 Column {
                     Text(
-                        S.futureExpenditures.linkedTransactions,
+                        S.savingsGoals.linkedTransactions,
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
@@ -657,11 +657,11 @@ private fun AddEditSavingsGoalDialog(
                     OutlinedTextField(
                         value = name,
                         onValueChange = { name = if (autoCapitalize) com.syncbudget.app.data.toApaTitleCase(it) else it },
-                        label = { Text(S.futureExpenditures.name) },
+                        label = { Text(S.savingsGoals.name) },
                         singleLine = true,
                         isError = showValidation && !isNameValid,
                         supportingText = if (showValidation && !isNameValid) ({
-                            Text(S.futureExpenditures.requiredNameExample, color = Color(0xFFF44336))
+                            Text(S.savingsGoals.requiredNameExample, color = Color(0xFFF44336))
                         }) else null,
                         colors = textFieldColors,
                         modifier = Modifier.fillMaxWidth()
@@ -676,11 +676,11 @@ private fun AddEditSavingsGoalDialog(
                                 else if (decs <= maxDecimalPlaces) { targetAmountText = newVal }
                             }
                         },
-                        label = { Text(S.futureExpenditures.targetAmount) },
+                        label = { Text(S.savingsGoals.targetAmount) },
                         singleLine = true,
                         isError = showValidation && !isTargetAmountValid,
                         supportingText = if (showValidation && !isTargetAmountValid) ({
-                            Text(S.futureExpenditures.exampleTargetAmount, color = Color(0xFFF44336))
+                            Text(S.savingsGoals.exampleTargetAmount, color = Color(0xFFF44336))
                         }) else null,
                         keyboardOptions = KeyboardOptions(keyboardType = if (maxDecimalPlaces > 0) KeyboardType.Decimal else KeyboardType.Number),
                         colors = textFieldColors,
@@ -697,11 +697,11 @@ private fun AddEditSavingsGoalDialog(
                                     else if (decs <= maxDecimalPlaces) { startingSavedText = newVal }
                                 }
                             },
-                            label = { Text(S.futureExpenditures.startingSavedAmount) },
+                            label = { Text(S.savingsGoals.startingSavedAmount) },
                             singleLine = true,
                             isError = showValidation && !isStartingSavedValid,
                             supportingText = if (showValidation && !isStartingSavedValid) ({
-                                Text(S.futureExpenditures.mustBeLessThanTarget, color = Color(0xFFF44336))
+                                Text(S.savingsGoals.mustBeLessThanTarget, color = Color(0xFFF44336))
                             }) else null,
                             keyboardOptions = KeyboardOptions(keyboardType = if (maxDecimalPlaces > 0) KeyboardType.Decimal else KeyboardType.Number),
                             colors = textFieldColors,
@@ -719,11 +719,11 @@ private fun AddEditSavingsGoalDialog(
                                 else if (decs <= maxDecimalPlaces) { contributionText = newVal }
                             }
                         },
-                        label = { Text(S.futureExpenditures.contributionPerPeriod) },
+                        label = { Text(S.savingsGoals.contributionPerPeriod) },
                         singleLine = true,
                         isError = showValidation && !isContributionValid,
                         supportingText = if (showValidation && !isContributionValid) ({
-                            Text(S.futureExpenditures.exampleContribution, color = Color(0xFFF44336))
+                            Text(S.savingsGoals.exampleContribution, color = Color(0xFFF44336))
                         }) else null,
                         keyboardOptions = KeyboardOptions(keyboardType = if (maxDecimalPlaces > 0) KeyboardType.Decimal else KeyboardType.Number),
                         colors = textFieldColors,
@@ -734,7 +734,7 @@ private fun AddEditSavingsGoalDialog(
                         onClick = { showDatePicker = true },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(S.futureExpenditures.calculateWithTargetDate)
+                        Text(S.savingsGoals.calculateWithTargetDate)
                     }
                 }
 

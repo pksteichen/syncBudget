@@ -78,10 +78,10 @@ import com.syncbudget.app.ui.screens.BudgetIncomeConfirmDialog
 import com.syncbudget.app.ui.screens.DashboardHelpScreen
 import com.syncbudget.app.ui.screens.DuplicateResolutionDialog
 import com.syncbudget.app.data.sync.AdminClaim
-import com.syncbudget.app.ui.screens.FamilySyncHelpScreen
-import com.syncbudget.app.ui.screens.FamilySyncScreen
-import com.syncbudget.app.ui.screens.FutureExpendituresHelpScreen
-import com.syncbudget.app.ui.screens.FutureExpendituresScreen
+import com.syncbudget.app.ui.screens.SyncHelpScreen
+import com.syncbudget.app.ui.screens.SyncScreen
+import com.syncbudget.app.ui.screens.SavingsGoalsHelpScreen
+import com.syncbudget.app.ui.screens.SavingsGoalsScreen
 import com.syncbudget.app.ui.screens.QuickStartOverlay
 import com.syncbudget.app.ui.screens.QuickStartStep
 import com.syncbudget.app.ui.screens.MainScreen
@@ -253,16 +253,16 @@ class MainActivity : ComponentActivity() {
                         vm.currentScreen = when (vm.currentScreen) {
                             "settings_help" -> "settings"
                             "transactions_help" -> "transactions"
-                            "future_expenditures_help" -> "future_expenditures"
+                            "savings_goals_help" -> "savings_goals"
                             "amortization_help" -> "amortization"
                             "recurring_expenses_help" -> "recurring_expenses"
                             "budget_config_help" -> "budget_config"
                             "simulation_graph_help" -> "simulation_graph"
-                            "simulation_graph" -> "future_expenditures"
+                            "simulation_graph" -> "savings_goals"
                             "budget_config" -> "settings"
                             "budget_calendar_help" -> "budget_calendar"
-                            "family_sync" -> "settings"
-                            "family_sync_help" -> "family_sync"
+                            "sync" -> "settings"
+                            "sync_help" -> "sync"
                             else -> "main"
                         }
                     }
@@ -407,7 +407,7 @@ class MainActivity : ComponentActivity() {
                     )
                     "settings" -> SettingsScreenBranch(vm, toastState)
                     "transactions" -> TransactionsScreenBranch(vm, toastState)
-                    "future_expenditures" -> FutureExpendituresScreen(
+                    "savings_goals" -> SavingsGoalsScreen(
                         isPaidUser = vm.isPaidUser,
                         isSubscriber = vm.isSubscriber,
                         savingsGoals = vm.activeSavingsGoals,
@@ -425,9 +425,9 @@ class MainActivity : ComponentActivity() {
                         today = vm.budgetToday,
                         isManualOverBudget = vm.isManualBudgetEnabled && vm.manualBudgetAmount > vm.safeBudgetAmount,
                         budgetPeriodLabel = when (vm.budgetPeriod) {
-                            BudgetPeriod.DAILY -> vm.strings.futureExpenditures.savingsPeriodDaily
-                            BudgetPeriod.WEEKLY -> vm.strings.futureExpenditures.savingsPeriodWeekly
-                            BudgetPeriod.MONTHLY -> vm.strings.futureExpenditures.savingsPeriodMonthly
+                            BudgetPeriod.DAILY -> vm.strings.savingsGoals.savingsPeriodDaily
+                            BudgetPeriod.WEEKLY -> vm.strings.savingsGoals.savingsPeriodWeekly
+                            BudgetPeriod.MONTHLY -> vm.strings.savingsGoals.savingsPeriodMonthly
                         },
                         onAddGoal = { goal ->
                             val added = goal.copy(deviceId = vm.localDeviceId)
@@ -462,7 +462,7 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         onBack = { vm.currentScreen = "main" },
-                        onHelpClick = { vm.currentScreen = "future_expenditures_help" },
+                        onHelpClick = { vm.currentScreen = "savings_goals_help" },
                         onViewChart = { vm.currentScreen = "simulation_graph" },
                         autoCapitalize = vm.autoCapitalize
                     )
@@ -478,7 +478,7 @@ class MainActivity : ComponentActivity() {
                         resetDayOfMonth = vm.resetDayOfMonth,
                         currencySymbol = vm.currencySymbol,
                         today = vm.budgetToday,
-                        onBack = { vm.currentScreen = "future_expenditures" },
+                        onBack = { vm.currentScreen = "savings_goals" },
                         onHelpClick = { vm.currentScreen = "simulation_graph_help" }
                     )
                     "amortization" -> AmortizationScreen(
@@ -741,7 +741,7 @@ class MainActivity : ComponentActivity() {
                         onHelpClick = { vm.currentScreen = "budget_config_help" },
                         autoCapitalize = vm.autoCapitalize
                     )
-                    "family_sync" -> FamilySyncScreenBranch(vm, toastState)
+                    "sync" -> SyncScreenBranch(vm, toastState)
                     "dashboard_help" -> DashboardHelpScreen(
                         onBack = { vm.currentScreen = "main" }
                     )
@@ -751,8 +751,8 @@ class MainActivity : ComponentActivity() {
                     "transactions_help" -> TransactionsHelpScreen(
                         onBack = { vm.currentScreen = "transactions" }
                     )
-                    "future_expenditures_help" -> FutureExpendituresHelpScreen(
-                        onBack = { vm.currentScreen = "future_expenditures" }
+                    "savings_goals_help" -> SavingsGoalsHelpScreen(
+                        onBack = { vm.currentScreen = "savings_goals" }
                     )
                     "amortization_help" -> AmortizationHelpScreen(
                         onBack = { vm.currentScreen = "amortization" }
@@ -763,8 +763,8 @@ class MainActivity : ComponentActivity() {
                     "budget_config_help" -> BudgetConfigHelpScreen(
                         onBack = { vm.currentScreen = "budget_config" }
                     )
-                    "family_sync_help" -> FamilySyncHelpScreen(
-                        onBack = { vm.currentScreen = "family_sync" }
+                    "sync_help" -> SyncHelpScreen(
+                        onBack = { vm.currentScreen = "sync" }
                     )
                     "simulation_graph_help" -> SimulationGraphHelpScreen(
                         onBack = { vm.currentScreen = "simulation_graph" }
@@ -1397,7 +1397,7 @@ class MainActivity : ComponentActivity() {
                 if (changedCats.isNotEmpty()) vm.saveCategories(changedCats)
             },
             onNavigateToBudgetConfig = { vm.currentScreen = "budget_config" },
-            onNavigateToFamilySync = { vm.currentScreen = "family_sync" },
+            onNavigateToSync = { vm.currentScreen = "sync" },
             onNavigateToQuickStart = {
                 vm.quickStartStep = QuickStartStep.WELCOME
                 vm.currentScreen = "main"
@@ -1869,7 +1869,7 @@ class MainActivity : ComponentActivity() {
                 FullBackupSerializer.restoreFullState(context, jsonContent)
                 vm.reloadAllFromDisk()
 
-                // Handle family sync: dissolve old group, create new one.
+                // Handle SYNC: dissolve old group, create new one.
                 if (vm.isSyncConfigured) {
                     vm.transactions.forEachIndexed { i, t ->
                         vm.transactions[i] = t.copy(deviceId = "")
@@ -1965,13 +1965,13 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun FamilySyncScreenBranch(
+    private fun SyncScreenBranch(
         vm: MainViewModel,
         toastState: AppToastState,
     ) {
         val coroutineScope = rememberCoroutineScope()
         val context = androidx.compose.ui.platform.LocalContext.current
-        FamilySyncScreen(
+        SyncScreen(
             isConfigured = vm.isSyncConfigured,
             isSubscriber = vm.isSubscriber,
             groupId = vm.syncGroupId,
@@ -2279,7 +2279,7 @@ class MainActivity : ComponentActivity() {
             generatedPairingCode = vm.generatedPairingCode,
             onDismissPairingCode = { vm.generatedPairingCode = null },
             onRenameDevice = { targetDeviceId, newName ->
-                val gId = vm.syncGroupId ?: return@FamilySyncScreen
+                val gId = vm.syncGroupId ?: return@SyncScreen
                 coroutineScope.launch {
                     try {
                         FirestoreService.updateDeviceName(gId, targetDeviceId, newName)
@@ -2301,7 +2301,7 @@ class MainActivity : ComponentActivity() {
                 }
             },
             onRemoveDevice = { targetDeviceId ->
-                val gId = vm.syncGroupId ?: return@FamilySyncScreen
+                val gId = vm.syncGroupId ?: return@SyncScreen
                 coroutineScope.launch {
                     try {
                         FirestoreService.removeDevice(gId, targetDeviceId)
@@ -2310,7 +2310,7 @@ class MainActivity : ComponentActivity() {
                     } catch (_: Exception) {}
                 }
             },
-            onHelpClick = { vm.currentScreen = "family_sync_help" },
+            onHelpClick = { vm.currentScreen = "sync_help" },
             onBack = {
                 vm.generatedPairingCode = null
                 vm.currentScreen = "settings"

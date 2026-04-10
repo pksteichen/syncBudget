@@ -631,7 +631,7 @@ fun MainScreen(
                     IconButton(onClick = { onNavigate("transactions") }, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.AutoMirrored.Filled.List, S.dashboard.transactions, tint = customColors.accentTint, modifier = Modifier.size(32.dp))
                     }
-                    IconButton(onClick = { onNavigate("future_expenditures") }, modifier = Modifier.size(48.dp)) {
+                    IconButton(onClick = { onNavigate("savings_goals") }, modifier = Modifier.size(48.dp)) {
                         Icon(painter = painterResource(id = R.drawable.ic_coins), contentDescription = S.dashboard.savingsGoals, tint = customColors.accentTint, modifier = Modifier.size(32.dp))
                     }
                     IconButton(onClick = { onNavigate("amortization") }, modifier = Modifier.size(48.dp)) {
@@ -1099,14 +1099,14 @@ private fun SavingsSuperchargeDialog(
                                     )
                                     if (goal.isPaused) {
                                         Text(
-                                            text = S.futureExpenditures.paused,
+                                            text = S.savingsGoals.paused,
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
                                         )
                                     }
                                 }
                                 Text(
-                                    text = S.futureExpenditures.targetLabel(
+                                    text = S.savingsGoals.targetLabel(
                                         formatCurrency(goal.targetAmount, currencySymbol)
                                     ),
                                     style = MaterialTheme.typography.bodySmall,
@@ -1122,7 +1122,7 @@ private fun SavingsSuperchargeDialog(
                                         BudgetPeriod.MONTHLY -> today.plusMonths(periodsToPayoff)
                                     }
                                     Text(
-                                        text = S.futureExpenditures.payoffDate(payoffDate.format(dateFormatter)),
+                                        text = S.savingsGoals.payoffDate(payoffDate.format(dateFormatter)),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f * contentAlpha)
                                     )
@@ -1130,7 +1130,7 @@ private fun SavingsSuperchargeDialog(
                                 // Current per-period contribution
                                 val currentContribution = calculatePerPeriodDeduction(goal, budgetPeriod)
                                 Text(
-                                    text = S.futureExpenditures.contributionLabel(
+                                    text = S.savingsGoals.contributionLabel(
                                         formatCurrency(currentContribution, currencySymbol),
                                         budgetPeriodLabel
                                     ),
@@ -1153,7 +1153,7 @@ private fun SavingsSuperchargeDialog(
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = S.futureExpenditures.savedOf(
+                                    text = S.savingsGoals.savedOf(
                                         formatCurrency(goal.totalSavedSoFar, currencySymbol),
                                         formatCurrency(goal.targetAmount, currencySymbol)
                                     ),
@@ -1235,7 +1235,7 @@ private fun SavingsSuperchargeDialog(
                                             )
                                         } else if (newRemaining <= 0) {
                                             Text(
-                                                text = S.futureExpenditures.goalReached,
+                                                text = S.savingsGoals.goalReached,
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = previewPulseColor
                                             )

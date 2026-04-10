@@ -158,7 +158,7 @@ fun SimulationGraphScreen(
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = S.futureExpenditures.simulationGraphTitle,
+                        text = S.savingsGoals.simulationGraphTitle,
                         style = MaterialTheme.typography.titleLarge,
                         color = customColors.headerText
                     )
@@ -195,7 +195,7 @@ fun SimulationGraphScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             Text(
-                text = S.futureExpenditures.simulationGraphDescription,
+                text = S.savingsGoals.simulationGraphDescription,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
             )
@@ -215,7 +215,7 @@ fun SimulationGraphScreen(
                             else if (decs <= maxDecimals) { savingsText = newVal }
                         }
                     },
-                    label = { Text(S.futureExpenditures.simulationSavingsLabel) },
+                    label = { Text(S.savingsGoals.simulationSavingsLabel) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = if (maxDecimals > 0) KeyboardType.Decimal else KeyboardType.Number),
                     colors = textFieldColors,
@@ -237,7 +237,7 @@ fun SimulationGraphScreen(
                             else if (decs <= maxDecimals) { savedPerPeriodText = cleaned }
                         }
                     },
-                    label = { Text(S.futureExpenditures.simulationSavedPerLabel(periodLabel)) },
+                    label = { Text(S.savingsGoals.simulationSavedPerLabel(periodLabel)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     colors = textFieldColors,
@@ -248,13 +248,13 @@ fun SimulationGraphScreen(
 
             if (savingsExceedBudget) {
                 Text(
-                    S.futureExpenditures.simulationSavingsExceedBudget,
+                    S.savingsGoals.simulationSavingsExceedBudget,
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                 )
             } else if (adjTimeline.size < 2) {
                 Text(
-                    S.futureExpenditures.simulationNoData,
+                    S.savingsGoals.simulationNoData,
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                 )

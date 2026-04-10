@@ -144,7 +144,7 @@ fun SettingsScreen(
     onWeekStartChange: (Boolean) -> Unit = {},
     budgetPeriod: String = "DAILY",
     onNavigateToBudgetConfig: () -> Unit = {},
-    onNavigateToFamilySync: () -> Unit = {},
+    onNavigateToSync: () -> Unit = {},
     onNavigateToQuickStart: () -> Unit = {},
     isSyncConfigured: Boolean = false,
     isAdmin: Boolean = true,
@@ -259,10 +259,10 @@ fun SettingsScreen(
                         Text(S.settings.configureYourBudget)
                     }
                     OutlinedButton(
-                        onClick = onNavigateToFamilySync,
+                        onClick = onNavigateToSync,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text(S.sync.familySync)
+                        Text(S.sync.syncButton)
                     }
                 }
             }

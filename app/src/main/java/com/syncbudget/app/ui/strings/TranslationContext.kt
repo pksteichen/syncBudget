@@ -440,9 +440,9 @@ object TranslationContext {
         "keepEditing" to "Button label to cancel the discard action and continue editing the transaction form."
     )
 
-    // ── Savings Goals (Future Expenditures) Strings ──
+    // ── Savings Goals Strings ──
 
-    val futureExpenditures = mapOf(
+    val savingsGoals = mapOf(
         "title" to "Screen title for the Savings Goals page. Savings Goals are planned future expenses or financial targets.",
         "description" to "Subtitle text explaining what Savings Goals does: automatically deducts small amounts each budget period to save toward a target.",
         "addSavingsGoal" to "Button label to create a new savings goal entry.",
@@ -553,12 +553,12 @@ object TranslationContext {
         "simulationNoData" to "Message shown on the simulation chart when there is no data to display (no income or expenses configured)."
     )
 
-    // ── Sync (Family Sync) Strings ──
+    // ── SYNC Strings ──
 
     val sync = mapOf(
-        "title" to "Screen title for the Family Sync page. Family Sync shares a budget across multiple household devices.",
-        "familySync" to "Feature name: synchronization of budget data across family members' devices.",
-        "familySyncDescription" to "Subtitle explaining Family Sync: syncs budget across up to 5 household devices.",
+        "title" to "Screen title for the SYNC page. SYNC is the brand name for the household device-sharing feature; always render in all-caps.",
+        "syncButton" to "Settings button label opening the SYNC page. Always rendered in all-caps as a brand mark.",
+        "syncDescription" to "Subtitle explaining the SYNC feature: shares the budget across up to 5 household devices.",
         "createGroup" to "Button label to create a new family sync group. The creator becomes the admin.",
         "createGroupDescription" to "Description of the Create Group action: starts a new sync group and generates a pairing code for inviting others.",
         "joinGroup" to "Button label to join an existing family sync group using a pairing code.",
@@ -1107,9 +1107,9 @@ object TranslationContext {
         "tip6" to "Budget config tip: only include reliable recurring income, not one-time windfalls."
     )
 
-    // ── Savings Goals (Future Expenditures) Help Strings ──
+    // ── Savings Goals Help Strings ──
 
-    val futureExpendituresHelp = mapOf(
+    val savingsGoalsHelp = mapOf(
         "title" to "Help page title for Savings Goals.",
         "whatTitle" to "Help section title: What Are Savings Goals?",
         "whatBody" to "Help text: Savings Goals save for future expenses by automatically reducing the budget each period.",
@@ -1302,9 +1302,9 @@ object TranslationContext {
         "tip6" to "Recurring tip: check bank statements to catch missed recurring charges."
     )
 
-    // ── Family Sync Help Strings ──
+    // ── SYNC Help Strings ──
 
-    val familySyncHelp = mapOf(
+    val syncHelp = mapOf(
         "title" to "Help page title for Family Sync.",
         "whatTitle" to "Help section title: What is Family Sync?",
         "whatBody" to "Help text: Family Sync shares budget across up to 5 devices with end-to-end encryption.",
@@ -1364,7 +1364,7 @@ object TranslationContext {
         "budgetIncomeNoLink" to "Widget button to indicate the income is extra/unexpected (not already budgeted)."
     )
 
-    // ── Simulation Graph Help Strings ──
+    // ── Cash Flow Simulation Help Strings ──
 
     val simulationGraphHelp = mapOf(
         "title" to "Screen title for the Cash Flow Simulation help page.",

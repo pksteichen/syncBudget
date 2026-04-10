@@ -24,7 +24,7 @@ import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FamilySyncHelpScreen(onBack: () -> Unit) {
+fun SyncHelpScreen(onBack: () -> Unit) {
     val customColors = LocalSyncBudgetColors.current
     val S = LocalStrings.current
 
@@ -33,7 +33,7 @@ fun FamilySyncHelpScreen(onBack: () -> Unit) {
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = S.familySyncHelp.title,
+                        text = S.syncHelp.title,
                         style = MaterialTheme.typography.titleLarge,
                         color = customColors.headerText
                     )
@@ -62,39 +62,39 @@ fun FamilySyncHelpScreen(onBack: () -> Unit) {
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
-            HelpSectionTitle(S.familySyncHelp.whatTitle)
-            HelpBodyText(S.familySyncHelp.whatBody)
+            HelpSectionTitle(S.syncHelp.whatTitle)
+            HelpBodyText(S.syncHelp.whatBody)
 
-            HelpSectionTitle(S.familySyncHelp.adminRoleTitle)
-            HelpBodyText(S.familySyncHelp.adminRoleBody)
+            HelpSectionTitle(S.syncHelp.adminRoleTitle)
+            HelpBodyText(S.syncHelp.adminRoleBody)
 
-            HelpSectionTitle(S.familySyncHelp.gettingStartedTitle)
-            HelpBodyText(S.familySyncHelp.gettingStartedBody)
+            HelpSectionTitle(S.syncHelp.gettingStartedTitle)
+            HelpBodyText(S.syncHelp.gettingStartedBody)
 
-            HelpSectionTitle(S.familySyncHelp.joiningTitle)
-            HelpBodyText(S.familySyncHelp.joiningBody)
+            HelpSectionTitle(S.syncHelp.joiningTitle)
+            HelpBodyText(S.syncHelp.joiningBody)
 
-            HelpSectionTitle(S.familySyncHelp.syncStatusTitle)
-            HelpBodyText(S.familySyncHelp.syncStatusBody)
+            HelpSectionTitle(S.syncHelp.syncStatusTitle)
+            HelpBodyText(S.syncHelp.syncStatusBody)
 
-            HelpSectionTitle(S.familySyncHelp.staleWarningsTitle)
-            HelpBodyText(S.familySyncHelp.staleWarningsBody)
+            HelpSectionTitle(S.syncHelp.staleWarningsTitle)
+            HelpBodyText(S.syncHelp.staleWarningsBody)
 
-            HelpSectionTitle(S.familySyncHelp.attributionTitle)
-            HelpBodyText(S.familySyncHelp.attributionBody)
+            HelpSectionTitle(S.syncHelp.attributionTitle)
+            HelpBodyText(S.syncHelp.attributionBody)
 
-            HelpSectionTitle(S.familySyncHelp.adminClaimsTitle)
-            HelpBodyText(S.familySyncHelp.adminClaimsBody)
+            HelpSectionTitle(S.syncHelp.adminClaimsTitle)
+            HelpBodyText(S.syncHelp.adminClaimsBody)
 
-            HelpSectionTitle(S.familySyncHelp.leavingTitle)
-            HelpBodyText(S.familySyncHelp.leavingBody)
+            HelpSectionTitle(S.syncHelp.leavingTitle)
+            HelpBodyText(S.syncHelp.leavingBody)
 
-            HelpSectionTitle(S.familySyncHelp.privacyTitle)
-            HelpBodyText(S.familySyncHelp.privacyBody)
+            HelpSectionTitle(S.syncHelp.privacyTitle)
+            HelpBodyText(S.syncHelp.privacyBody)
 
-            if (S.familySyncHelp.subscriptionTitle.isNotEmpty()) {
-                HelpSectionTitle(S.familySyncHelp.subscriptionTitle)
-                HelpBodyText(S.familySyncHelp.subscriptionBody)
+            if (S.syncHelp.subscriptionTitle.isNotEmpty()) {
+                HelpSectionTitle(S.syncHelp.subscriptionTitle)
+                HelpBodyText(S.syncHelp.subscriptionBody)
             }
         }
     }

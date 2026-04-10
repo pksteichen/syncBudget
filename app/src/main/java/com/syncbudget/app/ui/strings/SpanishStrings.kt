@@ -396,7 +396,7 @@ object SpanishStrings : AppStrings {
         fullRestoreWarning = "Advertencia: Una restauraci\u00f3n completa eliminar\u00e1 cualquier transacci\u00f3n o cambio realizado desde que se cre\u00f3 este respaldo. Las transacciones ingresadas despu\u00e9s deber\u00e1n volver a ingresarse o recargarse desde un CSV bancario.",
         fullBackupRestored = "Respaldo completo restaurado exitosamente",
         fullBackupSaved = "Respaldo completo guardado exitosamente",
-        fullBackupSyncWarning = "Restaurar un respaldo completo disolver\u00e1 el grupo de sincronizaci\u00f3n familiar actual. Deber\u00e1s crear un nuevo grupo y compartir un nuevo c\u00f3digo de emparejamiento con los miembros de la familia.",
+        fullBackupSyncWarning = "Restaurar un respaldo completo disolver\u00e1 el grupo SYNC actual. Deber\u00e1s crear un nuevo grupo y compartir un nuevo c\u00f3digo de emparejamiento con los otros dispositivos.",
         fullBackupNonAdminBlock = "Solo el administrador del grupo puede restaurar un respaldo completo. Una restauraci\u00f3n completa corromper\u00eda el estado de sincronizaci\u00f3n de todos los dispositivos.",
         fullBackupGroupRecreated = "Respaldo restaurado. Nuevo grupo familiar creado \u2014 comparte el c\u00f3digo de emparejamiento con los miembros de la familia.",
         fullBackupGroupDissolved = "Respaldo restaurado. Grupo familiar disuelto.",
@@ -437,7 +437,7 @@ object SpanishStrings : AppStrings {
         clearDescriptionConfirm = { count -> "Esto borrar\u00e1 la descripci\u00f3n en las $count transacciones seleccionadas. \u00bfContinuar?" }
     )
 
-    override val futureExpenditures = FutureExpendituresStrings(
+    override val savingsGoals = SavingsGoalsStrings(
         title = "Metas de Ahorro",
         description = "Planifica y ahorra para gastos futuros u objetivos financieros. La app deduce autom\u00e1ticamente una peque\u00f1a cantidad en cada per\u00edodo.",
         addSavingsGoal = "Agregar meta de ahorro",
@@ -543,9 +543,9 @@ object SpanishStrings : AppStrings {
     )
 
     override val sync = SyncStrings(
-        title = "Sincronizar",
-        familySync = "Sincronizar",
-        familySyncDescription = "Sincroniza tu presupuesto en hasta 5 dispositivos de tu hogar.",
+        title = "SYNC",
+        syncButton = "SYNC",
+        syncDescription = "Comparte tu presupuesto con hasta 5 dispositivos de tu hogar.",
         createGroup = "Crear Grupo Familiar",
         createGroupDescription = "Inicia un nuevo grupo de sincronizaci\u00f3n e invita a familiares con un c\u00f3digo de emparejamiento.",
         joinGroup = "Unirse a Grupo Familiar",
@@ -622,7 +622,7 @@ object SpanishStrings : AppStrings {
         createGroupTitle = "Crear Grupo",
         renameDevice = "Renombrar Dispositivo",
         removeDeviceTitle = "Eliminar Dispositivo",
-        removeDeviceMessage = { name -> "Eliminar \"$name\" de este grupo? El dispositivo se desconectar\u00e1 de la sincronizaci\u00f3n familiar." },
+        removeDeviceMessage = { name -> "Eliminar \"$name\" de este grupo? El dispositivo se desconectar\u00e1 de SYNC." },
         removeDeviceConfirm = "Eliminar",
         subscriptionExpiredNotice = "La suscripci\u00f3n del admin expir\u00f3. El grupo se disolver\u00e1 pronto. Suscr\u00edbete y reclama admin para mantener el grupo activo.",
         updateRequiredNotice = "Un miembro de la familia actualiz\u00f3 BudgeTrak. Actualiza desde Play Store para continuar sincronizando.",
@@ -1295,7 +1295,7 @@ object SpanishStrings : AppStrings {
         tip6 = "Solo incluye ingresos confiables y recurrentes. No agregues ingresos puntuales \u2014 reg\u00edstralos como ingreso extra en Transacciones."
     )
 
-    override val futureExpendituresHelp = FutureExpendituresHelpStrings(
+    override val savingsGoalsHelp = SavingsGoalsHelpStrings(
         title = "Ayuda de Metas de Ahorro",
         whatTitle = "\u00bfQu\u00e9 son las Metas de Ahorro?",
         whatBody = "Las Metas de Ahorro te permiten planificar y ahorrar para gastos futuros u objetivos " +
@@ -1550,7 +1550,7 @@ object SpanishStrings : AppStrings {
         tip6 = "Revisa tus extractos bancarios para asegurarte de no haber olvidado ning\u00fan cargo recurrente."
     )
 
-    override val familySyncHelp = FamilySyncHelpStrings(
+    override val syncHelp = SyncHelpStrings(
         title = "Ayuda de Sincronizaci\u00f3n",
         whatTitle = "\u00bfQu\u00e9 es la Sincronizaci\u00f3n?",
         whatBody = "La Sincronizaci\u00f3n te permite compartir un presupuesto familiar en hasta 5 dispositivos. " +
