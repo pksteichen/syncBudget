@@ -112,6 +112,27 @@ fun nearestOccurrenceDistance(
     return occurrences.minOf { abs(ChronoUnit.DAYS.between(transactionDate, it)) }
 }
 
+/**
+ * Find the closest expected occurrence date to a transaction date.
+ * Returns the occurrence LocalDate, or null if none can be computed.
+ */
+fun nearestOccurrenceDate(
+    transactionDate: LocalDate,
+    repeatType: RepeatType,
+    repeatInterval: Int,
+    startDate: LocalDate?,
+    monthDay1: Int?,
+    monthDay2: Int?
+): LocalDate? {
+    val rangeStart = transactionDate.minusDays(15)
+    val rangeEnd = transactionDate.plusDays(15)
+    val occurrences = BudgetCalculator.generateOccurrences(
+        repeatType, repeatInterval, startDate, monthDay1, monthDay2, rangeStart, rangeEnd
+    )
+    if (occurrences.isEmpty()) return null
+    return occurrences.minByOrNull { abs(ChronoUnit.DAYS.between(transactionDate, it)) }
+}
+
 fun isRecurringDateCloseEnough(transactionDate: LocalDate, re: RecurringExpense): Boolean {
     val distance = nearestOccurrenceDistance(
         transactionDate, re.repeatType, re.repeatInterval,

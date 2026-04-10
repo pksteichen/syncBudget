@@ -124,6 +124,32 @@ class BackgroundSyncWorker(
                 }
             }
 
+            // Proactive App Check token refresh — same logic as Tier 2 but essential
+            // here because the ViewModel (and its keep-alive loop) is dead. Without this,
+            // all Firestore network reads and RTDB writes fail with PERMISSION_DENIED.
+            if (groupId != null) {
+                try {
+                    val token = kotlinx.coroutines.withTimeoutOrNull(10_000) {
+                        com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
+                            .getAppCheckToken(false).await()
+                    }
+                    if (token != null) {
+                        val remainingMs = token.expireTimeMillis - System.currentTimeMillis()
+                        if (remainingMs < 35 * 60 * 1000L) {
+                            val refreshed = kotlinx.coroutines.withTimeoutOrNull(10_000) {
+                                com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
+                                    .getAppCheckToken(true).await()
+                            }
+                            if (refreshed != null) {
+                                com.syncbudget.app.BudgeTrakApplication.tokenLog(
+                                    "Proactive token refresh (Worker Tier 3): was ${remainingMs/1000}s from expiry"
+                                )
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+
             var mergeResult: SyncMergeProcessor.MergeResult? = null
             var encryptionKey: ByteArray? = null
             var deviceId: String? = null

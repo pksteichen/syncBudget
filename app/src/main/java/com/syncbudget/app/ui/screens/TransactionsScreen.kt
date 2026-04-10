@@ -162,6 +162,7 @@ import com.syncbudget.app.data.findRecurringExpenseMatches
 import com.syncbudget.app.data.generateTransactionId
 import com.syncbudget.app.data.getCategoryIcon
 import com.syncbudget.app.data.isRecurringDateCloseEnough
+import com.syncbudget.app.data.nearestOccurrenceDate
 import com.syncbudget.app.data.parseSyncBudgetCsv
 import com.syncbudget.app.data.parseGenericCsv
 import com.syncbudget.app.data.parseUsBank
@@ -2367,13 +2368,17 @@ fun BudgetIncomeConfirmDialog(
         Spacer(modifier = Modifier.height(12.dp))
         SectionLabel(S.transactions.incomeSourceLabel)
         incomeSources.forEachIndexed { idx, src ->
+            val occurrenceDate = nearestOccurrenceDate(
+                transaction.date, src.repeatType, src.repeatInterval,
+                src.startDate, src.monthDay1, src.monthDay2
+            )
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { selectedIndex = idx }) {
                 RadioButton(selected = idx == selectedIndex, onClick = { selectedIndex = idx })
                 Column(modifier = Modifier.weight(1f)) {
                     TransactionCard(
                         source = src.source,
                         amount = formatCurrency(src.amount, currencySymbol),
-                        date = ""
+                        date = occurrenceDate?.format(dateFormatter) ?: ""
                     )
                 }
             }
@@ -2419,7 +2424,7 @@ fun AmortizationConfirmDialog(
                     TransactionCard(
                         source = entry.source,
                         amount = formatCurrency(entry.amount, currencySymbol),
-                        date = ""
+                        date = entry.startDate.format(dateFormatter)
                     )
                 }
             }
@@ -2460,13 +2465,17 @@ fun RecurringExpenseConfirmDialog(
         SectionLabel(S.transactions.recurringExpenseLabel)
         recurringExpenses.forEachIndexed { idx, re ->
             val dateCloseEnough = isRecurringDateCloseEnough(transaction.date, re)
+            val occurrenceDate = nearestOccurrenceDate(
+                transaction.date, re.repeatType, re.repeatInterval,
+                re.startDate, re.monthDay1, re.monthDay2
+            )
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { selectedIndex = idx }) {
                 RadioButton(selected = idx == selectedIndex, onClick = { selectedIndex = idx })
                 Column(modifier = Modifier.weight(1f)) {
                     TransactionCard(
                         source = re.source,
                         amount = formatCurrency(re.amount, currencySymbol),
-                        date = ""
+                        date = occurrenceDate?.format(dateFormatter) ?: ""
                     )
                     if (!dateCloseEnough) {
                         Text(
