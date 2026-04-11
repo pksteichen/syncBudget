@@ -872,6 +872,7 @@ object EnglishStrings : AppStrings {
         currencyYen = "\u00a5 \u2014 Japanese Yen / Chinese Yuan",
         currencyRupee = "\u20b9 \u2014 Indian Rupee",
         currencyWon = "\u20a9 \u2014 Korean Won",
+        currencyPeso = "\u20b1 \u2014 Philippine Peso",
         currencyMore = "And more",
         currencyNote = "The currency symbol affects the Solari display, transaction amounts, budget " +
             "configuration, and all other monetary displays. Decimal places are automatically " +
@@ -1047,7 +1048,9 @@ object EnglishStrings : AppStrings {
         helpDesc = "Opens this help page.",
         actionBarTitle = "Action Bar",
         actionBarBody = "Below the header, the action bar provides quick access to common operations:",
-        filterDesc = "Filter toggle \u2014 cycles through: All, Expenses, Income.",
+        filterDesc = "Filter toggle \u2014 cycles through: All, Expenses, Income, and other filter options (Recurring, Excluded, Not Verified, Photos). Pill label updates to reflect the active filter.",
+        sortButtonDesc = "Sort order \u2014 cycles through Date \u2193, Date \u2191, Amount \u2193, Amount \u2191, and Category. Pill label shows the active sort.",
+        rangeButtonDesc = "Date range \u2014 cycles through 6mo, 1yr, 2yr, and All. Limits the list to transactions within that window (selecting All includes archived transactions). Pill label shows the active range.",
         addIncomeDesc = "Create a new income transaction.",
         addExpenseDesc = "Create a new expense transaction.",
         searchDesc = "Open search menu with three options:",
@@ -1078,6 +1081,7 @@ object EnglishStrings : AppStrings {
         selectAllDesc = "Select All \u2014 toggle all visible transactions",
         changeCategoryDesc = "Set a single category for all selected transactions.",
         editMerchantDesc = "Replace the merchant/source name and/or description on all selected transactions.",
+        verifyDesc = "Mark all selected transactions as verified. Useful after a bank import when you want to confirm auto-categorized transactions in bulk. Verified transactions show a blue category icon in the list; unverified ones show the grey default \"Other\" color.",
         deleteDesc = "Delete all selected transactions.",
         closeDesc = "Exit selection mode without changes.",
         addEditTitle = "Add / Edit Transaction Dialog",
@@ -1106,6 +1110,7 @@ object EnglishStrings : AppStrings {
         multiCatBody = "When two or more categories are selected, you unlock three entry modes. " +
             "First enter the Total amount, then choose a mode:",
         pieChartDesc = "Drag slices on an interactive pie chart to distribute the total across categories.",
+        calculatorTitle = "Calculator Mode",
         calculatorDesc = "Enter a specific dollar amount for each category. The last empty field auto-fills.",
         percentageDesc = "Enter a percentage for each category. Percentages auto-adjust to total 100%.",
         pieChartModeTitle = "Pie Chart Mode",

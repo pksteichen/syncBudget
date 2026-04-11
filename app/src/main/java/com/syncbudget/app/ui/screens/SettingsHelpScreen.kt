@@ -142,6 +142,7 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
             HelpBulletText(S.settingsHelp.currencyYen)
             HelpBulletText(S.settingsHelp.currencyRupee)
             HelpBulletText(S.settingsHelp.currencyWon)
+            HelpBulletText(S.settingsHelp.currencyPeso)
             HelpBulletText(S.settingsHelp.currencyMore)
             Spacer(modifier = Modifier.height(8.dp))
             HelpBodyText(

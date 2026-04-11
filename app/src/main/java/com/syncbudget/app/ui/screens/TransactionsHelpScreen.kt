@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ThumbUpAlt
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
@@ -184,34 +185,54 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
             BodyText(S.transactionsHelp.actionBarBody)
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Visual action bar mockup
+            // Visual action bar mockup — mirrors the live action bar in
+            // TransactionsScreen: filter pill, sort pill, range pill, +, −, search.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(10.dp))
                     .border(1.dp, dimColor.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
-                    .padding(horizontal = 16.dp, vertical = 10.dp)
+                    .padding(horizontal = 10.dp, vertical = 10.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Filter pill
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(20.dp))
                             .border(1.dp, dimColor.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
-                            .padding(horizontal = 14.dp, vertical = 6.dp)
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
                     ) {
-                        Text(S.transactions.all, style = MaterialTheme.typography.bodyMedium, color = textColor)
+                        Text(S.transactions.all, style = MaterialTheme.typography.bodySmall, color = textColor)
+                    }
+                    // Sort pill
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .border(1.dp, dimColor.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(S.transactions.sortDateDesc, style = MaterialTheme.typography.bodySmall, color = textColor)
+                    }
+                    // Range pill
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .border(1.dp, dimColor.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(S.transactions.range6mo, style = MaterialTheme.typography.bodySmall, color = textColor)
                     }
                     Icon(
                         Icons.Filled.Add, contentDescription = null,
-                        tint = Color(0xFF4CAF50), modifier = Modifier.size(32.dp)
+                        tint = Color(0xFF4CAF50), modifier = Modifier.size(30.dp)
                     )
                     Icon(
                         Icons.Filled.Remove, contentDescription = null,
-                        tint = Color(0xFFF44336), modifier = Modifier.size(32.dp)
+                        tint = Color(0xFFF44336), modifier = Modifier.size(30.dp)
                     )
                     Icon(
                         Icons.Filled.Search, contentDescription = null,
@@ -221,7 +242,7 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
             }
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Filter button
+            // Filter pill description
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
@@ -234,6 +255,42 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
                     S.transactionsHelp.filterDesc,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = textColor
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            // Sort pill description
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(14.dp))
+                        .border(1.dp, dimColor.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Text(S.transactions.sortDateDesc, style = MaterialTheme.typography.bodySmall, color = textColor)
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    S.transactionsHelp.sortButtonDesc,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = textColor
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            // Range pill description
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(14.dp))
+                        .border(1.dp, dimColor.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Text(S.transactions.range6mo, style = MaterialTheme.typography.bodySmall, color = textColor)
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    S.transactionsHelp.rangeButtonDesc,
                     style = MaterialTheme.typography.bodyMedium,
                     color = textColor
                 )
@@ -434,11 +491,13 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(S.transactions.selectAll, style = MaterialTheme.typography.bodyMedium, color = textColor, modifier = Modifier.weight(1f))
                     Icon(Icons.Filled.Category, contentDescription = null, tint = textColor, modifier = Modifier.size(22.dp))
-                    Spacer(modifier = Modifier.width(14.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
                     Icon(Icons.Filled.Edit, contentDescription = null, tint = textColor, modifier = Modifier.size(22.dp))
-                    Spacer(modifier = Modifier.width(14.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Icon(Icons.Filled.ThumbUpAlt, contentDescription = null, tint = Color(0xFF2E7D32), modifier = Modifier.size(22.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
                     Icon(Icons.Filled.Delete, contentDescription = null, tint = Color(0xFFF44336), modifier = Modifier.size(22.dp))
-                    Spacer(modifier = Modifier.width(14.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
                     Icon(Icons.Filled.Close, contentDescription = null, tint = textColor, modifier = Modifier.size(22.dp))
                 }
             }
@@ -452,6 +511,7 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
             Spacer(modifier = Modifier.height(4.dp))
             IconExplanationRow(Icons.Filled.Category, S.transactions.changeCategory, S.transactionsHelp.changeCategoryDesc)
             IconExplanationRow(Icons.Filled.Edit, S.transactions.editMerchant, S.transactionsHelp.editMerchantDesc)
+            IconExplanationRow(Icons.Filled.ThumbUpAlt, S.transactions.verifiedToast, S.transactionsHelp.verifyDesc, Color(0xFF2E7D32))
             IconExplanationRow(Icons.Filled.Delete, S.common.delete, S.transactionsHelp.deleteDesc, Color(0xFFF44336))
             IconExplanationRow(Icons.Filled.Close, S.common.close, S.transactionsHelp.closeDesc)
             Spacer(modifier = Modifier.height(16.dp))
@@ -604,6 +664,10 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
                 S.transactionsHelp.pieChartDragNote,
                 italic = true
             )
+            Spacer(modifier = Modifier.height(10.dp))
+
+            SubSectionTitle(S.transactionsHelp.calculatorTitle)
+            BodyText(S.transactionsHelp.calculatorDesc)
             Spacer(modifier = Modifier.height(10.dp))
 
             SubSectionTitle(S.transactionsHelp.autoFillTitle)

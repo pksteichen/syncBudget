@@ -864,6 +864,7 @@ object SpanishStrings : AppStrings {
         currencyYen = "\u00a5 \u2014 Yen japon\u00e9s / Yuan chino",
         currencyRupee = "\u20b9 \u2014 Rupia india",
         currencyWon = "\u20a9 \u2014 Won surcoreano",
+        currencyPeso = "\u20b1 \u2014 Peso filipino",
         currencyMore = "Y m\u00e1s",
         currencyNote = "El s\u00edmbolo de moneda afecta la pantalla Solari, los montos de transacciones, la " +
             "configuraci\u00f3n del presupuesto y todas las dem\u00e1s visualizaciones monetarias. Los decimales se " +
@@ -1037,7 +1038,10 @@ object SpanishStrings : AppStrings {
         helpDesc = "Abre esta p\u00e1gina de ayuda.",
         actionBarTitle = "Barra de acciones",
         actionBarBody = "Debajo de la barra superior, la barra de acciones da acceso r\u00e1pido a operaciones comunes:",
-        filterDesc = "Filtro \u2014 alterna entre: Todas, Gastos, Ingresos.",
+        filterDesc = "Filtro \u2014 alterna entre: Todas, Gastos, Ingresos, y otras opciones de filtro (Recurrentes, Excluidas, Sin Verificar, Fotos). La etiqueta de la p\u00edldora refleja el filtro activo.",
+        // TODO(Commit 5): translate
+        sortButtonDesc = "Sort order \u2014 cycles through Date \u2193, Date \u2191, Amount \u2193, Amount \u2191, and Category. Pill label shows the active sort.",
+        rangeButtonDesc = "Date range \u2014 cycles through 6mo, 1yr, 2yr, and All. Limits the list to transactions within that window (selecting All includes archived transactions). Pill label shows the active range.",
         addIncomeDesc = "Crear una nueva transacci\u00f3n de ingreso.",
         addExpenseDesc = "Crear una nueva transacci\u00f3n de gasto.",
         searchDesc = "Abrir el men\u00fa de b\u00fasqueda con tres opciones:",
@@ -1068,6 +1072,8 @@ object SpanishStrings : AppStrings {
         selectAllDesc = "Seleccionar todo \u2014 selecciona o deselecciona todas las transacciones visibles",
         changeCategoryDesc = "Asignar una categor\u00eda a todas las transacciones seleccionadas.",
         editMerchantDesc = "Reemplazar el nombre de comercio/fuente y/o la descripci\u00f3n en todas las transacciones seleccionadas.",
+        // TODO(Commit 5): translate
+        verifyDesc = "Mark all selected transactions as verified. Useful after a bank import when you want to confirm auto-categorized transactions in bulk. Verified transactions show a blue category icon in the list; unverified ones show the grey default \"Other\" color.",
         deleteDesc = "Eliminar todas las transacciones seleccionadas.",
         closeDesc = "Salir del modo de selecci\u00f3n sin cambios.",
         addEditTitle = "Di\u00e1logo de Agregar / Editar transacci\u00f3n",
@@ -1096,6 +1102,7 @@ object SpanishStrings : AppStrings {
         multiCatBody = "Al seleccionar dos o m\u00e1s categor\u00edas, se desbloquean tres modos de ingreso. " +
             "Primero ingresa el monto Total, luego elige un modo:",
         pieChartDesc = "Arrastra las secciones en un gr\u00e1fico circular interactivo para distribuir el total entre categor\u00edas.",
+        calculatorTitle = "Modo Calculadora",
         calculatorDesc = "Ingresa un monto espec\u00edfico para cada categor\u00eda. El \u00faltimo campo vac\u00edo se completa autom\u00e1ticamente.",
         percentageDesc = "Ingresa un porcentaje para cada categor\u00eda. Los porcentajes se ajustan autom\u00e1ticamente para sumar 100%.",
         pieChartModeTitle = "Modo de gr\u00e1fico circular",
