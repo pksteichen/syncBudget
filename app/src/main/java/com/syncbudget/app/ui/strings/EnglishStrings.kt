@@ -1319,8 +1319,6 @@ object EnglishStrings : AppStrings {
         everyXWeeksBody = "Income arrives every N weeks (1\u201352). Requires a Start Date. The day of " +
             "the week is determined by your start date (e.g., if your start date falls on " +
             "a Friday, income repeats every N Fridays).",
-        biWeeklyTitle = "",
-        biWeeklyBody = "",
         everyXMonthsTitle = "Month",
         everyXMonthsBody = "Income arrives on a specific day of the month, every N months (1\u201312). " +
             "Pick a start date to set the day and phase. Days 29\u201331 are allowed when " +
@@ -1520,6 +1518,11 @@ object EnglishStrings : AppStrings {
         actionsTitle = "Actions",
         editNote = "Tap an entry to edit its details (source name, amount, periods, start date).",
         deleteDesc = "Permanently remove the amortization entry.",
+        deleteLinkedNote = "If the entry has any transactions linked to it, BudgeTrak remembers " +
+            "how much of the amortization had already been applied at the time each transaction was linked. " +
+            "Deleting the entry unlinks those transactions but keeps the remembered amounts intact, so your " +
+            "past available-cash history stays accurate \u2014 the transactions don't suddenly start " +
+            "subtracting the full amount from your budget.",
         matchingTitle = "Automatic Transaction Matching",
         matchingBody = "When you add a transaction (manually or via bank import), the app checks " +
             "whether the merchant name and amount match any of your amortization entries. " +
@@ -1574,8 +1577,6 @@ object EnglishStrings : AppStrings {
         everyXWeeksTitle = "Week",
         everyXWeeksBody = "The expense occurs every N weeks (1\u201352). Requires a Start Date. " +
             "The day of the week is determined by the start date.",
-        biWeeklyTitle = "",
-        biWeeklyBody = "",
         everyXMonthsTitle = "Month",
         everyXMonthsBody = "Occurs on a specific day of the month, every N months (1\u201312). " +
             "Pick a start date to set the day and phase. Most bills use this type: rent on the 1st, " +
@@ -1597,10 +1598,24 @@ object EnglishStrings : AppStrings {
         expenseNextDateBody = "Each entry shows the expense name, followed by the amount and the date of the next upcoming occurrence (e.g., \"\$15.99 on Mar 1, 2026\"). Expenses in the Other section also show a brief description of their repeat period (e.g., \"Every 2 weeks\").",
         expenseOtherPeriodBody = "",
         expenseSortBody = "A sort button appears on the left side of each subheader. Tap it to toggle between alphabetical order (A) and amount descending (currency symbol). All sections sort together. Your preference is saved automatically.",
+        setAsideProgressBody = "Each expense row shows a small \"set aside so far\" line (e.g., \"\$42.00 set aside of \$120.00\"). This is the running total that has been reserved from your budget for this expense since the last time it was paid. Once the expense is actually charged and matched to a transaction, the counter resets and starts over for the next occurrence. This lets you see at a glance whether the money is already waiting for the bill.",
         actionsTitle = "Actions",
         editNote = "Tap an expense to edit its name and amount.",
         repeatSettingsDesc = "Configure or change the repeat schedule.",
         deleteDesc = "Permanently remove the recurring expense.",
+        acceleratedTitle = "Accelerated Set-Aside",
+        acceleratedBody = "When you add or edit a recurring expense, the add/edit dialog shows a " +
+            "small green Speed icon in the footer. Tapping it toggles Accelerated mode on or off \u2014 " +
+            "when on, the icon is solid green; when off, it fades out. An accelerated expense also shows " +
+            "the same green Speed icon next to its row in the expense list, so you can spot them at a glance. " +
+            "Accelerated mode changes how the budget reserves money for that one expense. " +
+            "Normally, BudgeTrak spreads the cost evenly over the full repeat interval so the money builds " +
+            "up gradually. With Accelerated mode on, the app instead reserves enough each period to fully " +
+            "cover the expense by its next due date, even if you've added it late or are catching up after " +
+            "a missed payment. This pulls a bit more out of your available cash each period, but guarantees " +
+            "the full amount is set aside by the time the bill actually arrives. Use this for bills you " +
+            "want to be certain are fully funded on time \u2014 particularly new recurring expenses you've " +
+            "just added partway through an interval, or expenses where falling behind has real consequences.",
         budgetEffectTitle = "How Recurring Expenses Affect Your Budget",
         budgetEffectBody = "Recurring expenses play two roles in the budget system:",
         timingSafetyTitle = "1. Budget Calculation (Timing Safety)",
@@ -1655,13 +1670,13 @@ object EnglishStrings : AppStrings {
         adminRoleTitle = "The Admin Role",
         adminRoleBody = "The person who creates the group becomes the admin. Creating a group " +
             "and holding admin status requires a subscription. The admin can " +
-            "change shared budget settings (currency, budget period, reset schedule), " +
+            "change shared budget settings (currency, budget period, reset schedule, receipt " +
+            "photo retention, and other options on the Settings and Budget Configuration screens), " +
             "start or reset the budget, generate pairing codes to invite new devices, " +
-            "remove devices (long-press on the device roster), " +
-            "set the household timezone, enable transaction attribution, and dissolve the " +
-            "group. Non-admin members can view settings but cannot change them \u2014 " +
-            "tapping a locked setting shows \"Administrator only\". " +
-            "Free users can join an existing group without a subscription.",
+            "remove devices (long-press on the device roster), set the group timezone, repair " +
+            "orphaned transaction attributions, and dissolve the group. Non-admin members can view " +
+            "the shared settings but cannot change them \u2014 tapping a locked setting shows " +
+            "\"Administrator only\". Free users can join an existing group without a subscription.",
         adminFeaturesTitle = "Admin Decisions: What You Control & Why",
         adminFeaturesIntro = "As the admin you make a handful of choices that affect everyone in the SYNC group. " +
             "Here is a quick guide to each one and when you might want to use it.",
@@ -1672,21 +1687,22 @@ object EnglishStrings : AppStrings {
             "or strong daily awareness, weekly to align with paychecks, monthly for stable income " +
             "and longer planning. Only the admin can change this or tap Start/Reset Budget so " +
             "stray taps from another device cannot wipe everyone's progress.",
-        adminFeatureCurrencyTitle = "Currency, Date Format & Display",
-        adminFeatureCurrencyBody = "Currency symbol, date format, and other shared display preferences are set " +
-            "by the admin and applied to every device. Use this to keep the household consistent. " +
-            "Each device can still pick its own theme (light / dark / system) independently.",
+        adminFeatureCurrencyTitle = "Currency Symbol",
+        adminFeatureCurrencyBody = "The currency symbol is a shared setting \u2014 the admin picks one and every " +
+            "device in the group uses it. Change it in Settings. Date format and theme (light / dark / system) " +
+            "are per-device choices, so each member can set them independently without affecting anyone else.",
         adminFeatureTimezoneTitle = "Group Timezone",
         adminFeatureTimezoneBody = "If your group spans multiple timezones (a traveling spouse, college kid, " +
             "or family across regions), set the Group Timezone to a single zone everyone agrees on. " +
             "Period boundaries (when each new day, week, or month starts) are calculated in that " +
             "timezone so all devices roll over together. Leave it on the default \"Device timezone\" " +
             "if everyone is in the same place.",
-        adminFeatureAttributionTitle = "Transaction Attribution",
-        adminFeatureAttributionBody = "Attribution adds a small label to each transaction in the list showing " +
-            "which device recorded it. Turn this on if you want visibility into who entered what \u2014 " +
-            "useful for shared expenses or teaching kids about budgeting. Leave it off for more " +
-            "privacy. The label shows \"You\" for your own entries and the device nickname for others.",
+        adminFeatureAttributionTitle = "Repair Attributions",
+        adminFeatureAttributionBody = "If devices leave the group or get renamed, attribution labels on old " +
+            "transactions can end up pointing at devices that no longer exist. The admin sees a wrench " +
+            "icon next to the attribution toggle that opens the Repair Attributions dialog, where those " +
+            "orphaned labels can be reassigned or cleared in one pass. The attribution toggle itself is " +
+            "a per-device display choice \u2014 see the Transaction Attribution section below.",
         adminFeatureRetentionTitle = "Receipt Photo Retention",
         adminFeatureRetentionBody = "If you use receipt photos, you can set a retention period (e.g., 90 days) " +
             "after which older photos are automatically removed from cloud storage. This keeps cloud " +
@@ -1726,9 +1742,11 @@ object EnglishStrings : AppStrings {
             "a recent snapshot and merges your local changes without replaying " +
             "every missed update.",
         attributionTitle = "Transaction Attribution",
-        attributionBody = "When enabled by the admin, each transaction in the list shows which device " +
-            "created it. Your own transactions show \"You\" and transactions from other " +
-            "devices show the device name. This helps families see who recorded each expense.",
+        attributionBody = "The attribution toggle on the SYNC screen is a per-device display choice \u2014 " +
+            "each member turns it on or off for themselves and it doesn't affect anyone else. " +
+            "When on, each transaction in the list shows which device recorded it: your own " +
+            "transactions show \"You\" and transactions from other devices show the device name. " +
+            "Useful for shared expenses or teaching kids about budgeting; leave it off for a cleaner list.",
         adminClaimsTitle = "Admin Claims",
         adminClaimsBody = "If the admin device is lost or unavailable, any subscriber can claim the " +
             "admin role. Tap \"Claim Admin Role\" on the Sync screen (requires subscription). " +
@@ -1760,7 +1778,9 @@ object EnglishStrings : AppStrings {
         overviewTitle = "What is the Cash Flow Simulation?",
         overviewBody = "The Cash Flow Simulation projects your financial trajectory over the next 18 months. " +
             "It takes your current budget, income sources, recurring expenses, savings goals, and amortization " +
-            "entries and plays them forward in time to show how your available cash is expected to change.",
+            "entries and plays them forward in time to show how your available cash is expected to change. " +
+            "Cash Flow Simulation is a subscriber feature \u2014 open it from the chart icon on the Savings " +
+            "Goals screen.",
         howItWorksTitle = "How It Works",
         howItWorksBody = "The simulation starts with your current available cash and steps through each budget period " +
             "(day, week, or month depending on your settings). At each step it adds your income, subtracts " +
@@ -1813,9 +1833,12 @@ object EnglishStrings : AppStrings {
             "commitments so you can see at a glance which days have payments coming in or going out.",
         colorsTitle = "Color Legend",
         colorsBody = "Each day on the calendar is color-coded based on what events fall on that day:",
-        greenDesc = "Green — Income is scheduled on this day",
-        redDesc = "Red — An expense is due on this day",
-        splitDesc = "Split (green and red) — Both income and expenses fall on the same day",
+        greenDesc = "Green \u2014 Income is scheduled on this day",
+        redDesc = "Red \u2014 An expense is due on this day",
+        splitDesc = "Split (green and red) \u2014 Both income and expenses fall on the same day",
+        resetDayDesc = "Blue tint \u2014 A budget reset day (for weekly or monthly budget periods). " +
+            "This is the day your period boundary falls on and your available cash rolls over. " +
+            "Tap a reset day to see \"Budget Reset Day\" in the details popup along with any income or expenses.",
         navigationTitle = "Navigating Months",
         navigationBody = "Use the left and right arrows at the top of the calendar to move between " +
             "months. The calendar defaults to the current month when you open it.",

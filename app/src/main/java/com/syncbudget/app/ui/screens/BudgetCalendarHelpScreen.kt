@@ -71,6 +71,7 @@ fun BudgetCalendarHelpScreen(onBack: () -> Unit) {
             HelpBulletText(H.greenDesc)
             HelpBulletText(H.redDesc)
             HelpBulletText(H.splitDesc)
+            HelpBulletText(H.resetDayDesc)
 
             HelpSectionTitle(H.navigationTitle)
             HelpBodyText(H.navigationBody)

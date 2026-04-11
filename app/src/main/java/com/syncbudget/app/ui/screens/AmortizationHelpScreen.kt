@@ -209,6 +209,8 @@ fun AmortizationHelpScreen(onBack: () -> Unit) {
             HelpBodyText(S.amortizationHelp.editNote)
             Spacer(modifier = Modifier.height(4.dp))
             HelpIconRow(Icons.Filled.Delete, S.common.delete, S.amortizationHelp.deleteDesc, Color(0xFFF44336))
+            Spacer(modifier = Modifier.height(6.dp))
+            HelpBodyText(S.amortizationHelp.deleteLinkedNote, italic = true)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()

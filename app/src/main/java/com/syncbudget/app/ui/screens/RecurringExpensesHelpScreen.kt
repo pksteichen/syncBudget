@@ -20,6 +20,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -200,6 +201,8 @@ fun RecurringExpensesHelpScreen(onBack: () -> Unit) {
             HelpBodyText(S.recurringExpensesHelp.expenseNextDateBody)
             Spacer(modifier = Modifier.height(6.dp))
             HelpBodyText(S.recurringExpensesHelp.expenseSortBody)
+            Spacer(modifier = Modifier.height(6.dp))
+            HelpBodyText(S.recurringExpensesHelp.setAsideProgressBody)
             Spacer(modifier = Modifier.height(10.dp))
 
             HelpSubSectionTitle(S.recurringExpensesHelp.actionsTitle)
@@ -211,7 +214,40 @@ fun RecurringExpensesHelpScreen(onBack: () -> Unit) {
 
             HelpDividerLine()
 
-            // ─── SECTION 6: HOW THEY AFFECT YOUR BUDGET ───
+            // ─── SECTION 6: ACCELERATED SET-ASIDE ───
+            HelpSectionTitle(S.recurringExpensesHelp.acceleratedTitle)
+            HelpBodyText(S.recurringExpensesHelp.acceleratedBody)
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFF4CAF50).copy(alpha = 0.08f))
+                    .border(1.dp, Color(0xFF4CAF50).copy(alpha = 0.3f), RoundedCornerShape(10.dp))
+                    .padding(14.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Filled.Speed,
+                        contentDescription = null,
+                        tint = Color(0xFF4CAF50),
+                        modifier = Modifier.size(26.dp)
+                    )
+                    Spacer(modifier = Modifier.size(12.dp))
+                    Text(
+                        S.recurringExpenses.acceleratedMode,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = textColor
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDividerLine()
+
+            // ─── SECTION 7: HOW THEY AFFECT YOUR BUDGET ───
             HelpSectionTitle(S.recurringExpensesHelp.budgetEffectTitle)
             HelpBodyText(S.recurringExpensesHelp.budgetEffectBody)
             Spacer(modifier = Modifier.height(8.dp))

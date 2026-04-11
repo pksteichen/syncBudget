@@ -1301,8 +1301,6 @@ object SpanishStrings : AppStrings {
         everyXWeeksBody = "El ingreso llega cada N semanas (1\u201352). Requiere una Fecha de Inicio. El d\u00eda de " +
             "la semana lo determina tu fecha de inicio (ej. si tu fecha de inicio cae en viernes, " +
             "el ingreso se repite cada N viernes).",
-        biWeeklyTitle = "",
-        biWeeklyBody = "",
         everyXMonthsTitle = "Mes",
         everyXMonthsBody = "El ingreso llega en un d\u00eda espec\u00edfico del mes, cada N meses (1\u201312). " +
             "Elige una fecha de inicio para establecer el d\u00eda y la fase. Los d\u00edas 29\u201331 se permiten " +
@@ -1500,6 +1498,11 @@ object SpanishStrings : AppStrings {
         actionsTitle = "Acciones",
         editNote = "Toca una entrada para editar sus detalles (nombre de fuente, monto, per\u00edodos, fecha de inicio).",
         deleteDesc = "Eliminar permanentemente la entrada de amortizaci\u00f3n.",
+        deleteLinkedNote = "Si la entrada tiene transacciones vinculadas, BudgeTrak recuerda cu\u00e1nto de la " +
+            "amortizaci\u00f3n ya se hab\u00eda aplicado al momento en que se vincul\u00f3 cada transacci\u00f3n. " +
+            "Eliminar la entrada desvincula esas transacciones pero conserva los montos recordados, " +
+            "para que tu historial de efectivo disponible se mantenga preciso \u2014 las transacciones no " +
+            "empiezan de golpe a restar el monto completo de tu presupuesto.",
         matchingTitle = "Coincidencia autom\u00e1tica de transacciones",
         matchingBody = "Cuando agregas una transacci\u00f3n (manualmente o mediante importaci\u00f3n bancaria), la app verifica " +
             "si el nombre del comercio y el monto coinciden con alguna de tus entradas de amortizaci\u00f3n. " +
@@ -1554,8 +1557,6 @@ object SpanishStrings : AppStrings {
         everyXWeeksTitle = "Semana",
         everyXWeeksBody = "El gasto ocurre cada N semanas (1\u201352). Requiere una Fecha de Inicio. " +
             "El d\u00eda de la semana lo determina la fecha de inicio.",
-        biWeeklyTitle = "",
-        biWeeklyBody = "",
         everyXMonthsTitle = "Mes",
         everyXMonthsBody = "Ocurre en un d\u00eda espec\u00edfico del mes, cada N meses (1\u201312). " +
             "Elige una fecha de inicio para establecer el d\u00eda y la fase. La mayor\u00eda de facturas usan este tipo: " +
@@ -1577,10 +1578,26 @@ object SpanishStrings : AppStrings {
         expenseNextDateBody = "Cada entrada muestra el nombre del gasto, seguido del monto y la fecha de la pr\u00f3xima ocurrencia (ej., \"\$15.99 el 1 mar, 2026\"). Los gastos en la secci\u00f3n Otros tambi\u00e9n muestran una breve descripci\u00f3n de su per\u00edodo de repetici\u00f3n (ej., \"Cada 2 semanas\").",
         expenseOtherPeriodBody = "",
         expenseSortBody = "Un bot\u00f3n de ordenamiento aparece a la izquierda de cada encabezado. T\u00f3calo para alternar entre orden alfab\u00e9tico (A) y por monto descendente (s\u00edmbolo de moneda). Todas las secciones se ordenan juntas. Tu preferencia se guarda autom\u00e1ticamente.",
+        setAsideProgressBody = "Cada fila de gasto muestra una peque\u00f1a l\u00ednea de \"reservado hasta ahora\" (por ejemplo, \"\$42.00 reservados de \$120.00\"). Es el total acumulado que se ha apartado de tu presupuesto para este gasto desde la \u00faltima vez que se pag\u00f3. Una vez que el gasto se cobra y se asocia a una transacci\u00f3n, el contador se reinicia y comienza de nuevo para la siguiente ocurrencia. Esto te permite ver de un vistazo si el dinero ya est\u00e1 esperando para la factura.",
         actionsTitle = "Acciones",
         editNote = "Toca un gasto para editar su nombre y monto.",
         repeatSettingsDesc = "Configurar o cambiar el calendario de repetici\u00f3n.",
         deleteDesc = "Eliminar permanentemente el gasto recurrente.",
+        acceleratedTitle = "Reserva Acelerada",
+        acceleratedBody = "Cuando agregas o editas un gasto recurrente, el di\u00e1logo muestra un peque\u00f1o " +
+            "\u00edcono verde de velocidad en el pie. Al tocarlo se activa o desactiva el modo Acelerado \u2014 " +
+            "cuando est\u00e1 activado, el \u00edcono est\u00e1 en verde s\u00f3lido; cuando est\u00e1 desactivado, se atenua. " +
+            "Un gasto acelerado tambi\u00e9n muestra el mismo \u00edcono verde junto a su fila en la lista de gastos, " +
+            "para que puedas identificarlos de un vistazo. El modo Acelerado cambia c\u00f3mo el presupuesto " +
+            "reserva dinero para ese gasto en particular. Normalmente, BudgeTrak distribuye el costo de " +
+            "manera uniforme sobre todo el intervalo de repetici\u00f3n para que el dinero se acumule " +
+            "gradualmente. Con el modo Acelerado activado, la app reserva lo suficiente cada per\u00edodo para " +
+            "cubrir el gasto por completo en su pr\u00f3xima fecha de vencimiento, incluso si lo agregaste tarde " +
+            "o est\u00e1s poni\u00e9ndote al d\u00eda despu\u00e9s de un pago atrasado. Esto toma un poco m\u00e1s de tu efectivo " +
+            "disponible cada per\u00edodo, pero garantiza que el monto completo est\u00e9 reservado para cuando " +
+            "llegue la factura. Usa esto para facturas que quieres asegurar que est\u00e9n totalmente financiadas " +
+            "a tiempo \u2014 particularmente gastos recurrentes nuevos que acabas de agregar a mitad de un " +
+            "intervalo, o gastos donde atrasarse tiene consecuencias reales.",
         budgetEffectTitle = "C\u00f3mo afectan los gastos recurrentes a tu presupuesto",
         budgetEffectBody = "Los gastos recurrentes cumplen dos funciones en el sistema de presupuesto:",
         timingSafetyTitle = "1. C\u00e1lculo del presupuesto (Protecci\u00f3n temporal)",
@@ -1634,11 +1651,12 @@ object SpanishStrings : AppStrings {
         adminRoleTitle = "El Rol de Administrador",
         adminRoleBody = "La persona que crea el grupo se convierte en administrador. Crear un grupo " +
             "y mantener el rol de admin requiere una suscripci\u00f3n. El admin puede " +
-            "cambiar la configuraci\u00f3n compartida del presupuesto (moneda, per\u00edodo, calendario de reinicio), " +
-            "iniciar o restablecer el presupuesto, generar c\u00f3digos de emparejamiento para invitar nuevos dispositivos, " +
-            "eliminar dispositivos (mantener pulsado en la lista de dispositivos), " +
-            "configurar la zona horaria del grupo, habilitar la atribuci\u00f3n de transacciones y disolver el " +
-            "grupo. Los miembros no admin pueden ver la configuraci\u00f3n pero no cambiarla \u2014 " +
+            "cambiar la configuraci\u00f3n compartida del presupuesto (moneda, per\u00edodo, calendario de reinicio, " +
+            "retenci\u00f3n de fotos de recibos y otras opciones en las pantallas Ajustes y Configuraci\u00f3n del " +
+            "Presupuesto), iniciar o restablecer el presupuesto, generar c\u00f3digos de emparejamiento para invitar " +
+            "nuevos dispositivos, eliminar dispositivos (mantener pulsado en la lista de dispositivos), " +
+            "configurar la zona horaria del grupo, reparar atribuciones hu\u00e9rfanas y disolver el grupo. " +
+            "Los miembros no admin pueden ver la configuraci\u00f3n compartida pero no cambiarla \u2014 " +
             "tocar una opci\u00f3n bloqueada muestra \"Solo administrador\". " +
             "Los usuarios gratuitos pueden unirse a un grupo sin suscripci\u00f3n.",
         adminFeaturesTitle = "Decisiones del Administrador: Qu\u00e9 Controlas y Por Qu\u00e9",
@@ -1651,22 +1669,24 @@ object SpanishStrings : AppStrings {
             "o m\u00e1xima conciencia diaria, semanal para alinear con tus pagos, mensual para ingresos estables " +
             "y planificaci\u00f3n a largo plazo. Solo el administrador puede cambiar esto o tocar Iniciar/Reiniciar " +
             "Presupuesto, para que toques accidentales desde otro dispositivo no borren el progreso de todos.",
-        adminFeatureCurrencyTitle = "Moneda, Formato de Fecha y Pantalla",
-        adminFeatureCurrencyBody = "El s\u00edmbolo de moneda, el formato de fecha y otras preferencias compartidas de pantalla " +
-            "las define el administrador y se aplican a todos los dispositivos. Usa esto para mantener " +
-            "consistencia en el hogar. Cada dispositivo todav\u00eda puede elegir su propio tema (claro / oscuro / sistema) " +
-            "de forma independiente.",
+        adminFeatureCurrencyTitle = "S\u00edmbolo de Moneda",
+        adminFeatureCurrencyBody = "El s\u00edmbolo de moneda es una opci\u00f3n compartida \u2014 el administrador la elige y todos los " +
+            "dispositivos del grupo la usan. C\u00e1mbiala desde Ajustes. El formato de fecha y el tema (claro / oscuro / " +
+            "sistema) son elecciones por dispositivo, as\u00ed que cada miembro puede configurarlos de forma independiente " +
+            "sin afectar a los dem\u00e1s.",
         adminFeatureTimezoneTitle = "Zona Horaria del Grupo",
         adminFeatureTimezoneBody = "Si tu grupo abarca varias zonas horarias (una pareja que viaja, un estudiante " +
             "universitario o familiares en distintas regiones), establece la Zona Horaria del Grupo en una zona " +
             "que todos acepten. Los l\u00edmites de per\u00edodo (cu\u00e1ndo comienza cada nuevo d\u00eda, semana o mes) se " +
             "calculan en esa zona para que todos los dispositivos cambien al mismo tiempo. D\u00e9jala en \"Zona horaria " +
             "del dispositivo\" si todos est\u00e1n en el mismo lugar.",
-        adminFeatureAttributionTitle = "Atribuci\u00f3n de Transacciones",
-        adminFeatureAttributionBody = "La atribuci\u00f3n agrega una peque\u00f1a etiqueta a cada transacci\u00f3n en la lista " +
-            "que indica qu\u00e9 dispositivo la registr\u00f3. Act\u00edvalo si quieres visibilidad sobre qui\u00e9n ingres\u00f3 qu\u00e9 \u2014 " +
-            "\u00fatil para gastos compartidos o para ense\u00f1ar a los hijos sobre presupuesto. D\u00e9jalo desactivado para " +
-            "m\u00e1s privacidad. La etiqueta muestra \"T\u00fa\" para tus propias entradas y el apodo del dispositivo para las dem\u00e1s.",
+        adminFeatureAttributionTitle = "Reparar Atribuciones",
+        adminFeatureAttributionBody = "Si los dispositivos salen del grupo o se renombran, las etiquetas de atribuci\u00f3n en " +
+            "transacciones antiguas pueden terminar apuntando a dispositivos que ya no existen. El administrador ve " +
+            "un \u00edcono de llave inglesa junto al interruptor de atribuci\u00f3n que abre el di\u00e1logo Reparar " +
+            "Atribuciones, donde esas etiquetas hu\u00e9rfanas pueden reasignarse o borrarse de una sola vez. " +
+            "El interruptor de atribuci\u00f3n en s\u00ed es una elecci\u00f3n de visualizaci\u00f3n por dispositivo \u2014 " +
+            "consulta la secci\u00f3n Atribuci\u00f3n de Transacciones m\u00e1s abajo.",
         adminFeatureRetentionTitle = "Retenci\u00f3n de Fotos de Recibos",
         adminFeatureRetentionBody = "Si usas fotos de recibos, puedes establecer un per\u00edodo de retenci\u00f3n (por ejemplo, 90 d\u00edas) " +
             "tras el cual las fotos m\u00e1s antiguas se eliminan autom\u00e1ticamente del almacenamiento en la nube. Esto " +
@@ -1707,9 +1727,12 @@ object SpanishStrings : AppStrings {
             "la app carga una instant\u00e1nea reciente y combina tus cambios locales sin necesidad " +
             "de reproducir cada actualizaci\u00f3n perdida.",
         attributionTitle = "Atribuci\u00f3n de Transacciones",
-        attributionBody = "Cuando el administrador lo habilita, cada transacci\u00f3n muestra qu\u00e9 dispositivo la cre\u00f3. " +
-            "Tus propias transacciones muestran \"T\u00fa\" y las de otros dispositivos muestran " +
-            "el nombre del dispositivo. Esto ayuda a los hogares a ver qui\u00e9n registr\u00f3 cada gasto.",
+        attributionBody = "El interruptor de atribuci\u00f3n en la pantalla SYNC es una elecci\u00f3n de visualizaci\u00f3n por " +
+            "dispositivo \u2014 cada miembro lo activa o desactiva para s\u00ed mismo y no afecta a los dem\u00e1s. " +
+            "Cuando est\u00e1 activado, cada transacci\u00f3n en la lista muestra qu\u00e9 dispositivo la registr\u00f3: " +
+            "tus propias transacciones muestran \"T\u00fa\" y las de otros dispositivos muestran el nombre del " +
+            "dispositivo. \u00datil para gastos compartidos o para ense\u00f1ar a los hijos sobre presupuesto; d\u00e9jalo " +
+            "desactivado para una lista m\u00e1s limpia.",
         adminClaimsTitle = "Reclamos de Admin",
         adminClaimsBody = "Si el dispositivo administrador se pierde o no est\u00e1 disponible, cualquier suscriptor puede " +
             "reclamar el rol de administrador. Toca \"Reclamar Rol de Admin\" en la p\u00e1gina SYNC (requiere suscripci\u00f3n). " +
@@ -1740,7 +1763,9 @@ object SpanishStrings : AppStrings {
         overviewTitle = "\u00bfQu\u00e9 es la Simulaci\u00f3n de Flujo de Caja?",
         overviewBody = "La Simulaci\u00f3n de Flujo de Caja proyecta tu trayectoria financiera durante los pr\u00f3ximos 18 meses. " +
             "Toma tu presupuesto actual, fuentes de ingreso, gastos recurrentes, metas de ahorro y entradas de " +
-            "amortizaci\u00f3n y los proyecta hacia adelante para mostrar c\u00f3mo se espera que cambie tu efectivo disponible.",
+            "amortizaci\u00f3n y los proyecta hacia adelante para mostrar c\u00f3mo se espera que cambie tu efectivo disponible. " +
+            "La Simulaci\u00f3n de Flujo de Caja es una funci\u00f3n para suscriptores \u2014 \u00e1brela desde el \u00edcono " +
+            "de gr\u00e1fico en la pantalla de Metas de Ahorro.",
         howItWorksTitle = "C\u00f3mo Funciona",
         howItWorksBody = "La simulaci\u00f3n comienza con tu efectivo disponible actual y avanza por cada per\u00edodo presupuestario " +
             "(d\u00eda, semana o mes seg\u00fan tu configuraci\u00f3n). En cada paso suma tus ingresos, resta gastos recurrentes, " +
@@ -1794,6 +1819,10 @@ object SpanishStrings : AppStrings {
         greenDesc = "Verde \u2014 Hay ingresos programados para este d\u00eda",
         redDesc = "Rojo \u2014 Hay un gasto programado para este d\u00eda",
         splitDesc = "Dividido (verde y rojo) \u2014 Tanto ingresos como gastos caen en el mismo d\u00eda",
+        resetDayDesc = "Tinte azul \u2014 Un d\u00eda de reinicio del presupuesto (para per\u00edodos semanales o mensuales). " +
+            "Es el d\u00eda en que cae el l\u00edmite de tu per\u00edodo y tu efectivo disponible se renueva. " +
+            "Toca un d\u00eda de reinicio para ver \"D\u00eda de Reinicio del Presupuesto\" en el di\u00e1logo de detalles, " +
+            "junto con cualquier ingreso o gasto.",
         navigationTitle = "Navegaci\u00f3n por Meses",
         navigationBody = "Usa las flechas izquierda y derecha en la parte superior del calendario para " +
             "moverte entre meses. El calendario muestra el mes actual al abrirlo.",
