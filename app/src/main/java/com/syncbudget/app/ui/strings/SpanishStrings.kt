@@ -656,16 +656,15 @@ object SpanishStrings : AppStrings {
             "\"\$42.50/d\u00eda\" o \"\$297.50/semana\". Esto indica cu\u00e1nto se agrega a " +
             "tu efectivo disponible en cada per\u00edodo. Si tu presupuesto a\u00fan no est\u00e1 configurado, " +
             "muestra \"Sin configurar\".",
-        // TODO(Commit 5): translate
-        budgetPeriodExpl = "You can configure your budget to update daily, weekly, or monthly, and to start " +
-            "on your custom schedule. However, we strongly encourage a daily budget! A daily budget is much " +
-            "easier to follow. Longer term budgets sometimes result in a person spending too much early on " +
-            "and ending up short. The technology behind our budgeting model averages out your income and " +
-            "recurring expenses using a detailed simulation far into the future, and then calculates exactly " +
-            "how much you can spend each day (if you choose) to keep from going negative. Even if your income " +
-            "is erratic and your bills are spread out throughout the month or year, the app will give you a " +
-            "fixed number you can rely on to keep you in control. See the Budget Configuration Help page for " +
-            "more details (and How the Budget Works below).",
+        budgetPeriodExpl = "Puedes configurar tu presupuesto para que se actualice a diario, semanalmente o mensualmente, " +
+            "y comenzar en el calendario que prefieras. Sin embargo, \u00a1recomendamos encarecidamente un presupuesto diario! " +
+            "Un presupuesto diario es mucho m\u00e1s f\u00e1cil de seguir. Los presupuestos a m\u00e1s largo plazo a veces hacen que la " +
+            "persona gaste demasiado al principio y termine corta de dinero. La tecnolog\u00eda detr\u00e1s de nuestro modelo " +
+            "promedia tus ingresos y gastos recurrentes mediante una simulaci\u00f3n detallada que proyecta hacia el futuro, " +
+            "y luego calcula exactamente cu\u00e1nto puedes gastar cada d\u00eda (si eliges ese per\u00edodo) para que nunca te pongas " +
+            "en n\u00fameros rojos. Incluso si tus ingresos son irregulares y tus facturas est\u00e1n distribuidas a lo largo del " +
+            "mes o el a\u00f1o, la app te dar\u00e1 un n\u00famero fijo en el que puedas confiar para mantenerte en control. Consulta " +
+            "la p\u00e1gina de Ayuda de Configuraci\u00f3n del Presupuesto para m\u00e1s detalles (y \"C\u00f3mo funciona el presupuesto\" m\u00e1s abajo).",
         headerBarTitle = "Barra superior",
         headerBarBody = "La barra superior da acceso a los ajustes y a esta p\u00e1gina de ayuda:",
         headerSettingsDesc = "Abre la pantalla de Ajustes para configurar opciones de visualizaci\u00f3n, categor\u00edas y acceder a la Configuraci\u00f3n del presupuesto.",
@@ -676,8 +675,7 @@ object SpanishStrings : AppStrings {
         navSavingsDesc = "Planifica y ahorra para gastos futuros u objetivos financieros. Elige una fecha objetivo o una contribuci\u00f3n fija por per\u00edodo.",
         navAmortizationDesc = "Distribuye un gasto grande del pasado a lo largo de varios per\u00edodos para que no golpee tu presupuesto de una sola vez.",
         navRecurringDesc = "Registra facturas, suscripciones y pagos de pr\u00e9stamos para que la calculadora de presupuesto los tenga en cuenta autom\u00e1ticamente.",
-        // TODO(Commit 5): translate
-        navCalendarDesc = "View a calendar showing all your upcoming bills and income.",
+        navCalendarDesc = "Ver un calendario que muestra todas tus facturas e ingresos pr\u00f3ximos.",
         spendingChartTitle = "Gr\u00e1fico de gastos",
         spendingChartBody = "Debajo de la pantalla Solari, un gr\u00e1fico de gastos muestra c\u00f3mo se distribuyen " +
             "tus gastos por categor\u00eda. Una barra de t\u00edtulo encima del gr\u00e1fico ofrece controles:",
@@ -726,8 +724,7 @@ object SpanishStrings : AppStrings {
         budgetAmountBody = "Tu presupuesto real por per\u00edodo es el Presupuesto Seguro menos las deducciones activas:",
         budgetSavingsBullet = "Deducciones de Metas de Ahorro \u2014 dinero reservado para compras planeadas y objetivos de ahorro",
         budgetAmortBullet = "Deducciones de Amortizaci\u00f3n \u2014 distribuyendo gastos grandes del pasado a lo largo del tiempo",
-        // TODO(Commit 5): translate
-        budgetAccelBullet = "Optional Accelerated deductions for new recurring expenses \u2014 to make sure you have the money available for that first bill",
+        budgetAccelBullet = "Deducciones aceleradas opcionales para nuevos gastos recurrentes \u2014 para asegurarte de tener el dinero disponible para esa primera factura",
         budgetAmountNote = "Esto asegura que tu dinero para gastar ya est\u00e9 ajustado tanto para gastos grandes futuros como pasados.",
         availableCashSectionTitle = "Efectivo disponible",
         availableCashSectionBody = "El Efectivo Disponible es el n\u00famero que se muestra en la pantalla Solari. Se calcula " +
@@ -787,20 +784,18 @@ object SpanishStrings : AppStrings {
         featureBullet10 = "Categor\u00edas totalmente personalizables con selecci\u00f3n de iconos",
         featureBullet11 = "Soporte para m\u00faltiples monedas y formatos de fecha con archivado de transacciones",
         featureBullet12 = "SYNC \u2014 comparte tu presupuesto entre dispositivos del hogar con cifrado de extremo a extremo (suscriptores)",
-        // TODO(Commit 5): translate
-        featureBullet13 = "Photos! \u2014 attach photos of receipts or what you bought to transactions (paid users)",
-        featureBullet14 = "Widget \u2014 enter your transactions and see your Available Cash right on your home screen (free users can install and try it, paid users get unlimited use)",
+        featureBullet13 = "\u00a1Fotos! \u2014 adjunta fotos de recibos o de lo que compraste a tus transacciones (usuarios de pago)",
+        featureBullet14 = "Widget \u2014 registra tus transacciones y ve tu Efectivo Disponible directamente en la pantalla de inicio (los usuarios gratuitos pueden instalarlo y probarlo, los de pago lo usan ilimitadamente)",
         syncIndicatorTitle = "Indicador de SYNC",
         syncIndicatorBody = "Cuando SYNC est\u00e1 activado, aparece un indicador en la esquina inferior izquierda de la pantalla Solari:",
         syncArrowsBullet = "\u00cdcono de SYNC \u2014 muestra el estado de la conexi\u00f3n: verde = en l\u00ednea y sincronizando, amarillo = la conexi\u00f3n se est\u00e1 recuperando, rojo = sin internet o error",
         syncDotsBullet = "Puntos de colores \u2014 uno por dispositivo vinculado (hasta 4), mostrando presencia en tiempo real: verde = en l\u00ednea, azul oscuro = visto < 1 hr, amarillo = 1\u20132 hrs, rojo = > 2 hrs",
         privacyTitle = "Privacidad y seguridad",
-        privacyBody = "Tus datos financieros permanecen en tu dispositivo por defecto. BudgeTrak no " +
-            "recopila an\u00e1lisis y no comparte tus datos con nadie. Al exportar tus transacciones, puedes elegir un formato " +
-            "cifrado protegido por una contrase\u00f1a que t\u00fa eliges, con cifrado de extremo a extremo de est\u00e1ndar industrial. " +
-            "Cuando activas SYNC, los datos se comparten entre tus dispositivos vinculados con el mismo cifrado de extremo a extremo \u2014 " +
-            "el servidor en la nube solo almacena datos cifrados y no puede leer tus transacciones, montos ni nombres de comercios. " +
-            "Tu dinero, tus datos, tu control.",
+        privacyBody = "Tus datos financieros permanecen en tu dispositivo por defecto. BudgeTrak no comparte tus datos con " +
+            "nadie. Tus respaldos autom\u00e1ticos (Ajustes \u2192 Respaldos) est\u00e1n protegidos por una contrase\u00f1a que t\u00fa eliges, " +
+            "con cifrado de extremo a extremo de est\u00e1ndar industrial. Cuando activas SYNC, los datos se comparten entre " +
+            "tus dispositivos vinculados con el mismo cifrado de extremo a extremo \u2014 el servidor en la nube solo almacena " +
+            "datos cifrados y no puede leer tus transacciones, montos ni nombres de comercios. Tu dinero, tus datos, tu control.",
         widgetTitle = "Widget de pantalla de inicio",
         widgetBody = "BudgeTrak incluye un widget de pantalla de inicio que muestra tu efectivo disponible " +
             "en estilo de pantalla Solari, para que puedas consultar tu presupuesto de un vistazo sin abrir la app. " +
@@ -810,8 +805,8 @@ object SpanishStrings : AppStrings {
         widgetButtonsDesc = "Los botones r\u00e1pidos de transacci\u00f3n (+/-) debajo de la pantalla Solari te permiten registrar " +
             "ingresos o gastos directamente desde el widget. Al tocarlos se abre un di\u00e1logo simplificado " +
             "con selecci\u00f3n de categor\u00eda.",
-        widgetFreeDesc = "Los usuarios gratuitos pueden agregar 1 transacci\u00f3n de widget por d\u00eda. La pantalla Solari muestra " +
-            "un mensaje de actualizaci\u00f3n. Los usuarios de pago tienen transacciones ilimitadas desde el widget y una pantalla limpia.",
+        widgetFreeDesc = "Los usuarios gratuitos pueden agregar 1 transacci\u00f3n de widget por d\u00eda para probarlo. " +
+            "Los usuarios de pago tienen transacciones ilimitadas desde el widget y una pantalla limpia.",
         subExpiryWarningTitle = "Aviso de Vencimiento de Suscripci\u00f3n",
         subExpiryWarningBody = "Si est\u00e1s usando SYNC y la suscripci\u00f3n del administrador vence, aparece un aviso " +
             "en el panel una vez por sesi\u00f3n. Tendr\u00e1s un per\u00edodo de gracia de 7 d\u00edas para volver a suscribirte " +
@@ -826,17 +821,16 @@ object SpanishStrings : AppStrings {
             "antes de unirte, para poder cargarlas despu\u00e9s con Cargar. Los respaldos autom\u00e1ticos de Ajustes " +
             "no sirven para este prop\u00f3sito, ya que Restaurar est\u00e1 bloqueado para todos los dispositivos activos " +
             "de un grupo (consulta la p\u00e1gina de Ayuda de Ajustes para m\u00e1s detalles).",
-        // TODO(Commit 5): translate
-        paidTitle = "Paid User & Subscriber",
-        paidBody = "BudgeTrak has two upgrade tiers. Paid User (\$10 one-time purchase) unlocks:",
-        paidSave = "Ad-free experience \u2014 the banner at the top of all screens is hidden",
-        paidPhotos = "Transaction Photos \u2014 attach up to 5 photos to each transaction (receipts or whatever you want)",
-        paidWidget = "Full widget access \u2014 unlimited widget transactions per day and a clean Solari display without the upgrade overlay",
-        paidLoad = "Save/Load transactions \u2014 export to CSV, Excel, or PDF, and import from bank statements",
-        paidAdFree = "Subscriber (\$5 monthly subscription) adds advanced features:",
-        subBulletSync = "Create and administer SYNC groups \u2014 BudgeTrak's most powerful feature, letting you share a budget with other members of your family, small business, club, etc. Our subscription fee is about half the cost of our competitors and covers the cost of maintaining the cloud service. Only one group member needs a subscription; other devices in the group can be free versions or can pay the one-time Paid User purchase above to remove ads and unlock the Paid User features.",
-        subBulletSimulation = "Cash flow simulation chart \u2014 an interactive chart that shows exactly how we calculate your required cash-on-hand on the Savings Goals page, and lets you experiment with different savings and spending rates.",
-        subFooterNote = "Free users can join existing SYNC groups without a subscription. Subscriber status automatically includes all Paid User benefits."
+        paidTitle = "Usuario de Pago y Suscriptor",
+        paidBody = "BudgeTrak tiene dos niveles de mejora. Usuario de Pago (compra \u00fanica de \$10) desbloquea:",
+        paidSave = "Experiencia sin anuncios \u2014 el banner en la parte superior de todas las pantallas se oculta",
+        paidPhotos = "Fotos de transacciones \u2014 adjunta hasta 5 fotos a cada transacci\u00f3n (recibos o lo que quieras)",
+        paidWidget = "Acceso completo al widget \u2014 transacciones ilimitadas desde el widget por d\u00eda y una pantalla Solari limpia, sin el mensaje de actualizaci\u00f3n",
+        paidLoad = "Guardar/Cargar transacciones \u2014 exportar a CSV, Excel o PDF, e importar desde extractos bancarios",
+        paidAdFree = "Suscriptor (suscripci\u00f3n mensual de \$5) agrega funciones avanzadas:",
+        subBulletSync = "Crear y administrar grupos SYNC \u2014 la funci\u00f3n m\u00e1s poderosa de BudgeTrak, que te permite compartir un presupuesto con otros miembros de tu familia, peque\u00f1o negocio, club, etc. Nuestra cuota de suscripci\u00f3n cuesta alrededor de la mitad que la competencia y cubre el costo de mantener el servicio en la nube. Solo un miembro del grupo necesita una suscripci\u00f3n; los dem\u00e1s dispositivos pueden ser versiones gratuitas o pagar la compra \u00fanica de Usuario de Pago anterior para quitar los anuncios y desbloquear las funciones de pago.",
+        subBulletSimulation = "Gr\u00e1fico de simulaci\u00f3n de flujo de efectivo \u2014 un gr\u00e1fico interactivo que muestra exactamente c\u00f3mo calculamos el efectivo que necesitas tener disponible en la p\u00e1gina de Metas de Ahorro, y te permite experimentar con diferentes tasas de ahorro y gasto.",
+        subFooterNote = "Los usuarios gratuitos pueden unirse a grupos SYNC existentes sin suscripci\u00f3n. El estado de Suscriptor incluye autom\u00e1ticamente todos los beneficios de Usuario de Pago."
     )
 
     override val settingsHelp = SettingsHelpStrings(
@@ -1039,9 +1033,8 @@ object SpanishStrings : AppStrings {
         actionBarTitle = "Barra de acciones",
         actionBarBody = "Debajo de la barra superior, la barra de acciones da acceso r\u00e1pido a operaciones comunes:",
         filterDesc = "Filtro \u2014 alterna entre: Todas, Gastos, Ingresos, y otras opciones de filtro (Recurrentes, Excluidas, Sin Verificar, Fotos). La etiqueta de la p\u00edldora refleja el filtro activo.",
-        // TODO(Commit 5): translate
-        sortButtonDesc = "Sort order \u2014 cycles through Date \u2193, Date \u2191, Amount \u2193, Amount \u2191, and Category. Pill label shows the active sort.",
-        rangeButtonDesc = "Date range \u2014 cycles through 6mo, 1yr, 2yr, and All. Limits the list to transactions within that window (selecting All includes archived transactions). Pill label shows the active range.",
+        sortButtonDesc = "Orden de clasificaci\u00f3n \u2014 alterna entre Fecha \u2193, Fecha \u2191, Monto \u2193, Monto \u2191 y Categor\u00eda. La etiqueta de la p\u00edldora muestra el orden activo.",
+        rangeButtonDesc = "Rango de fechas \u2014 alterna entre 6 meses, 1 a\u00f1o, 2 a\u00f1os y Todo. Limita la lista a las transacciones dentro de ese rango (al elegir Todo se incluyen las transacciones archivadas). La etiqueta de la p\u00edldora muestra el rango activo.",
         addIncomeDesc = "Crear una nueva transacci\u00f3n de ingreso.",
         addExpenseDesc = "Crear una nueva transacci\u00f3n de gasto.",
         searchDesc = "Abrir el men\u00fa de b\u00fasqueda con tres opciones:",
@@ -1072,8 +1065,7 @@ object SpanishStrings : AppStrings {
         selectAllDesc = "Seleccionar todo \u2014 selecciona o deselecciona todas las transacciones visibles",
         changeCategoryDesc = "Asignar una categor\u00eda a todas las transacciones seleccionadas.",
         editMerchantDesc = "Reemplazar el nombre de comercio/fuente y/o la descripci\u00f3n en todas las transacciones seleccionadas.",
-        // TODO(Commit 5): translate
-        verifyDesc = "Mark all selected transactions as verified. Useful after a bank import when you want to confirm auto-categorized transactions in bulk. Verified transactions show a blue category icon in the list; unverified ones show the grey default \"Other\" color.",
+        verifyDesc = "Marca todas las transacciones seleccionadas como verificadas. \u00datil despu\u00e9s de una importaci\u00f3n bancaria cuando quieres confirmar en lote las transacciones categorizadas autom\u00e1ticamente. Las transacciones verificadas muestran un icono de categor\u00eda azul en la lista; las no verificadas muestran el color gris del valor predeterminado \"Otros\".",
         deleteDesc = "Eliminar todas las transacciones seleccionadas.",
         closeDesc = "Salir del modo de selecci\u00f3n sin cambios.",
         addEditTitle = "Di\u00e1logo de Agregar / Editar transacci\u00f3n",
