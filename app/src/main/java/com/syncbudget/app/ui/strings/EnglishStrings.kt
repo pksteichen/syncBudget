@@ -633,30 +633,40 @@ object EnglishStrings : AppStrings {
         welcomeBody = "BudgeTrak is a privacy-first budgeting app designed to give you " +
             "a clear, real-time picture of how much money you can safely spend right now. " +
             "Unlike traditional budget trackers that only show you where your money went, " +
-            "this app tells you where your money can go \u2014 calculated from your actual " +
-            "income schedule, recurring bills, and financial goals.",
+            "this app tells you how much you can spend without putting yourself in a bind " +
+            "tomorrow \u2014 calculated from your actual income schedule, recurring bills, " +
+            "and financial goals.",
         dailyBudgetNumberTitle = "Your Daily Budget Number",
         dailyBudgetNumberBody = "The large number on the Solari display is your Available Cash \u2014 the amount " +
             "you can spend right now without jeopardizing your bills, savings goals, or " +
             "financial commitments. Think of it as the answer to the question everyone asks: " +
-            "\"How much can I afford to spend today?\"",
+            "\"How much can I afford to spend?\"",
         solariDisplayTitle = "The Solari Display",
-        solariDisplayBody = "The centerpiece of the app is the Solari-style flip display \u2014 inspired by the " +
+        solariDisplayBody = "The centerpiece of the dashboard is the Solari-style flip display \u2014 inspired by the " +
             "split-flap departure boards found in train stations and airports. It shows two " +
             "key pieces of information:",
         availableCashTitle = "Available Cash (Main Number)",
-        availableCashBody = "This is how much money you have available for discretionary spending. " +
+        availableCashBody = "This is how much money you have available for discretionary spending this period. " +
             "It is automatically computed from your budget history and transactions, " +
             "and stays perfectly in sync across all your devices:",
         bullet1 = "Increases each budget period (daily, weekly, or monthly) by your budget amount",
         bullet2 = "Decreases when you record an expense",
         bullet3 = "Increases when you record extra (non-budget) income",
-        bullet4 = "Shows red/negative when you've overspent",
+        bullet4 = "Shows negative when you've overspent",
         budgetLabelTitle = "Budget Label (Below the Number)",
-        budgetLabelBody = "The label beneath the digits shows your budget rate \u2014 for example, " +
+        budgetLabelBody = "The label beneath the digits shows your budget amount \u2014 for example, " +
             "\"\$42.50/day\" or \"\$297.50/week\". This tells you how much is added to " +
             "your available cash each period. If your budget is not yet configured, " +
             "it shows \"Not configured\".",
+        budgetPeriodExpl = "You can configure your budget to update daily, weekly, or monthly, and to start " +
+            "on your custom schedule. However, we strongly encourage a daily budget! A daily budget is much " +
+            "easier to follow. Longer term budgets sometimes result in a person spending too much early on " +
+            "and ending up short. The technology behind our budgeting model averages out your income and " +
+            "recurring expenses using a detailed simulation far into the future, and then calculates exactly " +
+            "how much you can spend each day (if you choose) to keep from going negative. Even if your income " +
+            "is erratic and your bills are spread out throughout the month or year, the app will give you a " +
+            "fixed number you can rely on to keep you in control. See the Budget Configuration Help page for " +
+            "more details (and How the Budget Works below).",
         headerBarTitle = "Header Bar",
         headerBarBody = "The header bar provides access to settings and this help page:",
         headerSettingsDesc = "Open the Settings screen to configure display options, categories, and access Budget Configuration.",
@@ -664,15 +674,19 @@ object EnglishStrings : AppStrings {
         navBarTitle = "Navigation Bar",
         navBarBody = "The bottom navigation bar provides quick access to all major features:",
         navTransactionsDesc = "Record and manage your income and expenses. Import bank statements, search, filter, and categorize.",
-        navSavingsDesc = "Plan and save for future expenses or financial targets. Choose a target date or fixed per-period contribution.",
-        navAmortizationDesc = "Spread a past large expense across multiple budget periods so it doesn't hit your budget all at once.",
+        navSavingsDesc = "Plan and save for future expenses or financial targets. Choose a fixed per-period contribution, " +
+            "and you can even use a target date to calculate it automatically. While subscribers can access a detailed " +
+            "chart on this page that shows your future cash flow (which can be modified to simulate cash accumulation " +
+            "over time at other spending levels), free users also have access to the most important number \u2014 how much " +
+            "do you need to have saved right now to pay your future bills?",
+        navAmortizationDesc = "Spread a recent large expense across multiple budget periods so it doesn't hit your budget all at once.",
         navRecurringDesc = "Register bills, subscriptions, and loan payments so the budget calculator accounts for them automatically.",
+        navCalendarDesc = "View a calendar showing all your upcoming bills and income.",
         spendingChartTitle = "Spending Chart",
         spendingChartBody = "Below the Solari display, a spending chart visualizes how your expenses are " +
             "distributed across categories. A title bar above the chart provides controls:",
         chartTitleBarTitle = "Chart Title Bar",
-        chartRangeBullet = "Range button (left) \u2014 cycles through time ranges: 7 days, 30 days, 90 days, or All Time",
-        chartSpendingBullet = "\"Spending\" title (center) \u2014 the chart label",
+        chartRangeBullet = "Range button (left) \u2014 cycles through time ranges.",
         chartToggleBullet = "Chart type toggle (right) \u2014 switch between pie chart and bar chart views",
         chartIconsTitle = "Pie Chart Icons",
         chartIconsBody = "Category icons are displayed inside their pie wedges in a contrasting color " +
@@ -693,7 +707,7 @@ object EnglishStrings : AppStrings {
             "the Transactions screen: duplicate detection, recurring expense matching, " +
             "amortization matching, and budget income detection.",
         superchargeTitle = "Supercharge",
-        superchargeBody = "The bolt icon in the lower-right corner of the dashboard opens Supercharge. " +
+        superchargeBody = "The bolt icon in the lower-right corner of the Solari board opens Supercharge. " +
             "This feature lets you make extra one-time contributions to your Savings Goals " +
             "from your available cash.",
         superchargeIconDesc = "Allocate extra funds to one or more Savings Goals from your current available cash.",
@@ -716,14 +730,16 @@ object EnglishStrings : AppStrings {
         budgetAmountBody = "Your actual per-period budget is the Safe Budget Amount minus any active deductions:",
         budgetSavingsBullet = "Savings Goal deductions \u2014 money set aside for planned purchases and savings targets",
         budgetAmortBullet = "Amortization deductions \u2014 spreading past large expenses over time",
+        budgetAccelBullet = "Optional Accelerated deductions for new recurring expenses \u2014 to make sure you have the money available for that first bill",
         budgetAmountNote = "This ensures your spending money is already adjusted for both upcoming and past large expenses.",
         availableCashSectionTitle = "Available Cash",
         availableCashSectionBody = "Available Cash is the number shown on the Solari display. It is automatically " +
             "computed from your budget period credits, expenses, and extra income. " +
-            "With Sync enabled, it stays consistent across all devices without manual intervention. " +
-            "The result: a single number that tells you exactly how much you can spend.",
+            "With a SYNC group enabled (subscribers), it stays consistent across all devices without manual intervention. " +
+            "The result: a single number that tells all of you exactly how much you can spend.",
         gettingStartedTitle = "Getting Started",
-        gettingStartedBody = "Follow these steps to set up your budget for the first time:",
+        gettingStartedBody = "The Quick Start Guide may have already taken you through these steps (or you can start it on the Settings page), " +
+            "but otherwise follow these steps to set up your budget for the first time:",
         step1Title = "Open Settings",
         step1Desc = "Tap the gear icon in the top left to configure your currency, display preferences, and transaction categories.",
         step2Title = "Configure Your Budget",
@@ -732,10 +748,8 @@ object EnglishStrings : AppStrings {
         step3Desc = "In Budget Configuration, add all reliable income sources \u2014 your salary, regular side income, etc. Set the repeat schedule for each (e.g., \"Month\" on the 1st and 15th for bi-monthly pay).",
         step4Title = "Add Recurring Expenses",
         step4Desc = "Navigate to Recurring Expenses (the sync icon on the dashboard) and add all your regular bills: rent, utilities, insurance, subscriptions, loan payments.",
-        step5Title = "Start Your Budget",
-        step5Desc = "Back in Budget Configuration, your safe budget is calculated automatically. Tap \"Start/Reset Budget\" to initialize your available cash.",
-        step6Title = "Start Tracking",
-        step6Desc = "Return to the dashboard. Your Solari display now shows your available cash. Record expenses as you spend and watch your number update in real time.",
+        step5Title = "Start Tracking",
+        step5Desc = "Return to the dashboard. Your Solari display now shows your available cash. Record expenses as you spend and watch your number update in real time.",
         habitsTitle = "Building Better Financial Habits",
         habitsBody = "BudgeTrak is more than a tracker \u2014 it's a tool for building " +
             "lasting financial awareness. Here's how to get the most out of it:",
@@ -747,8 +761,15 @@ object EnglishStrings : AppStrings {
         tipRecordTitle = "Record Every Expense",
         tipRecordBody = "Small purchases are where budgets quietly fail. A coffee here, a snack " +
             "there \u2014 they add up fast. Recording every expense keeps you honest " +
-            "and helps you spot patterns you might not notice otherwise. Use bank imports " +
-            "for efficiency, and manually log cash purchases.",
+            "and helps you spot patterns you might not notice otherwise. Subscribers can use bank CSV " +
+            "imports for efficiency or to catch up if you fall behind, but all users should manually log cash purchases. " +
+            "Free users should enter bank transactions as they are made via credit/debit cards, and should also " +
+            "remember to enter those auto-pay transactions and direct deposits that show up in your bank's website. " +
+            "Use the calendar to know when to expect these, so you don't forget. It's also not a bad idea for " +
+            "subscribers to manually enter credit/debit purchases even if you plan to use CSV import, as banks " +
+            "are usually a few days behind, and having the transactions in the app sooner makes your Available Cash " +
+            "number more accurate sooner. The import feature will help you identify duplicates, so you don't " +
+            "end up with the same transaction twice.",
         tipPlanTitle = "Plan for the Unexpected",
         tipPlanBody = "Use Savings Goals to plan for things like car tires, appliance " +
             "replacements, holiday gifts, or vacations. When you save a little each period, " +
@@ -763,31 +784,32 @@ object EnglishStrings : AppStrings {
         tipWatchBody = "If you consistently spend less than your budget amount, your available cash " +
             "will gradually increase. This surplus is your buffer for unexpected expenses " +
             "and a sign that your financial habits are working. Don't feel pressured to " +
-            "spend it \u2014 let it grow.",
+            "spend it \u2014 let it grow, or use the Supercharge icon to boost your Savings Goals!",
         keyFeaturesTitle = "Key Features at a Glance",
-        featureBullet1 = "Real-time budget tracking with a beautiful Solari flip display",
+        featureBullet1 = "Real-time budget tracking with a Solari flip display!",
         featureBullet2 = "Smart budget calculation that accounts for irregular income and expense timing",
-        featureBullet3 = "Automatic recurring expense and income recognition from bank imports",
+        featureBullet3 = "Automatic recurring expense and income recognition from bank imports (subscribers)",
         featureBullet4 = "Savings Goals \u2014 save for big purchases and financial targets automatically",
         featureBullet5 = "Amortization \u2014 spread large past purchases over time",
         featureBullet6 = "Multi-category transaction splitting with pie chart, calculator, or percentage modes",
-        featureBullet7 = "Encrypted transaction backup and restore",
-        featureBullet8 = "Bank statement import with auto-categorization",
+        featureBullet7 = "Encrypted transaction backup and restore for all users!",
+        featureBullet8 = "Bank statement import with auto-categorization (subscribers)",
         featureBullet9 = "Duplicate transaction detection",
         featureBullet10 = "Fully customizable categories with icon selection",
         featureBullet11 = "Multiple currency and date format support with transaction archiving",
-        featureBullet12 = "SYNC \u2014 share your budget across household devices with end-to-end encryption",
+        featureBullet12 = "SYNC \u2014 share your budget across household devices with end-to-end encryption (subscribers)",
+        featureBullet13 = "Photos! \u2014 attach photos of receipts or what you bought to transactions (paid users)",
+        featureBullet14 = "Widget \u2014 enter your transactions and see your Available Cash right on your home screen (free users can install and try it, paid users get unlimited use)",
         syncIndicatorTitle = "SYNC Indicator",
         syncIndicatorBody = "When SYNC is enabled, an indicator appears in the bottom-left corner of the Solari display:",
         syncArrowsBullet = "SYNC icon \u2014 shows connection status: green = online and syncing, yellow = connection recovering, red = no internet or error",
         syncDotsBullet = "Colored dots \u2014 one per linked device (up to 4), showing real-time presence: green = online now, dark blue = seen < 1 hr, yellow = 1\u20132 hrs, red = > 2 hrs",
         privacyTitle = "Privacy & Security",
-        privacyBody = "Your financial data stays on your device by default. BudgeTrak does not collect analytics " +
-            "and does not share your data with anyone. When you export your transactions, you can choose an encrypted " +
-            "format protected by a password you choose, using industry-standard end-to-end encryption. " +
-            "When you enable SYNC, data is shared between your linked devices with the same end-to-end encryption \u2014 " +
-            "the cloud server stores only encrypted data and cannot read your transactions, amounts, or merchant " +
-            "names. Your money, your data, your control.",
+        privacyBody = "Your financial data stays on your device by default. BudgeTrak does not share your data with " +
+            "anyone. Your automatic backups (Settings \u2192 Backups) are protected by a password you choose, using " +
+            "industry-standard end-to-end encryption. When you enable SYNC, data is shared between your linked " +
+            "devices with the same end-to-end encryption \u2014 the cloud server stores only encrypted data and cannot " +
+            "read your transactions, amounts, or merchant names. Your money, your data, your control.",
         widgetTitle = "Home Screen Widget",
         widgetBody = "BudgeTrak includes a home screen widget that displays your available cash " +
             "in a Solari flip-display style, so you can check your budget at a glance without opening the app. " +
@@ -797,15 +819,32 @@ object EnglishStrings : AppStrings {
         widgetButtonsDesc = "Quick transaction buttons (+/-) below the Solari display let you record income " +
             "or expenses directly from the widget. Tapping opens a streamlined transaction dialog " +
             "with category selection.",
-        widgetFreeDesc = "Free users can add 1 widget transaction per day. The Solari display shows " +
-            "an upgrade message overlay. Paid users have unlimited widget transactions and a clean display.",
+        widgetFreeDesc = "Free users can add 1 widget transaction per day to try it out. " +
+            "Paid users have unlimited widget transactions and a clean display.",
         subExpiryWarningTitle = "Subscription Expiry Notice",
         subExpiryWarningBody = "If you're using SYNC and the admin's subscription expires, a notice " +
             "appears on the dashboard once per session. You'll have a 7-day grace period to resubscribe " +
             "before the SYNC group is dissolved. During the grace period, any subscriber in the group " +
             "can claim the admin role from the SYNC page to keep the group alive. If no admin " +
-            "subscription is active by the end of the 7 days, the group is dissolved and each device " +
-            "keeps its own local copy of the data."
+            "subscription is active by the end of the 7 days, the group is dissolved, but each device " +
+            "keeps its own local copy of the data. You will not lose your data, but any changes made " +
+            "will no longer sync. Setting up a new group requires all other devices to use the " +
+            "administrator's data to start, so budget data on added devices will be deleted upon group join. " +
+            "If you have unique transactions on a device you'd like to add to a group, please back them up " +
+            "using the Save feature on the transaction page prior to joining, so you can load them back in " +
+            "using the Load feature later! The automatic backups in Settings cannot be used for this purpose, " +
+            "as Restore is blocked for all active group devices (See the Settings Help page for details on " +
+            "using Restore in a group situation).",
+        paidTitle = "Paid User & Subscriber",
+        paidBody = "BudgeTrak has two upgrade tiers. Paid User (\$10 one-time purchase) unlocks:",
+        paidSave = "Ad-free experience \u2014 the banner at the top of all screens is hidden",
+        paidPhotos = "Transaction Photos \u2014 attach up to 5 photos to each transaction (receipts or whatever you want)",
+        paidWidget = "Full widget access \u2014 unlimited widget transactions per day and a clean Solari display without the upgrade overlay",
+        paidLoad = "Save/Load transactions \u2014 export to CSV, Excel, or PDF, and import from bank statements",
+        paidAdFree = "Subscriber (\$5 monthly subscription) adds advanced features:",
+        subBulletSync = "Create and administer SYNC groups \u2014 BudgeTrak's most powerful feature, letting you share a budget with other members of your family, small business, club, etc. Our subscription fee is about half the cost of our competitors and covers the cost of maintaining the cloud service. Only one group member needs a subscription; other devices in the group can be free versions or can pay the one-time Paid User purchase above to remove ads and unlock the Paid User features.",
+        subBulletSimulation = "Cash flow simulation chart \u2014 an interactive chart that shows exactly how we calculate your required cash-on-hand on the Savings Goals page, and lets you experiment with different savings and spending rates.",
+        subFooterNote = "Free users can join existing SYNC groups without a subscription. Subscriber status automatically includes all Paid User benefits."
     )
 
     override val settingsHelp = SettingsHelpStrings(
@@ -827,7 +866,7 @@ object EnglishStrings : AppStrings {
         currencyTitle = "Currency",
         currencyBody = "Choose the currency symbol displayed throughout the app. The dropdown includes " +
             "common symbols:",
-        currencyDollar = "$ \u2014 US Dollar, Canadian Dollar, Australian Dollar, etc.",
+        currencyDollar = "$ \u2014 US Dollar, Canadian Dollar, Australian Dollar, Mexican Peso, etc.",
         currencyEuro = "\u20ac \u2014 Euro",
         currencyPound = "\u00a3 \u2014 British Pound",
         currencyYen = "\u00a5 \u2014 Japanese Yen / Chinese Yuan",
@@ -855,7 +894,8 @@ object EnglishStrings : AppStrings {
             "it will look before selecting.",
         weekStartTitle = "Week Starts On",
         weekStartBody = "Choose whether the week begins on Sunday or Monday. This affects the spending " +
-            "chart's weekly grouping and any weekly budget period calculations.",
+            "chart's weekly grouping and the calendar. Weekly budget period reset days are configured " +
+            "in Budget Configuration.",
         chartPaletteTitle = "Chart Palette",
         chartPaletteBody = "Choose the color palette used for pie charts and bar charts throughout the app. " +
             "Three options are available:",
@@ -877,32 +917,23 @@ object EnglishStrings : AppStrings {
         autoCapitalizeTitle = "Auto Capitalize",
         autoCapitalizeBody = "When enabled (default), merchant names and descriptions you type into transaction " +
             "dialogs are automatically formatted in Title Case as you finish each word \u2014 \"chick fil a\" " +
-            "becomes \"Chick Fil A\", \"DOORDASH\" becomes \"Doordash\". This keeps your transaction list " +
-            "looking clean and consistent without extra effort. Turn it off if you prefer to type capitalization manually.",
-        paidTitle = "Paid User & Subscriber",
-        paidBody = "BudgeTrak has two upgrade tiers. Paid User (one-time purchase) unlocks:",
-        paidSave = "Ad-free experience \u2014 the banner at the top of all screens is hidden",
-        paidLoad = "Full widget access \u2014 unlimited widget transactions per day and a clean Solari display without the upgrade overlay",
-        paidAdFree = "Subscriber (monthly subscription) adds advanced features:",
-        paidWidget = "Save/Load transactions \u2014 export to CSV or encrypted file, import from bank statements",
-        paidNote = "Cash flow simulation chart, create and administer sync groups, " +
-            "and claim admin role. Free users can join existing sync groups. " +
-            "Subscriber status automatically includes all Paid User benefits.",
+            "becomes \"Chick Fil A\", \"doordash\" becomes \"Doordash\". Short all-caps acronyms (up to 4 " +
+            "letters, e.g., USA, BMW, NASA) are preserved, and mid-word capitals you type intentionally " +
+            "(iPhone, eBay) are left alone. Turn the setting off entirely if you prefer to type capitalization manually.",
         widgetLogoTitle = "Show Logo on Widget",
-        widgetLogoBody = "When checked, the BudgeTrak logo appears between the transaction buttons on the " +
-            "home screen widget. Uncheck to hide the logo for a more minimal widget appearance.",
+        widgetLogoBody = "When checked, the BudgeTrak SYNC logo appears between the transaction buttons on the " +
+            "home screen widget. Uncheck to hide the logo for a minimalist widget appearance.",
         receiptPhotosTitle = "Receipt Photos",
         receiptPhotosBody = "Paid users can attach up to 5 photos per transaction. Swipe left on a transaction to reveal the photo panel, or use the camera icon in the edit dialog.",
         receiptPhotosBullet1 = "Photos are stored locally and synced across linked devices when SYNC is enabled",
         receiptPhotosBullet2 = "Long-press a photo thumbnail to delete it",
         receiptPhotosBullet3 = "Tap a photo thumbnail to view it full-screen",
         receiptPhotosRetentionTitle = "Photo Retention",
-        receiptPhotosRetentionBody = "The admin can set a retention period to automatically delete receipt photos older than a certain number of days. This helps manage storage on all synced devices.",
-        receiptPhotosRetentionNote = "When photos are pruned, the deletion syncs to all devices in the group automatically.",
+        receiptPhotosRetentionBody = "You can set a retention period to automatically delete receipt photos older than a certain number of days. This helps manage storage on all synced devices. In a SYNC group this setting is restricted to the admin.",
+        receiptPhotosRetentionNote = "When photos are pruned, the deletion syncs to all devices in a group automatically.",
         receiptPhotosBullet4 = "Tap the camera icon or choose from gallery to attach photos",
-        receiptPhotosBullet5 = "Photos are automatically compressed for efficient storage (max 1000px, ~250KB)",
+        receiptPhotosBullet5 = "Photos are automatically compressed for efficient storage",
         receiptPhotosBullet6 = "In a SYNC group, photos are encrypted and shared across all linked devices",
-        receiptPhotosBullet7 = "An admin can set a retention period \u2014 photos older than the configured days are automatically cleaned up from cloud storage",
         categoriesTitle = "Categories",
         categoriesBody = "Categories let you classify your transactions for better spending insight. " +
             "Each category has a name and an icon.",
@@ -916,7 +947,7 @@ object EnglishStrings : AppStrings {
         catOther = "Other \u2014 the default fallback category for uncategorized transactions",
         catRecurring = "Recurring Income \u2014 auto-assigned to transactions matched as budget income",
         catAmortization = "",
-        catSupercharge = "Supercharge \u2014 auto-assigned to savings goal deposit transactions. Hidden from the category picker.",
+        catSupercharge = "Supercharge \u2014 auto-assigned to savings goal Supercharge transactions. Hidden from the category picker.",
         addCategoryTitle = "Adding a Category",
         addCategoryBody = "Tap \"Add Category\" to create a new category. Enter a name and choose an icon " +
             "from the icon grid. Icons are displayed as a visual grid you can scroll through.",
@@ -943,8 +974,8 @@ object EnglishStrings : AppStrings {
         backupsPasswordWarning = "Your backup password cannot be recovered. If you lose it, your backups are permanently inaccessible. Store it somewhere safe.",
         backupsOffPhoneTip = "For maximum safety, copy your backup files from Download/BudgeTrak/backups/ to a cloud service (Google Drive, Dropbox, etc.) or another device. If your phone is lost or damaged, you can restore by copying the files back to this folder on a new phone.",
         backupsRestoreTitle = "Restoring from Backup",
-        backupsRestoreBody = "The Restore button lets you choose a backup date and enter your password to restore all data and photos.",
-        backupsRestoreBullet1 = "Restore is only available when not in a sync group",
+        backupsRestoreBody = "The Restore button lets you choose a backup file and enter your password to restore all data and photos.",
+        backupsRestoreBullet1 = "Restore is only available when not in a SYNC group",
         backupsRestoreBullet2 = "If a Restore is needed for a SYNC group, the Admin must dissolve the group",
         backupsRestoreBullet3 = "Restore will then be available",
         backupsRestoreBullet4 = "After Restore, create a new SYNC group and provide pairing codes to other members to rejoin",
@@ -999,7 +1030,7 @@ object EnglishStrings : AppStrings {
         tipsTitle = "Tips",
         tip1 = "Set up categories before importing transactions \u2014 the auto-categorization uses your existing transaction history to match merchants.",
         tip2 = "Create categories that match your spending habits. Common examples: Food, Transport, Entertainment, Health, Housing, Utilities, Shopping.",
-        tip3 = "Use the \"Daily\" budget period if you want the most granular spending control.",
+        tip3 = "Using the \"Daily\" budget period is highly recommended. See the reasons for this on the Dashboard Help page.",
         tip4 = "The Budget Configuration button is the first thing to set up after installing the app."
     )
 
@@ -1014,41 +1045,39 @@ object EnglishStrings : AppStrings {
         saveDesc = "Save all transactions to a file. Requires Paid User.",
         loadDesc = "Import or load transactions from a file. Requires Paid User.",
         helpDesc = "Opens this help page.",
-        saveLoadNote = "The Save and Load icons appear dimmed if Paid User is not enabled in Settings.",
         actionBarTitle = "Action Bar",
         actionBarBody = "Below the header, the action bar provides quick access to common operations:",
         filterDesc = "Filter toggle \u2014 cycles through: All, Expenses, Income.",
         addIncomeDesc = "Create a new income transaction.",
         addExpenseDesc = "Create a new expense transaction.",
         searchDesc = "Open search menu with three options:",
-        dateSearchBullet = "Date Search \u2014 pick a start and end date. Includes an optional filter for unmodified bank transactions only",
-        textSearchBullet = "Text Search \u2014 search by merchant/source name",
+        dateSearchBullet = "Date Search \u2014 pick a start and end date.",
+        textSearchBullet = "Text Search \u2014 search merchant/source name and description",
         amountSearchBullet = "Amount Search \u2014 search by amount range",
         searchNote = "While search results are active, a banner appears at the top. Tap the banner to clear the search.",
         listTitle = "Transaction List",
         listBody = "Transactions are displayed in a scrollable list, sorted by date (newest first). " +
             "Each row shows:",
-        listIconBullet = "Category icon (left) \u2014 colored to indicate the category",
+        listIconBullet = "Category icon (left)",
         listDateBullet = "Date \u2014 formatted per your Settings preference",
         listMerchantBullet = "Merchant/Source \u2014 the name of the payee or payer",
         listAmountBullet = "Amount \u2014 red for expenses, green for income",
         iconColorsTitle = "Category Icon Colors",
-        coloredLabel = "Colored",
-        coloredDesc = " \u2014 category was set or confirmed by you",
-        defaultLabel = "Default",
-        defaultDesc = " \u2014 auto-assigned during import (not yet confirmed)",
+        coloredLabel = "Blue",
+        coloredDesc = " \u2014 transaction is verified",
+        defaultLabel = "Other",
+        defaultDesc = " \u2014 auto-assigned during import (not yet verified)",
         filterByIconNote = "Tap a category icon to filter the list to only that category. A filter banner will appear; tap it to clear.",
         multiCategoryTitle = "Multi-Category Transactions",
         multiCategoryBody = "A list icon indicates the transaction is split across multiple categories. " +
             "Tap it to expand and see the per-category breakdown.",
         tapEditTitle = "Tapping & Editing",
         tapBullet = "Tap a transaction to open the Edit dialog",
-        longPressBullet = "Long-press a transaction to enter selection mode",
         selectionTitle = "Selection Mode",
-        selectionBody = "Long-press any transaction to enter selection mode. A toolbar appears with bulk actions:",
+        selectionBody = "Long-press any transaction to enter multi-select mode. A toolbar appears with bulk actions:",
         selectAllDesc = "Select All \u2014 toggle all visible transactions",
         changeCategoryDesc = "Set a single category for all selected transactions.",
-        editMerchantDesc = "Replace the merchant/source name on all selected transactions.",
+        editMerchantDesc = "Replace the merchant/source name and/or description on all selected transactions.",
         deleteDesc = "Delete all selected transactions.",
         closeDesc = "Exit selection mode without changes.",
         addEditTitle = "Add / Edit Transaction Dialog",
@@ -1061,8 +1090,8 @@ object EnglishStrings : AppStrings {
         fieldDescriptionDesc = "Optional notes about the transaction (e.g., what was purchased).",
         fieldLinkButtons = "Link Buttons",
         fieldLinkButtonsDesc = "Optional link buttons appear below the description field. " +
-            "For expenses, a sync icon links to a recurring expense and a clock icon links to an amortization entry. " +
-            "For income, a dollar icon links to an income source. " +
+            "For expenses, a recurring-expense icon links to a recurring expense and a clock icon links to an amortization entry. " +
+            "For income, a bank icon links to an income source. " +
             "Linked transactions are already accounted for in your budget and do NOT reduce available cash. " +
             "A small icon appears next to the amount on linked transactions.",
         fieldCategory = "Category (required)",
@@ -1092,16 +1121,16 @@ object EnglishStrings : AppStrings {
             "When you change a percentage, other fields adjust proportionally.",
         duplicateTitle = "Duplicate Detection",
         duplicateBody = "When you save a new transaction or import from a file, the app checks for possible duplicates. " +
-            "A transaction is flagged if it matches an existing one on all three criteria:",
-        dupAmountBullet = "Amount within 1% of each other",
-        dupDateBullet = "Date within 7 days of each other",
+            "A transaction is flagged if it matches an existing one on all three criteria, which are configured on the Settings page:",
+        dupAmountBullet = "Amount within a certain % of each other",
+        dupDateBullet = "Date within a number of days of each other",
         dupMerchantBullet = "Merchant name shares a common substring",
         dupDialogBody = "When a duplicate is detected, you'll see a dialog with four options:",
         dupIgnore = "Ignore \u2014 keep both transactions",
         dupKeepNew = "Keep New \u2014 replace the existing with the new one",
         dupKeepExisting = "Keep Existing \u2014 discard the new transaction",
         dupIgnoreAll = "Ignore All \u2014 keep all remaining duplicates (import only)",
-        savingTitle = "Saving Transactions",
+        savingTitle = "Saving Transactions (Paid User)",
         savingBody = "Tap the Save icon in the header to export all transactions to a file. Three formats are available:",
         csvFormatTitle = "CSV Format",
         csvFormatBody = "Saves your transactions as a plain-text CSV file (budgetrak_transactions.csv). " +

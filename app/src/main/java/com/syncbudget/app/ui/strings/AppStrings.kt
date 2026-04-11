@@ -675,6 +675,7 @@ data class DashboardHelpStrings(
     val bullet4: String,
     val budgetLabelTitle: String,
     val budgetLabelBody: String,
+    val budgetPeriodExpl: String,
     val headerBarTitle: String,
     val headerBarBody: String,
     val headerSettingsDesc: String,
@@ -685,11 +686,11 @@ data class DashboardHelpStrings(
     val navSavingsDesc: String,
     val navAmortizationDesc: String,
     val navRecurringDesc: String,
+    val navCalendarDesc: String,
     val spendingChartTitle: String,
     val spendingChartBody: String,
     val chartTitleBarTitle: String,
     val chartRangeBullet: String,
-    val chartSpendingBullet: String,
     val chartToggleBullet: String,
     val chartIconsTitle: String,
     val chartIconsBody: String,
@@ -718,6 +719,7 @@ data class DashboardHelpStrings(
     val budgetAmountBody: String,
     val budgetSavingsBullet: String,
     val budgetAmortBullet: String,
+    val budgetAccelBullet: String,
     val budgetAmountNote: String,
     val availableCashSectionTitle: String,
     val availableCashSectionBody: String,
@@ -731,10 +733,8 @@ data class DashboardHelpStrings(
     val step3Desc: String,
     val step4Title: String,
     val step4Desc: String,
-    val step5Title: String,
+    val step5Title: String,  // "Start Tracking" — was step6 before the Start/Reset Budget step was removed in v2.5.x
     val step5Desc: String,
-    val step6Title: String,
-    val step6Desc: String,
     val habitsTitle: String,
     val habitsBody: String,
     val tipKnowTitle: String,
@@ -760,6 +760,8 @@ data class DashboardHelpStrings(
     val featureBullet10: String,
     val featureBullet11: String,
     val featureBullet12: String,
+    val featureBullet13: String,
+    val featureBullet14: String,
     val syncIndicatorTitle: String,
     val syncIndicatorBody: String,
     val syncArrowsBullet: String,
@@ -773,7 +775,21 @@ data class DashboardHelpStrings(
     val widgetFreeDesc: String,
     // Subscription expiry warning popup (admin's subscription expired)
     val subExpiryWarningTitle: String,
-    val subExpiryWarningBody: String
+    val subExpiryWarningBody: String,
+    // Paid User & Subscriber tiers (moved from settingsHelp in v2.5.x — these
+    // describe what's unlocked at each tier and are more of a marketing / intro
+    // topic than a Settings-screen feature. Tier toggles in Settings are now
+    // debug-only; Google Play Billing controls these in production.)
+    val paidTitle: String,
+    val paidBody: String,
+    val paidSave: String,         // Paid User bullet: ad-free
+    val paidPhotos: String,       // Paid User bullet: receipt photos (new in v2.5.x)
+    val paidWidget: String,       // Paid User bullet: unlimited widget transactions + clean display
+    val paidLoad: String,         // Paid User bullet: save/load transactions (moved from Subscriber to Paid in v2.5.x)
+    val paidAdFree: String,       // Subscriber subsection heading (previously a bullet; renamed semantically but kept key for minimal churn)
+    val subBulletSync: String,    // Subscriber bullet: create/administer SYNC groups
+    val subBulletSimulation: String, // Subscriber bullet: cash flow simulation chart
+    val subFooterNote: String     // Standalone note below Subscriber bullets: free users can join; subscribers auto-include Paid
 )
 
 data class SettingsHelpStrings(
@@ -825,13 +841,6 @@ data class SettingsHelpStrings(
     // Auto-Capitalize
     val autoCapitalizeTitle: String,
     val autoCapitalizeBody: String,
-    val paidTitle: String,
-    val paidBody: String,
-    val paidSave: String,
-    val paidLoad: String,
-    val paidAdFree: String,
-    val paidWidget: String,
-    val paidNote: String,
     val widgetLogoTitle: String,
     val widgetLogoBody: String,
     // Receipt photos section
@@ -846,7 +855,6 @@ data class SettingsHelpStrings(
     val receiptPhotosBullet4: String,
     val receiptPhotosBullet5: String,
     val receiptPhotosBullet6: String,
-    val receiptPhotosBullet7: String,
     val categoriesTitle: String,
     val categoriesBody: String,
     val chartedColumnDesc: String,
@@ -933,7 +941,6 @@ data class TransactionsHelpStrings(
     val saveDesc: String,
     val loadDesc: String,
     val helpDesc: String,
-    val saveLoadNote: String,
     val actionBarTitle: String,
     val actionBarBody: String,
     val filterDesc: String,
@@ -960,7 +967,6 @@ data class TransactionsHelpStrings(
     val multiCategoryBody: String,
     val tapEditTitle: String,
     val tapBullet: String,
-    val longPressBullet: String,
     val selectionTitle: String,
     val selectionBody: String,
     val selectAllDesc: String,

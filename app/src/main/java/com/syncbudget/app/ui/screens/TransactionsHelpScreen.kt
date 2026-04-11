@@ -175,11 +175,6 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
             IconExplanationRow(Icons.Filled.Save, S.transactions.save, S.transactionsHelp.saveDesc)
             IconExplanationRow(Icons.Filled.MoveToInbox, S.transactions.load, S.transactionsHelp.loadDesc)
             IconExplanationRow(Icons.AutoMirrored.Filled.Help, S.common.help, S.transactionsHelp.helpDesc)
-            Spacer(modifier = Modifier.height(4.dp))
-            BodyText(
-                S.transactionsHelp.saveLoadNote,
-                italic = true
-            )
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDivider()
@@ -409,7 +404,6 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
             // ─── SECTION 5: TAP & LONG PRESS ───
             SectionTitle(S.transactionsHelp.tapEditTitle)
             BulletText(S.transactionsHelp.tapBullet)
-            BulletText(S.transactionsHelp.longPressBullet)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDivider()

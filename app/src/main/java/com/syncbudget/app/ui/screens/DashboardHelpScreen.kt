@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
@@ -144,6 +145,9 @@ fun DashboardHelpScreen(onBack: () -> Unit) {
 
             HelpSubSectionTitle(S.dashboardHelp.budgetLabelTitle)
             HelpBodyText(S.dashboardHelp.budgetLabelBody)
+            Spacer(modifier = Modifier.height(10.dp))
+
+            HelpBodyText(S.dashboardHelp.budgetPeriodExpl)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
@@ -224,6 +228,7 @@ fun DashboardHelpScreen(onBack: () -> Unit) {
             HelpIconRow(painterResource(id = R.drawable.ic_coins), S.dashboard.savingsGoals, S.dashboardHelp.navSavingsDesc)
             HelpIconRow(Icons.Filled.Schedule, S.dashboard.amortization, S.dashboardHelp.navAmortizationDesc)
             HelpIconRow(Icons.Filled.Sync, S.dashboard.recurringExpenses, S.dashboardHelp.navRecurringDesc)
+            HelpIconRow(Icons.Filled.CalendarMonth, S.dashboard.budgetCalendar, S.dashboardHelp.navCalendarDesc)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
@@ -235,7 +240,6 @@ fun DashboardHelpScreen(onBack: () -> Unit) {
 
             HelpSubSectionTitle(S.dashboardHelp.chartTitleBarTitle)
             HelpBulletText(S.dashboardHelp.chartRangeBullet)
-            HelpBulletText(S.dashboardHelp.chartSpendingBullet)
             HelpBulletText(S.dashboardHelp.chartToggleBullet)
             Spacer(modifier = Modifier.height(10.dp))
 
@@ -313,6 +317,7 @@ fun DashboardHelpScreen(onBack: () -> Unit) {
             Spacer(modifier = Modifier.height(4.dp))
             HelpBulletText(S.dashboardHelp.budgetSavingsBullet)
             HelpBulletText(S.dashboardHelp.budgetAmortBullet)
+            HelpBulletText(S.dashboardHelp.budgetAccelBullet)
             Spacer(modifier = Modifier.height(8.dp))
             HelpBodyText(
                 S.dashboardHelp.budgetAmountNote,
@@ -340,8 +345,6 @@ fun DashboardHelpScreen(onBack: () -> Unit) {
             HelpNumberedItem(4, S.dashboardHelp.step4Title, S.dashboardHelp.step4Desc)
             Spacer(modifier = Modifier.height(4.dp))
             HelpNumberedItem(5, S.dashboardHelp.step5Title, S.dashboardHelp.step5Desc)
-            Spacer(modifier = Modifier.height(4.dp))
-            HelpNumberedItem(6, S.dashboardHelp.step6Title, S.dashboardHelp.step6Desc)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
@@ -404,6 +407,8 @@ fun DashboardHelpScreen(onBack: () -> Unit) {
             HelpBulletText(S.dashboardHelp.featureBullet10)
             HelpBulletText(S.dashboardHelp.featureBullet11)
             HelpBulletText(S.dashboardHelp.featureBullet12)
+            HelpBulletText(S.dashboardHelp.featureBullet13)
+            HelpBulletText(S.dashboardHelp.featureBullet14)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
@@ -425,6 +430,27 @@ fun DashboardHelpScreen(onBack: () -> Unit) {
             HelpBulletText(S.dashboardHelp.widgetSolariDesc)
             HelpBulletText(S.dashboardHelp.widgetButtonsDesc)
             HelpBulletText(S.dashboardHelp.widgetFreeDesc)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDividerLine()
+
+            // ─── PAID USER & SUBSCRIBER TIERS ─── (moved from settingsHelp in v2.5.x)
+            HelpSectionTitle(S.dashboardHelp.paidTitle)
+            HelpBodyText(S.dashboardHelp.paidBody)
+            Spacer(modifier = Modifier.height(4.dp))
+            HelpBulletText(S.dashboardHelp.paidSave)
+            HelpBulletText(S.dashboardHelp.paidPhotos)
+            HelpBulletText(S.dashboardHelp.paidWidget)
+            HelpBulletText(S.dashboardHelp.paidLoad)
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Subscriber is its own subsection heading (not a bullet)
+            HelpSubSectionTitle(S.dashboardHelp.paidAdFree)
+            Spacer(modifier = Modifier.height(4.dp))
+            HelpBulletText(S.dashboardHelp.subBulletSync)
+            HelpBulletText(S.dashboardHelp.subBulletSimulation)
+            Spacer(modifier = Modifier.height(8.dp))
+            HelpBodyText(S.dashboardHelp.subFooterNote)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()

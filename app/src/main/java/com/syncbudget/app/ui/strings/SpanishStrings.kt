@@ -652,10 +652,20 @@ object SpanishStrings : AppStrings {
         bullet3 = "Aumenta cuando registras ingresos extra (no presupuestados)",
         bullet4 = "Se muestra en rojo/negativo cuando has gastado de m\u00e1s",
         budgetLabelTitle = "Etiqueta del presupuesto (debajo del n\u00famero)",
-        budgetLabelBody = "La etiqueta debajo de los d\u00edgitos muestra la tasa de tu presupuesto \u2014 por ejemplo, " +
+        budgetLabelBody = "La etiqueta debajo de los d\u00edgitos muestra tu monto de presupuesto \u2014 por ejemplo, " +
             "\"\$42.50/d\u00eda\" o \"\$297.50/semana\". Esto indica cu\u00e1nto se agrega a " +
             "tu efectivo disponible en cada per\u00edodo. Si tu presupuesto a\u00fan no est\u00e1 configurado, " +
             "muestra \"Sin configurar\".",
+        // TODO(Commit 5): translate
+        budgetPeriodExpl = "You can configure your budget to update daily, weekly, or monthly, and to start " +
+            "on your custom schedule. However, we strongly encourage a daily budget! A daily budget is much " +
+            "easier to follow. Longer term budgets sometimes result in a person spending too much early on " +
+            "and ending up short. The technology behind our budgeting model averages out your income and " +
+            "recurring expenses using a detailed simulation far into the future, and then calculates exactly " +
+            "how much you can spend each day (if you choose) to keep from going negative. Even if your income " +
+            "is erratic and your bills are spread out throughout the month or year, the app will give you a " +
+            "fixed number you can rely on to keep you in control. See the Budget Configuration Help page for " +
+            "more details (and How the Budget Works below).",
         headerBarTitle = "Barra superior",
         headerBarBody = "La barra superior da acceso a los ajustes y a esta p\u00e1gina de ayuda:",
         headerSettingsDesc = "Abre la pantalla de Ajustes para configurar opciones de visualizaci\u00f3n, categor\u00edas y acceder a la Configuraci\u00f3n del presupuesto.",
@@ -666,12 +676,13 @@ object SpanishStrings : AppStrings {
         navSavingsDesc = "Planifica y ahorra para gastos futuros u objetivos financieros. Elige una fecha objetivo o una contribuci\u00f3n fija por per\u00edodo.",
         navAmortizationDesc = "Distribuye un gasto grande del pasado a lo largo de varios per\u00edodos para que no golpee tu presupuesto de una sola vez.",
         navRecurringDesc = "Registra facturas, suscripciones y pagos de pr\u00e9stamos para que la calculadora de presupuesto los tenga en cuenta autom\u00e1ticamente.",
+        // TODO(Commit 5): translate
+        navCalendarDesc = "View a calendar showing all your upcoming bills and income.",
         spendingChartTitle = "Gr\u00e1fico de gastos",
         spendingChartBody = "Debajo de la pantalla Solari, un gr\u00e1fico de gastos muestra c\u00f3mo se distribuyen " +
             "tus gastos por categor\u00eda. Una barra de t\u00edtulo encima del gr\u00e1fico ofrece controles:",
         chartTitleBarTitle = "Barra de t\u00edtulo del gr\u00e1fico",
-        chartRangeBullet = "Bot\u00f3n de rango (izquierda) \u2014 alterna entre rangos de tiempo: 7 d\u00edas, 30 d\u00edas, 90 d\u00edas o Todo",
-        chartSpendingBullet = "T\u00edtulo \"Gastos\" (centro) \u2014 la etiqueta del gr\u00e1fico",
+        chartRangeBullet = "Bot\u00f3n de rango (izquierda) \u2014 alterna entre rangos de tiempo.",
         chartToggleBullet = "Selector de tipo de gr\u00e1fico (derecha) \u2014 alterna entre gr\u00e1fico circular y gr\u00e1fico de barras",
         chartIconsTitle = "Iconos del gr\u00e1fico circular",
         chartIconsBody = "Los iconos de categor\u00eda se muestran dentro de sus segmentos del gr\u00e1fico en un color " +
@@ -715,6 +726,8 @@ object SpanishStrings : AppStrings {
         budgetAmountBody = "Tu presupuesto real por per\u00edodo es el Presupuesto Seguro menos las deducciones activas:",
         budgetSavingsBullet = "Deducciones de Metas de Ahorro \u2014 dinero reservado para compras planeadas y objetivos de ahorro",
         budgetAmortBullet = "Deducciones de Amortizaci\u00f3n \u2014 distribuyendo gastos grandes del pasado a lo largo del tiempo",
+        // TODO(Commit 5): translate
+        budgetAccelBullet = "Optional Accelerated deductions for new recurring expenses \u2014 to make sure you have the money available for that first bill",
         budgetAmountNote = "Esto asegura que tu dinero para gastar ya est\u00e9 ajustado tanto para gastos grandes futuros como pasados.",
         availableCashSectionTitle = "Efectivo disponible",
         availableCashSectionBody = "El Efectivo Disponible es el n\u00famero que se muestra en la pantalla Solari. Se calcula " +
@@ -731,10 +744,8 @@ object SpanishStrings : AppStrings {
         step3Desc = "En Configuraci\u00f3n del presupuesto, agrega todas tus fuentes de ingreso confiables \u2014 tu salario, ingresos extra regulares, etc. Configura el calendario de repetici\u00f3n de cada una (ej. \"Mes\" el 1 y el 15 para pagos quincenales).",
         step4Title = "Agrega gastos recurrentes",
         step4Desc = "Ve a Gastos Recurrentes (el icono de sincronizaci\u00f3n en el panel principal) y agrega todas tus facturas regulares: alquiler, servicios, seguros, suscripciones, pagos de pr\u00e9stamos.",
-        step5Title = "Inicia tu presupuesto",
-        step5Desc = "De vuelta en Configuraci\u00f3n del presupuesto, tu presupuesto seguro se calcula autom\u00e1ticamente. Toca \"Iniciar/Restablecer\" para inicializar tu efectivo disponible.",
-        step6Title = "Empieza a registrar",
-        step6Desc = "Vuelve al panel principal. Tu pantalla Solari ahora muestra tu efectivo disponible. Registra gastos a medida que gastas y observa c\u00f3mo se actualiza el n\u00famero en tiempo real.",
+        step5Title = "Empieza a registrar",
+        step5Desc = "Vuelve al panel principal. Tu pantalla Solari ahora muestra tu efectivo disponible. Registra gastos a medida que gastas y observa c\u00f3mo se actualiza el n\u00famero en tiempo real.",
         habitsTitle = "Construyendo mejores h\u00e1bitos financieros",
         habitsBody = "BudgeTrak es m\u00e1s que un rastreador \u2014 es una herramienta para crear " +
             "conciencia financiera duradera. As\u00ed puedes sacarle el m\u00e1ximo provecho:",
@@ -775,7 +786,10 @@ object SpanishStrings : AppStrings {
         featureBullet9 = "Detecci\u00f3n de transacciones duplicadas",
         featureBullet10 = "Categor\u00edas totalmente personalizables con selecci\u00f3n de iconos",
         featureBullet11 = "Soporte para m\u00faltiples monedas y formatos de fecha con archivado de transacciones",
-        featureBullet12 = "SYNC \u2014 comparte tu presupuesto entre dispositivos del hogar con cifrado de extremo a extremo",
+        featureBullet12 = "SYNC \u2014 comparte tu presupuesto entre dispositivos del hogar con cifrado de extremo a extremo (suscriptores)",
+        // TODO(Commit 5): translate
+        featureBullet13 = "Photos! \u2014 attach photos of receipts or what you bought to transactions (paid users)",
+        featureBullet14 = "Widget \u2014 enter your transactions and see your Available Cash right on your home screen (free users can install and try it, paid users get unlimited use)",
         syncIndicatorTitle = "Indicador de SYNC",
         syncIndicatorBody = "Cuando SYNC est\u00e1 activado, aparece un indicador en la esquina inferior izquierda de la pantalla Solari:",
         syncArrowsBullet = "\u00cdcono de SYNC \u2014 muestra el estado de la conexi\u00f3n: verde = en l\u00ednea y sincronizando, amarillo = la conexi\u00f3n se est\u00e1 recuperando, rojo = sin internet o error",
@@ -803,8 +817,26 @@ object SpanishStrings : AppStrings {
             "en el panel una vez por sesi\u00f3n. Tendr\u00e1s un per\u00edodo de gracia de 7 d\u00edas para volver a suscribirte " +
             "antes de que el grupo SYNC se disuelva. Durante el per\u00edodo de gracia, cualquier suscriptor del grupo " +
             "puede reclamar el rol de administrador desde la p\u00e1gina SYNC para mantener el grupo activo. " +
-            "Si no hay una suscripci\u00f3n de administrador activa al final de los 7 d\u00edas, el grupo se disuelve " +
-            "y cada dispositivo conserva su propia copia local de los datos."
+            "Si no hay una suscripci\u00f3n de administrador activa al final de los 7 d\u00edas, el grupo se disuelve, " +
+            "pero cada dispositivo conserva su propia copia local de los datos. No perder\u00e1s tus datos, pero los " +
+            "cambios realizados ya no se sincronizar\u00e1n. Configurar un nuevo grupo requiere que todos los dem\u00e1s " +
+            "dispositivos partan de los datos del administrador, as\u00ed que los datos de presupuesto en dispositivos " +
+            "agregados se borrar\u00e1n al unirse al grupo. Si tienes transacciones \u00fanicas en un dispositivo que " +
+            "quieras agregar al grupo, resp\u00e1ldalas usando la funci\u00f3n Guardar de la p\u00e1gina de Transacciones " +
+            "antes de unirte, para poder cargarlas despu\u00e9s con Cargar. Los respaldos autom\u00e1ticos de Ajustes " +
+            "no sirven para este prop\u00f3sito, ya que Restaurar est\u00e1 bloqueado para todos los dispositivos activos " +
+            "de un grupo (consulta la p\u00e1gina de Ayuda de Ajustes para m\u00e1s detalles).",
+        // TODO(Commit 5): translate
+        paidTitle = "Paid User & Subscriber",
+        paidBody = "BudgeTrak has two upgrade tiers. Paid User (\$10 one-time purchase) unlocks:",
+        paidSave = "Ad-free experience \u2014 the banner at the top of all screens is hidden",
+        paidPhotos = "Transaction Photos \u2014 attach up to 5 photos to each transaction (receipts or whatever you want)",
+        paidWidget = "Full widget access \u2014 unlimited widget transactions per day and a clean Solari display without the upgrade overlay",
+        paidLoad = "Save/Load transactions \u2014 export to CSV, Excel, or PDF, and import from bank statements",
+        paidAdFree = "Subscriber (\$5 monthly subscription) adds advanced features:",
+        subBulletSync = "Create and administer SYNC groups \u2014 BudgeTrak's most powerful feature, letting you share a budget with other members of your family, small business, club, etc. Our subscription fee is about half the cost of our competitors and covers the cost of maintaining the cloud service. Only one group member needs a subscription; other devices in the group can be free versions or can pay the one-time Paid User purchase above to remove ads and unlock the Paid User features.",
+        subBulletSimulation = "Cash flow simulation chart \u2014 an interactive chart that shows exactly how we calculate your required cash-on-hand on the Savings Goals page, and lets you experiment with different savings and spending rates.",
+        subFooterNote = "Free users can join existing SYNC groups without a subscription. Subscriber status automatically includes all Paid User benefits."
     )
 
     override val settingsHelp = SettingsHelpStrings(
@@ -826,7 +858,7 @@ object SpanishStrings : AppStrings {
         currencyTitle = "Moneda",
         currencyBody = "Elige el s\u00edmbolo de moneda que se muestra en toda la app. El men\u00fa desplegable incluye " +
             "s\u00edmbolos comunes:",
-        currencyDollar = "$ \u2014 D\u00f3lar estadounidense, canadiense, australiano, etc.",
+        currencyDollar = "$ \u2014 D\u00f3lar estadounidense, canadiense, australiano, peso mexicano, etc.",
         currencyEuro = "\u20ac \u2014 Euro",
         currencyPound = "\u00a3 \u2014 Libra esterlina",
         currencyYen = "\u00a5 \u2014 Yen japon\u00e9s / Yuan chino",
@@ -878,31 +910,23 @@ object SpanishStrings : AppStrings {
             "que escribes en los di\u00e1logos de transacci\u00f3n se formatean autom\u00e1ticamente con may\u00fasculas iniciales " +
             "a medida que terminas cada palabra \u2014 \"chick fil a\" se convierte en \"Chick Fil A\", \"DOORDASH\" " +
             "se convierte en \"Doordash\". Esto mantiene tu lista de transacciones limpia y consistente sin esfuerzo extra. " +
-            "Desact\u00edvalo si prefieres escribir las may\u00fasculas manualmente.",
-        paidTitle = "Usuario de Pago y Suscriptor",
-        paidBody = "BudgeTrak tiene dos niveles de mejora. Usuario de pago (compra \u00fanica) desbloquea:",
-        paidSave = "Sin anuncios \u2014 el banner en la parte superior de todas las pantallas se oculta",
-        paidLoad = "Widget completo \u2014 transacciones ilimitadas por d\u00eda y Solari limpio sin mensaje de actualizaci\u00f3n",
-        paidAdFree = "Suscriptor (suscripci\u00f3n mensual) agrega funciones avanzadas:",
-        paidWidget = "Guardar/Cargar transacciones \u2014 exportar a CSV o archivo cifrado, importar desde estados de cuenta bancarios",
-        paidNote = "Gr\u00e1fico de simulaci\u00f3n de flujo de efectivo, crear y administrar grupos de sincronizaci\u00f3n, " +
-            "y reclamar rol de administrador. Los usuarios gratuitos pueden unirse a grupos existentes. " +
-            "El estado de suscriptor incluye autom\u00e1ticamente todos los beneficios de usuario de pago.",
+            "Los acr\u00f3nimos cortos en may\u00fasculas (hasta 4 letras, como USA, BMW, NASA) se conservan, y las may\u00fasculas " +
+            "a mitad de palabra que escribes a prop\u00f3sito (iPhone, eBay) se dejan intactas. Desactiva la opci\u00f3n " +
+            "si prefieres escribir las may\u00fasculas manualmente.",
         widgetLogoTitle = "Mostrar logo en el widget",
-        widgetLogoBody = "Al activarlo, el logo de BudgeTrak aparece entre los botones de transacci\u00f3n en el " +
-            "widget de la pantalla de inicio. Desact\u00edvalo para ocultar el logo y obtener una apariencia m\u00e1s minimalista.",
+        widgetLogoBody = "Al activarlo, el logo de BudgeTrak SYNC aparece entre los botones de transacci\u00f3n en el " +
+            "widget de la pantalla de inicio. Desact\u00edvalo para ocultar el logo y obtener una apariencia minimalista.",
         receiptPhotosTitle = "Fotos de Recibos",
         receiptPhotosBody = "Los usuarios de pago pueden adjuntar hasta 5 fotos por transacci\u00f3n. Desliza a la izquierda en una transacci\u00f3n para ver el panel de fotos, o usa el icono de c\u00e1mara en el di\u00e1logo de edici\u00f3n.",
         receiptPhotosBullet1 = "Las fotos se almacenan localmente y se sincronizan entre los dispositivos vinculados cuando SYNC est\u00e1 activado",
         receiptPhotosBullet2 = "Mant\u00e9n presionada una miniatura para eliminarla",
         receiptPhotosBullet3 = "Toca una miniatura para verla en pantalla completa",
         receiptPhotosRetentionTitle = "Retenci\u00f3n de Fotos",
-        receiptPhotosRetentionBody = "El administrador puede establecer un per\u00edodo de retenci\u00f3n para eliminar autom\u00e1ticamente las fotos de recibos con cierta antig\u00fcedad. Esto ayuda a gestionar el almacenamiento en todos los dispositivos sincronizados.",
-        receiptPhotosRetentionNote = "Cuando las fotos se eliminan por antig\u00fcedad, la eliminaci\u00f3n se sincroniza autom\u00e1ticamente a todos los dispositivos del grupo.",
+        receiptPhotosRetentionBody = "Puedes establecer un per\u00edodo de retenci\u00f3n para eliminar autom\u00e1ticamente las fotos de recibos con cierta antig\u00fcedad. Esto ayuda a gestionar el almacenamiento en todos los dispositivos sincronizados. En un grupo SYNC, esta opci\u00f3n est\u00e1 restringida al administrador.",
+        receiptPhotosRetentionNote = "Cuando las fotos se eliminan por antig\u00fcedad, la eliminaci\u00f3n se sincroniza autom\u00e1ticamente a todos los dispositivos de un grupo.",
         receiptPhotosBullet4 = "Toca el icono de c\u00e1mara o elige desde la galer\u00eda para adjuntar fotos",
-        receiptPhotosBullet5 = "Las fotos se comprimen autom\u00e1ticamente para almacenamiento eficiente (m\u00e1x 1000px, ~250KB)",
+        receiptPhotosBullet5 = "Las fotos se comprimen autom\u00e1ticamente para almacenamiento eficiente",
         receiptPhotosBullet6 = "En un grupo SYNC, las fotos se cifran y se comparten entre todos los dispositivos vinculados",
-        receiptPhotosBullet7 = "Un administrador puede establecer un per\u00edodo de retenci\u00f3n \u2014 las fotos m\u00e1s antiguas que los d\u00edas configurados se eliminan autom\u00e1ticamente del almacenamiento en la nube",
         categoriesTitle = "Categor\u00edas",
         categoriesBody = "Las categor\u00edas te permiten clasificar tus transacciones para un mejor an\u00e1lisis de gastos. " +
             "Cada categor\u00eda tiene un nombre y un icono.",
@@ -916,7 +940,7 @@ object SpanishStrings : AppStrings {
         catOther = "Otros \u2014 la categor\u00eda predeterminada para transacciones sin clasificar",
         catRecurring = "Ingreso recurrente \u2014 asignada autom\u00e1ticamente a transacciones reconocidas como ingreso presupuestado",
         catAmortization = "",
-        catSupercharge = "Supercharge \u2014 asignada autom\u00e1ticamente a transacciones de dep\u00f3sito de metas de ahorro. Oculta del selector de categor\u00edas.",
+        catSupercharge = "Supercharge \u2014 asignada autom\u00e1ticamente a transacciones de Supercharge de metas de ahorro. Oculta del selector de categor\u00edas.",
         addCategoryTitle = "Agregar una categor\u00eda",
         addCategoryBody = "Toca \"Agregar categor\u00eda\" para crear una nueva. Escribe un nombre y elige un icono " +
             "de la cuadr\u00edcula de iconos. Los iconos se muestran en una cuadr\u00edcula visual por la que puedes desplazarte.",
@@ -943,8 +967,8 @@ object SpanishStrings : AppStrings {
         backupsPasswordWarning = "Tu contrase\u00f1a de respaldo no se puede recuperar. Si la pierdes, tus copias ser\u00e1n permanentemente inaccesibles. Gu\u00e1rdala en un lugar seguro.",
         backupsOffPhoneTip = "Para m\u00e1xima seguridad, copia tus archivos de respaldo desde Download/BudgeTrak/backups/ a un servicio en la nube (Google Drive, Dropbox, etc.) u otro dispositivo. Si pierdes o da\u00f1as tu tel\u00e9fono, puedes restaurar copiando los archivos de vuelta a esta carpeta en un nuevo tel\u00e9fono.",
         backupsRestoreTitle = "Restaurar desde Copia de Seguridad",
-        backupsRestoreBody = "El bot\u00f3n Restaurar te permite elegir una fecha y escribir tu contrase\u00f1a para restaurar todos los datos y fotos.",
-        backupsRestoreBullet1 = "Restaurar solo est\u00e1 disponible cuando no est\u00e1s en un grupo de sincronizaci\u00f3n",
+        backupsRestoreBody = "El bot\u00f3n Restaurar te permite elegir un archivo de respaldo y escribir tu contrase\u00f1a para restaurar todos los datos y fotos.",
+        backupsRestoreBullet1 = "Restaurar solo est\u00e1 disponible cuando no est\u00e1s en un grupo SYNC",
         backupsRestoreBullet2 = "Si se necesita una Restauraci\u00f3n para un grupo SYNC, el Administrador debe disolver el grupo",
         backupsRestoreBullet3 = "Restaurar estar\u00e1 entonces disponible",
         backupsRestoreBullet4 = "Despu\u00e9s de Restaurar, crea un nuevo grupo SYNC y proporciona c\u00f3digos de emparejamiento a los otros miembros para que se re\u00fanan",
@@ -996,7 +1020,7 @@ object SpanishStrings : AppStrings {
         tipsTitle = "Consejos",
         tip1 = "Configura las categor\u00edas antes de importar transacciones \u2014 la categorizaci\u00f3n autom\u00e1tica usa tu historial de transacciones existente para identificar comercios.",
         tip2 = "Crea categor\u00edas que reflejen tus h\u00e1bitos de gasto. Ejemplos comunes: Comida, Transporte, Entretenimiento, Salud, Vivienda, Servicios, Compras.",
-        tip3 = "Usa el per\u00edodo \"Diario\" si quieres el control de gastos m\u00e1s detallado.",
+        tip3 = "Se recomienda encarecidamente usar el per\u00edodo \"Diario\". Consulta las razones en la p\u00e1gina de Ayuda del Panel Principal.",
         tip4 = "El bot\u00f3n de Configuraci\u00f3n del presupuesto es lo primero que debes configurar despu\u00e9s de instalar la app."
     )
 
@@ -1011,41 +1035,39 @@ object SpanishStrings : AppStrings {
         saveDesc = "Guardar todas las transacciones en un archivo. Requiere Usuario de pago.",
         loadDesc = "Importar o cargar transacciones desde un archivo. Requiere Usuario de pago.",
         helpDesc = "Abre esta p\u00e1gina de ayuda.",
-        saveLoadNote = "Los iconos de Guardar y Cargar aparecen atenuados si el Usuario de pago no est\u00e1 activado en Ajustes.",
         actionBarTitle = "Barra de acciones",
         actionBarBody = "Debajo de la barra superior, la barra de acciones da acceso r\u00e1pido a operaciones comunes:",
         filterDesc = "Filtro \u2014 alterna entre: Todas, Gastos, Ingresos.",
         addIncomeDesc = "Crear una nueva transacci\u00f3n de ingreso.",
         addExpenseDesc = "Crear una nueva transacci\u00f3n de gasto.",
         searchDesc = "Abrir el men\u00fa de b\u00fasqueda con tres opciones:",
-        dateSearchBullet = "Buscar por fecha \u2014 selecciona una fecha de inicio y fin. Incluye un filtro opcional para transacciones bancarias sin modificar",
-        textSearchBullet = "Buscar por texto \u2014 busca por nombre de comercio/fuente",
+        dateSearchBullet = "Buscar por fecha \u2014 selecciona una fecha de inicio y fin.",
+        textSearchBullet = "Buscar por texto \u2014 busca por nombre de comercio/fuente y descripci\u00f3n",
         amountSearchBullet = "Buscar por monto \u2014 busca por rango de monto",
         searchNote = "Mientras los resultados de b\u00fasqueda est\u00e1n activos, aparece un banner en la parte superior. Toca el banner para borrar la b\u00fasqueda.",
         listTitle = "Lista de transacciones",
         listBody = "Las transacciones se muestran en una lista desplazable, ordenadas por fecha (m\u00e1s recientes primero). " +
             "Cada fila muestra:",
-        listIconBullet = "Icono de categor\u00eda (izquierda) \u2014 coloreado seg\u00fan la categor\u00eda",
+        listIconBullet = "Icono de categor\u00eda (izquierda)",
         listDateBullet = "Fecha \u2014 con el formato seg\u00fan tu preferencia en Ajustes",
         listMerchantBullet = "Comercio/Fuente \u2014 el nombre del beneficiario o pagador",
         listAmountBullet = "Monto \u2014 rojo para gastos, verde para ingresos",
         iconColorsTitle = "Colores de los iconos de categor\u00eda",
-        coloredLabel = "Con color",
-        coloredDesc = " \u2014 la categor\u00eda fue establecida o confirmada por ti",
-        defaultLabel = "Predeterminado",
-        defaultDesc = " \u2014 asignada autom\u00e1ticamente durante la importaci\u00f3n (a\u00fan sin confirmar)",
+        coloredLabel = "Azul",
+        coloredDesc = " \u2014 transacci\u00f3n verificada",
+        defaultLabel = "Otros",
+        defaultDesc = " \u2014 asignada autom\u00e1ticamente durante la importaci\u00f3n (a\u00fan sin verificar)",
         filterByIconNote = "Toca un icono de categor\u00eda para filtrar la lista solo a esa categor\u00eda. Aparecer\u00e1 un banner de filtro; t\u00f3calo para borrarlo.",
         multiCategoryTitle = "Transacciones con m\u00faltiples categor\u00edas",
         multiCategoryBody = "Un icono de lista indica que la transacci\u00f3n est\u00e1 dividida en m\u00faltiples categor\u00edas. " +
             "T\u00f3calo para expandir y ver el desglose por categor\u00eda.",
         tapEditTitle = "Tocar y editar",
         tapBullet = "Toca una transacci\u00f3n para abrir el di\u00e1logo de edici\u00f3n",
-        longPressBullet = "Mant\u00e9n presionada una transacci\u00f3n para entrar en modo de selecci\u00f3n",
         selectionTitle = "Modo de selecci\u00f3n",
-        selectionBody = "Mant\u00e9n presionada cualquier transacci\u00f3n para entrar en modo de selecci\u00f3n. Aparece una barra de herramientas con acciones masivas:",
+        selectionBody = "Mant\u00e9n presionada cualquier transacci\u00f3n para entrar en el modo de selecci\u00f3n m\u00faltiple. Aparece una barra de herramientas con acciones masivas:",
         selectAllDesc = "Seleccionar todo \u2014 selecciona o deselecciona todas las transacciones visibles",
         changeCategoryDesc = "Asignar una categor\u00eda a todas las transacciones seleccionadas.",
-        editMerchantDesc = "Reemplazar el nombre de comercio/fuente en todas las transacciones seleccionadas.",
+        editMerchantDesc = "Reemplazar el nombre de comercio/fuente y/o la descripci\u00f3n en todas las transacciones seleccionadas.",
         deleteDesc = "Eliminar todas las transacciones seleccionadas.",
         closeDesc = "Salir del modo de selecci\u00f3n sin cambios.",
         addEditTitle = "Di\u00e1logo de Agregar / Editar transacci\u00f3n",
@@ -1058,8 +1080,8 @@ object SpanishStrings : AppStrings {
         fieldDescriptionDesc = "Notas opcionales sobre la transacci\u00f3n (ej., qu\u00e9 se compr\u00f3).",
         fieldLinkButtons = "Botones de vinculaci\u00f3n",
         fieldLinkButtonsDesc = "Botones opcionales de vinculaci\u00f3n aparecen debajo del campo de descripci\u00f3n. " +
-            "Para gastos, un icono de sincronizaci\u00f3n vincula a un gasto recurrente y un icono de reloj vincula a una entrada de amortizaci\u00f3n. " +
-            "Para ingresos, un icono de d\u00f3lar vincula a una fuente de ingreso. " +
+            "Para gastos, un icono de gasto recurrente vincula a un gasto recurrente y un icono de reloj vincula a una entrada de amortizaci\u00f3n. " +
+            "Para ingresos, un icono de banco vincula a una fuente de ingreso. " +
             "Las transacciones vinculadas ya est\u00e1n contabilizadas en tu presupuesto y NO reducen el efectivo disponible. " +
             "Un peque\u00f1o icono aparece junto al monto en las transacciones vinculadas.",
         fieldCategory = "Categor\u00eda (requerida)",
@@ -1089,16 +1111,16 @@ object SpanishStrings : AppStrings {
             "Al cambiar un porcentaje, los dem\u00e1s campos se ajustan proporcionalmente.",
         duplicateTitle = "Detecci\u00f3n de duplicados",
         duplicateBody = "Al guardar una nueva transacci\u00f3n o importar desde un archivo, la app verifica posibles duplicados. " +
-            "Una transacci\u00f3n se marca si coincide con una existente en los tres criterios:",
-        dupAmountBullet = "Monto con diferencia menor al 1%",
-        dupDateBullet = "Fecha con diferencia menor a 7 d\u00edas",
+            "Una transacci\u00f3n se marca si coincide con una existente en los tres criterios, configurados en la p\u00e1gina de Ajustes:",
+        dupAmountBullet = "Monto con diferencia menor a un cierto porcentaje",
+        dupDateBullet = "Fecha con diferencia menor a un cierto n\u00famero de d\u00edas",
         dupMerchantBullet = "Nombre del comercio comparte una subcadena en com\u00fan",
         dupDialogBody = "Cuando se detecta un duplicado, ver\u00e1s un di\u00e1logo con cuatro opciones:",
         dupIgnore = "Ignorar \u2014 conservar ambas transacciones",
         dupKeepNew = "Conservar nuevo \u2014 reemplazar la existente con la nueva",
         dupKeepExisting = "Conservar existente \u2014 descartar la nueva transacci\u00f3n",
         dupIgnoreAll = "Ignorar todos \u2014 conservar todos los duplicados restantes (solo al importar)",
-        savingTitle = "Guardar transacciones",
+        savingTitle = "Guardar transacciones (Usuario de Pago)",
         savingBody = "Toca el icono de Guardar en la barra superior para exportar todas las transacciones a un archivo. Hay tres formatos disponibles:",
         csvFormatTitle = "Formato CSV",
         csvFormatBody = "Guarda tus transacciones como un archivo CSV de texto plano (budgetrak_transactions.csv). " +

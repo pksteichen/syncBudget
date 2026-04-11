@@ -225,22 +225,10 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
 
             HelpDividerLine()
 
-            // ─── SECTION 9: PAID USER ───
-            HelpSectionTitle(S.settingsHelp.paidTitle)
-            HelpBodyText(S.settingsHelp.paidBody)
-            Spacer(modifier = Modifier.height(4.dp))
-            HelpBulletText(S.settingsHelp.paidSave)
-            HelpBulletText(S.settingsHelp.paidLoad)
-            HelpBulletText(S.settingsHelp.paidAdFree)
-            HelpBulletText(S.settingsHelp.paidWidget)
-            Spacer(modifier = Modifier.height(8.dp))
-            HelpBodyText(
-                S.settingsHelp.paidNote,
-                italic = true
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-
-            HelpDividerLine()
+            // Paid User / Subscriber tier details moved to the Dashboard Help page
+            // in v2.5.x (see dashboardHelp.paidTitle onward). The tier is controlled
+            // by Google Play Billing in release builds, not a Settings toggle, so
+            // the detailed explanation belongs in the welcome/intro area.
 
             // ─── WIDGET LOGO ───
             HelpSectionTitle(S.settingsHelp.widgetLogoTitle)
@@ -259,7 +247,6 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
             HelpBulletText(S.settingsHelp.receiptPhotosBullet4)
             HelpBulletText(S.settingsHelp.receiptPhotosBullet5)
             HelpBulletText(S.settingsHelp.receiptPhotosBullet6)
-            HelpBulletText(S.settingsHelp.receiptPhotosBullet7)
             Spacer(modifier = Modifier.height(10.dp))
 
             HelpSubSectionTitle(S.settingsHelp.receiptPhotosRetentionTitle)
