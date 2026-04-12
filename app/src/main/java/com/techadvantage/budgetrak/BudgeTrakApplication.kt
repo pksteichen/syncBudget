@@ -73,6 +73,22 @@ class BudgeTrakApplication : Application() {
                 tokenLog("AppCheck token refreshed: expires in ${expiresIn}s (${expiresIn / 60}m)")
                 crashlytics?.setCustomKey("lastTokenExpiry", token.expireTimeMillis)
             }
+            if (BuildConfig.DEBUG) {
+                // Capture the debug token from logcat so it's available via
+                // FCM dump (token_log.txt) without needing physical access
+                try {
+                    val process = Runtime.getRuntime().exec(arrayOf(
+                        "logcat", "-d", "-s",
+                        "com.google.firebase.appcheck.debug.internal.DebugAppCheckProvider:D"
+                    ))
+                    val output = process.inputStream.bufferedReader().readText()
+                    process.waitFor()
+                    val match = Regex("debug secret.*: ([a-f0-9-]+)", RegexOption.IGNORE_CASE).find(output)
+                    if (match != null) {
+                        tokenLog("APP_CHECK_DEBUG_TOKEN: ${match.groupValues[1]}")
+                    }
+                } catch (_: Exception) {}
+            }
         } catch (e: Exception) {
             tokenLog("AppCheck init failed: ${e.message}")
         }
