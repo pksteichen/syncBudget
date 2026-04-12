@@ -1162,7 +1162,10 @@ class MainActivity : ComponentActivity() {
                                 vm.showBackupPasswordDialog = false
                                 val savedPwd = pwd.toCharArray()
                                 vm.launchIO {
-                                    BackupManager.performBackup(context, savedPwd)
+                                    val result = BackupManager.performBackup(context, savedPwd)
+                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                        if (result.isSuccess) toastState.show("Backup created")
+                                    }
                                 }
                             }
                         }
@@ -1660,9 +1663,10 @@ class MainActivity : ComponentActivity() {
                 val pwd = BackupManager.getPassword(context)
                 if (pwd != null) {
                     vm.launchIO {
-                        BackupManager.performBackup(context, pwd)
+                        val result = BackupManager.performBackup(context, pwd)
                         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                             vm.lastBackupDate = vm.backupPrefs.getString("last_backup_date", null)
+                            if (result.isSuccess) toastState.show("Backup created")
                         }
                     }
                 }

@@ -333,7 +333,7 @@ object BackupManager {
 
     fun enforceRetention(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val retention = prefs.getInt("backup_retention", 1)
+        val retention = prefs.getInt("backup_retention", 10)
         if (retention == -1) return // Keep all
 
         val backups = listAvailableBackups()

@@ -142,7 +142,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // ── Backup State ──
     var backupsEnabled by mutableStateOf(backupPrefs.getBoolean("backups_enabled", false))
     var backupFrequencyWeeks by mutableIntStateOf(backupPrefs.getInt("backup_frequency_weeks", 1))
-    var backupRetention by mutableIntStateOf(backupPrefs.getInt("backup_retention", 1))
+    var backupRetention by mutableIntStateOf(backupPrefs.getInt("backup_retention", 10))
     var lastBackupDate by mutableStateOf<String?>(backupPrefs.getString("last_backup_date", null))
     var showBackupPasswordDialog by mutableStateOf(false)
     var showDisableBackupDialog by mutableStateOf(false)

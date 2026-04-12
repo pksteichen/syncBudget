@@ -78,6 +78,9 @@ object FullBackupSerializer {
             localPrefs.put("matchPercent", prefs.getDoubleCompat("matchPercent", 1.0))
             localPrefs.put("matchDollar", prefs.getInt("matchDollar", 1))
             localPrefs.put("matchChars", prefs.getInt("matchChars", 5))
+            localPrefs.put("incomeMode", prefs.getString("incomeMode", "FIXED"))
+            localPrefs.put("autoCapitalize", prefs.getBoolean("autoCapitalize", true))
+            localPrefs.put("showWidgetLogo", prefs.getBoolean("showWidgetLogo", true))
             json.put("localPrefs", localPrefs)
         }
 
@@ -274,6 +277,9 @@ object FullBackupSerializer {
                 putString("matchPercent", lp.optDouble("matchPercent", 1.0).toString())
                 putInt("matchDollar", lp.optInt("matchDollar", 1))
                 putInt("matchChars", lp.optInt("matchChars", 5))
+                putString("incomeMode", lp.optString("incomeMode", "FIXED"))
+                putBoolean("autoCapitalize", lp.optBoolean("autoCapitalize", true))
+                putBoolean("showWidgetLogo", lp.optBoolean("showWidgetLogo", true))
                 apply()
             }
         }
