@@ -1,5 +1,5 @@
 # Keep data classes used in Firestore serialization
--keep class com.syncbudget.app.data.** { *; }
+-keep class com.techadvantage.budgetrak.data.** { *; }
 
 # Firebase
 -keep class com.google.firebase.** { *; }
@@ -9,7 +9,7 @@
 -dontwarn androidx.compose.**
 
 # Keep CryptoHelper (JCE reflection)
--keep class com.syncbudget.app.data.CryptoHelper { *; }
+-keep class com.techadvantage.budgetrak.data.CryptoHelper { *; }
 
 # AndroidX Security (EncryptedSharedPreferences)
 -keep class androidx.security.crypto.** { *; }

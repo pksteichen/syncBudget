@@ -1,0 +1,1243 @@
+package com.techadvantage.budgetrak.ui.screens
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Help
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import com.techadvantage.budgetrak.ui.theme.AdAwareAlertDialog
+import com.techadvantage.budgetrak.ui.theme.DialogStyle
+import com.techadvantage.budgetrak.ui.theme.DialogPrimaryButton
+import com.techadvantage.budgetrak.ui.theme.DialogSecondaryButton
+import com.techadvantage.budgetrak.ui.theme.DialogDangerButton
+import com.techadvantage.budgetrak.ui.theme.DialogWarningButton
+import com.techadvantage.budgetrak.ui.theme.DialogHeader
+import com.techadvantage.budgetrak.ui.theme.DialogFooter
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DatePicker
+import com.techadvantage.budgetrak.ui.theme.AdAwareDatePickerDialog
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import com.techadvantage.budgetrak.ui.theme.AdAwareDialog
+import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrow
+import com.techadvantage.budgetrak.data.BudgetPeriod
+import com.techadvantage.budgetrak.data.IncomeSource
+import com.techadvantage.budgetrak.data.RepeatType
+import com.techadvantage.budgetrak.data.generateIncomeSourceId
+import com.techadvantage.budgetrak.ui.components.formatCurrency
+import com.techadvantage.budgetrak.ui.components.CURRENCY_DECIMALS
+import com.techadvantage.budgetrak.ui.strings.LocalStrings
+import com.techadvantage.budgetrak.ui.theme.LocalSyncBudgetColors
+import com.techadvantage.budgetrak.ui.theme.LocalAppToast
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalContext
+import java.time.DayOfWeek
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
+import java.util.Locale
+
+private val HOUR_LABELS = (0..23).map { hour ->
+    when {
+        hour == 0 -> "12 AM"
+        hour < 12 -> "$hour AM"
+        hour == 12 -> "12 PM"
+        else -> "${hour - 12} PM"
+    }
+}
+
+private val DAY_OF_WEEK_ORDER = listOf(
+    DayOfWeek.SUNDAY, DayOfWeek.MONDAY, DayOfWeek.TUESDAY,
+    DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY, DayOfWeek.SATURDAY
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BudgetConfigScreen(
+    incomeSources: List<IncomeSource>,
+    currencySymbol: String,
+    onAddIncomeSource: (IncomeSource) -> Unit,
+    onUpdateIncomeSource: (IncomeSource) -> Unit,
+    onDeleteIncomeSource: (IncomeSource) -> Unit,
+    budgetPeriod: BudgetPeriod,
+    onBudgetPeriodChange: (BudgetPeriod) -> Unit,
+    resetHour: Int,
+    onResetHourChange: (Int) -> Unit,
+    resetDayOfWeek: Int,
+    onResetDayOfWeekChange: (Int) -> Unit,
+    resetDayOfMonth: Int,
+    onResetDayOfMonthChange: (Int) -> Unit,
+    safeBudgetAmount: Double = 0.0,
+    isManualBudgetEnabled: Boolean = false,
+    manualBudgetAmount: Double = 0.0,
+    onManualBudgetToggle: (Boolean) -> Unit = {},
+    onManualBudgetAmountChange: (Double) -> Unit = {},
+    onResetBudget: () -> Unit = {},
+    budgetStartDate: String? = null,
+    dateFormatPattern: String = "yyyy-MM-dd",
+    isSyncConfigured: Boolean = false,
+    isAdmin: Boolean = true,
+    incomeMode: String = "FIXED",
+    onIncomeModeChange: (String) -> Unit = {},
+    onBack: () -> Unit,
+    onHelpClick: () -> Unit = {},
+    autoCapitalize: Boolean = true
+) {
+    val customColors = LocalSyncBudgetColors.current
+    val S = LocalStrings.current
+    val dateFormatter = remember(dateFormatPattern) { DateTimeFormatter.ofPattern(dateFormatPattern) }
+    var showAddDialog by remember { mutableStateOf(false) }
+    var editingSource by remember { mutableStateOf<IncomeSource?>(null) }
+    var deletingSource by remember { mutableStateOf<IncomeSource?>(null) }
+    var showResetDialog by remember { mutableStateOf(false) }
+    var showResetBudgetConfirm by remember { mutableStateOf(false) }
+    var periodExpanded by remember { mutableStateOf(false) }
+    val isLocked = isSyncConfigured && !isAdmin
+    val toastState = LocalAppToast.current
+
+    val textFieldColors = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = MaterialTheme.colorScheme.onBackground,
+        unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+        focusedBorderColor = MaterialTheme.colorScheme.primary,
+        unfocusedBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+        focusedLabelColor = MaterialTheme.colorScheme.primary,
+        unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+    )
+
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = {
+                    Text(
+                        text = S.budgetConfig.title,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = customColors.headerText
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = S.common.back,
+                            tint = customColors.headerText
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onHelpClick) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Help,
+                            contentDescription = S.common.help,
+                            tint = customColors.headerText
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = customColors.headerBackground
+                )
+            )
+        },
+        containerColor = MaterialTheme.colorScheme.background
+    ) { paddingValues ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    ExposedDropdownMenuBox(
+                        expanded = if (isLocked) false else periodExpanded,
+                        onExpandedChange = {
+                            if (isLocked) toastState.show(S.settings.administratorOnly)
+                            else periodExpanded = it
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        OutlinedTextField(
+                            value = when (budgetPeriod) {
+                                BudgetPeriod.DAILY -> S.common.budgetPeriodDaily
+                                BudgetPeriod.WEEKLY -> S.common.budgetPeriodWeekly
+                                BudgetPeriod.MONTHLY -> S.common.budgetPeriodMonthly
+                            },
+                            onValueChange = {},
+                            readOnly = true,
+                            enabled = !isLocked,
+                            label = { Text(S.budgetConfig.budgetPeriod) },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = periodExpanded) },
+                            colors = textFieldColors,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = periodExpanded,
+                            onDismissRequest = { periodExpanded = false }
+                        ) {
+                            BudgetPeriod.entries.forEach { period ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(when (period) {
+                                            BudgetPeriod.DAILY -> S.common.budgetPeriodDaily
+                                            BudgetPeriod.WEEKLY -> S.common.budgetPeriodWeekly
+                                            BudgetPeriod.MONTHLY -> S.common.budgetPeriodMonthly
+                                        })
+                                    },
+                                    onClick = {
+                                        onBudgetPeriodChange(period)
+                                        periodExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Box {
+                        OutlinedButton(
+                            onClick = { showResetDialog = true },
+                            enabled = !isLocked
+                        ) {
+                            Text(when (budgetPeriod) {
+                                BudgetPeriod.WEEKLY -> S.budgetConfig.resetDay
+                                BudgetPeriod.MONTHLY -> S.budgetConfig.resetDate
+                                else -> S.budgetConfig.refreshTime
+                            })
+                        }
+                        if (isLocked) Box(Modifier.matchParentSize().clickable { toastState.show(S.settings.administratorOnly) })
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
+            item {
+                val periodLabel = when (budgetPeriod) {
+                    BudgetPeriod.DAILY -> S.common.periodDay
+                    BudgetPeriod.WEEKLY -> S.common.periodWeek
+                    BudgetPeriod.MONTHLY -> S.common.periodMonth
+                }
+
+                Text(
+                    text = S.budgetConfig.safeBudgetAmountLabel(currencySymbol, "%.${CURRENCY_DECIMALS[currencySymbol] ?: 2}f".format(safeBudgetAmount), periodLabel),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                if (budgetStartDate != null) {
+                    Text(
+                        text = S.budgetConfig.budgetTrackingSince(budgetStartDate),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Box {
+                    OutlinedButton(
+                        onClick = { showResetBudgetConfirm = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isLocked
+                    ) {
+                        Text(S.budgetConfig.startResetBudget)
+                    }
+                    if (isLocked) Box(Modifier.matchParentSize().clickable { toastState.show(S.settings.administratorOnly) })
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Box {
+                        Checkbox(
+                            checked = isManualBudgetEnabled,
+                            onCheckedChange = onManualBudgetToggle,
+                            enabled = !isLocked
+                        )
+                        if (isLocked) Box(Modifier.matchParentSize().clickable { toastState.show(S.settings.administratorOnly) })
+                    }
+                    Text(
+                        text = S.budgetConfig.manualBudgetOverride,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                }
+
+                if (isManualBudgetEnabled) {
+                    val maxDecimalPlaces = CURRENCY_DECIMALS[currencySymbol] ?: 2
+                    var manualAmountText by remember(manualBudgetAmount) {
+                        mutableStateOf(if (manualBudgetAmount == 0.0) "" else "%.${CURRENCY_DECIMALS[currencySymbol] ?: 2}f".format(manualBudgetAmount))
+                    }
+                    OutlinedTextField(
+                        value = manualAmountText,
+                        onValueChange = { newVal ->
+                            if (newVal.isEmpty() || newVal == "." || newVal.toDoubleOrNull() != null) {
+                                val dotIdx = newVal.indexOf('.')
+                                val decs = if (dotIdx >= 0) newVal.length - dotIdx - 1 else 0
+                                if (maxDecimalPlaces == 0 && dotIdx >= 0) { /* block */ }
+                                else if (decs <= maxDecimalPlaces) {
+                                    manualAmountText = newVal
+                                    newVal.toDoubleOrNull()?.let { onManualBudgetAmountChange(it) }
+                                }
+                            }
+                        },
+                        label = { Text(S.budgetConfig.budgetAmountPer(periodLabel)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = if (maxDecimalPlaces > 0) KeyboardType.Decimal else KeyboardType.Number),
+                        colors = textFieldColors,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = S.budgetConfig.manualOverrideSeeHelp,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                    )
+                }
+                if (isLocked) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = S.sync.adminOnly,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFFFF9800)
+                    )
+                }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            }
+
+            item {
+                Text(
+                    text = S.budgetConfig.incomeSourceDescription,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = S.budgetConfig.incomeModeLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isLocked) MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+                           else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                val modes = listOf("FIXED", "ACTUAL", "ACTUAL_ADJUST")
+                val modeLabels = mapOf(
+                    "FIXED" to S.budgetConfig.incomeModeFixed,
+                    "ACTUAL" to S.budgetConfig.incomeModeActual,
+                    "ACTUAL_ADJUST" to S.budgetConfig.incomeModeActualAdjust
+                )
+                val currentLabel = modeLabels[incomeMode] ?: modeLabels["FIXED"]!!
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Income mode toggle (cycles on tap)
+                    Box(modifier = Modifier.weight(1f)) {
+                    Surface(
+                        onClick = {
+                            val idx = modes.indexOf(incomeMode)
+                            var nextIdx = (idx + 1) % modes.size
+                            if (modes[nextIdx] == "ACTUAL_ADJUST" && isManualBudgetEnabled) {
+                                nextIdx = (nextIdx + 1) % modes.size
+                            }
+                            onIncomeModeChange(modes[nextIdx])
+                        },
+                        enabled = !isLocked,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = currentLabel,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (isLocked) MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+                                   else MaterialTheme.colorScheme.primary,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp)
+                        )
+                    }
+                    if (isLocked) Box(Modifier.matchParentSize().clickable { toastState.show(S.settings.administratorOnly) })
+                    }
+                    // Add income source button (available to all members)
+                    Surface(
+                        onClick = { showAddDialog = true },
+                        enabled = true,
+                        color = Color.Transparent,
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Add,
+                                contentDescription = null,
+                                modifier = Modifier.padding(end = 4.dp),
+                                tint = MaterialTheme.colorScheme.onBackground
+                            )
+                            Text(
+                                text = S.budgetConfig.addIncomeSource,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                        }
+                    }
+                }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            }
+
+            items(incomeSources) { source ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { editingSource = source }
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = source.source,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        if (source.description.isNotBlank()) {
+                            Text(
+                                source.description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Text(
+                            text = formatCurrency(source.amount, currencySymbol),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                        )
+                    }
+                    IconButton(onClick = { deletingSource = source }) {
+                        Icon(
+                            imageVector = Icons.Filled.Delete,
+                            contentDescription = S.common.delete,
+                            tint = Color(0xFFF44336)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (showAddDialog) {
+        AddEditIncomeDialog(
+            existingSource = null,
+            currencySymbol = currencySymbol,
+            dateFormatter = dateFormatter,
+            onDismiss = { showAddDialog = false },
+            onSave = { incomeSource ->
+                val id = generateIncomeSourceId(incomeSources.map { it.id }.toSet())
+                onAddIncomeSource(incomeSource.copy(id = id))
+                showAddDialog = false
+            },
+            autoCapitalize = autoCapitalize
+        )
+    }
+
+    editingSource?.let { source ->
+        AddEditIncomeDialog(
+            existingSource = source,
+            currencySymbol = currencySymbol,
+            dateFormatter = dateFormatter,
+            onDismiss = { editingSource = null },
+            onSave = { updated ->
+                onUpdateIncomeSource(updated)
+                editingSource = null
+            },
+            autoCapitalize = autoCapitalize
+        )
+    }
+
+    deletingSource?.let { source ->
+        AdAwareAlertDialog(
+            onDismissRequest = { deletingSource = null },
+            title = { Text(S.budgetConfig.deleteSourceConfirmTitle(source.source)) },
+            text = { Text(S.budgetConfig.deleteSourceConfirmBody) },
+            style = DialogStyle.DANGER,
+            confirmButton = {
+                DialogDangerButton(onClick = {
+                        onDeleteIncomeSource(source)
+                        deletingSource = null
+                    }) { Text(S.common.delete) }
+            },
+            dismissButton = {
+                DialogSecondaryButton(onClick = { deletingSource = null }) { Text(S.common.cancel) }
+            }
+        )
+    }
+
+    if (showResetDialog) {
+        BudgetResetDialog(
+            budgetPeriod = budgetPeriod,
+            resetHour = resetHour,
+            resetDayOfWeek = resetDayOfWeek,
+            resetDayOfMonth = resetDayOfMonth,
+            onDismiss = { showResetDialog = false },
+            onSave = { hour, dayOfWeek, dayOfMonth ->
+                onResetHourChange(hour)
+                onResetDayOfWeekChange(dayOfWeek)
+                onResetDayOfMonthChange(dayOfMonth)
+                showResetDialog = false
+            }
+        )
+    }
+
+    if (showResetBudgetConfirm) {
+        AdAwareAlertDialog(
+            onDismissRequest = { showResetBudgetConfirm = false },
+            title = { Text(S.budgetConfig.resetBudgetConfirmTitle) },
+            text = {
+                Text(S.budgetConfig.resetBudgetConfirmBody)
+            },
+            style = DialogStyle.WARNING,
+            confirmButton = {
+                DialogWarningButton(onClick = {
+                        onResetBudget()
+                        showResetBudgetConfirm = false
+                    }) { Text(S.common.reset) }
+            },
+            dismissButton = {
+                DialogSecondaryButton(onClick = { showResetBudgetConfirm = false }) { Text(S.common.cancel) }
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddEditIncomeDialog(
+    existingSource: IncomeSource?,
+    currencySymbol: String,
+    dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd"),
+    onDismiss: () -> Unit,
+    onSave: (IncomeSource) -> Unit,
+    autoCapitalize: Boolean = true
+) {
+    val S = LocalStrings.current
+    val context = LocalContext.current
+    val toastState = LocalAppToast.current
+    val isEdit = existingSource != null
+    val title = if (isEdit) S.budgetConfig.editIncomeSource else S.budgetConfig.addIncomeSource
+
+    val maxDecimalPlaces = CURRENCY_DECIMALS[currencySymbol] ?: 2
+
+    var sourceName by remember { mutableStateOf(existingSource?.source ?: "") }
+    var amountText by remember {
+        mutableStateOf(
+            if (existingSource != null && existingSource.amount > 0.0)
+                "%.${CURRENCY_DECIMALS[currencySymbol] ?: 2}f".format(existingSource.amount)
+            else ""
+        )
+    }
+    var repeatType by remember { mutableStateOf(existingSource?.repeatType ?: RepeatType.MONTHS) }
+    var intervalText by remember { mutableStateOf(existingSource?.repeatInterval?.toString() ?: "1") }
+    var description by remember { mutableStateOf(existingSource?.description ?: "") }
+    var startDate by remember { mutableStateOf(existingSource?.startDate) }
+    var monthDay1Text by remember { mutableStateOf(existingSource?.monthDay1?.toString() ?: "") }
+    var monthDay2Text by remember { mutableStateOf(existingSource?.monthDay2?.toString() ?: "") }
+    var typeExpanded by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showValidation by remember { mutableStateOf(false) }
+
+
+    val textFieldColors = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = MaterialTheme.colorScheme.onBackground,
+        unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+        focusedBorderColor = MaterialTheme.colorScheme.primary,
+        unfocusedBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+        focusedLabelColor = MaterialTheme.colorScheme.primary,
+        unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+    )
+
+    val amount = amountText.toDoubleOrNull()
+    val interval = intervalText.toIntOrNull()
+    val monthDay1 = monthDay1Text.toIntOrNull()
+    val monthDay2 = monthDay2Text.toIntOrNull()
+
+    val isSourceValid = sourceName.isNotBlank()
+    val isAmountValid = amount != null && amount > 0
+
+    val isRepeatValid = when (repeatType) {
+        RepeatType.DAYS -> interval != null && interval in 1..365 && startDate != null
+        RepeatType.WEEKS -> interval != null && interval in 1..52 && startDate != null
+        RepeatType.BI_WEEKLY -> startDate != null
+        RepeatType.MONTHS -> interval != null && interval in 1..12 && startDate != null
+        RepeatType.BI_MONTHLY -> monthDay1 != null && monthDay1 in 1..28 && monthDay2 != null && monthDay2 in 1..28
+        RepeatType.ANNUAL -> startDate != null
+    }
+
+    val isValid = isSourceValid && isAmountValid && isRepeatValid
+
+    AdAwareDialog(
+        onDismissRequest = onDismiss,
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .imePadding(),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            val dialogScrollState = rememberScrollState()
+            Box {
+            Column {
+                DialogHeader(title)
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(dialogScrollState)
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedTextField(
+                        value = sourceName,
+                        onValueChange = { sourceName = if (autoCapitalize) com.techadvantage.budgetrak.data.toApaTitleCase(it) else it },
+                        label = { Text(S.common.sourceName) },
+                        singleLine = true,
+                        isError = showValidation && !isSourceValid,
+                        supportingText = if (showValidation && !isSourceValid) ({
+                            Text(S.budgetConfig.requiredPaycheckExample, color = Color(0xFFF44336))
+                        }) else null,
+                        colors = textFieldColors,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = description,
+                        onValueChange = { description = if (autoCapitalize) com.techadvantage.budgetrak.data.toApaTitleCase(it) else it },
+                        label = { Text(S.common.descriptionFieldLabel) },
+                        colors = textFieldColors,
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = amountText,
+                        onValueChange = { newVal ->
+                            if (newVal.isEmpty() || newVal == "." || newVal.toDoubleOrNull() != null) {
+                                val dotIdx = newVal.indexOf('.')
+                                val decs = if (dotIdx >= 0) newVal.length - dotIdx - 1 else 0
+                                if (maxDecimalPlaces == 0 && dotIdx >= 0) { /* block */ }
+                                else if (decs <= maxDecimalPlaces) { amountText = newVal }
+                            }
+                        },
+                        label = { Text(S.common.amount) },
+                        singleLine = true,
+                        isError = showValidation && !isAmountValid,
+                        supportingText = if (showValidation && !isAmountValid) ({
+                            Text(S.budgetConfig.exampleIncomeAmount, color = Color(0xFFF44336))
+                        }) else null,
+                        keyboardOptions = KeyboardOptions(keyboardType = if (maxDecimalPlaces > 0) KeyboardType.Decimal else KeyboardType.Number),
+                        colors = textFieldColors,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    HorizontalDivider()
+
+                    ExposedDropdownMenuBox(
+                        expanded = typeExpanded,
+                        onExpandedChange = { typeExpanded = it }
+                    ) {
+                        OutlinedTextField(
+                            value = when (repeatType) {
+                                RepeatType.DAYS -> S.common.repeatTypeDays
+                                RepeatType.WEEKS -> S.common.repeatTypeWeeks
+                                RepeatType.BI_WEEKLY -> S.common.repeatTypeBiWeekly
+                                RepeatType.MONTHS -> S.common.repeatTypeMonths
+                                RepeatType.BI_MONTHLY -> S.common.repeatTypeBiMonthly
+                                RepeatType.ANNUAL -> S.common.repeatTypeAnnual
+                            },
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text(S.common.repeatType) },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeExpanded) },
+                            colors = textFieldColors,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = typeExpanded,
+                            onDismissRequest = { typeExpanded = false }
+                        ) {
+                            RepeatType.entries.filter { it != RepeatType.BI_WEEKLY }.forEach { type ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(when (type) {
+                                            RepeatType.DAYS -> S.common.repeatTypeDays
+                                            RepeatType.WEEKS -> S.common.repeatTypeWeeks
+                                            RepeatType.BI_WEEKLY -> S.common.repeatTypeBiWeekly
+                                            RepeatType.MONTHS -> S.common.repeatTypeMonths
+                                            RepeatType.BI_MONTHLY -> S.common.repeatTypeBiMonthly
+                                            RepeatType.ANNUAL -> S.common.repeatTypeAnnual
+                                        })
+                                    },
+                                    onClick = {
+                                        repeatType = type
+                                        typeExpanded = false
+                                        when (type) {
+                                            RepeatType.DAYS -> { intervalText = "1"; monthDay1Text = ""; monthDay2Text = "" }
+                                            RepeatType.WEEKS -> { intervalText = "1"; monthDay1Text = ""; monthDay2Text = "" }
+                                            RepeatType.BI_WEEKLY -> { monthDay1Text = ""; monthDay2Text = "" }
+                                            RepeatType.MONTHS -> { intervalText = "1"; monthDay1Text = ""; monthDay2Text = "" }
+                                            RepeatType.BI_MONTHLY -> { intervalText = "1"; startDate = null }
+                                            RepeatType.ANNUAL -> { monthDay1Text = ""; monthDay2Text = "" }
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    when (repeatType) {
+                        RepeatType.DAYS -> {
+                            OutlinedTextField(
+                                value = intervalText,
+                                onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) intervalText = it },
+                                label = { Text(S.common.everyXDays) },
+                                singleLine = true,
+                                isError = showValidation && (interval == null || interval !in 1..365),
+                                supportingText = if (showValidation && (interval == null || interval !in 1..365)) ({
+                                    Text(S.common.exampleDays, color = Color(0xFFF44336))
+                                }) else null,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                colors = textFieldColors,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Box(
+                                modifier = if (showValidation && startDate == null)
+                                    Modifier.border(1.dp, Color.Red, RoundedCornerShape(4.dp))
+                                else Modifier
+                            ) {
+                                OutlinedButton(
+                                    onClick = { showDatePicker = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(if (startDate != null) S.common.startDateLabel(startDate!!.format(dateFormatter)) else S.common.pickStartDate)
+                                }
+                            }
+                            if (showValidation && startDate == null) {
+                                Text(S.common.selectAStartDate, style = MaterialTheme.typography.bodySmall, color = Color(0xFFF44336))
+                            }
+                        }
+                        RepeatType.WEEKS -> {
+                            OutlinedTextField(
+                                value = intervalText,
+                                onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) intervalText = it },
+                                label = { Text(S.common.intervalWeeks) },
+                                singleLine = true,
+                                isError = showValidation && (interval == null || interval !in 1..52),
+                                supportingText = if (showValidation && (interval == null || interval !in 1..52)) ({
+                                    Text(S.common.exampleWeeks, color = Color(0xFFF44336))
+                                }) else null,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                colors = textFieldColors,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Box(
+                                modifier = if (showValidation && startDate == null)
+                                    Modifier.border(1.dp, Color.Red, RoundedCornerShape(4.dp))
+                                else Modifier
+                            ) {
+                                OutlinedButton(
+                                    onClick = { showDatePicker = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(if (startDate != null) S.common.startDateLabel(startDate!!.format(dateFormatter)) else S.common.pickStartDate)
+                                }
+                            }
+                            if (showValidation && startDate == null) {
+                                Text(S.common.selectAStartDate, style = MaterialTheme.typography.bodySmall, color = Color(0xFFF44336))
+                            }
+                            if (startDate != null) {
+                                val dayName = startDate!!.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
+                                Text(
+                                    text = S.common.dayOfWeekLabel(dayName),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                                )
+                            }
+                        }
+                        RepeatType.BI_WEEKLY -> {
+                            Box(
+                                modifier = if (showValidation && startDate == null)
+                                    Modifier.border(1.dp, Color.Red, RoundedCornerShape(4.dp))
+                                else Modifier
+                            ) {
+                                OutlinedButton(
+                                    onClick = { showDatePicker = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(if (startDate != null) S.common.startDateLabel(startDate!!.format(dateFormatter)) else S.common.pickStartDate)
+                                }
+                            }
+                            if (showValidation && startDate == null) {
+                                Text(S.common.selectAStartDate, style = MaterialTheme.typography.bodySmall, color = Color(0xFFF44336))
+                            }
+                            if (startDate != null) {
+                                val dayName = startDate!!.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
+                                Text(
+                                    text = S.common.dayOfWeekLabel(dayName),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                                )
+                            }
+                        }
+                        RepeatType.MONTHS -> {
+                            OutlinedTextField(
+                                value = intervalText,
+                                onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) intervalText = it },
+                                label = { Text(S.common.everyXMonths) },
+                                singleLine = true,
+                                isError = showValidation && (interval == null || interval !in 1..12),
+                                supportingText = if (showValidation && (interval == null || interval !in 1..12)) ({
+                                    Text(S.common.exampleMonths, color = Color(0xFFF44336))
+                                }) else null,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                colors = textFieldColors,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Box(
+                                modifier = if (showValidation && startDate == null)
+                                    Modifier.border(1.dp, Color.Red, RoundedCornerShape(4.dp))
+                                else Modifier
+                            ) {
+                                OutlinedButton(
+                                    onClick = { showDatePicker = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(if (startDate != null) S.common.startDateLabel(startDate!!.format(dateFormatter)) else S.common.pickStartDate)
+                                }
+                            }
+                            if (showValidation && startDate == null) {
+                                Text(S.common.selectAStartDate, style = MaterialTheme.typography.bodySmall, color = Color(0xFFF44336))
+                            }
+                            if (startDate != null) {
+                                Text(
+                                    text = S.common.dayOfMonth + ": " + startDate!!.dayOfMonth,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                                )
+                            }
+                        }
+                        RepeatType.BI_MONTHLY -> {
+                            OutlinedTextField(
+                                value = monthDay1Text,
+                                onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) monthDay1Text = it },
+                                label = { Text(S.common.firstDayOfMonth) },
+                                singleLine = true,
+                                isError = showValidation && (monthDay1 == null || monthDay1 !in 1..28),
+                                supportingText = if (showValidation && (monthDay1 == null || monthDay1 !in 1..28)) ({
+                                    Text(S.common.exampleBiMonthlyDay1, color = Color(0xFFF44336))
+                                }) else null,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                colors = textFieldColors,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            OutlinedTextField(
+                                value = monthDay2Text,
+                                onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) monthDay2Text = it },
+                                label = { Text(S.common.secondDayOfMonth) },
+                                singleLine = true,
+                                isError = showValidation && (monthDay2 == null || monthDay2 !in 1..28),
+                                supportingText = if (showValidation && (monthDay2 == null || monthDay2 !in 1..28)) ({
+                                    Text(S.common.exampleBiMonthlyDay2, color = Color(0xFFF44336))
+                                }) else null,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                colors = textFieldColors,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        RepeatType.ANNUAL -> {
+                            Box(
+                                modifier = if (showValidation && startDate == null)
+                                    Modifier.border(1.dp, Color.Red, RoundedCornerShape(4.dp))
+                                else Modifier
+                            ) {
+                                OutlinedButton(
+                                    onClick = { showDatePicker = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(if (startDate != null) S.common.startDateLabel(startDate!!.format(dateFormatter)) else S.common.pickStartDate)
+                                }
+                            }
+                            if (showValidation && startDate == null) {
+                                Text(S.common.selectAStartDate, style = MaterialTheme.typography.bodySmall, color = Color(0xFFF44336))
+                            }
+                        }
+                    }
+                }
+
+                DialogFooter {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel, maxLines = 1) }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    DialogPrimaryButton(
+                        onClick = {
+                            if (isValid) {
+                                val result = when (repeatType) {
+                                    RepeatType.DAYS -> IncomeSource(
+                                        id = existingSource?.id ?: 0,
+                                        source = sourceName.trim(),
+                                        description = description.trim(),
+                                        amount = amount!!,
+                                        repeatType = repeatType,
+                                        repeatInterval = interval!!,
+                                        startDate = startDate,
+                                        monthDay1 = null,
+                                        monthDay2 = null
+                                    )
+                                    RepeatType.WEEKS -> IncomeSource(
+                                        id = existingSource?.id ?: 0,
+                                        source = sourceName.trim(),
+                                        description = description.trim(),
+                                        amount = amount!!,
+                                        repeatType = repeatType,
+                                        repeatInterval = interval!!,
+                                        startDate = startDate,
+                                        monthDay1 = null,
+                                        monthDay2 = null
+                                    )
+                                    RepeatType.BI_WEEKLY -> IncomeSource(
+                                        id = existingSource?.id ?: 0,
+                                        source = sourceName.trim(),
+                                        description = description.trim(),
+                                        amount = amount!!,
+                                        repeatType = repeatType,
+                                        repeatInterval = 1,
+                                        startDate = startDate,
+                                        monthDay1 = null,
+                                        monthDay2 = null
+                                    )
+                                    RepeatType.MONTHS -> IncomeSource(
+                                        id = existingSource?.id ?: 0,
+                                        source = sourceName.trim(),
+                                        description = description.trim(),
+                                        amount = amount!!,
+                                        repeatType = repeatType,
+                                        repeatInterval = interval!!,
+                                        startDate = startDate,
+                                        monthDay1 = startDate!!.dayOfMonth,
+                                        monthDay2 = null
+                                    )
+                                    RepeatType.BI_MONTHLY -> IncomeSource(
+                                        id = existingSource?.id ?: 0,
+                                        source = sourceName.trim(),
+                                        description = description.trim(),
+                                        amount = amount!!,
+                                        repeatType = repeatType,
+                                        repeatInterval = 1,
+                                        startDate = null,
+                                        monthDay1 = monthDay1,
+                                        monthDay2 = monthDay2
+                                    )
+                                    RepeatType.ANNUAL -> IncomeSource(
+                                        id = existingSource?.id ?: 0,
+                                        source = sourceName.trim(),
+                                        description = description.trim(),
+                                        amount = amount!!,
+                                        repeatType = repeatType,
+                                        repeatInterval = 1,
+                                        startDate = startDate,
+                                        monthDay1 = null,
+                                        monthDay2 = null
+                                    )
+                                }
+                                onSave(result)
+                            } else {
+                                showValidation = true
+                            }
+                        }
+                    ) { Text(S.common.save) }
+                }
+                }
+            }
+            PulsingScrollArrow(
+                scrollState = dialogScrollState,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 12.dp, bottom = 50.dp)
+            )
+            }
+        }
+    }
+
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = startDate?.let {
+                it.atStartOfDay(ZoneId.of("UTC")).toInstant().toEpochMilli()
+            }
+        )
+        AdAwareDatePickerDialog(
+            title = S.common.selectDate,
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                var okBtnYPx by remember { mutableIntStateOf(0) }
+                DialogPrimaryButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            val selected = Instant.ofEpochMilli(millis).atZone(ZoneId.of("UTC")).toLocalDate()
+                            val monthInterval = intervalText.toIntOrNull() ?: 1
+                            if (repeatType == RepeatType.MONTHS && monthInterval != 12 && selected.dayOfMonth > 28) {
+                                toastState.show(S.common.dateDayTooHigh, okBtnYPx)
+                            } else {
+                                startDate = selected
+                                showDatePicker = false
+                            }
+                        }
+                    },
+                    modifier = Modifier.onGloballyPositioned { okBtnYPx = it.positionInWindow().y.toInt() }
+                ) { Text(S.common.ok) }
+            },
+            dismissButton = {
+                DialogSecondaryButton(onClick = { showDatePicker = false }) { Text(S.common.cancel) }
+            }
+        ) {
+            DatePicker(state = datePickerState, title = null)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BudgetResetDialog(
+    budgetPeriod: BudgetPeriod,
+    resetHour: Int,
+    resetDayOfWeek: Int,
+    resetDayOfMonth: Int,
+    onDismiss: () -> Unit,
+    onSave: (hour: Int, dayOfWeek: Int, dayOfMonth: Int) -> Unit
+) {
+    val S = LocalStrings.current
+    var selectedHour by remember { mutableIntStateOf(resetHour) }
+    var selectedDayOfWeek by remember { mutableIntStateOf(resetDayOfWeek) }
+    var dayOfMonthText by remember { mutableStateOf(resetDayOfMonth.toString()) }
+    var hourExpanded by remember { mutableStateOf(false) }
+    var dayOfWeekExpanded by remember { mutableStateOf(false) }
+
+    val textFieldColors = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = MaterialTheme.colorScheme.onBackground,
+        unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+        focusedBorderColor = MaterialTheme.colorScheme.primary,
+        unfocusedBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+        focusedLabelColor = MaterialTheme.colorScheme.primary,
+        unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+    )
+
+    val dayOfMonth = dayOfMonthText.toIntOrNull()
+    val isValid = when (budgetPeriod) {
+        BudgetPeriod.DAILY -> true
+        BudgetPeriod.WEEKLY -> true
+        BudgetPeriod.MONTHLY -> dayOfMonth != null && dayOfMonth in 1..28
+    }
+
+    val selectedDayOfWeekName = DayOfWeek.of(selectedDayOfWeek)
+        .getDisplayName(TextStyle.FULL, Locale.getDefault())
+
+    val resetDialogTitle = when (budgetPeriod) {
+        BudgetPeriod.WEEKLY -> S.budgetConfig.resetDayTitle
+        BudgetPeriod.MONTHLY -> S.budgetConfig.resetDateTitle
+        else -> S.budgetConfig.resetSettingsTitle
+    }
+
+    AdAwareDialog(
+        onDismissRequest = onDismiss,
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            val resetScrollState = rememberScrollState()
+            Box {
+            Column {
+                DialogHeader(resetDialogTitle)
+
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(resetScrollState)
+                        .padding(horizontal = 20.dp, vertical = 16.dp)
+                ) {
+                    if (budgetPeriod == BudgetPeriod.WEEKLY) {
+                        val weeklyDays = DayOfWeek.entries
+                        ExposedDropdownMenuBox(
+                            expanded = dayOfWeekExpanded,
+                            onExpandedChange = { dayOfWeekExpanded = it }
+                        ) {
+                            OutlinedTextField(
+                                value = selectedDayOfWeekName,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text(S.budgetConfig.dayOfWeekLabel) },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dayOfWeekExpanded) },
+                                colors = textFieldColors,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .menuAnchor()
+                            )
+                            ExposedDropdownMenu(
+                                expanded = dayOfWeekExpanded,
+                                onDismissRequest = { dayOfWeekExpanded = false }
+                            ) {
+                                weeklyDays.forEach { day ->
+                                    DropdownMenuItem(
+                                        text = { Text(day.getDisplayName(TextStyle.FULL, Locale.getDefault())) },
+                                        onClick = {
+                                            selectedDayOfWeek = day.value
+                                            dayOfWeekExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (budgetPeriod == BudgetPeriod.MONTHLY) {
+                        OutlinedTextField(
+                            value = dayOfMonthText,
+                            onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) dayOfMonthText = it },
+                            label = { Text(S.budgetConfig.dayOfMonthReset) },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            colors = textFieldColors,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    if (budgetPeriod == BudgetPeriod.DAILY) {
+                        ExposedDropdownMenuBox(
+                            expanded = hourExpanded,
+                            onExpandedChange = { hourExpanded = it }
+                        ) {
+                            OutlinedTextField(
+                                value = HOUR_LABELS[selectedHour],
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text(S.budgetConfig.resetHour) },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = hourExpanded) },
+                                colors = textFieldColors,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .menuAnchor()
+                            )
+                            ExposedDropdownMenu(
+                                expanded = hourExpanded,
+                                onDismissRequest = { hourExpanded = false }
+                            ) {
+                                HOUR_LABELS.forEachIndexed { index, label ->
+                                    DropdownMenuItem(
+                                        text = { Text(label) },
+                                        onClick = {
+                                            selectedHour = index
+                                            hourExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                DialogFooter {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel, maxLines = 1) }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    DialogPrimaryButton(
+                        onClick = {
+                            if (isValid) {
+                                val saveHour = if (budgetPeriod == BudgetPeriod.DAILY) selectedHour else 0
+                                onSave(saveHour, selectedDayOfWeek, dayOfMonth ?: resetDayOfMonth)
+                            }
+                        },
+                        enabled = isValid
+                    ) { Text(S.common.save) }
+                }
+                }
+            }
+            PulsingScrollArrow(
+                scrollState = resetScrollState,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 12.dp, bottom = 50.dp)
+            )
+            }
+        }
+    }
+}

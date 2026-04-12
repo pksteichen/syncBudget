@@ -1,0 +1,1895 @@
+package com.techadvantage.budgetrak.ui.strings
+
+object EnglishStrings : AppStrings {
+
+    override val defaultCategoryNames = DefaultCategoryNames(
+        other = "Other",
+        recurringIncome = "Recurring Income",
+        supercharge = "Supercharge",
+        transportation = "Transportation/Gas",
+        groceries = "Groceries",
+        entertainment = "Entertainment",
+        homeSupplies = "Home Supplies",
+        restaurants = "Restaurants",
+        charity = "Charity",
+        clothes = "Clothes"
+    )
+
+    override val common = CommonStrings(
+        ok = "OK",
+        cancel = "Cancel",
+        delete = "Delete",
+        save = "Save",
+        back = "Back",
+        next = "Next",
+        help = "Help",
+        reset = "Reset",
+        close = "Close",
+        periodDay = "day",
+        periodWeek = "week",
+        periodMonth = "month",
+        periodDays = "days",
+        periodWeeks = "weeks",
+        periodMonths = "months",
+        addNewIncomeTransaction = "Add New Income Transaction",
+        addNewExpenseTransaction = "Add New Expense Transaction",
+        applyToPastTitle = "Apply to Past Transactions?",
+        applyToPastBody = "Do you want to update past linked transactions to reflect the new amount? This will affect your current available budget.",
+        applyToPastConfirm = "Yes, update past",
+        applyToPastDeny = "No, future only",
+        sourceLabel = "Source",
+        merchantLabel = "Merchant/Service",
+        repeatTypeDays = "Day",
+        repeatTypeWeeks = "Week",
+        repeatTypeBiWeekly = "Every 2 Weeks",
+        repeatTypeMonths = "Month",
+        repeatTypeBiMonthly = "Twice per Month",
+        repeatTypeAnnual = "Annual",
+        budgetPeriodDaily = "Daily",
+        budgetPeriodWeekly = "Weekly",
+        budgetPeriodMonthly = "Monthly",
+        sourceName = "Source",
+        amount = "Amount",
+        repeatType = "Repeat Type",
+        everyXDays = "Days Between Repeats (1-365)",
+        intervalWeeks = "Weeks Between Repeats (1-52)",
+        everyXMonths = "Months Between Repeats (1-12)",
+        dayOfMonth = "Day of Month (1-28)",
+        firstDayOfMonth = "First Day (1-28)",
+        secondDayOfMonth = "Second Day (1-28)",
+        pickStartDate = "Pick Start Date",
+        startDateLabel = { date -> "Start Date: $date" },
+        selectAStartDate = "Select a start date",
+        dayOfWeekLabel = { day -> "Day of Week: $day" },
+        requiredSourceExample = "Required, e.g. Grocery Store",
+        exampleAmount = "e.g. 42.50",
+        exampleDays = "e.g. 14",
+        exampleWeeks = "e.g. 2",
+        exampleMonths = "e.g. 1",
+        exampleMonthDay = "e.g. 15",
+        exampleBiMonthlyDay1 = "e.g. 1",
+        exampleBiMonthlyDay2 = "e.g. 15",
+        language = "Language",
+        dateDayTooHigh = "Please select a date between the 1st and 28th of the month",
+        descriptionFieldLabel = "Description",
+        selectDate = "Select Date"
+    )
+
+    override val dashboard = DashboardStrings(
+        appTitle = "BudgeTrak",
+        notConfigured = "Not configured",
+        spending = "Spending",
+        settings = "Settings",
+        transactions = "Transactions",
+        savingsGoals = "Savings Goals",
+        amortization = "Amortization",
+        recurringExpenses = "Recurring Expenses",
+        addIncome = "Add Income",
+        addExpense = "Add Expense",
+        supercharge = "Supercharge",
+        superchargeTitle = "Supercharge Savings Goals",
+        superchargeRemaining = { remaining -> "Remaining: $remaining" },
+        superchargeAllocate = "Allocate",
+        range7d = "7 Days",
+        range30d = "30 Days",
+        range90d = "90 Days",
+        rangeAll = "All Time",
+        noDataAvailable = "No data available",
+        noSavingsGoalsConfigured = "No savings goals configured",
+        budgetLabel = { amount, period -> "$amount/$period" },
+        superchargeReduceContributions = "Reduce Future Contributions",
+        superchargeAchieveSooner = "Achieve Goal Sooner",
+        superchargeExtraShouldLabel = "Extra Contribution Should...",
+        superchargeNewContribution = { amount, period -> "New: $amount/$period" },
+        superchargeNewPayoff = { date -> "New payoff: $date" },
+        superchargeNewCompletion = { date -> "Completes: $date" },
+        superchargeAutoAdjust = "Contributions adjust automatically",
+        superchargeExceedsCash = { total -> "Total ($total) exceeds available cash" },
+        upgradeForFullWidget = "Upgrade for full widget",
+        adPlaceholder = "Ad",
+        switchToPieChart = "Switch to pie chart",
+        switchToBarChart = "Switch to bar chart",
+        budgetCalendar = "Budget Calendar"
+    )
+
+    override val settings = SettingsStrings(
+        title = "Settings",
+        configureYourBudget = "Configure Budget",
+        quickStartGuide = "Quick Start Guide",
+        currency = "Currency",
+        showDecimalPlaces = "Show decimal places",
+        dateFormat = "Date Format",
+        weekStartsOn = "Week Starts On",
+        weekStartWeeklyNote = "For weekly budgets, this is set by Reset Day in Budget Configuration.",
+        sunday = "Sunday",
+        monday = "Monday",
+        chartPalette = "Chart Palette",
+        bright = "Bright",
+        pastel = "Pastel",
+        sunset = "Sunset",
+        matchDays = "Match Days\u00A0(\u2060\u00b1\u2060N\u2060)",
+        matchPercent = "Match Percent\u00A0(\u2060\u00b1\u2060%\u2060)",
+        matchDollar = "Match Dollar\u00A0(\u2060\u00b1\u2060\$\u2060)",
+        matchChars = "Match Characters",
+        matchingConfiguration = "Matching Configuration",
+        paidUser = "Paid User",
+        subscriber = "Subscriber",
+        upgradeToAccess = "Upgrade to access this feature",
+        subscribeToAccess = "Subscribe to access this feature",
+        administratorOnly = "Administrator only",
+        showWidgetLogo = "Show logo on widget",
+        autoCapitalize = "Auto Capitalize",
+        privacySection = "Privacy",
+        crashReports = "Send crash reports",
+        crashReportsDesc = "Help us catch and fix bugs by sharing anonymous crash data. No financial information is sent.",
+        categories = "Categories",
+        charted = "Charted",
+        widget = "Widget",
+        addCategory = "Add Category",
+        editCategory = "Edit Category",
+        categoryName = "Category Name",
+        chooseIcon = "Choose Icon:",
+        deleteCategoryTitle = { name -> "Delete $name?" },
+        deleteCategoryNoTransactions = "No transactions use this category. It will be deleted immediately.",
+        reassignCategoryTitle = { name, count -> "Reassign $count transactions from $name" },
+        reassignCategoryBody = { name, count -> "$count transaction${if (count != 1) "s" else ""} use the \"$name\" category. Choose a replacement category before deleting." },
+        moveTo = "Move to",
+        moveAndDelete = "Move & Delete",
+        languageLabel = "Language",
+        english = "English",
+        spanish = "Espa\u00f1ol",
+        // Receipt Photos
+        receiptPhotosSection = "Receipt Photos",
+        cacheSize = { size -> "Cache size: $size MB" },
+        receiptRetention = "Receipt retention",
+        keepAll = "Keep all",
+        days30 = "30 days",
+        days60 = "60 days",
+        days90 = "90 days",
+        days180 = "180 days",
+        days365 = "1 year",
+        adminOnlyRetention = "Only the admin can change receipt retention",
+        // Backups
+        backupsSection = "Backups",
+        enableAutoBackups = "Enable automatic backups",
+        lastBackupLabel = "Last",
+        nextBackupLabel = "Next",
+        backupNow = "Backup Now",
+        restoreBackup = "Restore Backup",
+        frequencyLabel = "Frequency",
+        retentionLabel = "Retention",
+        week1 = "1 week",
+        weeks2 = "2 weeks",
+        weeks4 = "4 weeks",
+        retentionAll = "All",
+        leaveGroupToRestore = "Leave your group to restore from backup. Sync will overwrite restored data.",
+        // Backup dialogs
+        setBackupPassword = "Set Backup Password",
+        backupPasswordWarning = "This password encrypts your backups. If you lose it, your backups cannot be recovered. Store it somewhere safe.",
+        passwordLabel = "Password",
+        confirmPasswordLabel = "Confirm Password",
+        passwordTooShort = "Password must be at least 8 characters",
+        passwordMismatch = "Passwords do not match",
+        enableBackups = "Enable",
+        disableBackups = "Disable Backups?",
+        keepOrDeletePrompt = "Would you like to keep or delete your existing backup files?",
+        deleteAllConfirmMsg = "Are you sure? All backup files will be permanently deleted. This cannot be undone.",
+        deleteAllBtn = "Delete All",
+        confirmDeleteBtn = "Confirm Delete",
+        keepFilesBtn = "Keep Files",
+        noBackupsFound = "No backup files found.\n\nTo restore from a backup, place your backup files (backup_*_system.enc and backup_*_photos.enc) in:\n\nDownload/BudgeTrak/backups/\n\nIf you saved backups to a cloud service, download them to this folder first.",
+        selectBackupPrompt = "Select a backup to restore:",
+        withPhotos = "with photos",
+        dataOnly = "data only",
+        restoreWarning = "This will replace all current data. A pre-restore backup will be saved automatically.",
+        backupPasswordLabel = "Backup password",
+        enterPasswordError = "Enter your backup password",
+        restoreBtn = "Restore",
+        // Photo row
+        photoCamera = "Camera",
+        photoGallery = "Gallery",
+        deletePhotoTitle = "Delete Photo",
+        deletePhotoConfirm = "Remove this receipt photo?",
+        upgradeForPhotos = "Upgrade for receipt photos",
+        dataManagementSection = "Data Management",
+        activeTransactionsTally = { count, threshold -> "Active transactions: %,d / %,d".format(count, threshold) },
+        activeTransactionsCount = { count -> "Active transactions: %,d".format(count) },
+        archiveThresholdLabel = "Archive threshold",
+        archiveOff = "Off",
+        lastArchivedInfo = { date, count -> "Last archived: $date ($count transactions)" },
+        totalArchivedCount = { count -> "Total archived: %,d transactions".format(count) },
+        archivedToast = { count -> "Archived $count old transactions to keep the app fast" }
+    )
+
+    override val budgetConfig = BudgetConfigStrings(
+        title = "Budget Configuration",
+        budgetPeriod = "Budget Period",
+        safeBudgetAmountLabel = { symbol, amount, period -> "Safe Budget Amount: $symbol$amount/$period" },
+        budgetTrackingSince = { date -> "Budget tracking since: $date" },
+        refreshTime = "Refresh Time",
+        resetDay = "Reset Day",
+        resetDate = "Reset Date",
+        startResetBudget = "Start/Reset Budget",
+        manualBudgetOverride = "Manual Budget Override",
+        budgetAmountPer = { period -> "Budget Amount per $period" },
+        manualOverrideNote = { period -> "Savings Goals and Amortization page entries will reduce this amount. If you want exactly this amount added each $period, pause your Savings Goals and Amortization deductions on those pages." },
+        manualOverrideSavingsWarning = "Setting an amount higher than the safe budget amount calculated above will disable the needed savings calculation on the Recurring Expenses page.",
+        manualOverrideSeeHelp = "See help (?) for details.",
+        incomeSourceDescription = "Add sources of consistent income that you can rely on for budgeting. If your pay varies (large check, small check), you can make more than one entry for a source.",
+        addIncomeSource = "Add Income Source",
+        editIncomeSource = "Edit Income Source",
+        deleteSourceConfirmTitle = { name -> "Delete $name?" },
+        deleteSourceConfirmBody = "This income source will be permanently removed.",
+        resetBudgetConfirmTitle = "Start/Reset Budget?",
+        resetBudgetConfirmBody = "This will reset the budget start date to today and set available cash to one period's budget amount. Your transactions will not be affected.",
+        resetSettingsTitle = "Refresh Time Settings",
+        resetDayTitle = "Reset Day",
+        resetDateTitle = "Reset Date",
+        resetHour = "Reset Hour",
+        dayOfWeekLabel = "Day of Week",
+        dayOfMonthReset = "Day of Month (1-28)",
+        requiredPaycheckExample = "Required, e.g. Paycheck",
+        exampleIncomeAmount = "e.g. 2500.00",
+        incomeModeLabel = "Income Mode",
+        incomeModeFixed = "Use Fixed Income",
+        incomeModeActual = "Use Actual Income",
+        incomeModeActualAdjust = "Use Actual Income\n& Adjust Budget"
+    )
+
+    override val transactions = TransactionsStrings(
+        title = "Transactions",
+        all = "All",
+        expensesFilter = "Expenses",
+        incomeFilter = "Income",
+        recurringFilter = "Recurring",
+        excludedFilter = "Excluded",
+        notVerifiedFilter = "Not Verified",
+        photosFilter = "Photos",
+        sortDateDesc = "Date \u2193",
+        sortDateAsc = "Date \u2191",
+        sortAmountDesc = "Amount \u2193",
+        sortAmountAsc = "Amount \u2191",
+        sortCategory = "Category",
+        addIncome = "Add Income",
+        addExpense = "Add Expense",
+        editTransaction = "Edit Transaction",
+        search = "Search",
+        dateSearch = "Date Search",
+        textSearch = "Text Search",
+        amountSearch = "Amount Search",
+        searchBy = "Search by",
+        searchResults = "Search Results",
+        tapToClearSearch = "Tap to clear search",
+        noTransactions = "No transactions",
+        selectAll = "Select All",
+        changeCategory = "Change Category",
+        editMerchant = "Edit Merchant/Source",
+        deleteSelected = "Delete Selected",
+        selectedCount = { count -> "$count selected" },
+        date = "Date",
+        merchant = "Merchant",
+        category = "Category",
+        amount = "Amount",
+        total = "Total",
+        pieChart = "Pie chart mode",
+        calculator = "Calculator mode",
+        percentage = "Percentage mode",
+        save = "Save",
+        load = "Load",
+        saveTransactions = "Save Transactions",
+        loadTransactions = "Import / Load",
+        csv = "CSV",
+        xls = "Excel (.xlsx)",
+        pdf = "PDF",
+        selectFile = "Select File",
+        usBank = "US Bank",
+        secureSyncCsv = "BudgeTrak CSV Save File",
+        duplicateDetected = "Possible Duplicate",
+        duplicateExisting = "Existing:",
+        duplicateNew = "New:",
+        ignore = "Ignore",
+        keepNew = "Keep New",
+        keepExisting = "Keep Existing",
+        keepBoth = "Keep Both",
+        ignoreAll = "Skip All",
+        verifiedToast = "You have verified this transaction!",
+        unverifiedToast = "You have marked this transaction as unverified.",
+        excludedToast = "Transaction excluded from budget.",
+        includedToast = "Transaction included in budget.",
+        effectTitleRecurring = "Linked Recurring Expense",
+        effectTitleAmortization = "Linked Amortization",
+        effectTitleIncome = "Linked Income Source",
+        effectTitleSavingsGoal = "Savings Goal Purchase",
+        effectTitleExcluded = "Excluded from Budget",
+        effectRecurringMatch = { amt, name, reAmt -> "This $amt expense matches the budgeted $reAmt for \"$name\", so it has no additional effect on your available cash.\n\nIf deleted, the budgeted amount will continue being deducted each period." },
+        effectRecurringUnder = { amt, name, reAmt, diff -> "This $amt expense is $diff less than the budgeted $reAmt for \"$name\". The $diff difference is added back to your available cash.\n\nIf deleted, the budgeted amount will continue being deducted each period." },
+        effectRecurringOver = { amt, name, reAmt, diff -> "This $amt expense is $diff more than the budgeted $reAmt for \"$name\". The $diff overage is deducted from your available cash.\n\nIf deleted, the budgeted amount will continue being deducted each period." },
+        effectAmortizationComplete = { amt, name, aeTotal, periods, period -> "This $amt purchase is linked to \"$name\", a completed amortization of $aeTotal over $periods ${period}s. The full cost has already been deducted from your budget, so this transaction has no additional effect on available cash.\n\nIf deleted, the transaction is removed but the amortization entry remains." },
+        effectAmortizationActive = { amt, name, aeTotal, perPeriod, period, elapsed, total -> "This $amt purchase is linked to \"$name\", an amortization of $aeTotal at $perPeriod/$period ($elapsed of $total periods elapsed). The cost is being spread across budget periods instead of hitting all at once.\n\nIf deleted, the transaction is removed but the amortization entry continues its deductions." },
+        effectIncomeFixed = { amt, name, srcAmt -> "This $amt income is linked to \"$name\" (budgeted at $srcAmt). In Fixed mode, the budget uses the fixed amount regardless of what you actually received, so this transaction has no effect on available cash.\n\nIf deleted, the budgeted income amount remains unchanged." },
+        effectIncomeActualMatch = { amt, name, srcAmt -> "This $amt income matches the budgeted $srcAmt for \"$name\". No adjustment to available cash.\n\nIf deleted, the budget reverts to using only the budgeted amount." },
+        effectIncomeActualOver = { amt, name, srcAmt, diff -> "This $amt income is $diff more than the budgeted $srcAmt for \"$name\". The $diff surplus is added to your available cash.\n\nIf deleted, this surplus will be removed from available cash." },
+        effectIncomeActualUnder = { amt, name, srcAmt, diff -> "This $amt income is $diff less than the budgeted $srcAmt for \"$name\". The $diff shortfall is deducted from your available cash.\n\nIf deleted, this shortfall will be removed from available cash." },
+        effectIncomeActualAdjust = { amt, name -> "This $amt income is linked to \"$name\". In Actual-Adjust mode, the budgeted amount was updated to match, so there is no difference.\n\nIf deleted, the budget reverts to the source's current amount." },
+        effectSavingsGoal = { amt, name -> "This $amt purchase was funded from savings goal \"$name\". The money came from savings, not your budget, so it has no effect on available cash.\n\nIf deleted, the spent amount will be restored to the savings goal." },
+        effectSavingsGoalPartial = { savingsAmount, goalName, budgetAmount ->
+            "Your savings goal \"$goalName\" covered $savingsAmount of this purchase. The remaining $budgetAmount was deducted from your available cash."
+        },
+        effectExcluded = { amt -> "This $amt transaction is excluded from budget calculations. It has no effect on your available cash.\n\nIf deleted, it is simply removed." },
+        bulkVerifyTitle = "Verify Transactions",
+        bulkVerifyMessage = { count -> "Mark $count selected transaction(s) as:" },
+        markVerified = "Verified",
+        markUnverified = "Unverified",
+        recurringExpenseMatch = "Recurring Transaction Detected",
+        recurringMatchTitle = { source -> "Matched Recurring Expense:" },
+        recurringMatchBody = { source, amount -> "$source \u2014 $amount" },
+        yesRecurring = "Yes, Recurring",
+        noRegularExpense = "No, Not Recurring",
+        amortizationMatch = "Amortization Transaction Detected",
+        amortizationMatchTitle = { source -> "Matched Amortization Entry:" },
+        amortizationMatchBody = { source, amount -> "$source \u2014 $amount" },
+        yesAmortization = "Yes, Amortized",
+        noRegularAmort = "No, Not Amortized",
+        budgetIncomeMatch = "Budget Income Detected",
+        budgetIncomeMatchTitle = { source -> "Matched Income Source:" },
+        budgetIncomeMatchBody = { source, amount -> "$source \u2014 $amount" },
+        yesBudgetIncome = "Yes, Budget Income",
+        noExtraIncome = "No, Extra Income",
+        dateAdvisory = "Note: This transaction's date differs from the expected schedule by more than 2 days. Consider updating your recurring expense configuration.",
+        transactionLabel = "Transaction",
+        incomeSourceLabel = "Income Source",
+        amortizationEntryLabel = "Amortization Entry",
+        recurringExpenseLabel = "Recurring Expense",
+        savedSuccessfully = { count -> "$count transactions saved successfully." },
+        loadedSuccessfully = { loaded, total -> "$loaded of $total transactions loaded." },
+        allSkipped = { total -> "0 of $total transactions loaded. Previously loaded data skipped." },
+        passwordMinLength = "Password must be at least 8 characters",
+        passwordsMustMatch = "Passwords do not match",
+        newMerchantName = "Description",
+        filterByCategory = { name -> "Filtered by: $name" },
+        tapToClearFilter = "Tap to clear filter",
+        dateRangeSearch = "Date Range Search",
+        startDate = "Select Start Date",
+        endDate = "Select End Date",
+        minAmount = "Min Amount",
+        maxAmount = "Max Amount",
+        searchText = "Search terms",
+        from = "From",
+        to = "To",
+        format = "Format:",
+        parseError = "Parse Error",
+        unknownError = "Unknown error",
+        parsedBeforeError = { count: Int -> "$count transactions parsed before error." },
+        rowsSkippedWarning = { skipped: Int, total: Int -> "$skipped of $total rows in the file could not be parsed and were skipped." },
+        keep = "Keep",
+        requiredMerchantExample = "Required, e.g. Grocery Store",
+        moveCategoryValue = "Move Category Value",
+        sumMismatch = "Sum Mismatch",
+        maxCategoriesReached = "Maximum of 7 categories per transaction",
+        maxAmount2 = { max: String -> "Max: $max" },
+        includeAllData = "Include all app data (full backup)",
+        fullBackupNote = "All app data will be saved including settings, categories, recurring expenses, savings goals, and amortization entries.",
+        fullBackupDetected = "Full Backup Detected",
+        fullBackupBody = "This file contains settings, categories, recurring expenses, savings goals, amortization entries, and all other app data. How would you like to load it?",
+        loadTransactionsOnly = "Load Transactions Only",
+        loadAllDataOverwrite = "Load All Data & Overwrite",
+        fullRestoreWarning = "Warning: A full restore will delete any transactions or changes made since this save was created. Transactions entered after that point will need to be re-entered or reloaded from a bank CSV.",
+        fullBackupRestored = "Full backup restored successfully",
+        fullBackupSaved = "Full backup saved successfully",
+        fullBackupSyncWarning = "Restoring a full backup will dissolve the current SYNC group. You will need to create a new group and share a new pairing code with the other linked devices.",
+        fullBackupNonAdminBlock = "Only the group admin can restore a full backup. A full restore would corrupt sync state for all devices.",
+        fullBackupGroupRecreated = "Backup restored. New SYNC group created \u2014 share the pairing code with the other linked devices.",
+        fullBackupGroupDissolved = "Backup restored. SYNC group dissolved.",
+        linkToRecurring = "Link to",
+        linkToAmortization = "Link to",
+        createNewAmortization = "Create New Amortization",
+        linkToIncome = "Link to",
+        linkToSavingsGoal = "Link to",
+        linkMismatchTitle = "Amount Mismatch",
+        linkMismatchBody = { txnAmt, entryAmt -> "Transaction ($txnAmt) differs from entry ($entryAmt)." },
+        linkAnyway = "Link Anyway",
+        updateTransactionAmount = "Update Transaction",
+        linkedToRecurring = { name -> "Recurring: $name" },
+        linkedToAmortization = { name -> "Amortization: $name" },
+        linkedToIncome = { name -> "Income: $name" },
+        linkedToSavingsGoal = { name -> "Savings Goal: $name" },
+        unmodifiedBankTransactions = "Unverified Transactions",
+        formatGenericCsv = "Any Bank CSV",
+        formatUsBank = "US Bank",
+        formatBudgeTrakCsv = "BudgeTrak CSV Save File",
+        unknown = "Unknown",
+        amountExample = "e.g. 42.50",
+        moveCategoryBody = { valueLabel, catName -> "Where would you like to place $valueLabel from $catName?" },
+        sumMismatchBody = { catTotal, txnTotal -> "Category amounts total $catTotal but Total is $txnTotal." },
+        selectFieldToAdjust = "Select field to adjust:",
+        discardChangesTitle = "Discard Changes?",
+        discardChangesBody = "You have unsaved changes. Discard them?",
+        discard = "Discard",
+        keepEditing = "Keep Editing",
+        range6mo = "6mo",
+        range1yr = "1yr",
+        range2yr = "2yr",
+        rangeAll = "All",
+        archivedNotEditable = "Archived transactions cannot be edited",
+        editDescriptionAlso = "Edit Description also",
+        newDescription = "New description",
+        clearDescriptionConfirm = { count -> "This will clear the description on all $count selected transactions. Continue?" }
+    )
+
+    override val savingsGoals = SavingsGoalsStrings(
+        title = "Savings Goals",
+        description = "Plan and save for future expenses or financial targets. The app automatically deducts a small amount each budget period.",
+        addSavingsGoal = "Add Savings Goal",
+        editSavingsGoal = "Edit Savings Goal",
+        name = "Description",
+        targetAmount = "Target Amount",
+        startingSavedAmount = "Starting Saved Amount",
+        contributionPerPeriod = "Contribution per Period",
+        calculateWithTargetDate = "Calculate with Target Date",
+        goalReached = "Goal reached!",
+        paused = "Paused",
+        budgetReduction = { amount, period -> "-$amount/$period" },
+        contributionLabel = { amount, period -> "$amount/$period" },
+        savedOf = { saved, total -> "$saved of $total saved" },
+        targetAmountBy = { amount, date -> "$amount by $date" },
+        targetLabel = { amount -> "Target: $amount" },
+        deleteSavingsGoal = "Delete Savings Goal?",
+        deleteGoalConfirm = { name -> "Permanently delete \"$name\"?" },
+        pauseAll = "Pause All",
+        resumeAll = "Resume All",
+        pause = "Pause",
+        resume = "Resume",
+        requiredNameExample = "Required, e.g. New Tires",
+        exampleTargetAmount = "e.g. 1000.00",
+        exampleContribution = "e.g. 5.00",
+        mustBeLessThanTarget = "Must be less than target",
+        payoffDate = { date -> "Payoff: $date" },
+        savingsRequiredMessage = { amount, period -> "You need $amount saved to cover $period budget and these expenses." },
+        savingsPeriodDaily = "today's",
+        savingsPeriodWeekly = "this week's",
+        savingsPeriodMonthly = "this month's",
+        savingsWhyLink = "Why?",
+        savingsWhyTitle = "Why Savings Are Needed",
+        savingsWhyBody = "This number comes from a cash flow simulation that walks forward from today through all your upcoming income deposits, expense due dates, and budget spending needs.\n\nIt finds the point in the future where your cash balance would dip the lowest — for example, right before a big paycheck arrives but after rent is due — and tells you how much buffer you need to survive that dip!\n\nThis number changes daily as you move closer to income and expense dates. For example, right after payday it will be highest (many spending days ahead), and right before payday it will be lowest. Once you are caught up, you should stay caught up if you don't overspend. If your bank account is lower than this number, consider setting up a savings plan on the Savings page to catch up.",
+        savingsLowPointToast = { date -> "Cash flow low point: $date" },
+        linkedTransactions = "Linked Transactions",
+        noLinkedTransactions = "No linked transactions",
+        viewSimulationChart = "Tap to view chart",
+        simulationGraphTitle = "Cash Flow Simulation",
+        simulationGraphDescription = "Projected cash flow over the simulation period. Adjust your current savings or set aside extra money to see how it affects your future expected cash on hand.",
+        simulationSavingsLabel = "Current Savings",
+        simulationSavedPerLabel = { period -> "Saved per $period" },
+        simulationSavingsExceedBudget = "Savings per period exceed the budget amount",
+        simulationNoData = "No simulation data available"
+    )
+
+    override val amortization = AmortizationStrings(
+        title = "Amortization",
+        description = "Spread a large expense across multiple budget periods so it doesn't hit your budget all at once.",
+        addEntry = "Add Amortization Entry",
+        editEntry = "Edit Amortization Entry",
+        sourceName = "Merchant/Service",
+        totalAmount = "Total Amount",
+        budgetPeriods = { period -> "Budget Periods ($period)" },
+        selectStartDate = "Pick Start Date",
+        startDateLabel = { date -> "Start Date: $date" },
+        completed = "Completed",
+        xOfYComplete = { x, y, period -> "$x of $y $period complete" },
+        totalPerPeriod = { total, perPeriod, periodLabel -> "$total ($perPeriod/$periodLabel)" },
+        deleteEntryTitle = "Delete Amortization Entry?",
+        deleteEntryConfirm = { name -> "Permanently delete \"$name\"?" },
+        requiredLaptopExample = "Required, e.g. Laptop",
+        exampleTotalAmount = "e.g. 900.00",
+        examplePeriods = "e.g. 90",
+        selectAStartDate = "Select a start date",
+        paused = "Paused",
+        pauseAll = "Pause All",
+        resumeAll = "Resume All",
+        pause = "Pause",
+        resume = "Resume",
+        linkedTransactions = "Linked Transactions",
+        noLinkedTransactions = "No linked transactions"
+    )
+
+    override val recurringExpenses = RecurringExpensesStrings(
+        title = "Recurring Expenses",
+        description = "Register bills, subscriptions, and recurring payments so the budget calculator accounts for them automatically.",
+        addExpense = "Add Recurring Expense",
+        editExpense = "Edit Recurring Expense",
+        deleteExpenseTitle = { name -> "Delete $name?" },
+        deleteExpenseBody = "This recurring expense will be permanently removed.",
+        descriptionLabel = "Merchant/Service",
+        requiredNetflixExample = "Required, e.g. Netflix",
+        exampleAmount = "e.g. 15.99",
+        monthlyExpenses = "Monthly Expenses",
+        annualExpenses = "Annual Expenses",
+        otherExpenses = "Other Expense Periods",
+        noMonthlyExpenses = "No monthly expenses",
+        noAnnualExpenses = "No annual expenses",
+        noOtherExpenses = "No other recurring expenses",
+        nextOn = { amount, date -> "$amount on $date" },
+        everyNDays = { n -> "Every $n days" },
+        everyNWeeks = { n -> "Every $n weeks" },
+        everyNMonths = { n -> "Every $n months" },
+        everyTwoWeeks = "Every 2 weeks",
+        twicePerMonth = "Twice per month",
+        linkedTransactions = "Linked Transactions",
+        noLinkedTransactions = "No linked transactions",
+        acceleratedMode = "Accelerated Set-aside",
+        acceleratedModeEnabled = "Accelerated mode enabled",
+        acceleratedModeDisabled = "Accelerated mode disabled",
+        setAsideProgress = { saved, total -> "$saved / $total set aside" }
+    )
+
+    override val sync = SyncStrings(
+        title = "SYNC",
+        syncButton = "SYNC",
+        syncDescription = "Share your budget with up to 5 devices in your household.",
+        createGroup = "Create SYNC Group",
+        createGroupDescription = "Start a new SYNC group and invite other devices with a pairing code.",
+        joinGroup = "Join SYNC Group",
+        joinGroupDescription = "Enter a pairing code from another device to join its SYNC group.",
+        leaveGroup = "Leave Group",
+        dissolveGroup = "Dissolve Group",
+        evictionRemoved = "The administrator of your Sync group has removed your device. You can rejoin on the Sync page in Settings.",
+        evictionDissolved = "The administrator of your Sync group has dissolved the group. You can create or join a new group on the Sync page in Settings.",
+        subscriptionGraceWarning = { days -> "Your group administrator's subscription has expired. Please remind them to renew to keep the group active, or you can subscribe and take over admin duties on the Sync page. Without a subscription, after $days day${if (days != 1) "s" else ""} the Sync feature will go away, but you will not lose data. Each device will operate independently." },
+        claimVotePrompt = { name -> "Group member \"$name\" has requested to assume administrator duties." },
+        claimAccept = "Accept",
+        claimReject = "Reject",
+        syncNow = "Sync Now",
+        syncCashToAdmin = "Sync Available Cash to Admin",
+        lastSynced = { time -> "Last data sent/received: $time" },
+        syncing = "Syncing...",
+        syncError = "Sync error",
+        notConfigured = "Not configured",
+        groupId = "Group ID",
+        pairingCode = "Pairing Code",
+        enterPairingCode = "Enter pairing code",
+        pairingCodeExpiry = "Code expires in 10 minutes",
+        generateCode = "Generate Pairing Code",
+        deviceRoster = "Device Roster",
+        devices = "Devices",
+        thisDevice = "This device",
+        admin = "Admin",
+        transferAdmin = "Transfer Admin",
+        removeDevice = "Remove Device",
+        confirmLeave = "Are you sure you want to leave this sync group? Your local data will be kept but will no longer sync.",
+        confirmDissolve = "Are you sure you want to dissolve this group? All members will be disconnected and sync data will be deleted.",
+        connected = "Connected",
+        disconnected = "Disconnected",
+        syncStatusSynced = "Synced",
+        syncStatusSyncing = "Syncing",
+        syncStatusStale = "Stale",
+        syncStatusError = "Error",
+        syncStatusOff = "Off",
+        groupCreated = "SYNC group created",
+        joinedGroup = "Joined SYNC group",
+        leftGroup = "Left SYNC group",
+        groupDissolved = "Group dissolved",
+        pairingCodeCopied = "Pairing code copied",
+        invalidPairingCode = "Invalid or expired pairing code",
+        encryptionKey = "Encryption Key",
+        deviceName = "Device Name",
+        adminOnly = "Admin only",
+        groupTimezone = "Group Timezone",
+        selectTimezone = "Select Timezone",
+        showAttributionLabel = "Show Attribution",
+        you = "You",
+        repairAttributions = "Repair Attributions",
+        repairAttributionsBody = "These device codes appear in your transactions but are not in the current SYNC group. Enter a nickname for each to display instead of the code.",
+        nicknameHint = "Nickname",
+        noOrphanedCodes = "No unrecognized device codes found.",
+        staleWarning60 = "Sync soon to keep your data current",
+        staleWarning75 = "15 days until sync data expires",
+        staleWarning85 = "5 days to sync or local changes will need to be discarded",
+        staleBlocked = "Sync blocked \u2014 full refresh required",
+        claimAdmin = "Claim Admin Role",
+        objectClaim = "Object",
+        claimPending = "Admin claim pending",
+        claimApproved = "You have been approved as the new administrator.",
+        claimRejected = "Your request to assume administrator duties was rejected.",
+        claimExpiry = { time -> "Claim expires: $time" },
+        claimBy = { name -> "$name is claiming admin role" },
+        errorRemovedFromGroup = "You have been removed from this group",
+        errorGroupDeleted = "This group has been dissolved",
+        errorEncryption = "Encryption error \u2014 check your pairing",
+        joinWarningTitle = "Replace Local Data?",
+        joinWarningBody = "Joining a SYNC group will replace your local budget data with the group's shared data. Your current transactions, goals, and settings will be overwritten. This cannot be undone.",
+        dissolveError = "Failed to reach server \u2014 try again later",
+        enterNickname = "Your name",
+        createGroupTitle = "Create Group",
+        renameDevice = "Rename Device",
+        removeDeviceTitle = "Remove Device",
+        removeDeviceMessage = { name -> "Remove \"$name\" from this group? The device will be disconnected from SYNC." },
+        removeDeviceConfirm = "Remove",
+        subscriptionExpiredNotice = "Admin subscription expired. Group will be dissolved soon. Subscribe and claim admin to keep the group active.",
+        updateRequiredNotice = "Another device in your SYNC group updated BudgeTrak. Please update from the Play Store to continue syncing.",
+        copy = "Copy"
+    )
+
+    // ── Help Screen Strings ──
+
+    override val dashboardHelp = DashboardHelpStrings(
+        title = "Dashboard Help",
+        welcomeTitle = "Welcome to BudgeTrak SYNC",
+        welcomeBody = "BudgeTrak is a privacy-first budgeting app designed to give you " +
+            "a clear, real-time picture of how much money you can safely spend right now. " +
+            "Unlike traditional budget trackers that only show you where your money went, " +
+            "this app tells you how much you can spend without putting yourself in a bind " +
+            "tomorrow \u2014 calculated from your actual income schedule, recurring bills, " +
+            "and financial goals.",
+        dailyBudgetNumberTitle = "Your Daily Budget Number",
+        dailyBudgetNumberBody = "The large number on the Solari display is your Available Cash \u2014 the amount " +
+            "you can spend right now without jeopardizing your bills, savings goals, or " +
+            "financial commitments. Think of it as the answer to the question everyone asks: " +
+            "\"How much can I afford to spend?\"",
+        solariDisplayTitle = "The Solari Display",
+        solariDisplayBody = "The centerpiece of the dashboard is the Solari-style flip display \u2014 inspired by the " +
+            "split-flap departure boards found in train stations and airports. It shows two " +
+            "key pieces of information:",
+        availableCashTitle = "Available Cash (Main Number)",
+        availableCashBody = "This is how much money you have available for discretionary spending this period. " +
+            "It is automatically computed from your budget history and transactions, " +
+            "and stays perfectly in sync across all your devices:",
+        bullet1 = "Increases each budget period (daily, weekly, or monthly) by your budget amount",
+        bullet2 = "Decreases when you record an expense",
+        bullet3 = "Increases when you record extra (non-budget) income",
+        bullet4 = "Shows negative when you've overspent",
+        budgetLabelTitle = "Budget Label (Below the Number)",
+        budgetLabelBody = "The label beneath the digits shows your budget amount \u2014 for example, " +
+            "\"\$42.50/day\" or \"\$297.50/week\". This tells you how much is added to " +
+            "your available cash each period. If your budget is not yet configured, " +
+            "it shows \"Not configured\".",
+        budgetPeriodExpl = "You can configure your budget to update daily, weekly, or monthly, and to start " +
+            "on your custom schedule. However, we strongly encourage a daily budget! A daily budget is much " +
+            "easier to follow. Longer term budgets sometimes result in a person spending too much early on " +
+            "and ending up short. The technology behind our budgeting model averages out your income and " +
+            "recurring expenses using a detailed simulation far into the future, and then calculates exactly " +
+            "how much you can spend each day (if you choose) to keep from going negative. Even if your income " +
+            "is erratic and your bills are spread out throughout the month or year, the app will give you a " +
+            "fixed number you can rely on to keep you in control. See the Budget Configuration Help page for " +
+            "more details (and How the Budget Works below).",
+        headerBarTitle = "Header Bar",
+        headerBarBody = "The header bar provides access to settings and this help page:",
+        headerSettingsDesc = "Open the Settings screen to configure display options, categories, and access Budget Configuration.",
+        headerHelpDesc = "Opens this help page.",
+        navBarTitle = "Navigation Bar",
+        navBarBody = "The bottom navigation bar provides quick access to all major features:",
+        navTransactionsDesc = "Record and manage your income and expenses. Import bank statements, search, filter, and categorize.",
+        navSavingsDesc = "Plan and save for future expenses or financial targets. Choose a fixed per-period contribution, " +
+            "and you can even use a target date to calculate it automatically. While subscribers can access a detailed " +
+            "chart on this page that shows your future cash flow (which can be modified to simulate cash accumulation " +
+            "over time at other spending levels), free users also have access to the most important number \u2014 how much " +
+            "do you need to have saved right now to pay your future bills?",
+        navAmortizationDesc = "Spread a recent large expense across multiple budget periods so it doesn't hit your budget all at once.",
+        navRecurringDesc = "Register bills, subscriptions, and loan payments so the budget calculator accounts for them automatically.",
+        navCalendarDesc = "View a calendar showing all your upcoming bills and income.",
+        spendingChartTitle = "Spending Chart",
+        spendingChartBody = "Below the Solari display, a spending chart visualizes how your expenses are " +
+            "distributed across categories. A title bar above the chart provides controls:",
+        chartTitleBarTitle = "Chart Title Bar",
+        chartRangeBullet = "Range button (left) \u2014 cycles through time ranges.",
+        chartToggleBullet = "Chart type toggle (right) \u2014 switch between pie chart and bar chart views",
+        chartIconsTitle = "Pie Chart Icons",
+        chartIconsBody = "Category icons are displayed inside their pie wedges in a contrasting color " +
+            "(white on dark wedges, black on light wedges) for readability. Categories with " +
+            "very small slices (less than 4% of spending) have their icons stacked along the " +
+            "left margin of the chart in the wedge's color. Tap any icon to see the category " +
+            "name and amount.",
+        chartPaletteTitle = "Chart Palette",
+        chartPaletteBody = "The colors used in the chart can be changed in Settings under \"Chart Palette\". " +
+            "Three palettes are available: Bright, Pastel, and Sunset. Each palette automatically " +
+            "adjusts for light and dark mode.",
+        quickButtonsTitle = "Quick Transaction Buttons",
+        quickButtonsBody = "Below the chart, two large buttons let you quickly add transactions without " +
+            "leaving the dashboard:",
+        quickAddIncomeDesc = "Opens the Add Income dialog. The transaction is saved and available cash increases.",
+        quickAddExpenseDesc = "Opens the Add Expense dialog. The transaction is saved and available cash decreases.",
+        quickMatchingNote = "Transactions added from the dashboard go through the same matching checks as " +
+            "the Transactions screen: duplicate detection, recurring expense matching, " +
+            "amortization matching, and budget income detection.",
+        superchargeTitle = "Supercharge",
+        superchargeBody = "The bolt icon in the lower-right corner of the Solari board opens Supercharge. " +
+            "This feature lets you make extra one-time contributions to your Savings Goals " +
+            "from your available cash.",
+        superchargeIconDesc = "Allocate extra funds to one or more Savings Goals from your current available cash.",
+        superchargeDialogBody = "In the Supercharge dialog, enter an amount for each goal you want to boost. " +
+            "The total is deducted from your available cash and added to the goals' saved amounts. " +
+            "This is useful when you have surplus cash and want to reach a goal faster.",
+        howBudgetWorksTitle = "How the Budget Works",
+        howBudgetWorksBody = "The budget engine runs a cash flow simulation using your income schedule and " +
+            "recurring expenses to determine a safe spending amount for each budget period.",
+        safeBudgetTitle = "Safe Budget Amount",
+        safeBudgetBody = "This is the maximum you can spend per period (day, week, or month) without " +
+            "running out of money to cover your bills. The calculation:",
+        safeBudgetStep1 = "Income projection",
+        safeBudgetStep1Desc = "Your income sources and their repeat schedules are projected forward one year.",
+        safeBudgetStep2 = "Expense simulation",
+        safeBudgetStep2Desc = "Your recurring expenses are projected over the same period.",
+        safeBudgetStep3 = "Timing safety",
+        safeBudgetStep3Desc = "The engine ensures that even in months with clustered bills, the budget amount covers all obligations.",
+        budgetAmountTitle = "Budget Amount",
+        budgetAmountBody = "Your actual per-period budget is the Safe Budget Amount minus any active deductions:",
+        budgetSavingsBullet = "Savings Goal deductions \u2014 money set aside for planned purchases and savings targets",
+        budgetAmortBullet = "Amortization deductions \u2014 spreading past large expenses over time",
+        budgetAccelBullet = "Optional Accelerated deductions for new recurring expenses \u2014 to make sure you have the money available for that first bill",
+        budgetAmountNote = "This ensures your spending money is already adjusted for both upcoming and past large expenses.",
+        availableCashSectionTitle = "Available Cash",
+        availableCashSectionBody = "Available Cash is the number shown on the Solari display. It is automatically " +
+            "computed from your budget period credits, expenses, and extra income. " +
+            "With a SYNC group enabled (subscribers), it stays consistent across all devices without manual intervention. " +
+            "The result: a single number that tells all of you exactly how much you can spend.",
+        gettingStartedTitle = "Getting Started",
+        gettingStartedBody = "The Quick Start Guide may have already taken you through these steps (or you can start it on the Settings page), " +
+            "but otherwise follow these steps to set up your budget for the first time:",
+        step1Title = "Open Settings",
+        step1Desc = "Tap the gear icon in the top left to configure your currency, display preferences, and transaction categories.",
+        step2Title = "Configure Your Budget",
+        step2Desc = "In Settings, tap \"Configure Your Budget\" to open Budget Configuration. Choose a budget period (Daily is recommended for most people).",
+        step3Title = "Add Income Sources",
+        step3Desc = "In Budget Configuration, add all reliable income sources \u2014 your salary, regular side income, etc. Set the repeat schedule for each (e.g., \"Month\" on the 1st and 15th for bi-monthly pay).",
+        step4Title = "Add Recurring Expenses",
+        step4Desc = "Navigate to Recurring Expenses (the sync icon on the dashboard) and add all your regular bills: rent, utilities, insurance, subscriptions, loan payments.",
+        step5Title = "Start Tracking",
+        step5Desc = "Return to the dashboard. Your Solari display now shows your available cash. Record expenses as you spend and watch your number update in real time.",
+        habitsTitle = "Building Better Financial Habits",
+        habitsBody = "BudgeTrak is more than a tracker \u2014 it's a tool for building " +
+            "lasting financial awareness. Here's how to get the most out of it:",
+        tipKnowTitle = "Know Your Number",
+        tipKnowBody = "Check the Solari display at least once a day. The simple act of knowing " +
+            "how much you can spend creates mindfulness around purchases. Research shows " +
+            "that people who track their spending spend 10\u201320% less on average, " +
+            "simply from awareness.",
+        tipRecordTitle = "Record Every Expense",
+        tipRecordBody = "Small purchases are where budgets quietly fail. A coffee here, a snack " +
+            "there \u2014 they add up fast. Recording every expense keeps you honest " +
+            "and helps you spot patterns you might not notice otherwise. Subscribers can use bank CSV " +
+            "imports for efficiency or to catch up if you fall behind, but all users should manually log cash purchases. " +
+            "Free users should enter bank transactions as they are made via credit/debit cards, and should also " +
+            "remember to enter those auto-pay transactions and direct deposits that show up in your bank's website. " +
+            "Use the calendar to know when to expect these, so you don't forget. It's also not a bad idea for " +
+            "subscribers to manually enter credit/debit purchases even if you plan to use CSV import, as banks " +
+            "are usually a few days behind, and having the transactions in the app sooner makes your Available Cash " +
+            "number more accurate sooner. The import feature will help you identify duplicates, so you don't " +
+            "end up with the same transaction twice.",
+        tipPlanTitle = "Plan for the Unexpected",
+        tipPlanBody = "Use Savings Goals to plan for things like car tires, appliance " +
+            "replacements, holiday gifts, or vacations. When you save a little each period, " +
+            "these expenses don't become emergencies. The key to financial peace is " +
+            "eliminating surprises.",
+        tipPaycheckTitle = "Avoid the Paycheck Trap",
+        tipPaycheckBody = "Many people overspend right after payday and scramble before the next one. " +
+            "The daily budget approach smooths your income across every day, so you have " +
+            "a consistent, predictable amount to spend regardless of when your paycheck arrives. " +
+            "No more feast-and-famine cycles.",
+        tipWatchTitle = "Watch Your Available Cash Grow",
+        tipWatchBody = "If you consistently spend less than your budget amount, your available cash " +
+            "will gradually increase. This surplus is your buffer for unexpected expenses " +
+            "and a sign that your financial habits are working. Don't feel pressured to " +
+            "spend it \u2014 let it grow, or use the Supercharge icon to boost your Savings Goals!",
+        keyFeaturesTitle = "Key Features at a Glance",
+        featureBullet1 = "Real-time budget tracking with a Solari flip display!",
+        featureBullet2 = "Smart budget calculation that accounts for irregular income and expense timing",
+        featureBullet3 = "Automatic recurring expense and income recognition from bank imports (subscribers)",
+        featureBullet4 = "Savings Goals \u2014 save for big purchases and financial targets automatically",
+        featureBullet5 = "Amortization \u2014 spread large past purchases over time",
+        featureBullet6 = "Multi-category transaction splitting with pie chart, calculator, or percentage modes",
+        featureBullet7 = "Encrypted transaction backup and restore for all users!",
+        featureBullet8 = "Bank statement import with auto-categorization (subscribers)",
+        featureBullet9 = "Duplicate transaction detection",
+        featureBullet10 = "Fully customizable categories with icon selection",
+        featureBullet11 = "Multiple currency and date format support with transaction archiving",
+        featureBullet12 = "SYNC \u2014 share your budget across household devices with end-to-end encryption (subscribers)",
+        featureBullet13 = "Photos! \u2014 attach photos of receipts or what you bought to transactions (paid users)",
+        featureBullet14 = "Widget \u2014 enter your transactions and see your Available Cash right on your home screen (free users can install and try it, paid users get unlimited use)",
+        syncIndicatorTitle = "SYNC Indicator",
+        syncIndicatorBody = "When SYNC is enabled, an indicator appears in the bottom-left corner of the Solari display:",
+        syncArrowsBullet = "SYNC icon \u2014 shows connection status: green = online and syncing, yellow = connection recovering, red = no internet or error",
+        syncDotsBullet = "Colored dots \u2014 one per linked device (up to 4), showing real-time presence: green = online now, dark blue = seen < 1 hr, yellow = 1\u20132 hrs, red = > 2 hrs",
+        privacyTitle = "Privacy & Security",
+        privacyBody = "Your financial data stays on your device by default. BudgeTrak does not share your data with " +
+            "anyone. Your automatic backups (Settings \u2192 Backups) are protected by a password you choose, using " +
+            "industry-standard end-to-end encryption. When you enable SYNC, data is shared between your linked " +
+            "devices with the same end-to-end encryption \u2014 the cloud server stores only encrypted data and cannot " +
+            "read your transactions, amounts, or merchant names. Your money, your data, your control.",
+        widgetTitle = "Home Screen Widget",
+        widgetBody = "BudgeTrak includes a home screen widget that displays your available cash " +
+            "in a Solari flip-display style, so you can check your budget at a glance without opening the app. " +
+            "Add it from your launcher's widget picker.",
+        widgetSolariDesc = "The widget shows your current available cash on Solari-style flip cards that " +
+            "automatically adapt to light and dark mode. It scales smoothly as you resize the widget.",
+        widgetButtonsDesc = "Quick transaction buttons (+/-) below the Solari display let you record income " +
+            "or expenses directly from the widget. Tapping opens a streamlined transaction dialog " +
+            "with category selection.",
+        widgetFreeDesc = "Free users can add 1 widget transaction per day to try it out. " +
+            "Paid users have unlimited widget transactions and a clean display.",
+        subExpiryWarningTitle = "Subscription Expiry Notice",
+        subExpiryWarningBody = "If you're using SYNC and the admin's subscription expires, a notice " +
+            "appears on the dashboard once per session. You'll have a 7-day grace period to resubscribe " +
+            "before the SYNC group is dissolved. During the grace period, any subscriber in the group " +
+            "can claim the admin role from the SYNC page to keep the group alive. If no admin " +
+            "subscription is active by the end of the 7 days, the group is dissolved, but each device " +
+            "keeps its own local copy of the data. You will not lose your data, but any changes made " +
+            "will no longer sync. Setting up a new group requires all other devices to use the " +
+            "administrator's data to start, so budget data on added devices will be deleted upon group join. " +
+            "If you have unique transactions on a device you'd like to add to a group, please back them up " +
+            "using the Save feature on the transaction page prior to joining, so you can load them back in " +
+            "using the Load feature later! The automatic backups in Settings cannot be used for this purpose, " +
+            "as Restore is blocked for all active group devices (See the Settings Help page for details on " +
+            "using Restore in a group situation).",
+        paidTitle = "Paid User & Subscriber",
+        paidBody = "BudgeTrak has two upgrade tiers. Paid User (\$10 one-time purchase) unlocks:",
+        paidSave = "Ad-free experience \u2014 the banner at the top of all screens is hidden",
+        paidPhotos = "Transaction Photos \u2014 attach up to 5 photos to each transaction (receipts or whatever you want)",
+        paidWidget = "Full widget access \u2014 unlimited widget transactions per day and a clean Solari display without the upgrade overlay",
+        paidLoad = "Save/Load transactions \u2014 export to CSV, Excel, or PDF, and import from bank statements",
+        paidAdFree = "Subscriber (\$5 monthly subscription) adds advanced features:",
+        subBulletSync = "Create and administer SYNC groups \u2014 BudgeTrak's most powerful feature, letting you share a budget with other members of your family, small business, club, etc. Our subscription fee is about half the cost of our competitors and covers the cost of maintaining the cloud service. Only one group member needs a subscription; other devices in the group can be free versions or can pay the one-time Paid User purchase above to remove ads and unlock the Paid User features.",
+        subBulletSimulation = "Cash flow simulation chart \u2014 an interactive chart that shows exactly how we calculate your required cash-on-hand on the Savings Goals page, and lets you experiment with different savings and spending rates.",
+        subFooterNote = "Free users can join existing SYNC groups without a subscription. Subscriber status automatically includes all Paid User benefits."
+    )
+
+    override val settingsHelp = SettingsHelpStrings(
+        title = "Settings Help",
+        overviewTitle = "Overview",
+        overviewBody = "The Settings screen lets you customize how the app displays information " +
+            "and manage your transaction categories. Access it by tapping the gear icon " +
+            "on the dashboard.",
+        headerTitle = "Header Bar",
+        headerBody = "The header provides navigation and help access:",
+        backDesc = "Return to the dashboard.",
+        helpDesc = "Opens this help page.",
+        configureTitle = "Quick Start Guide & Budget Configuration",
+        configureBody = "At the top of Settings, the Quick Start Guide walks new users through " +
+            "initial setup step by step. Below it, Configure Budget and SYNC buttons " +
+            "provide access to budget configuration (income sources, budget period, " +
+            "safe budget calculation) and SYNC settings. See their help pages " +
+            "for full details.",
+        currencyTitle = "Currency",
+        currencyBody = "Choose the currency symbol displayed throughout the app. The dropdown includes " +
+            "common symbols:",
+        currencyDollar = "$ \u2014 US Dollar, Canadian Dollar, Australian Dollar, Mexican Peso, etc.",
+        currencyEuro = "\u20ac \u2014 Euro",
+        currencyPound = "\u00a3 \u2014 British Pound",
+        currencyYen = "\u00a5 \u2014 Japanese Yen / Chinese Yuan",
+        currencyRupee = "\u20b9 \u2014 Indian Rupee",
+        currencyWon = "\u20a9 \u2014 Korean Won",
+        currencyPeso = "\u20b1 \u2014 Philippine Peso",
+        currencyMore = "And more",
+        currencyNote = "The currency symbol affects the Solari display, transaction amounts, budget " +
+            "configuration, and all other monetary displays. Decimal places are automatically " +
+            "adjusted for currencies that traditionally don't use them (e.g., Yen).",
+        decimalsTitle = "Show Decimal Places",
+        decimalsBody = "When checked, the Solari display shows cents/pence after a decimal point. " +
+            "The number of decimal places depends on your currency (2 for most currencies, " +
+            "0 for currencies like the Japanese Yen). Unchecking this rounds the display to " +
+            "whole numbers for a cleaner look.",
+        dateFormatTitle = "Date Format",
+        dateFormatBody = "Choose how dates are displayed throughout the app, including the transaction " +
+            "list, date pickers, and export files. Options include:",
+        dateIso = "2026-02-17 \u2014 ISO format (default)",
+        dateUs = "02/17/2026 \u2014 US format",
+        dateEu = "17/02/2026 \u2014 European format",
+        dateAbbrev = "Feb 17, 2026 \u2014 Abbreviated month",
+        dateFull = "February 17, 2026 \u2014 Full month name",
+        dateMore = "And several other international formats",
+        dateNote = "The dropdown shows a sample date in each format so you can preview how " +
+            "it will look before selecting.",
+        weekStartTitle = "Week Starts On",
+        weekStartBody = "Choose whether the week begins on Sunday or Monday. This affects the spending " +
+            "chart's weekly grouping and the calendar. Weekly budget period reset days are configured " +
+            "in Budget Configuration.",
+        chartPaletteTitle = "Chart Palette",
+        chartPaletteBody = "Choose the color palette used for pie charts and bar charts throughout the app. " +
+            "Three options are available:",
+        paletteBright = "Bright \u2014 vivid, saturated colors for maximum contrast",
+        palettePastel = "Pastel \u2014 softer, muted tones for a gentler look",
+        paletteSunset = "Sunset \u2014 warm earth tones inspired by a sunset palette (default)",
+        paletteNote = "Each palette automatically adjusts for light and dark mode. The palette " +
+            "applies to the dashboard spending chart, the transaction pie chart editor, " +
+            "and all other chart displays.",
+        matchingTitle = "Matching Configuration",
+        matchingBody = "These settings control how the app detects duplicate transactions and matches " +
+            "transactions to recurring expenses, amortization entries, and budget income sources:",
+        matchDaysBullet = "Match Days (\u00b1N) \u2014 how many days apart two transactions can be and still be considered a match",
+        matchPercentBullet = "Match Percent (\u00b1%) \u2014 percentage tolerance for amount matching",
+        matchDollarBullet = "Match Dollar (\u00b1\$) \u2014 absolute dollar tolerance for amount matching",
+        matchCharsBullet = "Match Characters \u2014 minimum shared substring length for merchant name matching",
+        matchingNote = "The defaults work well for most users. Increase the tolerances if you find " +
+            "the app is missing matches, or decrease them if you're seeing too many false positives.",
+        autoCapitalizeTitle = "Auto Capitalize",
+        autoCapitalizeBody = "When enabled (default), merchant names and descriptions you type into transaction " +
+            "dialogs are automatically formatted in Title Case as you finish each word \u2014 \"chick fil a\" " +
+            "becomes \"Chick Fil A\", \"doordash\" becomes \"Doordash\". Short all-caps acronyms (up to 4 " +
+            "letters, e.g., USA, BMW, NASA) are preserved, and mid-word capitals you type intentionally " +
+            "(iPhone, eBay) are left alone. Turn the setting off entirely if you prefer to type capitalization manually.",
+        widgetLogoTitle = "Show Logo on Widget",
+        widgetLogoBody = "When checked, the BudgeTrak SYNC logo appears between the transaction buttons on the " +
+            "home screen widget. Uncheck to hide the logo for a minimalist widget appearance.",
+        crashReportsTitle = "Send Crash Reports",
+        crashReportsBody = "When enabled (default), BudgeTrak shares anonymous crash data so we can detect and fix " +
+            "problems quickly and ship a repair update. We strongly encourage leaving this on \u2014 it's the main " +
+            "way we hear about bugs that affect real users. Your privacy is protected: no transaction details, " +
+            "merchant names, amounts, dates, or receipt photos are ever sent. Only crash stack traces, anonymous " +
+            "device information, sync status, and basic counts (number of transactions, recurring expenses, etc.). " +
+            "Even your available cash is converted to a one-way hash before being included \u2014 the actual value " +
+            "never leaves your device. You can opt out at any time using this toggle.",
+        receiptPhotosTitle = "Receipt Photos",
+        receiptPhotosBody = "Paid users can attach up to 5 photos per transaction. Swipe left on a transaction to reveal the photo panel, or use the camera icon in the edit dialog.",
+        receiptPhotosBullet1 = "Photos are stored locally and synced across linked devices when SYNC is enabled",
+        receiptPhotosBullet2 = "Long-press a photo thumbnail to delete it",
+        receiptPhotosBullet3 = "Tap a photo thumbnail to view it full-screen",
+        receiptPhotosRetentionTitle = "Photo Retention",
+        receiptPhotosRetentionBody = "You can set a retention period to automatically delete receipt photos older than a certain number of days. This helps manage storage on all synced devices. In a SYNC group this setting is restricted to the admin.",
+        receiptPhotosRetentionNote = "When photos are pruned, the deletion syncs to all devices in a group automatically.",
+        receiptPhotosBullet4 = "Tap the camera icon or choose from gallery to attach photos",
+        receiptPhotosBullet5 = "Photos are automatically compressed for efficient storage",
+        receiptPhotosBullet6 = "In a SYNC group, photos are encrypted and shared across all linked devices",
+        categoriesTitle = "Categories",
+        categoriesBody = "Categories let you classify your transactions for better spending insight. " +
+            "Each category has a name and an icon.",
+        chartedColumnDesc = "Charted \u2014 controls whether the category appears in spending charts on the dashboard. " +
+            "Uncheck to hide a category from charts without deleting it.",
+        widgetColumnDesc = "Widget \u2014 controls whether the category appears in the widget's quick transaction dialog. " +
+            "Uncheck categories you wouldn't normally enter from the widget (e.g., Recurring Income, Mortgage) " +
+            "to keep the category picker clean and fast.",
+        defaultCategoriesTitle = "Default Categories",
+        defaultCategoriesBody = "Three categories are protected and cannot be deleted or renamed:",
+        catOther = "Other \u2014 the default fallback category for uncategorized transactions",
+        catRecurring = "Recurring Income \u2014 auto-assigned to transactions matched as budget income",
+        catAmortization = "",
+        catSupercharge = "Supercharge \u2014 auto-assigned to savings goal Supercharge transactions. Hidden from the category picker.",
+        addCategoryTitle = "Adding a Category",
+        addCategoryBody = "Tap \"Add Category\" to create a new category. Enter a name and choose an icon " +
+            "from the icon grid. Icons are displayed as a visual grid you can scroll through.",
+        editCategoryTitle = "Editing a Category",
+        editCategoryBody = "Tap any non-protected category to open the edit dialog. You can change the " +
+            "name, icon, and the Charted toggle (whether this category appears in dashboard charts). " +
+            "The delete button (red trash icon) appears in the dialog footer.",
+        deleteCategoryTitle = "Deleting a Category",
+        deleteCategoryBody = "When deleting a category that has existing transactions:",
+        deleteBullet1 = "If no transactions use the category, it is deleted immediately",
+        deleteBullet2 = "If transactions exist, a reassignment dialog appears",
+        deleteBullet3 = "You must choose another category to move the affected transactions to",
+        deleteBullet4 = "Tap \"Move & Delete\" to reassign all affected transactions and remove the category",
+        reassignmentTitle = "Category Reassignment",
+        reassignmentBody = "When you delete a category, all transactions assigned to it " +
+            "are moved to your chosen replacement category. This includes " +
+            "multi-category transactions where only the specific category " +
+            "split is affected. The reassignment is permanent.",
+        backupsTitle = "Backups",
+        backupsBody = "BudgeTrak can automatically create encrypted backups of your data and receipt photos. Backups are saved to Download/BudgeTrak/backups/ on your device.",
+        backupsEnableBullet = "Enable automatic backups — sets a backup password and starts the schedule",
+        backupsFrequencyBullet = "Frequency — how often backups run (1, 2, or 4 weeks)",
+        backupsRetentionBullet = "Retention — how many backup copies to keep (1, 10, or All)",
+        backupsPasswordWarning = "Your backup password cannot be recovered. If you lose it, your backups are permanently inaccessible. Store it somewhere safe.",
+        backupsOffPhoneTip = "For maximum safety, copy your backup files from Download/BudgeTrak/backups/ to a cloud service (Google Drive, Dropbox, etc.) or another device. If your phone is lost or damaged, you can restore by copying the files back to this folder on a new phone.",
+        backupsRestoreTitle = "Restoring from Backup",
+        backupsRestoreBody = "The Restore button lets you choose a backup file and enter your password to restore all data and photos.",
+        backupsRestoreBullet1 = "Restore is only available when not in a SYNC group",
+        backupsRestoreBullet2 = "If a Restore is needed for a SYNC group, the Admin must dissolve the group",
+        backupsRestoreBullet3 = "Restore will then be available",
+        backupsRestoreBullet4 = "After Restore, create a new SYNC group and provide pairing codes to other members to rejoin",
+        backupsRestoreNote = "Sync will overwrite restored data — always leave your group before restoring.",
+        // Backup encryption explanation (moved here from the Transactions help page,
+        // since the manual encrypted save format was removed; the same encryption
+        // logic still powers the auto-backup feature above).
+        backupEncryptionTitle = "How Backup Encryption Works",
+        backupEncryptionBody = "Your auto-backup file is protected with industry-standard end-to-end encryption \u2014 " +
+            "the same caliber used by modern secure messaging apps. The password you set is never stored anywhere; " +
+            "instead, BudgeTrak strengthens it cryptographically into the encryption key each time the backup is " +
+            "written or restored. That means anyone who finds your backup file (on this device or copied to the cloud) " +
+            "cannot read it without the password.",
+        passwordImportanceTitle = "Why Your Backup Password Matters",
+        passwordImportanceBody = "Encryption is only as strong as your password. A short or common password " +
+            "can be guessed quickly even with strong encryption. The table below estimates how long " +
+            "a determined attacker would need to crack passwords of different lengths and complexity:",
+        passwordTableHeader = "Password",
+        passwordTableExample = "Example",
+        passwordTableTime = "Time to Crack",
+        pw8Lower = "8 chars, lowercase",
+        pw8LowerEx = "password",
+        pw8LowerTime = "minutes",
+        pw8Mixed = "8 chars, mixed",
+        pw8MixedEx = "Pa\$sw0rd",
+        pw8MixedTime = "hours",
+        pw10Mixed = "10 chars, mixed",
+        pw10MixedEx = "K9#mP2x!qL",
+        pw10MixedTime = "months",
+        pw12Mixed = "12 chars, mixed",
+        pw12MixedEx = "7hR!q2Lp#9Zk",
+        pw12MixedTime = "millennia",
+        pw16Mixed = "16+ chars, mixed",
+        pw16MixedEx = "cT8!nQ#2mK@5rW9j",
+        pw16MixedTime = "trillions of years",
+        pw4Word = "4-word phrase",
+        pw4WordEx = "maple cloud river fox",
+        pw4WordTime = "trillions of years",
+        pbkdfNote = "BudgeTrak deliberately makes each password guess slow and expensive, so even an " +
+            "attacker with powerful hardware can only test a tiny fraction of the passwords " +
+            "they could attack a poorly-protected file with. Combined with a strong password, " +
+            "your backup file is effectively unbreakable.",
+        recommendedTitle = "Recommended Password Strategy",
+        recommendedBody = "Use 12 or more characters combining uppercase letters, lowercase letters, " +
+            "numbers, and symbols. A passphrase of 4\u20135 random words (e.g., \"correct horse battery staple\") " +
+            "is also excellent. With a strong password of this kind, even a determined attacker " +
+            "with high-end hardware would need trillions of years to crack your backup.",
+        passwordMinNote = "The minimum required length is 8 characters, but longer is always better. " +
+            "You must enter your password twice to confirm it the first time you enable backups. " +
+            "There is no password recovery \u2014 if you forget your password, your backup files cannot be opened. " +
+            "Store your password somewhere safe (a password manager is ideal).",
+        tipsTitle = "Tips",
+        tip1 = "Set up categories before importing transactions \u2014 the auto-categorization uses your existing transaction history to match merchants.",
+        tip2 = "Create categories that match your spending habits. Common examples: Food, Transport, Entertainment, Health, Housing, Utilities, Shopping.",
+        tip3 = "Using the \"Daily\" budget period is highly recommended. See the reasons for this on the Dashboard Help page.",
+        tip4 = "The Budget Configuration button is the first thing to set up after installing the app."
+    )
+
+    override val transactionsHelp = TransactionsHelpStrings(
+        title = "Transactions Help",
+        overviewTitle = "Overview",
+        overviewBody = "The Transactions screen is where you manage all income and expenses. " +
+            "You can add, edit, delete, search, filter, import, and export transactions.",
+        headerTitle = "Header Bar",
+        headerBody = "The header bar contains navigation and action icons:",
+        backDesc = "Return to the main screen.",
+        saveDesc = "Save all transactions to a file. Requires Paid User.",
+        loadDesc = "Import or load transactions from a file. Requires Paid User.",
+        helpDesc = "Opens this help page.",
+        actionBarTitle = "Action Bar",
+        actionBarBody = "Below the header, the action bar provides quick access to common operations:",
+        filterDesc = "Filter toggle \u2014 cycles through: All, Expenses, Income, and other filter options (Recurring, Excluded, Not Verified, Photos). Pill label updates to reflect the active filter.",
+        sortButtonDesc = "Sort order \u2014 cycles through Date \u2193, Date \u2191, Amount \u2193, Amount \u2191, and Category. Pill label shows the active sort.",
+        rangeButtonDesc = "Date range \u2014 cycles through 6mo, 1yr, 2yr, and All. Limits the list to transactions within that window (selecting All includes archived transactions). Pill label shows the active range.",
+        addIncomeDesc = "Create a new income transaction.",
+        addExpenseDesc = "Create a new expense transaction.",
+        searchDesc = "Open search menu with three options:",
+        dateSearchBullet = "Date Search \u2014 pick a start and end date.",
+        textSearchBullet = "Text Search \u2014 search merchant/source name and description",
+        amountSearchBullet = "Amount Search \u2014 search by amount range",
+        searchNote = "While search results are active, a banner appears at the top. Tap the banner to clear the search.",
+        listTitle = "Transaction List",
+        listBody = "Transactions are displayed in a scrollable list, sorted by date (newest first). " +
+            "Each row shows:",
+        listIconBullet = "Category icon (left)",
+        listDateBullet = "Date \u2014 formatted per your Settings preference",
+        listMerchantBullet = "Merchant/Source \u2014 the name of the payee or payer",
+        listAmountBullet = "Amount \u2014 red for expenses, green for income",
+        iconColorsTitle = "Category Icon Colors",
+        coloredLabel = "Blue",
+        coloredDesc = " \u2014 transaction is verified",
+        defaultLabel = "Other",
+        defaultDesc = " \u2014 auto-assigned during import (not yet verified)",
+        filterByIconNote = "Tap a category icon to filter the list to only that category. A filter banner will appear; tap it to clear.",
+        multiCategoryTitle = "Multi-Category Transactions",
+        multiCategoryBody = "A list icon indicates the transaction is split across multiple categories. " +
+            "Tap it to expand and see the per-category breakdown.",
+        tapEditTitle = "Tapping & Editing",
+        tapBullet = "Tap a transaction to open the Edit dialog",
+        selectionTitle = "Selection Mode",
+        selectionBody = "Long-press any transaction to enter multi-select mode. A toolbar appears with bulk actions:",
+        selectAllDesc = "Select All \u2014 toggle all visible transactions",
+        changeCategoryDesc = "Set a single category for all selected transactions.",
+        editMerchantDesc = "Replace the merchant/source name and/or description on all selected transactions.",
+        verifyDesc = "Mark all selected transactions as verified. Useful after a bank import when you want to confirm auto-categorized transactions in bulk. Verified transactions show a blue category icon in the list; unverified ones show the grey default \"Other\" color.",
+        deleteDesc = "Delete all selected transactions.",
+        closeDesc = "Exit selection mode without changes.",
+        addEditTitle = "Add / Edit Transaction Dialog",
+        addEditBody = "When adding or editing a transaction, a dialog appears with these fields:",
+        fieldDate = "Date",
+        fieldDateDesc = "Tap the calendar icon to pick a date.",
+        fieldMerchant = "Merchant / Service",
+        fieldMerchantDesc = "Type the name of the payee (expenses) or income source.",
+        fieldDescription = "Description",
+        fieldDescriptionDesc = "Optional notes about the transaction (e.g., what was purchased).",
+        fieldLinkButtons = "Link Buttons",
+        fieldLinkButtonsDesc = "Optional link buttons appear below the description field. " +
+            "For expenses, a recurring-expense icon links to a recurring expense and a clock icon links to an amortization entry. " +
+            "For income, a bank icon links to an income source. " +
+            "Linked transactions are already accounted for in your budget and do NOT reduce available cash. " +
+            "A small icon appears next to the amount on linked transactions.",
+        fieldCategory = "Category (required)",
+        fieldCategoryDesc = "Tap to open the category picker. You must select at least one category. " +
+            "You can select multiple categories to split the transaction. " +
+            "The border turns red if you try to save without a category.",
+        fieldAmount = "Amount",
+        fieldAmountDesc = "Enter the transaction amount.",
+        singleCatTitle = "Single Category",
+        singleCatBody = "With one category selected, simply enter the total amount in the Amount field.",
+        multiCatTitle = "Multiple Categories",
+        multiCatBody = "When two or more categories are selected, you unlock three entry modes. " +
+            "First enter the Total amount, then choose a mode:",
+        pieChartDesc = "Drag slices on an interactive pie chart to distribute the total across categories.",
+        calculatorTitle = "Calculator Mode",
+        calculatorDesc = "Enter a specific dollar amount for each category. The last empty field auto-fills.",
+        percentageDesc = "Enter a percentage for each category. Percentages auto-adjust to total 100%.",
+        pieChartModeTitle = "Pie Chart Mode",
+        pieChartModeBody = "The interactive pie chart lets you visually distribute a transaction across categories by dragging the divider lines between slices.",
+        pieChartDragNote = "Drag the boundary between any two slices to redistribute. " +
+            "The category labels and dollar amounts update in real time beneath the chart.",
+        autoFillTitle = "Auto-Fill Behavior",
+        autoFillBody = "In Calculator mode, auto-fill tracks which fields you've typed in. " +
+            "If you fill categories first, the total auto-fills as their sum. " +
+            "If you type a total first, the last empty category auto-fills with the remainder. " +
+            "Clearing a field releases it for auto-fill again. " +
+            "In Percentage mode, the last empty percentage field auto-fills to reach 100%. " +
+            "When you change a percentage, other fields adjust proportionally.",
+        duplicateTitle = "Duplicate Detection",
+        duplicateBody = "When you save a new transaction or import from a file, the app checks for possible duplicates. " +
+            "A transaction is flagged if it matches an existing one on all three criteria, which are configured on the Settings page:",
+        dupAmountBullet = "Amount within a certain % of each other",
+        dupDateBullet = "Date within a number of days of each other",
+        dupMerchantBullet = "Merchant name shares a common substring",
+        dupDialogBody = "When a duplicate is detected, you'll see a dialog with four options:",
+        dupIgnore = "Ignore \u2014 keep both transactions",
+        dupKeepNew = "Keep New \u2014 replace the existing with the new one",
+        dupKeepExisting = "Keep Existing \u2014 discard the new transaction",
+        dupIgnoreAll = "Ignore All \u2014 keep all remaining duplicates (import only)",
+        savingTitle = "Saving Transactions (Paid User)",
+        savingBody = "Tap the Save icon in the header to export all transactions to a file. Three formats are available:",
+        csvFormatTitle = "CSV Format",
+        csvFormatBody = "Saves your transactions as a plain-text CSV file (budgetrak_transactions.csv). " +
+            "It preserves all transactions and can be loaded back into the app or opened in spreadsheet " +
+            "software like Excel or Google Sheets for review.",
+        xlsxFormatTitle = "Excel Format (.xlsx)",
+        xlsxFormatBody = "Saves your transactions as a native Excel workbook (budgetrak_transactions.xlsx) " +
+            "with formatted columns, currency totals, and a clean header row. Use this when you want " +
+            "to open the file directly in Excel or Google Sheets without any conversion step.",
+        pdfReportFormatTitle = "PDF Expense Report",
+        pdfReportFormatBody = "Generates a polished PDF report of your transactions for any date range. " +
+            "The report groups transactions by category, totals each section, and includes a summary " +
+            "page \u2014 ideal for taxes, expense reimbursement, or sharing with an accountant.",
+        loadingTitle = "Loading & Importing",
+        loadingBody = "Tap the Load icon in the header to import transactions from a file. Three CSV formats are supported:",
+        loadGeneric = "Any Bank CSV",
+        loadGenericDesc = "Auto-detects the column layout of most US bank CSV exports. Try this format first " +
+            "for any bank \u2014 it usually finds the date, amount, merchant, and (when available) running balance " +
+            "without any setup. Falls back to one of the other formats if it cannot identify the columns.",
+        loadUsBank = "US Bank",
+        loadUsBankDesc = "Import transactions from a US Bank CSV export file. " +
+            "Transactions are automatically categorized based on your existing merchant history.",
+        loadCsv = "BudgeTrak CSV Save File",
+        loadCsvDesc = "Load a CSV file previously saved from this app's Save \u2192 CSV option. " +
+            "All categories and data are preserved exactly as they were.",
+        fullRestoreNote = "When loading a full backup, \"Load All Data & Overwrite\" replaces ALL app data " +
+            "(transactions, categories, settings, goals, etc.) with the backup contents. " +
+            "Any transactions or changes made after the save was created will be lost and must " +
+            "be re-entered or reloaded from a bank CSV. \"Load Transactions Only\" is the safer " +
+            "option \u2014 it imports just the transactions without overwriting anything else.",
+        loadDuplicateNote = "After loading, each imported transaction is checked for duplicates against your " +
+            "existing transactions. If duplicates are found, you'll be prompted to resolve them " +
+            "one at a time (see Duplicate Detection above).",
+        autoCatTitle = "Auto-Categorization (Bank Imports)",
+        autoCatBody = "When importing from a bank CSV, the app looks at your existing transactions from the " +
+            "past 6 months to find matching merchants. If a match is found, the most frequently used " +
+            "category is assigned automatically. Transactions without a match are assigned to \"Other\". " +
+            "Auto-categorized transactions show a default-colored icon until you manually confirm " +
+            "or change the category.",
+        // Sorting and filtering
+        sortTitle = "Sorting Transactions",
+        sortBody = "Tap the sort button in the action bar to choose how the transaction list is ordered. " +
+            "You can sort by:",
+        sortDateBullet = "Date \u2014 default; most recent at the top",
+        sortAmountBullet = "Amount \u2014 useful for spotting your largest expenses or smallest charges",
+        sortCategoryBullet = "Category \u2014 groups transactions by category for quick scanning",
+        sortDirectionNote = "Tap the sort button again to reverse the direction (ascending vs. descending). " +
+            "An arrow next to the sort button shows the current direction.",
+        filtersExpandedTitle = "Filtering Transactions",
+        filtersExpandedBody = "The filter button reveals toggles that narrow the list to specific kinds of transactions. " +
+            "You can combine filters with the date and merchant search:",
+        filterRecurringBullet = "Recurring \u2014 only transactions linked to a recurring expense or budget income",
+        filterExcludedBullet = "Excluded \u2014 only transactions marked as excluded from the budget (e.g., transfers between accounts)",
+        filterNotVerifiedBullet = "Not Verified \u2014 only auto-categorized transactions you haven't yet confirmed",
+        filterPhotosBullet = "Photos \u2014 only transactions that have a receipt photo attached",
+        // Multi-candidate matching
+        rankedMatchTitle = "Multi-Candidate Match Dialogs",
+        rankedMatchBody = "When BudgeTrak detects that a transaction may match a recurring expense, " +
+            "savings goal contribution, amortization payment, or budgeted income source, it shows " +
+            "a confirmation dialog. If more than one of your entries could be a match, the dialog " +
+            "lists all candidates with radio buttons so you can pick the correct one.",
+        rankedMatchClosestNote = "Candidates are ranked by closeness: the entry whose date and amount " +
+            "most closely match your transaction is pre-selected at the top. " +
+            "Just tap Yes to accept the suggested match, or pick a different candidate first.",
+        // PDF reports
+        pdfReportTitle = "PDF Expense Reports",
+        pdfReportBody = "Paid users can export a polished PDF report of their transactions for any date range. " +
+            "Tap the Save icon, choose \"PDF Report\", and pick the dates you want to include. " +
+            "The report groups transactions by category, totals each section, and includes a summary " +
+            "page \u2014 ideal for taxes, expense reimbursement, or sharing with an accountant.",
+        tipsTitle = "Tips",
+        tip1 = "Use CSV saves for spreadsheet-compatible backups that you can review on a computer.",
+        tip2 = "Use Excel format for richer formatting in spreadsheet apps; use PDF format for printing or sharing a polished expense report.",
+        tip3 = "The same file can be loaded as many times as needed \u2014 duplicate detection prevents accidental double-entries.",
+        tip4 = "Use the category filter (tap any category icon) combined with selection mode for efficient bulk edits.",
+        tip5 = "After a bank import, review auto-categorized transactions and use bulk Change Category to correct any misassignments."
+    )
+
+    override val budgetConfigHelp = BudgetConfigHelpStrings(
+        title = "Budget Configuration Help",
+        overviewTitle = "Overview",
+        overviewBody = "Budget Configuration is the core setup screen where you define your income " +
+            "sources, choose your budget period, and calculate your safe spending amount. " +
+            "The budget engine uses this information to determine how much you can safely " +
+            "spend each period.",
+        periodTitle = "Budget Period",
+        periodBody = "The budget period determines how often your available cash is replenished. " +
+            "Choose the period that best matches how you think about spending:",
+        periodDaily = "Daily",
+        periodDailyDesc = "Your budget is calculated per day. Best for tight budgets or people who want maximum daily awareness.",
+        periodWeekly = "Weekly",
+        periodWeeklyDesc = "Your budget is calculated per week. Good for people who plan expenses by the week.",
+        periodMonthly = "Monthly",
+        periodMonthlyDesc = "Your budget is calculated per month. Suits people with monthly pay who prefer monthly planning.",
+        periodNote = "The period also affects how Savings Goal and Amortization deductions are calculated, " +
+            "since they deduct a fixed amount per period.",
+        resetSettingsTitle = "Refresh Time Settings",
+        resetSettingsBody = "Tap the \"Refresh Time\" button next to the Budget Period selector to configure " +
+            "when your budget period rolls over:",
+        resetHourTitle = "Reset Hour",
+        resetHourBody = "The hour of the day when a new period begins and your budget amount is " +
+            "added to available cash. Default is 12 AM (midnight). Set this to when " +
+            "you typically start your day \u2014 for example, 6 AM if you're an early riser.",
+        dayOfWeekTitle = "Day of Week (Weekly)",
+        dayOfWeekBody = "For weekly budgets, choose which day the new week starts. For example, " +
+            "if you set Monday, your budget resets every Monday at the configured reset hour.",
+        dayOfMonthTitle = "Day of Month (Monthly)",
+        dayOfMonthBody = "For monthly budgets, choose which day of the month the new period starts " +
+            "(1\u201328). If you're paid on the 1st, set this to 1. If paid on the 15th, " +
+            "set it to 15. The maximum is 28 to ensure the date exists in all months.",
+        safeBudgetTitle = "Safe Budget Amount",
+        safeBudgetBody = "The Safe Budget Amount is the calculated maximum you can spend per period " +
+            "while still covering all your recurring expenses. It is displayed at the top " +
+            "of the configuration screen.",
+        howCalculatedTitle = "How It's Calculated",
+        howCalculatedBody = "The engine projects your income and expenses forward one year:",
+        calcStep1 = "Income summing",
+        calcStep1Desc = "All income source occurrences are generated for the next 12 months based on their repeat schedules. Total annual income is computed.",
+        calcStep2 = "Base amount",
+        calcStep2Desc = "The base budget is annual income divided by the number of budget periods in a year (e.g., 365 for daily, 52 for weekly, 12 for monthly).",
+        calcStep3 = "Timing safety",
+        calcStep3Desc = "The engine simulates each period and checks that cumulative expenses never exceed the budget. If bills cluster in certain periods, the budget amount is increased to cover the worst case.",
+        importantTitle = "Important",
+        importantBody = "The Safe Budget Amount only considers income sources and recurring expenses " +
+            "that have complete repeat schedule configurations. If a source has no repeat " +
+            "settings, it will be excluded from the calculation. Make sure to configure " +
+            "repeat schedules for all your income sources.",
+        autoRecalcTitle = "Automatic Recalculation",
+        autoRecalcBody = "The Safe Budget Amount updates automatically whenever you change income sources, " +
+            "recurring expenses, or the budget period. No manual recalculation is needed.",
+        startResetTitle = "Start/Reset Budget",
+        startResetBody = "Tap \"Start/Reset Budget\" when you first set up or need a fresh start. " +
+            "In a SYNC group, only the admin device can reset the budget \u2014 " +
+            "this button is disabled on non-admin devices. This:",
+        resetBullet1 = "Recalculates the safe budget amount",
+        resetBullet2 = "Resets the budget start date to today",
+        resetBullet3 = "Sets available cash to one period's budget amount",
+        resetBullet4 = "Does NOT delete your transactions",
+        whenToResetTitle = "When to Reset",
+        whenToResetBody = "Use Start/Reset Budget when your available cash has drifted from reality " +
+            "(e.g., after a major life change like a new job or move), or when " +
+            "you've made significant changes to your income sources or expenses " +
+            "and want to start fresh. Resetting will lose your accumulated surplus " +
+            "or deficit, so use it deliberately.",
+        manualTitle = "Manual Budget Override",
+        manualBody = "Check \"Manual Budget Override\" to set your own per-period budget amount " +
+            "instead of using the calculated value. When enabled:",
+        manualBullet1 = "A text field appears where you enter your desired amount per period",
+        manualBullet2 = "The safe budget calculation is ignored",
+        manualBullet3 = "Savings Goal and Amortization deductions still apply to your manual amount",
+        manualBullet4 = "Setting an amount higher than the calculated safe budget will disable the needed savings calculation on the Recurring Expenses page",
+        warningTitle = "Note",
+        warningBody = "Savings Goals and Amortization deductions are still subtracted from " +
+            "your manual budget amount. If you want exactly your entered amount each period, " +
+            "pause your Savings Goals and Amortization entries on those pages.",
+        incomeSourcesTitle = "Income Sources",
+        incomeSourcesBody = "Income sources represent your reliable, recurring income \u2014 the money you " +
+            "can count on for budgeting purposes. Add all consistent income streams: " +
+            "salary, freelance retainers, pension, recurring side income, etc.",
+        addingIncomeTitle = "Adding an Income Source",
+        addingIncomeBody = "Tap \"Add Income Source\" and fill in:",
+        incomeNameBullet = "Source Name \u2014 a descriptive name (e.g., \"Main Job Paycheck\"). This is also used for budget income detection when you add transactions.",
+        incomeAmountBullet = "Amount \u2014 the amount you receive per occurrence",
+        variablePayTitle = "Variable Pay",
+        variablePayBody = "If your pay varies (for example, a large paycheck and a small paycheck " +
+            "each month), create separate entries for each amount. The budget calculator " +
+            "will handle the different amounts correctly.",
+        managingTitle = "Managing Income Sources",
+        manageTapBullet = "Tap a source to edit its name and amount",
+        manageRepeatDesc = "Configure the income schedule (when you get paid)",
+        manageDeleteDesc = "Permanently remove the income source",
+        repeatTitle = "Repeat Schedules",
+        repeatBody = "Every income source needs a repeat schedule so the budget calculator knows " +
+            "when to expect payments. The same repeat types are available for income sources " +
+            "and recurring expenses:",
+        everyXDaysTitle = "Day",
+        everyXDaysBody = "Income arrives every N days (1\u2013365). Requires a Start Date \u2014 the date " +
+            "of any past or future occurrence. The engine calculates all future dates from " +
+            "this reference point.",
+        everyXWeeksTitle = "Week",
+        everyXWeeksBody = "Income arrives every N weeks (1\u201352). Requires a Start Date. The day of " +
+            "the week is determined by your start date (e.g., if your start date falls on " +
+            "a Friday, income repeats every N Fridays).",
+        everyXMonthsTitle = "Month",
+        everyXMonthsBody = "Income arrives on a specific day of the month, every N months (1\u201312). " +
+            "Pick a start date to set the day and phase. Days 29\u201331 are allowed when " +
+            "the interval is 12 (yearly); otherwise days are limited to 1\u201328.",
+        biMonthlyTitle = "Twice per Month (Bi-Monthly)",
+        biMonthlyBody = "Income arrives on two specific days each month. Enter both the First Day and " +
+            "Second Day (1\u201328 each). For example, if you're paid on the 1st and 15th, " +
+            "enter 1 and 15. This results in exactly 24 occurrences per year.",
+        annualTitle = "Annual",
+        annualBody = "Income arrives once per year on a specific date. Pick a start date \u2014 any day " +
+            "of any month is allowed, including the 29th\u201331st. The engine handles leap years " +
+            "and short months automatically.",
+        dayLimitTitle = "Day Limit: 1\u201328",
+        dayLimitBody = "Day-of-month values are limited to 28 for most repeat types to ensure the date " +
+            "exists in all months, including February. Annual and 12-month intervals allow " +
+            "days 29\u201331 since they target a specific month.",
+        budgetIncomeTitle = "Budget Income Detection",
+        budgetIncomeBody = "When you add an income transaction in the Transactions screen, the app " +
+            "checks whether it matches one of your configured income sources (by name " +
+            "and expected date). If a match is found, you're asked whether this is:",
+        budgetIncomeBullet = "Budget income \u2014 already accounted for in your budget",
+        extraIncomeBullet = "Extra income \u2014 unexpected or additional income (DOES increase available cash)",
+        budgetIncomeNote = "This prevents your paycheck from being double-counted \u2014 once in the budget " +
+            "calculation and again as a manual income entry.",
+        incomeModeTitle = "Income Mode",
+        incomeModeBody = "The income mode toggle controls how linked income transactions affect your available cash. " +
+            "Tap the button to cycle through the three modes:",
+        fixedModeTitle = "Use Fixed Income",
+        fixedModeBody = "Income transactions linked to a Recurring Income entry have no effect on available cash. " +
+            "Your budget assumes you receive the configured amount, and linked transactions simply confirm it arrived. " +
+            "This is the default and simplest mode.",
+        actualModeTitle = "Use Actual Income",
+        actualModeBody = "When a linked income transaction differs from the expected amount, the difference is applied to " +
+            "available cash. If you were expected to receive \$1,000 but got \$1,050, the extra \$50 is added. " +
+            "If you only got \$950, \$50 is subtracted. The Recurring Income entry itself stays unchanged \u2014 " +
+            "your budget still plans around the configured amount.",
+        actualAdjustModeTitle = "Use Actual Income & Adjust Budget",
+        actualAdjustModeBody = "Works like Actual Income, but also updates the Recurring Income entry's amount to match the " +
+            "actual transaction. This causes the safe budget amount to recalculate based on your real pay. " +
+            "This mode is unavailable when Manual Budget Override is enabled, since the safe budget amount " +
+            "is not used in that case.",
+        manualOverrideDetailsTitle = "Manual Budget Override \u2014 Details",
+        manualOverrideDetailsBody = "Savings Goals and Amortization deductions are still subtracted from your manual budget amount. " +
+            "If you want exactly your entered amount each period, pause those deductions on their respective pages.\n\n" +
+            "Setting an amount higher than the calculated safe budget will disable the needed savings calculation " +
+            "on the Recurring Expenses page.",
+        tipsTitle = "Tips",
+        tip1 = "Set up all income sources and recurring expenses before tapping Start/Reset Budget for the best result.",
+        tip2 = "The safe budget recalculates automatically whenever you change income or expenses.",
+        tip3 = "Use Start/Reset Budget sparingly \u2014 it wipes your accumulated surplus/deficit.",
+        tip4 = "For variable income, create separate entries for each pay amount to improve accuracy.",
+        tip5 = "Use descriptive source names like \"Acme Corp Paycheck\" \u2014 the name is used for automatic budget income matching.",
+        tip6 = "Only include reliable, recurring income. Don't add one-time windfalls \u2014 record those as extra income in Transactions."
+    )
+
+    override val savingsGoalsHelp = SavingsGoalsHelpStrings(
+        title = "Savings Goals Help",
+        whatTitle = "What Are Savings Goals?",
+        whatBody = "Savings Goals let you plan and save for future expenses or financial " +
+            "targets without blowing your budget. Instead of a large expense hitting " +
+            "your available cash all at once, the app automatically reduces your budget " +
+            "by a small amount each period to save up over time.",
+        exampleTitle = "Example",
+        exampleBody = "You want to build a \$3,000 emergency fund. Create a fixed contribution " +
+            "goal of \$5/day. On a daily budget, you barely notice the deduction, " +
+            "but after 20 months your emergency fund is fully funded. Or set a " +
+            "target date of 6 months to save \$600 for new tires \u2014 the app " +
+            "deducts about \$3.29/day automatically. No surprise, no stress.",
+        twoTypesTitle = "Two Goal Types",
+        twoTypesBody = "Savings Goals supports two different approaches to saving:",
+        targetDateTitle = "Target Date",
+        targetDateBody = "Set a date by which you need the money. The app automatically calculates " +
+            "how much to deduct each period based on the remaining amount and remaining " +
+            "time. As you get closer to the date, the deduction adjusts dynamically.",
+        fixedContribTitle = "Fixed Contribution",
+        fixedContribBody = "Set a fixed amount to contribute each budget period. There's no target date \u2014 " +
+            "the app simply deducts your chosen amount every period until the goal is " +
+            "reached. This is ideal for open-ended savings like an emergency fund.",
+        headerTitle = "Header Bar",
+        headerBody = "The header provides navigation and bulk actions:",
+        backDesc = "Return to the dashboard.",
+        pauseAllDesc = "Pause all active goals at once. Toggles to Play when all are paused.",
+        helpDesc = "Opens this help page.",
+        pauseAllNote = "The Pause All button only appears when you have at least one goal.",
+        addingTitle = "Adding a Savings Goal",
+        addingBody = "Tap \"Add Savings Goal\" and fill in:",
+        addStep1 = "Name",
+        addStep1Desc = "What you're saving for (e.g., \"New Tires\", \"Vacation to Hawaii\", \"Emergency Fund\").",
+        addStep2 = "Target Amount",
+        addStep2Desc = "The total cost you need to save.",
+        addStep3 = "Starting Saved Amount",
+        addStep3Desc = "Optional. If you already have some money saved toward this goal, enter it here to pre-fill the progress bar.",
+        addStep4 = "Goal Type",
+        addStep4Desc = "Choose \"Target Date\" to set a deadline, or \"Fixed Contribution\" for a regular per-period amount.",
+        addStep5 = "Target Date / Contribution",
+        addStep5Desc = "Depending on the goal type, select a target date or enter a contribution per period.",
+        deductionsTitle = "How Budget Deductions Work",
+        deductionsBody = "For each active (non-paused) goal, the app calculates a per-period deduction:",
+        targetDateDeductionTitle = "Target Date Goals",
+        targetDateDeductionFormula = "Deduction = (Target Amount \u2212 Saved So Far) \u00f7 Remaining Periods until Target Date",
+        fixedDeductionTitle = "Fixed Contribution Goals",
+        fixedDeductionBody = "The deduction equals the contribution per period you set when creating the goal. " +
+            "It stays constant until the goal is reached.",
+        deductionNote = "These deductions are subtracted from your Safe Budget Amount to produce " +
+            "your actual Budget Amount. The \"Saved So Far\" automatically increases each " +
+            "budget period based on the deduction amount.",
+        progressTitle = "Progress Tracking",
+        progressBody = "Each goal in the list shows:",
+        progressName = "Name \u2014 what you're saving for",
+        progressTarget = "Target amount (and target date for date-based goals)",
+        progressDeduction = "Budget deduction or contribution per period",
+        progressBar = "Progress bar \u2014 visual indicator of how close you are to the target",
+        progressSaved = "Saved amount \u2014 green text showing accumulated savings vs. target",
+        progressGoalReached = "\"Goal reached!\" label when fully saved",
+        actionsTitle = "Actions",
+        pauseDesc = "Temporarily stop deductions for this goal. Budget returns to normal while paused.",
+        resumeDesc = "Resume deductions. The per-period amount recalculates based on remaining time and savings.",
+        deleteDesc = "Permanently remove the savings goal.",
+        editNote = "Tap any goal to edit its name, target amount, goal type, or other settings.",
+        statusTitle = "Status Indicators",
+        activeTitle = "Active",
+        activeBody = "Normal state \u2014 the deduction is being applied each period and savings accumulate.",
+        pausedTitle = "Paused",
+        pausedBody = "Deductions are temporarily stopped. The goal appears dimmed. Pausing is useful " +
+            "when you have a tight month and need the full budget temporarily. Savings progress " +
+            "is preserved. When you resume, the deduction recalculates with the reduced remaining " +
+            "time (for target-date goals), so it will be slightly higher.",
+        goalReachedTitle = "Goal Reached",
+        goalReachedBody = "Shows \"Goal reached!\" in green when Saved So Far meets or exceeds the target. " +
+            "No further deductions are taken. You can delete the goal or keep it as a record.",
+        manualOverrideTitle = "Manual Budget Override",
+        manualOverrideBody = "If Manual Budget Override is enabled in Budget Configuration, Savings Goal " +
+            "deductions are still subtracted from your manual budget amount. You can pause " +
+            "individual goals or all goals at once if you want the full manual amount.",
+        linkingTitle = "Linking Transactions to Goals",
+        linkingBody = "When you record a transaction that represents spending toward a goal " +
+            "(for example, you finally buy the car tires you've been saving for), you can link " +
+            "the transaction to the goal in the transaction edit dialog. The amount you've already " +
+            "saved toward that goal is credited to the purchase, so it doesn't double-count against " +
+            "your budget.",
+        linkingPartialNote = "If your purchase is larger than the amount you've saved, " +
+            "only the saved portion is credited \u2014 the remainder hits your budget normally. " +
+            "The transaction shows in green when fully covered, or in orange with the remaining " +
+            "amount when partially funded.",
+        linkingSuperchargeNote = "Supercharge contributions and any savings made with the bolt icon are " +
+            "automatically tracked separately so you can boost a goal at any time without affecting " +
+            "your linked-purchase calculations.",
+        tipsTitle = "Tips",
+        tip1 = "Create target-date goals as early as possible \u2014 the more time you have, the smaller each period's deduction.",
+        tip2 = "Use fixed contribution goals for open-ended savings like emergency funds or general savings.",
+        tip3 = "Use Pause strategically during tight months, but resume promptly to avoid a spike in deductions as the target date approaches.",
+        tip4 = "Enter a starting saved amount when creating a goal if you already have money set aside.",
+        tip5 = "Common uses: car maintenance, medical procedures, holiday gifts, vacations, electronics, furniture, annual subscriptions, emergency fund.",
+        tip6 = "Pair this with Amortization: use Savings Goals to save before a purchase, and Amortization to spread costs after an unexpected purchase."
+    )
+
+    override val amortizationHelp = AmortizationHelpStrings(
+        title = "Amortization Help",
+        whatTitle = "What Is Amortization?",
+        whatBody = "Amortization lets you spread the impact of a large expense across " +
+            "multiple budget periods. Instead of the full cost destroying your budget " +
+            "in a single day/week/month, the cost is divided evenly and deducted " +
+            "from your budget over time.",
+        exampleTitle = "Example",
+        exampleBody = "Your car unexpectedly needs a \$900 repair. On a daily budget of \$40/day, " +
+            "that would wipe out more than 22 days of budget. Instead, you create an " +
+            "amortization entry for \$900 over 90 days. Your budget is reduced by only " +
+            "\$10/day for 90 days, keeping you above water while the cost is absorbed gradually.",
+        vsGoalsTitle = "Amortization vs. Savings Goals",
+        vsGoalsBody = "These two features are complementary:",
+        goalsBullet = "Savings Goals \u2014 save BEFORE a planned expense (proactive)",
+        amortBullet = "Amortization \u2014 spread AFTER an unplanned or past expense (reactive)",
+        headerTitle = "Header Bar",
+        backDesc = "Return to the dashboard.",
+        helpDesc = "Opens this help page.",
+        addingTitle = "Adding an Amortization Entry",
+        addingBody = "Tap \"Add Amortization Entry\" and fill in:",
+        addStep1 = "Source Name",
+        addStep1Desc = "A descriptive name for the expense (e.g., \"Car Repair\", \"Emergency Room Visit\", \"New Laptop\"). Important: this name is matched against bank transaction merchant names for automatic recognition.",
+        addStep2 = "Total Amount",
+        addStep2Desc = "The full cost of the expense.",
+        addStep3 = "Budget Periods",
+        addStep3Desc = "How many periods to spread the cost over. The label shows your current period type (days, weeks, or months).",
+        addStep4 = "Start Date",
+        addStep4Desc = "When the amortization begins (usually the date of the expense).",
+        deductionsTitle = "How Deductions Work",
+        deductionsBody = "The per-period deduction is straightforward:",
+        deductionFormula = "Deduction = Total Amount \u00f7 Number of Budget Periods",
+        deductionNote = "This deduction is subtracted from your Safe Budget Amount (along with any " +
+            "Savings Goal deductions) to produce your actual Budget Amount. The deduction remains " +
+            "constant for the full amortization period, then stops automatically.",
+        entryListTitle = "Entry List",
+        entryListBody = "Each amortization entry displays:",
+        entrySource = "Source name",
+        entryTotal = "Total amount and per-period deduction",
+        entryProgress = "Progress \u2014 \"X of Y [periods] complete\" or \"Completed\" in green",
+        actionsTitle = "Actions",
+        editNote = "Tap an entry to edit its details (source name, amount, periods, start date).",
+        deleteDesc = "Permanently remove the amortization entry.",
+        deleteLinkedNote = "If the entry has any transactions linked to it, BudgeTrak remembers " +
+            "how much of the amortization had already been applied at the time each transaction was linked. " +
+            "Deleting the entry unlinks those transactions but keeps the remembered amounts intact, so your " +
+            "past available-cash history stays accurate \u2014 the transactions don't suddenly start " +
+            "subtracting the full amount from your budget.",
+        matchingTitle = "Automatic Transaction Matching",
+        matchingBody = "When you add a transaction (manually or via bank import), the app checks " +
+            "whether the merchant name and amount match any of your amortization entries. " +
+            "If a match is found, you're shown a confirmation dialog:",
+        yesAmortBullet = "\"Yes, Amortization\" \u2014 the transaction is linked to the amortization entry and does NOT reduce your available cash (since the cost is already being deducted from your budget over time)",
+        noRegularBullet = "\"No, Regular\" \u2014 the transaction is treated as a normal expense",
+        sourceMatchingTitle = "Source Name Matching",
+        sourceMatchingBody = "Use descriptive names for your amortization sources. The matching " +
+            "algorithm looks for common substrings between the source name and " +
+            "the transaction merchant name. For example, a source named \"Toyota Service\" " +
+            "would match a bank transaction from \"TOYOTA SERVICE CENTER\".",
+        manualOverrideTitle = "Manual Budget Override",
+        manualOverrideBody = "If Manual Budget Override is enabled in Budget Configuration, amortization " +
+            "deductions are still subtracted from your manual budget amount. You can pause " +
+            "individual entries or all entries at once if you want the full manual amount.",
+        tipsTitle = "Tips",
+        tip1 = "Choose a number of periods that results in a comfortable per-period deduction. If \$10/day feels too much, spread over more days.",
+        tip2 = "Use amortization for any expense that would otherwise devastate your budget: medical bills, car repairs, appliance replacements, emergency travel.",
+        tip3 = "Completed entries (all periods elapsed) can be deleted to keep the list clean.",
+        tip4 = "Remember to also record the actual transaction \u2014 amortization only adjusts your budget rate, it doesn't record the expense itself.",
+        tip5 = "If you knew about the expense in advance, Savings Goals would have been the better tool. Use Amortization for surprises."
+    )
+
+    override val recurringExpensesHelp = RecurringExpensesHelpStrings(
+        title = "Recurring Expenses Help",
+        whatTitle = "What Are Recurring Expenses?",
+        whatBody = "Recurring expenses are bills and payments that repeat on a regular schedule: " +
+            "rent, mortgage, utilities, insurance, subscriptions, loan payments, and similar " +
+            "obligations. By registering them here, the budget calculator accounts for these " +
+            "costs automatically, so your daily/weekly/monthly budget reflects only what's " +
+            "truly available for discretionary spending.",
+        whyTitle = "Why This Matters",
+        whyBody = "Without recurring expenses in the budget calculator, your budget amount " +
+            "would be based on income alone. You'd see a high daily budget, spend freely, " +
+            "and then scramble when rent is due. Registering expenses ensures the budget " +
+            "reserves enough for bills, even in months where several bills cluster together.",
+        headerTitle = "Header Bar",
+        backDesc = "Return to the dashboard.",
+        helpDesc = "Opens this help page.",
+        addingTitle = "Adding a Recurring Expense",
+        addingBody = "Tap \"Add Recurring Expense\" and fill in:",
+        addStep1 = "Description",
+        addStep1Desc = "A descriptive name for the expense (e.g., \"Rent\", \"Netflix\", \"Car Insurance\"). Important: this name is matched against bank transaction merchant names for automatic recognition.",
+        addStep2 = "Amount",
+        addStep2Desc = "The amount per occurrence.",
+        repeatTitle = "Repeat Settings",
+        repeatBody = "Every recurring expense needs a repeat schedule so the budget calculator " +
+            "knows when to expect the charge. Tap the sync icon on any expense to configure:",
+        everyXDaysTitle = "Day",
+        everyXDaysBody = "The expense occurs every N days (1\u2013365). Requires a Start Date. " +
+            "Useful for irregular-interval expenses like medication refills.",
+        everyXWeeksTitle = "Week",
+        everyXWeeksBody = "The expense occurs every N weeks (1\u201352). Requires a Start Date. " +
+            "The day of the week is determined by the start date.",
+        everyXMonthsTitle = "Month",
+        everyXMonthsBody = "Occurs on a specific day of the month, every N months (1\u201312). " +
+            "Pick a start date to set the day and phase. Most bills use this type: rent on the 1st, " +
+            "phone bill on the 15th, etc. Days 29\u201331 are allowed when the interval is 12.",
+        biMonthlyTitle = "Twice per Month (Bi-Monthly)",
+        biMonthlyBody = "Occurs on two specific days each month. Enter both days (1\u201328 each). " +
+            "Useful for expenses that bill twice monthly.",
+        annualTitle = "Annual",
+        annualBody = "Occurs once per year on a specific date. Pick a start date \u2014 any day is allowed, " +
+            "including the 29th\u201331st. Useful for annual insurance premiums, memberships, or subscriptions.",
+        dayLimitNote = "Day-of-month values are limited to 28 for most repeat types to ensure the date " +
+            "exists in every month. Annual and 12-month intervals allow days 29\u201331.",
+        expenseListTitle = "Expense List",
+        expenseListBody = "Expenses are organized into three sections with colored subheaders:",
+        expenseGroupsBody = "Monthly Expenses \u2014 bills that repeat once per month. " +
+            "Annual Expenses \u2014 charges that occur once per year. " +
+            "Other Expense Periods \u2014 everything else (weekly, bi-weekly, bi-monthly, multi-month, or custom day intervals). " +
+            "If a section is empty, a short message is shown in its place.",
+        expenseNextDateBody = "Each entry shows the expense name, followed by the amount and the date of the next upcoming occurrence (e.g., \"\$15.99 on Mar 1, 2026\"). Expenses in the Other section also show a brief description of their repeat period (e.g., \"Every 2 weeks\").",
+        expenseOtherPeriodBody = "",
+        expenseSortBody = "A sort button appears on the left side of each subheader. Tap it to toggle between alphabetical order (A) and amount descending (currency symbol). All sections sort together. Your preference is saved automatically.",
+        setAsideProgressBody = "Each expense row shows a small \"set aside so far\" line (e.g., \"\$42.00 set aside of \$120.00\"). This is the running total that has been reserved from your budget for this expense since the last time it was paid. Once the expense is actually charged and matched to a transaction, the counter resets and starts over for the next occurrence. This lets you see at a glance whether the money is already waiting for the bill.",
+        actionsTitle = "Actions",
+        editNote = "Tap an expense to edit its name and amount.",
+        repeatSettingsDesc = "Configure or change the repeat schedule.",
+        deleteDesc = "Permanently remove the recurring expense.",
+        acceleratedTitle = "Accelerated Set-Aside",
+        acceleratedBody = "When you add or edit a recurring expense, the add/edit dialog shows a " +
+            "small green Speed icon in the footer. Tapping it toggles Accelerated mode on or off \u2014 " +
+            "when on, the icon is solid green; when off, it fades out. An accelerated expense also shows " +
+            "the same green Speed icon next to its row in the expense list, so you can spot them at a glance. " +
+            "Accelerated mode changes how the budget reserves money for that one expense. " +
+            "Normally, BudgeTrak spreads the cost evenly over the full repeat interval so the money builds " +
+            "up gradually. With Accelerated mode on, the app instead reserves enough each period to fully " +
+            "cover the expense by its next due date, even if you've added it late or are catching up after " +
+            "a missed payment. This pulls a bit more out of your available cash each period, but guarantees " +
+            "the full amount is set aside by the time the bill actually arrives. Use this for bills you " +
+            "want to be certain are fully funded on time \u2014 particularly new recurring expenses you've " +
+            "just added partway through an interval, or expenses where falling behind has real consequences.",
+        budgetEffectTitle = "How Recurring Expenses Affect Your Budget",
+        budgetEffectBody = "Recurring expenses play two roles in the budget system:",
+        timingSafetyTitle = "1. Budget Calculation (Timing Safety)",
+        timingSafetyBody = "The budget calculator projects all recurring expenses forward one year and " +
+            "simulates each budget period. It ensures your budget amount is high enough " +
+            "to cover bills even in months where multiple expenses cluster together. " +
+            "Without this, you might have enough money overall but not enough in a " +
+            "particular week or month.",
+        autoMatchTitle = "2. Automatic Transaction Matching",
+        autoMatchBody = "When you add a transaction (manually or via bank import), the app checks " +
+            "whether the merchant name and amount match any recurring expense. If a match " +
+            "is found, you're shown a confirmation dialog:",
+        yesRecurringBullet = "\"Yes, Recurring\" \u2014 the transaction is linked to the recurring expense and does NOT reduce your available cash (since it's already accounted for in the budget)",
+        noRegularBullet = "\"No, Regular\" \u2014 the transaction is treated as a normal expense",
+        whyMatchingTitle = "Why Matching Matters",
+        whyMatchingBody = "Your budget amount already has recurring expenses \"baked in\" \u2014 the " +
+            "calculator reserved money for them. If a recurring expense also subtracted " +
+            "from available cash, it would be double-counted. The matching system prevents " +
+            "this by recognizing recurring transactions and keeping them from affecting " +
+            "your spending money.",
+        sourceMatchTitle = "Source Name Matching",
+        sourceMatchBody = "The automatic recognition system matches transaction merchant names against " +
+            "your recurring expense source names. For best results:",
+        matchBullet1 = "Use descriptive names that overlap with how the expense appears on bank statements",
+        matchBullet2 = "For example, \"State Farm\" will match \"STATE FARM INSURANCE\" from your bank",
+        matchBullet3 = "The match looks for common substrings, so partial matches work",
+        matchBullet4 = "Amount must also be within 1% for the match to trigger",
+        linkingTitle = "Transaction Linking",
+        linkingBody = "When a bank transaction matches a recurring expense, BudgeTrak links them " +
+            "together. Linked transactions are already accounted for in your budget \u2014 they " +
+            "don't reduce your available cash because the recurring expense already reserved " +
+            "that amount.",
+        linkingBullet1 = "The app remembers the budgeted amount at the time of linking. If the actual charge differs from the budgeted amount, only the difference affects your cash.",
+        linkingBullet2 = "If you delete a recurring expense, linked transactions keep their remembered amounts so your budget stays accurate.",
+        linkingBullet3 = "You can manually link or unlink transactions in the transaction edit dialog using the link buttons.",
+        tipsTitle = "Tips",
+        tip1 = "Add ALL recurring expenses, even small ones like streaming subscriptions. They add up and the budget calculator needs the full picture.",
+        tip2 = "If an expense amount varies slightly (like a utility bill), use the average amount.",
+        tip3 = "Your budget recalculates automatically when you add or remove recurring expenses.",
+        tip4 = "Common expenses to add: rent/mortgage, utilities (electric, gas, water), insurance (car, health, home), subscriptions (streaming, gym, software), loan payments, phone bill.",
+        tip5 = "If an expense is truly one-time, don't add it here. Use Amortization instead to spread it over time.",
+        tip6 = "Check your bank statements to make sure you haven't missed any recurring charges."
+    )
+
+    override val syncHelp = SyncHelpStrings(
+        title = "SYNC Help",
+        whatTitle = "What is SYNC?",
+        whatBody = "SYNC lets you share a single household budget across up to 5 devices. " +
+            "All transactions, income sources, recurring expenses, savings goals, and settings " +
+            "are kept in step automatically using end-to-end encrypted cloud relay. " +
+            "No one \u2014 not even the server \u2014 can read your financial data.",
+        adminRoleTitle = "The Admin Role",
+        adminRoleBody = "The person who creates the group becomes the admin. Creating a group " +
+            "and holding admin status requires a subscription. The admin can " +
+            "change shared budget settings (currency, budget period, reset schedule, receipt " +
+            "photo retention, and other options on the Settings and Budget Configuration screens), " +
+            "start or reset the budget, generate pairing codes to invite new devices, " +
+            "remove devices (long-press on the device roster), set the group timezone, repair " +
+            "orphaned transaction attributions, and dissolve the group. Non-admin members can view " +
+            "the shared settings but cannot change them \u2014 tapping a locked setting shows " +
+            "\"Administrator only\". Free users can join an existing group without a subscription.",
+        adminFeaturesTitle = "Admin Decisions: What You Control & Why",
+        adminFeaturesIntro = "As the admin you make a handful of choices that affect everyone in the SYNC group. " +
+            "Here is a quick guide to each one and when you might want to use it.",
+        adminFeatureBudgetTitle = "Budget Period & Reset",
+        adminFeatureBudgetBody = "The budget period (Daily / Weekly / Monthly) and the reset schedule are " +
+            "shared across all linked devices, so everyone sees the same available cash. " +
+            "Pick the period that matches how you actually plan spending: daily for tight budgets " +
+            "or strong daily awareness, weekly to align with paychecks, monthly for stable income " +
+            "and longer planning. Only the admin can change this or tap Start/Reset Budget so " +
+            "stray taps from another device cannot wipe everyone's progress.",
+        adminFeatureCurrencyTitle = "Currency Symbol",
+        adminFeatureCurrencyBody = "The currency symbol is a shared setting \u2014 the admin picks one and every " +
+            "device in the group uses it. Change it in Settings. Date format and theme (light / dark / system) " +
+            "are per-device choices, so each member can set them independently without affecting anyone else.",
+        adminFeatureTimezoneTitle = "Group Timezone",
+        adminFeatureTimezoneBody = "If your group spans multiple timezones (a traveling spouse, college kid, " +
+            "or family across regions), set the Group Timezone to a single zone everyone agrees on. " +
+            "Period boundaries (when each new day, week, or month starts) are calculated in that " +
+            "timezone so all devices roll over together. Leave it on the default \"Device timezone\" " +
+            "if everyone is in the same place.",
+        adminFeatureAttributionTitle = "Repair Attributions",
+        adminFeatureAttributionBody = "If devices leave the group or get renamed, attribution labels on old " +
+            "transactions can end up pointing at devices that no longer exist. The admin sees a wrench " +
+            "icon next to the attribution toggle that opens the Repair Attributions dialog, where those " +
+            "orphaned labels can be reassigned or cleared in one pass. The attribution toggle itself is " +
+            "a per-device display choice \u2014 see the Transaction Attribution section below.",
+        adminFeatureRetentionTitle = "Receipt Photo Retention",
+        adminFeatureRetentionBody = "If you use receipt photos, you can set a retention period (e.g., 90 days) " +
+            "after which older photos are automatically removed from cloud storage. This keeps cloud " +
+            "usage low and limits how long sensitive purchase images are kept. Set it longer if you " +
+            "need photos for tax records, shorter if you only use them as in-the-moment proof.",
+        adminFeatureManageTitle = "Managing Devices & Dissolving",
+        adminFeatureManageBody = "Long-press a device in the roster to rename or remove it. Use this when " +
+            "someone gets a new phone, leaves the household, or you want to retire an old device. " +
+            "Dissolving the group permanently disconnects all members and erases the cloud-stored " +
+            "data \u2014 each device keeps its own local copy. Use Dissolve only when you're sure the " +
+            "group should end.",
+        gettingStartedTitle = "Getting Started",
+        gettingStartedBody = "To set up SYNC: Open Settings, tap SYNC, and tap " +
+            "\"Create Group\" (requires subscription). A SYNC group is created with you as admin. " +
+            "Then tap \"Generate Pairing Code\" and share the 6-character code with " +
+            "the people you want to add. They enter the code on their device to join. " +
+            "Codes expire after 10 minutes for security.",
+        joiningTitle = "Joining a Group",
+        joiningBody = "To join an existing group, tap \"Join Group\" and enter the " +
+            "6-character pairing code. Any user can join \u2014 no subscription required. " +
+            "Important: joining replaces your local budget data " +
+            "with the group's shared data. Your current transactions, goals, and settings " +
+            "will be overwritten. Make sure to back up first if needed.",
+        syncStatusTitle = "SYNC Status",
+        syncStatusBody = "The SYNC icon on the dashboard and the status card on this screen " +
+            "show the current state: green means online and syncing normally, " +
+            "yellow means the connection is recovering, and red means no internet or a sync error. " +
+            "The device roster shows real-time presence for each linked device: " +
+            "green = online now, dark blue = seen recently, " +
+            "yellow = 1\u20132 hours ago, red = over 2 hours ago.",
+        staleWarningsTitle = "Stale Warnings",
+        staleWarningsBody = "If your device hasn't synced for an extended period, escalating " +
+            "warnings appear on the dashboard: at 60 days a gentle reminder, " +
+            "at 75 days a countdown, at 85 days an urgent warning, and at 90 days " +
+            "sync is blocked and a full refresh from the group snapshot is required. " +
+            "For moderately stale devices, catch-up is automatic \u2014 the app loads " +
+            "a recent snapshot and merges your local changes without replaying " +
+            "every missed update.",
+        attributionTitle = "Transaction Attribution",
+        attributionBody = "The attribution toggle on the SYNC screen is a per-device display choice \u2014 " +
+            "each member turns it on or off for themselves and it doesn't affect anyone else. " +
+            "When on, each transaction in the list shows which device recorded it: your own " +
+            "transactions show \"You\" and transactions from other devices show the device name. " +
+            "Useful for shared expenses or teaching kids about budgeting; leave it off for a cleaner list.",
+        adminClaimsTitle = "Admin Claims",
+        adminClaimsBody = "If the admin device is lost or unavailable, any subscriber can claim the " +
+            "admin role. Tap \"Claim Admin Role\" on the Sync screen (requires subscription). " +
+            "Other members have 24 hours to object. If no one objects, the claim is " +
+            "approved and you become the new admin. If someone objects, the claim is rejected.",
+        leavingTitle = "Leaving or Dissolving",
+        leavingBody = "Non-admin members can leave a group at any time. Your local data is kept " +
+            "but stops syncing. The admin can dissolve the group entirely, which " +
+            "disconnects all members and deletes all sync data from the server. " +
+            "Local data on each device is preserved. " +
+            "The admin can also remove individual devices by long-pressing on the device roster.",
+
+        privacyTitle = "Privacy & Security",
+        privacyBody = "All SYNC data is protected with industry-standard end-to-end encryption. " +
+            "The encryption key is generated when the group is created and shared only through " +
+            "the pairing code, then stored securely on each device. The cloud server stores only " +
+            "encrypted data \u2014 it cannot read your transactions, amounts, merchant names, or any " +
+            "other financial information. Your money, your data, your control.",
+        subscriptionTitle = "Subscription & Group Lifecycle",
+        subscriptionBody = "The admin's subscription keeps the group active. If the subscription " +
+            "expires, all group members are notified daily and have a 7-day grace period " +
+            "to resubscribe. During the grace period, any subscriber can claim admin " +
+            "to keep the group alive. After 7 days without an active admin subscription, " +
+            "the group is automatically dissolved. Local data on each device is preserved."
+    )
+
+    override val simulationGraphHelp = SimulationGraphHelpStrings(
+        title = "Cash Flow Simulation Help",
+        overviewTitle = "What is the Cash Flow Simulation?",
+        overviewBody = "The Cash Flow Simulation projects your financial trajectory over the next 18 months. " +
+            "It takes your current budget, income sources, recurring expenses, savings goals, and amortization " +
+            "entries and plays them forward in time to show how your available cash is expected to change. " +
+            "Cash Flow Simulation is a subscriber feature \u2014 open it from the chart icon on the Savings " +
+            "Goals screen.",
+        howItWorksTitle = "How It Works",
+        howItWorksBody = "The simulation starts with your current available cash and steps through each budget period " +
+            "(day, week, or month depending on your settings). At each step it adds your income, subtracts " +
+            "recurring expenses, savings goal contributions, and amortization deductions. The resulting cash " +
+            "balance is plotted on the chart so you can see the overall trend \u2014 whether your cash is growing, " +
+            "shrinking, or cycling with your pay schedule.",
+        currentSavingsTitle = "Current Savings Input",
+        currentSavingsBody = "The \"Current Savings\" field lets you enter money you already have saved outside of your " +
+            "budget. This shifts the entire chart upward by that amount, giving you a more complete picture " +
+            "of your total financial position. Use this to see how your existing savings cushion combines " +
+            "with your ongoing cash flow. " +
+            "This number defaults to a value that just keeps you above zero throughout the simulation. " +
+            "If you have less money than this (in checking accounts, savings accounts, or buried in your garden) " +
+            "you should consider setting up a Savings Goal to catch up. Of course increasing income or reducing expenses also helps!",
+        savedPerPeriodTitle = "Saved per Period Input",
+        savedPerPeriodBody = "The \"Saved per Period\" field simulates setting aside a fixed amount each budget period. " +
+            "Savings Goals already set up on that page are already considered. Adding a positive amount here simulates additional money saved each period beyond what's already configured. A negative " +
+            "value simulates overspending (spending more than your budget). This lets you answer questions like " +
+            "\"What if I saved \$50 per week?\" or \"What happens if I consistently overspend by \$20 per day?\"",
+        insightsTitle = "Gaining Financial Insights",
+        insightsBody = "Try adjusting both inputs together to explore different scenarios. For example, enter your " +
+            "actual savings balance and then experiment with different per-period savings amounts to see how " +
+            "quickly your total wealth grows. If the chart trends downward, it means your expenses exceed " +
+            "your income over time \u2014 a signal to review your spending. If it trends upward, you have room " +
+            "to save more aggressively or pay down debt faster.",
+        tipsTitle = "Tips",
+        tip1 = "Pinch to zoom in on specific time ranges, and swipe to scroll through the timeline.",
+        tip2 = "Use the +/\u2013 buttons to adjust the zoom level in steps.",
+        tip3 = "Try a small per-period savings amount first, then increase it to find a comfortable balance between saving and spending.",
+        tip4 = "If your \"Saved per Period\" exceeds your budget, the chart will show a message \u2014 this means your savings goal isn't sustainable with your current income."
+    )
+
+    override val budgetCalendar = BudgetCalendarStrings(
+        title = "Budget Calendar",
+        income = "Income",
+        expenses = "Expenses",
+        dayDetails = "Day Details",
+        noEvents = "No recurring items on this day",
+        totalIncome = { amount -> "Total income: $amount" },
+        totalExpenses = { amount -> "Total expenses: $amount" },
+        budgetResetDay = "Budget Reset Day",
+        sun = "Sun", mon = "Mon", tue = "Tue", wed = "Wed", thu = "Thu", fri = "Fri", sat = "Sat"
+    )
+
+    override val budgetCalendarHelp = BudgetCalendarHelpStrings(
+        title = "Budget Calendar Help",
+        overviewTitle = "What is the Budget Calendar?",
+        overviewBody = "The Budget Calendar shows when your recurring income and expenses are " +
+            "scheduled throughout the month. It gives you a visual overview of your financial " +
+            "commitments so you can see at a glance which days have payments coming in or going out.",
+        colorsTitle = "Color Legend",
+        colorsBody = "Each day on the calendar is color-coded based on what events fall on that day:",
+        greenDesc = "Green \u2014 Income is scheduled on this day",
+        redDesc = "Red \u2014 An expense is due on this day",
+        splitDesc = "Split (green and red) \u2014 Both income and expenses fall on the same day",
+        resetDayDesc = "Blue tint \u2014 A budget reset day (for weekly or monthly budget periods). " +
+            "This is the day your period boundary falls on and your available cash rolls over. " +
+            "Tap a reset day to see \"Budget Reset Day\" in the details popup along with any income or expenses.",
+        navigationTitle = "Navigating Months",
+        navigationBody = "Use the left and right arrows at the top of the calendar to move between " +
+            "months. The calendar defaults to the current month when you open it.",
+        detailsTitle = "Viewing Details",
+        detailsBody = "Tap any highlighted day to see a breakdown of all income sources and " +
+            "recurring expenses scheduled for that day, including the source name and amount.",
+        tipsTitle = "Tips",
+        tip1 = "Use the calendar to spot heavy expense days and plan your spending around them.",
+        tip2 = "If you see many red days clustered together, consider adjusting due dates or payment schedules where possible."
+    )
+
+    override val widgetTransaction = WidgetTransactionStrings(
+        quickExpense = "Quick Expense",
+        quickIncome = "Quick Income",
+        amountLabel = { symbol -> "$symbol Amount" },
+        remaining = { symbol, amount -> "Remaining: $symbol$amount" },
+        merchantService = "Merchant/Service",
+        source = "Source",
+        descriptionOptional = "Description (optional)",
+        cancel = "Cancel",
+        save = "Save",
+        freeVersionLimit = "Free Version: 1 widget transaction per day",
+        duplicateTitle = "Possible Duplicate",
+        duplicateBody = { source, amount, date -> "Similar to existing: $source ($amount) on $date" },
+        duplicateExisting = "Existing",
+        duplicateNew = "New",
+        duplicateKeepOld = "Keep Existing",
+        duplicateKeepNew = "Keep New",
+        duplicateKeepBoth = "Keep Both",
+        recurringTitle = "Recurring Match",
+        recurringBody = { source -> "Matches recurring expense \"$source\". Link it?" },
+        recurringLink = "Link",
+        recurringNoLink = "No",
+        amortizationTitle = "Amortization Match",
+        amortizationBody = { source -> "Matches amortization \"$source\". Link it?" },
+        amortizationLink = "Link",
+        amortizationNoLink = "No",
+        budgetIncomeTitle = "Budget Income Match",
+        budgetIncomeBody = { source -> "Matches income source \"$source\". Mark as budget income?" },
+        budgetIncomeLink = "Yes",
+        budgetIncomeNoLink = "No"
+    )
+}

@@ -10,11 +10,11 @@ plugins {
 }
 
 android {
-    namespace = "com.syncbudget.app"
+    namespace = "com.techadvantage.budgetrak"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.securesync.app"
+        applicationId = "com.techadvantage.budgetrak"
         minSdk = 28
         targetSdk = 34
         versionCode = 3
