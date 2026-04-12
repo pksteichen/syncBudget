@@ -139,6 +139,9 @@ object EnglishStrings : AppStrings {
         administratorOnly = "Administrator only",
         showWidgetLogo = "Show logo on widget",
         autoCapitalize = "Auto Capitalize",
+        privacySection = "Privacy",
+        crashReports = "Send crash reports",
+        crashReportsDesc = "Help us catch and fix bugs by sharing anonymous crash data. No financial information is sent.",
         categories = "Categories",
         charted = "Charted",
         widget = "Widget",
@@ -924,6 +927,14 @@ object EnglishStrings : AppStrings {
         widgetLogoTitle = "Show Logo on Widget",
         widgetLogoBody = "When checked, the BudgeTrak SYNC logo appears between the transaction buttons on the " +
             "home screen widget. Uncheck to hide the logo for a minimalist widget appearance.",
+        crashReportsTitle = "Send Crash Reports",
+        crashReportsBody = "When enabled (default), BudgeTrak shares anonymous crash data so we can detect and fix " +
+            "problems quickly and ship a repair update. We strongly encourage leaving this on \u2014 it's the main " +
+            "way we hear about bugs that affect real users. Your privacy is protected: no transaction details, " +
+            "merchant names, amounts, dates, or receipt photos are ever sent. Only crash stack traces, anonymous " +
+            "device information, sync status, and basic counts (number of transactions, recurring expenses, etc.). " +
+            "Even your available cash is converted to a one-way hash before being included \u2014 the actual value " +
+            "never leaves your device. You can opt out at any time using this toggle.",
         receiptPhotosTitle = "Receipt Photos",
         receiptPhotosBody = "Paid users can attach up to 5 photos per transaction. Swipe left on a transaction to reveal the photo panel, or use the camera icon in the edit dialog.",
         receiptPhotosBullet1 = "Photos are stored locally and synced across linked devices when SYNC is enabled",

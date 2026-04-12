@@ -238,6 +238,13 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
 
             HelpDividerLine()
 
+            // ─── CRASH REPORTS ───
+            HelpSectionTitle(S.settingsHelp.crashReportsTitle)
+            HelpBodyText(S.settingsHelp.crashReportsBody)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDividerLine()
+
             // ─── RECEIPT PHOTOS ───
             HelpSectionTitle(S.settingsHelp.receiptPhotosTitle)
             HelpBodyText(S.settingsHelp.receiptPhotosBody)

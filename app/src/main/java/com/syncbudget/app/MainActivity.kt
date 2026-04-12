@@ -1492,6 +1492,15 @@ class MainActivity : ComponentActivity() {
                 vm.autoCapitalize = newValue
                 vm.prefs.edit().putBoolean("autoCapitalize", newValue).apply()
             },
+            crashlyticsEnabled = vm.crashlyticsEnabled,
+            onCrashlyticsEnabledChange = { newValue ->
+                vm.crashlyticsEnabled = newValue
+                vm.prefs.edit().putBoolean("crashlyticsEnabled", newValue).apply()
+                try {
+                    com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance()
+                        .setCrashlyticsCollectionEnabled(newValue)
+                } catch (_: Exception) {}
+            },
             categories = vm.activeCategories,
             transactions = vm.activeTransactions,
             onAddCategory = { cat ->

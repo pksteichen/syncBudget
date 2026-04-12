@@ -139,6 +139,9 @@ object SpanishStrings : AppStrings {
         administratorOnly = "Solo administrador",
         showWidgetLogo = "Mostrar logo en el widget",
         autoCapitalize = "Auto Capitalizar",
+        privacySection = "Privacidad",
+        crashReports = "Enviar informes de errores",
+        crashReportsDesc = "Ay\u00fadanos a detectar y corregir errores compartiendo datos an\u00f3nimos de fallos. No se env\u00eda ninguna informaci\u00f3n financiera.",
         categories = "Categor\u00edas",
         charted = "Gr\u00e1fica",
         widget = "Widget",
@@ -911,6 +914,16 @@ object SpanishStrings : AppStrings {
         widgetLogoTitle = "Mostrar logo en el widget",
         widgetLogoBody = "Al activarlo, el logo de BudgeTrak SYNC aparece entre los botones de transacci\u00f3n en el " +
             "widget de la pantalla de inicio. Desact\u00edvalo para ocultar el logo y obtener una apariencia minimalista.",
+        crashReportsTitle = "Enviar Informes de Errores",
+        crashReportsBody = "Cuando est\u00e1 activado (predeterminado), BudgeTrak comparte datos an\u00f3nimos de fallos para " +
+            "que podamos detectar y corregir problemas r\u00e1pidamente y enviar una actualizaci\u00f3n de reparaci\u00f3n. " +
+            "Recomendamos encarecidamente dejarlo activado \u2014 es la principal forma en que nos enteramos de errores " +
+            "que afectan a usuarios reales. Tu privacidad est\u00e1 protegida: nunca se env\u00edan detalles de transacciones, " +
+            "nombres de comercios, montos, fechas ni fotos de recibos. Solo trazas de fallos, informaci\u00f3n an\u00f3nima " +
+            "del dispositivo, estado de sincronizaci\u00f3n y conteos b\u00e1sicos (n\u00famero de transacciones, gastos " +
+            "recurrentes, etc.). Incluso tu efectivo disponible se convierte en un hash unidireccional antes de " +
+            "incluirse \u2014 el valor real nunca sale de tu dispositivo. Puedes desactivarlo en cualquier momento " +
+            "con este interruptor.",
         receiptPhotosTitle = "Fotos de Recibos",
         receiptPhotosBody = "Los usuarios de pago pueden adjuntar hasta 5 fotos por transacci\u00f3n. Desliza a la izquierda en una transacci\u00f3n para ver el panel de fotos, o usa el icono de c\u00e1mara en el di\u00e1logo de edici\u00f3n.",
         receiptPhotosBullet1 = "Las fotos se almacenan localmente y se sincronizan entre los dispositivos vinculados cuando SYNC est\u00e1 activado",

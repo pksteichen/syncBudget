@@ -122,6 +122,8 @@ fun SettingsScreen(
     onWidgetLogoChange: (Boolean) -> Unit = {},
     autoCapitalize: Boolean = true,
     onAutoCapitalizeChange: (Boolean) -> Unit = {},
+    crashlyticsEnabled: Boolean = true,
+    onCrashlyticsEnabledChange: (Boolean) -> Unit = {},
     matchDays: Int = 7,
     onMatchDaysChange: (Int) -> Unit = {},
     matchPercent: Double = 1.0,
@@ -763,6 +765,44 @@ fun SettingsScreen(
                         text = S.settings.autoCapitalize,
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onBackground
+                    )
+                }
+            }
+
+            // ── PRIVACY SECTION ──
+            item {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Text(
+                    text = S.settings.privacySection,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+
+            // Send Crash Reports checkbox
+            item {
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = crashlyticsEnabled,
+                            onCheckedChange = onCrashlyticsEnabledChange,
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = MaterialTheme.colorScheme.primary,
+                                uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                            )
+                        )
+                        Text(
+                            text = S.settings.crashReports,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                    Text(
+                        text = S.settings.crashReportsDesc,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
+                        modifier = Modifier.padding(start = 48.dp, end = 16.dp, bottom = 4.dp)
                     )
                 }
             }

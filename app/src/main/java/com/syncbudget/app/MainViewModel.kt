@@ -137,6 +137,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     )
     var showWidgetLogo by mutableStateOf(prefs.getBoolean("showWidgetLogo", true))
     var autoCapitalize by mutableStateOf(prefs.getBoolean("autoCapitalize", true))
+    var crashlyticsEnabled by mutableStateOf(prefs.getBoolean("crashlyticsEnabled", true))
 
     // ── Backup State ──
     var backupsEnabled by mutableStateOf(backupPrefs.getBoolean("backups_enabled", false))
@@ -582,7 +583,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // ── Daily health beacon (Crashlytics) ──
         // Records a non-fatal snapshot once per day so production devices
         // are visible in the Crashlytics dashboard even when nothing is wrong.
-        if (isSyncConfigured) {
+        // Skipped entirely when user has opted out of crash reporting.
+        if (isSyncConfigured && crashlyticsEnabled) {
             val maintenanceCashDigest = availableCash.toString().hashCode().toString(16)
             BudgeTrakApplication.updateDiagKeys(mapOf(
                 "cashDigest" to maintenanceCashDigest,
@@ -2091,16 +2093,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         // Update Crashlytics diagnostic keys (attached to every future crash/non-fatal).
         // Use cash hash (not actual value) to protect user financial privacy.
-        val cashDigest = availableCash.toString().hashCode().toString(16)
-        BudgeTrakApplication.updateDiagKeys(mapOf(
-            "cashDigest" to cashDigest,
-            "listenerStatus" to if (docSync?.isListening == true) "healthy" else if (isSyncConfigured) "dead" else "off",
-            "lastRefreshDate" to (lastRefreshDate?.toString() ?: "null"),
-            "activeDevices" to syncDevices.size.toString(),
-            "txnCount" to transactions.count { !it.deleted }.toString(),
-            "reCount" to recurringExpenses.count { !it.deleted }.toString(),
-            "plCount" to periodLedger.size.toString()
-        ))
+        // Skipped entirely when user has opted out of crash reporting.
+        if (crashlyticsEnabled) {
+            val cashDigest = availableCash.toString().hashCode().toString(16)
+            BudgeTrakApplication.updateDiagKeys(mapOf(
+                "cashDigest" to cashDigest,
+                "listenerStatus" to if (docSync?.isListening == true) "healthy" else if (isSyncConfigured) "dead" else "off",
+                "lastRefreshDate" to (lastRefreshDate?.toString() ?: "null"),
+                "activeDevices" to syncDevices.size.toString(),
+                "txnCount" to transactions.count { !it.deleted }.toString(),
+                "reCount" to recurringExpenses.count { !it.deleted }.toString(),
+                "plCount" to periodLedger.size.toString()
+            ))
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════

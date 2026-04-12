@@ -162,6 +162,9 @@ data class SettingsStrings(
     val administratorOnly: String,
     val showWidgetLogo: String,
     val autoCapitalize: String,
+    val privacySection: String,
+    val crashReports: String,
+    val crashReportsDesc: String,
     val categories: String,
     val charted: String,
     val widget: String,
@@ -844,6 +847,9 @@ data class SettingsHelpStrings(
     val autoCapitalizeBody: String,
     val widgetLogoTitle: String,
     val widgetLogoBody: String,
+    // Crash reports / Crashlytics
+    val crashReportsTitle: String,
+    val crashReportsBody: String,
     // Receipt photos section
     val receiptPhotosTitle: String,
     val receiptPhotosBody: String,

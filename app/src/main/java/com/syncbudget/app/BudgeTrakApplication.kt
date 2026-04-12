@@ -50,6 +50,14 @@ class BudgeTrakApplication : Application() {
 
         tokenLog("=== Process started ===")
 
+        // Honor user's Crashlytics opt-out before any Firebase service calls so
+        // disabled users never send data, even from this very startup.
+        try {
+            val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
+            val crashlyticsEnabled = prefs.getBoolean("crashlyticsEnabled", true)
+            FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(crashlyticsEnabled)
+        } catch (_: Exception) {}
+
         // Install App Check provider factory early — before any Firebase service calls.
         // Must be in Application.onCreate() (not ViewModel) so it runs even when
         // the process is started by WorkManager without a foreground Activity.
