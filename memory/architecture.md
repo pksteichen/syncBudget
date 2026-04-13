@@ -10,7 +10,7 @@ Total: ~47,000 lines across ~94 Kotlin source files.
 
 ## Top-level files
 - `MainActivity.kt` (2438 lines) — screen router, lifecycle observer, composable wrappers, ad-banner host. All state + logic lives in MainViewModel.
-- `MainViewModel.kt` (2650 lines) — `AndroidViewModel` holding ~80 state vars (mutableStateOf / mutableStateListOf / derivedStateOf), save functions, business logic, sync lifecycle, background loops (viewModelScope). `companion object { var instance: WeakReference<MainViewModel> }` lets `BackgroundSyncWorker` check whether the ViewModel is alive.
+- `MainViewModel.kt` (2650 lines) — `AndroidViewModel` holding ~80 state vars (mutableStateOf / mutableStateListOf / derivedStateOf), save functions, business logic, sync lifecycle, background loops (viewModelScope). `companion object { var instance: WeakReference<MainViewModel> }` lets `BackgroundSyncWorker` check whether the ViewModel is alive. Background work dispatches through `vm.launchIO { ... }` (ViewModelScope + Dispatchers.IO) rather than raw `CoroutineScope`/`GlobalScope` so coroutines cancel cleanly on `onCleared`.
 - `BudgeTrakApplication.kt` (107 lines) — App-level init: App Check provider (Debug/Play Integrity via `BuildConfig.DEBUG`), Crashlytics opt-out read, debug token capture to `token_log.txt`, `tokenLog()`, `syncEvent()`, `recordNonFatal()`, `updateDiagKeys()`.
 
 ## `ui/screens/` (10 navigable + 10 help + QuickStartGuide overlay)
@@ -71,7 +71,7 @@ Total: ~47,000 lines across ~94 Kotlin source files.
 - `FirestoreService.kt` — device/group management, pairing code, admin claims, subscriptions.
 - `GroupManager.kt` — group lifecycle (create/join/leave/dissolve).
 - `SyncFilters.kt` — `.active` extensions (excludes deleted + skeleton).
-- `SyncIdGenerator.kt`, `SecurePrefs.kt` (KeyStore-backed AES256-GCM for encryption key).
+- `SyncIdGenerator.kt`, `SecurePrefs.kt` — KeyStore-backed AES256-GCM for the group sync key. No plaintext fallback: on KeyStore failure `throw IllegalStateException("Secure storage unavailable — re-pairing required")`. A corrupted keystore is a re-pair event, never a silent downgrade.
 - `PeriodLedger.kt` — `PeriodLedgerEntry` data class + dedup helper.
 - `FcmService.kt` / `FcmSender.kt` — FCM message handling (debug dump requests only) + sender helper.
 - `RealtimePresenceService.kt` — RTDB presence at `groups/{gid}/presence/{deviceId}`; `onDisconnect` writes offline+timestamp; replaces Firestore device polling.
