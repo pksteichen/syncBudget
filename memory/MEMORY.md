@@ -160,9 +160,10 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [OCR/AI receipt capture plan](project_ocr_receipt_capture.md).
 - [Widget photo support (designed)](project_widget_photos.md).
 - [Pre-launch TODO](project_prelaunch_todo.md) — most done; App Check integrity level deferred.
+- [Billing + runaway-bug alerts (pending setup)](project_billing_alerts.md) — budget + Cloud Monitoring alerts + SMS channel + killswitch.
 
 ## Documentation
-- SSD/LLD v2.5 at `docs/BudgeTrak_SSD_v2.5.html` + `docs/BudgeTrak_LLD_v2.5.html`. Treat as lagging the code — verify against source.
+- SSD/LLD v2.6 at `docs/BudgeTrak_SSD_v2.6.md` + `docs/BudgeTrak_LLD_v2.6.md`. Verified against code on 2026-04-12; bump on any structural change.
 
 ## Audit Follow-ups
 - **2026-04-12 memory audit** (this one): clarified the two sync hashes — `cashHash` (Layer 2 consistency) is hex via `.toString(16)`; the `enc_hash` per-doc cache in FirestoreDocSync is decimal. An earlier draft conflated them. Removed `WidgetRefreshWorker` refs, restored auto-categorize scope (CSV import only), updated screen count (10 navigable + 10 help, plus QuickStartGuide overlay), deleted obsolete CRDT-era files, added spec_simulation / spec_dashboard / spec_recurring_and_savings / spec_backup / spec_diagnostics.
