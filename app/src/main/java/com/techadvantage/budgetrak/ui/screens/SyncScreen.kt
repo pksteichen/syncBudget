@@ -355,39 +355,41 @@ fun SyncScreen(
                     }
                 }
 
-                // Group ID
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "${S.sync.groupId}: ",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = groupId?.take(8)?.plus("...") ?: "",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontFamily = FontFamily.Monospace,
-                            modifier = Modifier.weight(1f)
-                        )
-                        var copyBtnYPx by remember { mutableIntStateOf(0) }
-                        IconButton(
-                            onClick = {
-                                groupId?.let {
-                                    clipboardManager.setText(AnnotatedString(it))
-                                    toastState.show(S.sync.pairingCodeCopied, copyBtnYPx)
-                                }
-                            },
-                            modifier = Modifier.size(32.dp)
-                                .onGloballyPositioned { copyBtnYPx = it.positionInWindow().y.toInt() }
+                // Group ID — debug-only diagnostic
+                if (com.techadvantage.budgetrak.BuildConfig.DEBUG) {
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = Icons.Filled.ContentCopy,
-                                contentDescription = S.sync.copy,
-                                modifier = Modifier.size(18.dp)
+                            Text(
+                                text = "${S.sync.groupId}: ",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
                             )
+                            Text(
+                                text = groupId?.take(8)?.plus("...") ?: "",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontFamily = FontFamily.Monospace,
+                                modifier = Modifier.weight(1f)
+                            )
+                            var copyBtnYPx by remember { mutableIntStateOf(0) }
+                            IconButton(
+                                onClick = {
+                                    groupId?.let {
+                                        clipboardManager.setText(AnnotatedString(it))
+                                        toastState.show(S.sync.pairingCodeCopied, copyBtnYPx)
+                                    }
+                                },
+                                modifier = Modifier.size(32.dp)
+                                    .onGloballyPositioned { copyBtnYPx = it.positionInWindow().y.toInt() }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.ContentCopy,
+                                    contentDescription = S.sync.copy,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
                     }
                 }
