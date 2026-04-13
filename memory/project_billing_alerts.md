@@ -5,7 +5,7 @@ type: project
 ---
 
 ## Status
-**Configured 2026-04-13.** Floor budget alert + 6 Cloud Monitoring runaway-rate alerts in place, notifying via SMS + email.
+**Configured 2026-04-13.** Floor budget alert + 4 Cloud Monitoring runaway-rate alerts in place, notifying via SMS + email.
 
 ## Environment
 - Billing account: `01ADA3-6ACE89-738567` (distinct from the Tech Advantage family-wide account `01907E-A308CF-E3D95D`, which has a pre-existing $15/mo org-wide budget).
@@ -28,15 +28,23 @@ Notification channel: SMS → `Paul Steichen Cell` (verified under Monitoring �
 | `presenceHeartbeat runaway (>2/min for 5 min)` | same metric, filtered `function_name = presenceHeartbeat` | > 2 | 5 min |
 | `Firestore reads runaway (>1000/min for 5 min)` | `firestore.googleapis.com/document/read_count`, rate / min | > 1000 | 5 min |
 | `Firestore writes runaway (>500/min for 5 min)` | `firestore.googleapis.com/document/write_count`, rate / min | > 500 | 5 min |
-| `RTDB bandwidth runaway (>1 MB/min for 5 min)` | `firebasedatabase.googleapis.com/network/sent_bytes_count`, rate / min | > 1 000 000 bytes/min | 5 min |
-| `Cloud Storage bandwidth runaway (>5 MB/min for 5 min)` | `storage.googleapis.com/network/sent_bytes_count`, rate / min | > 5 000 000 bytes/min | 5 min |
+
+**RTDB + Cloud Storage bandwidth alerts were tried and removed 2026-04-13.** Lessons logged below under "Deleted alerts"; relevant if we ever want to re-add them at scale.
+
+### Deleted alerts (bandwidth)
+Initially set up two more policies — RTDB sent-bytes and Cloud Storage sent-bytes — and both were deleted the same day. Lessons:
+1. **Wrong metric picked.** The picker offers `*_sent_bytes_limit` (monthly quota ceiling — huge static number) alongside `*_sent_bytes_count` (actual traffic). We accidentally picked the limit version, which is always above any sensible threshold, so the alert fired constantly.
+2. **Even with the right metric, the threshold is hard to set at 2-device scale** — Firebase SDK protocol overhead (session handshakes, reconnects, initial presence-node snapshots on every process start) crosses ~1 MB/min intermittently. Any threshold calibrated to today's "normal" is nonsense at 500 devices.
+3. **The 4 function-level + Firestore alerts catch every runaway loop we can realistically have** — a loop manifests as a function-invocation spike first, long before bandwidth spikes. Bandwidth alerts would have been overlap protection, not primary defense.
+4. **The $1 budget tripwire backstops bandwidth overruns anyway** (it's a catch-all on billed cost).
+5. When/if we re-add bandwidth alerts at scale (say 5K+ devices), use metric `firebasedatabase.googleapis.com/network/sent_bytes_count` (plain "Sent bytes", not "Sent bytes limit") and `storage.googleapis.com/network/sent_bytes_count`. Calibrate threshold against a week of real traffic data, not an estimate.
 
 ### Layered coverage
 | Layer | Speed | Catches |
 |---|---|---|
 | $15 family-wide budget (pre-existing, different billing account) | Slow | Catastrophic spike across any project |
 | **$1 sync-23ce9 budget** | Slow (6-24 h) | Floor: any paid service including ones without a Monitoring alert |
-| **6 Monitoring alerts** | ~1-2 min | Runaway function loops, runaway Firestore reads/writes, runaway RTDB/Storage bandwidth |
+| **4 Monitoring alerts** | ~1-2 min | Runaway function loops + runaway Firestore reads/writes |
 
 ### Thresholds — re-tune after live data
 Current values are educated guesses calibrated against our 2026-04-13 overnight dump (500-device estimates). After a week of real traffic, re-evaluate:

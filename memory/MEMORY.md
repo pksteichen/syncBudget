@@ -160,7 +160,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [OCR/AI receipt capture plan](project_ocr_receipt_capture.md).
 - [Widget photo support (designed)](project_widget_photos.md).
 - [Pre-launch TODO](project_prelaunch_todo.md) — most done; App Check integrity level deferred.
-- [Billing + runaway-bug alerts (configured 2026-04-13)](project_billing_alerts.md) — $1 budget + 6 Monitoring policies + SMS channel. Killswitch still optional.
+- [Billing + runaway-bug alerts (configured 2026-04-13)](project_billing_alerts.md) — $1 budget + 4 Monitoring policies + SMS channel. Killswitch still optional.
 
 ## Documentation
 - SSD/LLD v2.6 at `docs/BudgeTrak_SSD_v2.6.md` + `docs/BudgeTrak_LLD_v2.6.md`. Verified against code on 2026-04-12; bump on any structural change.
