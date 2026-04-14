@@ -82,6 +82,7 @@ import com.techadvantage.budgetrak.ui.theme.LocalAppToast
 import com.techadvantage.budgetrak.ui.theme.LocalSyncBudgetColors
 import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrow
 import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrows
+import com.techadvantage.budgetrak.ui.theme.ScrollableDropdownContent
 import androidx.compose.foundation.background
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -742,22 +743,24 @@ private fun AddEditExpenseDialog(
                             expanded = typeExpanded,
                             onDismissRequest = { typeExpanded = false }
                         ) {
-                            RepeatType.entries.filter { it != RepeatType.BI_WEEKLY }.forEach { type ->
-                                DropdownMenuItem(
-                                    text = { Text(getRepeatTypeLabel(type)) },
-                                    onClick = {
-                                        repeatType = type
-                                        typeExpanded = false
-                                        when (type) {
-                                            RepeatType.DAYS -> { intervalText = "1"; monthDay1Text = ""; monthDay2Text = "" }
-                                            RepeatType.WEEKS -> { intervalText = "1"; monthDay1Text = ""; monthDay2Text = "" }
-                                            RepeatType.BI_WEEKLY -> { monthDay1Text = ""; monthDay2Text = "" }
-                                            RepeatType.MONTHS -> { intervalText = "1"; monthDay1Text = ""; monthDay2Text = "" }
-                                            RepeatType.BI_MONTHLY -> { intervalText = "1"; startDate = null }
-                                            RepeatType.ANNUAL -> { monthDay1Text = ""; monthDay2Text = "" }
+                            ScrollableDropdownContent {
+                                RepeatType.entries.filter { it != RepeatType.BI_WEEKLY }.forEach { type ->
+                                    DropdownMenuItem(
+                                        text = { Text(getRepeatTypeLabel(type)) },
+                                        onClick = {
+                                            repeatType = type
+                                            typeExpanded = false
+                                            when (type) {
+                                                RepeatType.DAYS -> { intervalText = "1"; monthDay1Text = ""; monthDay2Text = "" }
+                                                RepeatType.WEEKS -> { intervalText = "1"; monthDay1Text = ""; monthDay2Text = "" }
+                                                RepeatType.BI_WEEKLY -> { monthDay1Text = ""; monthDay2Text = "" }
+                                                RepeatType.MONTHS -> { intervalText = "1"; monthDay1Text = ""; monthDay2Text = "" }
+                                                RepeatType.BI_MONTHLY -> { intervalText = "1"; startDate = null }
+                                                RepeatType.ANNUAL -> { monthDay1Text = ""; monthDay2Text = "" }
+                                            }
                                         }
-                                    }
-                                )
+                                    )
+                                }
                             }
                         }
                     }

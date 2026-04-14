@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -492,6 +493,41 @@ fun PulsingScrollArrow(scrollState: ScrollState, modifier: Modifier = Modifier) 
             modifier = modifier
                 .size(24.dp)
                 .offset(y = offsetY.dp)
+        )
+    }
+}
+
+/**
+ * Drop-in scrollable content for a `DropdownMenu` / `ExposedDropdownMenu`
+ * that needs bidirectional scroll affordance. Our own `ScrollState` lets
+ * `PulsingScrollArrows` do its thing; the `heightIn(max = maxHeight)`
+ * cap prevents the content from exceeding the outer popup and keeps
+ * scroll ownership inside this Box. Short lists wrap to content size,
+ * so small dropdowns don't bloat.
+ *
+ * Usage:
+ * ```
+ * ExposedDropdownMenu(expanded = …, onDismissRequest = …) {
+ *     ScrollableDropdownContent {
+ *         items.forEach { DropdownMenuItem(text = …, onClick = …) }
+ *     }
+ * }
+ * ```
+ */
+@Composable
+fun ScrollableDropdownContent(
+    maxHeight: androidx.compose.ui.unit.Dp = 280.dp,
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+) {
+    val scrollState = rememberScrollState()
+    Box(modifier = Modifier.heightIn(max = maxHeight)) {
+        Column(modifier = Modifier.verticalScroll(scrollState)) {
+            content()
+        }
+        PulsingScrollArrows(
+            scrollState = scrollState,
+            topPadding = 4.dp,
+            bottomPadding = 4.dp,
         )
     }
 }

@@ -44,6 +44,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.techadvantage.budgetrak.ui.theme.ScrollableDropdownContent
 import com.techadvantage.budgetrak.ui.theme.AdAwareAlertDialog
 import com.techadvantage.budgetrak.ui.theme.DialogDangerButton
 import com.techadvantage.budgetrak.ui.theme.DialogSecondaryButton
@@ -253,26 +254,28 @@ fun SwipeablePhotoRow(
                     expanded = showCameraPicker,
                     onDismissRequest = { showCameraPicker = false }
                 ) {
-                    DropdownMenuItem(
-                        text = { Text(S.settings.photoCamera) },
-                        leadingIcon = { Icon(Icons.Filled.PhotoCamera, null) },
-                        onClick = {
-                            showCameraPicker = false
-                            val file = File(context.cacheDir, "receipt_capture_${UUID.randomUUID()}.jpg")
-                            tempPhotoUri = androidx.core.content.FileProvider.getUriForFile(
-                                context, "${context.packageName}.fileprovider", file
-                            )
-                            cameraLauncher.launch(tempPhotoUri!!)
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(S.settings.photoGallery) },
-                        leadingIcon = { Icon(Icons.Filled.Collections, null) },
-                        onClick = {
-                            showCameraPicker = false
-                            galleryLauncher.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                        }
-                    )
+                    ScrollableDropdownContent {
+                        DropdownMenuItem(
+                            text = { Text(S.settings.photoCamera) },
+                            leadingIcon = { Icon(Icons.Filled.PhotoCamera, null) },
+                            onClick = {
+                                showCameraPicker = false
+                                val file = File(context.cacheDir, "receipt_capture_${UUID.randomUUID()}.jpg")
+                                tempPhotoUri = androidx.core.content.FileProvider.getUriForFile(
+                                    context, "${context.packageName}.fileprovider", file
+                                )
+                                cameraLauncher.launch(tempPhotoUri!!)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(S.settings.photoGallery) },
+                            leadingIcon = { Icon(Icons.Filled.Collections, null) },
+                            onClick = {
+                                showCameraPicker = false
+                                galleryLauncher.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            }
+                        )
+                    }
                 }
             }
 

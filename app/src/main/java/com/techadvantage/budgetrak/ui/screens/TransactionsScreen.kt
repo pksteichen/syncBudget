@@ -135,6 +135,7 @@ import com.techadvantage.budgetrak.ui.theme.dialogSectionLabelColor
 import com.techadvantage.budgetrak.ui.theme.LocalAppToast
 import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrow
 import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrows
+import com.techadvantage.budgetrak.ui.theme.ScrollableDropdownContent
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -921,27 +922,29 @@ fun TransactionsScreen(
                         expanded = showSearchMenu,
                         onDismissRequest = { showSearchMenu = false }
                     ) {
-                        DropdownMenuItem(
-                            text = { Text(S.transactions.dateSearch) },
-                            onClick = {
-                                showSearchMenu = false
-                                showDateSearchStart = true
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(S.transactions.textSearch) },
-                            onClick = {
-                                showSearchMenu = false
-                                showTextSearch = true
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(S.transactions.amountSearch) },
-                            onClick = {
-                                showSearchMenu = false
-                                showAmountSearch = true
-                            }
-                        )
+                        ScrollableDropdownContent {
+                            DropdownMenuItem(
+                                text = { Text(S.transactions.dateSearch) },
+                                onClick = {
+                                    showSearchMenu = false
+                                    showDateSearchStart = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(S.transactions.textSearch) },
+                                onClick = {
+                                    showSearchMenu = false
+                                    showTextSearch = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(S.transactions.amountSearch) },
+                                onClick = {
+                                    showSearchMenu = false
+                                    showAmountSearch = true
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -3329,26 +3332,28 @@ fun TransactionDialog(
                                 expanded = showDialogCameraPicker,
                                 onDismissRequest = { showDialogCameraPicker = false }
                             ) {
-                                DropdownMenuItem(
-                                    text = { Text("Camera") },
-                                    leadingIcon = { Icon(Icons.Filled.PhotoCamera, null) },
-                                    onClick = {
-                                        showDialogCameraPicker = false
-                                        val file = java.io.File(context.cacheDir, "receipt_dialog_${java.util.UUID.randomUUID()}.jpg")
-                                        dialogTempPhotoUri = androidx.core.content.FileProvider.getUriForFile(
-                                            context, "${context.packageName}.fileprovider", file
-                                        )
-                                        dialogCameraLauncher.launch(dialogTempPhotoUri!!)
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Gallery") },
-                                    leadingIcon = { Icon(Icons.Filled.Collections, null) },
-                                    onClick = {
-                                        showDialogCameraPicker = false
-                                        dialogGalleryLauncher.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                                    }
-                                )
+                                ScrollableDropdownContent {
+                                    DropdownMenuItem(
+                                        text = { Text("Camera") },
+                                        leadingIcon = { Icon(Icons.Filled.PhotoCamera, null) },
+                                        onClick = {
+                                            showDialogCameraPicker = false
+                                            val file = java.io.File(context.cacheDir, "receipt_dialog_${java.util.UUID.randomUUID()}.jpg")
+                                            dialogTempPhotoUri = androidx.core.content.FileProvider.getUriForFile(
+                                                context, "${context.packageName}.fileprovider", file
+                                            )
+                                            dialogCameraLauncher.launch(dialogTempPhotoUri!!)
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Gallery") },
+                                        leadingIcon = { Icon(Icons.Filled.Collections, null) },
+                                        onClick = {
+                                            showDialogCameraPicker = false
+                                            dialogGalleryLauncher.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                        }
+                                    )
+                                }
                             }
                         }
                     }

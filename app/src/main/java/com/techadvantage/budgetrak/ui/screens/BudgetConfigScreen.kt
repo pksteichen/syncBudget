@@ -71,6 +71,7 @@ import androidx.compose.ui.unit.dp
 import com.techadvantage.budgetrak.ui.theme.AdAwareDialog
 import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrow
 import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrows
+import com.techadvantage.budgetrak.ui.theme.ScrollableDropdownContent
 import com.techadvantage.budgetrak.data.BudgetPeriod
 import com.techadvantage.budgetrak.data.IncomeSource
 import com.techadvantage.budgetrak.data.RepeatType
@@ -233,20 +234,22 @@ fun BudgetConfigScreen(
                             expanded = periodExpanded,
                             onDismissRequest = { periodExpanded = false }
                         ) {
-                            BudgetPeriod.entries.forEach { period ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(when (period) {
-                                            BudgetPeriod.DAILY -> S.common.budgetPeriodDaily
-                                            BudgetPeriod.WEEKLY -> S.common.budgetPeriodWeekly
-                                            BudgetPeriod.MONTHLY -> S.common.budgetPeriodMonthly
-                                        })
-                                    },
-                                    onClick = {
-                                        onBudgetPeriodChange(period)
-                                        periodExpanded = false
-                                    }
-                                )
+                            ScrollableDropdownContent {
+                                BudgetPeriod.entries.forEach { period ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(when (period) {
+                                                BudgetPeriod.DAILY -> S.common.budgetPeriodDaily
+                                                BudgetPeriod.WEEKLY -> S.common.budgetPeriodWeekly
+                                                BudgetPeriod.MONTHLY -> S.common.budgetPeriodMonthly
+                                            })
+                                        },
+                                        onClick = {
+                                            onBudgetPeriodChange(period)
+                                            periodExpanded = false
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -727,31 +730,33 @@ private fun AddEditIncomeDialog(
                             expanded = typeExpanded,
                             onDismissRequest = { typeExpanded = false }
                         ) {
-                            RepeatType.entries.filter { it != RepeatType.BI_WEEKLY }.forEach { type ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(when (type) {
-                                            RepeatType.DAYS -> S.common.repeatTypeDays
-                                            RepeatType.WEEKS -> S.common.repeatTypeWeeks
-                                            RepeatType.BI_WEEKLY -> S.common.repeatTypeBiWeekly
-                                            RepeatType.MONTHS -> S.common.repeatTypeMonths
-                                            RepeatType.BI_MONTHLY -> S.common.repeatTypeBiMonthly
-                                            RepeatType.ANNUAL -> S.common.repeatTypeAnnual
-                                        })
-                                    },
-                                    onClick = {
-                                        repeatType = type
-                                        typeExpanded = false
-                                        when (type) {
-                                            RepeatType.DAYS -> { intervalText = "1"; monthDay1Text = ""; monthDay2Text = "" }
-                                            RepeatType.WEEKS -> { intervalText = "1"; monthDay1Text = ""; monthDay2Text = "" }
-                                            RepeatType.BI_WEEKLY -> { monthDay1Text = ""; monthDay2Text = "" }
-                                            RepeatType.MONTHS -> { intervalText = "1"; monthDay1Text = ""; monthDay2Text = "" }
-                                            RepeatType.BI_MONTHLY -> { intervalText = "1"; startDate = null }
-                                            RepeatType.ANNUAL -> { monthDay1Text = ""; monthDay2Text = "" }
+                            ScrollableDropdownContent {
+                                RepeatType.entries.filter { it != RepeatType.BI_WEEKLY }.forEach { type ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(when (type) {
+                                                RepeatType.DAYS -> S.common.repeatTypeDays
+                                                RepeatType.WEEKS -> S.common.repeatTypeWeeks
+                                                RepeatType.BI_WEEKLY -> S.common.repeatTypeBiWeekly
+                                                RepeatType.MONTHS -> S.common.repeatTypeMonths
+                                                RepeatType.BI_MONTHLY -> S.common.repeatTypeBiMonthly
+                                                RepeatType.ANNUAL -> S.common.repeatTypeAnnual
+                                            })
+                                        },
+                                        onClick = {
+                                            repeatType = type
+                                            typeExpanded = false
+                                            when (type) {
+                                                RepeatType.DAYS -> { intervalText = "1"; monthDay1Text = ""; monthDay2Text = "" }
+                                                RepeatType.WEEKS -> { intervalText = "1"; monthDay1Text = ""; monthDay2Text = "" }
+                                                RepeatType.BI_WEEKLY -> { monthDay1Text = ""; monthDay2Text = "" }
+                                                RepeatType.MONTHS -> { intervalText = "1"; monthDay1Text = ""; monthDay2Text = "" }
+                                                RepeatType.BI_MONTHLY -> { intervalText = "1"; startDate = null }
+                                                RepeatType.ANNUAL -> { monthDay1Text = ""; monthDay2Text = "" }
+                                            }
                                         }
-                                    }
-                                )
+                                    )
+                                }
                             }
                         }
                     }
@@ -1148,14 +1153,16 @@ private fun BudgetResetDialog(
                                 expanded = dayOfWeekExpanded,
                                 onDismissRequest = { dayOfWeekExpanded = false }
                             ) {
-                                weeklyDays.forEach { day ->
-                                    DropdownMenuItem(
-                                        text = { Text(day.getDisplayName(TextStyle.FULL, Locale.getDefault())) },
-                                        onClick = {
-                                            selectedDayOfWeek = day.value
-                                            dayOfWeekExpanded = false
-                                        }
-                                    )
+                                ScrollableDropdownContent {
+                                    weeklyDays.forEach { day ->
+                                        DropdownMenuItem(
+                                            text = { Text(day.getDisplayName(TextStyle.FULL, Locale.getDefault())) },
+                                            onClick = {
+                                                selectedDayOfWeek = day.value
+                                                dayOfWeekExpanded = false
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1193,14 +1200,16 @@ private fun BudgetResetDialog(
                                 expanded = hourExpanded,
                                 onDismissRequest = { hourExpanded = false }
                             ) {
-                                HOUR_LABELS.forEachIndexed { index, label ->
-                                    DropdownMenuItem(
-                                        text = { Text(label) },
-                                        onClick = {
-                                            selectedHour = index
-                                            hourExpanded = false
-                                        }
-                                    )
+                                ScrollableDropdownContent {
+                                    HOUR_LABELS.forEachIndexed { index, label ->
+                                        DropdownMenuItem(
+                                            text = { Text(label) },
+                                            onClick = {
+                                                selectedHour = index
+                                                hourExpanded = false
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }

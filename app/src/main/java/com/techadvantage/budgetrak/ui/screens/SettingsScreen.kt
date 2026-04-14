@@ -74,6 +74,7 @@ import androidx.compose.ui.unit.dp
 import com.techadvantage.budgetrak.ui.theme.AdAwareDialog
 import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrow
 import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrows
+import com.techadvantage.budgetrak.ui.theme.ScrollableDropdownContent
 import com.techadvantage.budgetrak.data.Category
 import com.techadvantage.budgetrak.data.CATEGORY_ICON_MAP
 import com.techadvantage.budgetrak.data.Transaction
@@ -320,14 +321,16 @@ fun SettingsScreen(
                             expanded = currencyExpanded,
                             onDismissRequest = { currencyExpanded = false }
                         ) {
-                            CURRENCY_OPTIONS.forEach { symbol ->
-                                DropdownMenuItem(
-                                    text = { Text(symbol) },
-                                    onClick = {
-                                        onCurrencyChange(symbol)
-                                        currencyExpanded = false
-                                    }
-                                )
+                            ScrollableDropdownContent {
+                                CURRENCY_OPTIONS.forEach { symbol ->
+                                    DropdownMenuItem(
+                                        text = { Text(symbol) },
+                                        onClick = {
+                                            onCurrencyChange(symbol)
+                                            currencyExpanded = false
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -386,15 +389,17 @@ fun SettingsScreen(
                             expanded = dateFormatExpanded,
                             onDismissRequest = { dateFormatExpanded = false }
                         ) {
-                            DATE_FORMAT_OPTIONS.forEach { pattern ->
-                                val display = sampleDate.format(DateTimeFormatter.ofPattern(pattern))
-                                DropdownMenuItem(
-                                    text = { Text(display) },
-                                    onClick = {
-                                        onDateFormatChange(pattern)
-                                        dateFormatExpanded = false
-                                    }
-                                )
+                            ScrollableDropdownContent {
+                                DATE_FORMAT_OPTIONS.forEach { pattern ->
+                                    val display = sampleDate.format(DateTimeFormatter.ofPattern(pattern))
+                                    DropdownMenuItem(
+                                        text = { Text(display) },
+                                        onClick = {
+                                            onDateFormatChange(pattern)
+                                            dateFormatExpanded = false
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -427,20 +432,22 @@ fun SettingsScreen(
                                 expanded = weekStartExpanded,
                                 onDismissRequest = { weekStartExpanded = false }
                             ) {
-                                DropdownMenuItem(
-                                    text = { Text(S.settings.sunday) },
-                                    onClick = {
-                                        onWeekStartChange(true)
-                                        weekStartExpanded = false
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(S.settings.monday) },
-                                    onClick = {
-                                        onWeekStartChange(false)
-                                        weekStartExpanded = false
-                                    }
-                                )
+                                ScrollableDropdownContent {
+                                    DropdownMenuItem(
+                                        text = { Text(S.settings.sunday) },
+                                        onClick = {
+                                            onWeekStartChange(true)
+                                            weekStartExpanded = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(S.settings.monday) },
+                                        onClick = {
+                                            onWeekStartChange(false)
+                                            weekStartExpanded = false
+                                        }
+                                    )
+                                }
                             }
                         }
                         if (isWeeklyBudget) {
@@ -488,14 +495,16 @@ fun SettingsScreen(
                             expanded = paletteExpanded,
                             onDismissRequest = { paletteExpanded = false }
                         ) {
-                            listOf("Bright" to S.settings.bright, "Pastel" to S.settings.pastel, "Sunset" to S.settings.sunset).forEach { (value, label) ->
-                                DropdownMenuItem(
-                                    text = { Text(label) },
-                                    onClick = {
-                                        onChartPaletteChange(value)
-                                        paletteExpanded = false
-                                    }
-                                )
+                            ScrollableDropdownContent {
+                                listOf("Bright" to S.settings.bright, "Pastel" to S.settings.pastel, "Sunset" to S.settings.sunset).forEach { (value, label) ->
+                                    DropdownMenuItem(
+                                        text = { Text(label) },
+                                        onClick = {
+                                            onChartPaletteChange(value)
+                                            paletteExpanded = false
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -522,20 +531,22 @@ fun SettingsScreen(
                             expanded = languageExpanded,
                             onDismissRequest = { languageExpanded = false }
                         ) {
-                            DropdownMenuItem(
-                                text = { Text("English") },
-                                onClick = {
-                                    onLanguageChange("en")
-                                    languageExpanded = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Español") },
-                                onClick = {
-                                    onLanguageChange("es")
-                                    languageExpanded = false
-                                }
-                            )
+                            ScrollableDropdownContent {
+                                DropdownMenuItem(
+                                    text = { Text("English") },
+                                    onClick = {
+                                        onLanguageChange("en")
+                                        languageExpanded = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Español") },
+                                    onClick = {
+                                        onLanguageChange("es")
+                                        languageExpanded = false
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -851,14 +862,16 @@ fun SettingsScreen(
                             expanded = pruneExpanded,
                             onDismissRequest = { pruneExpanded = false }
                         ) {
-                            pruneOptions.forEach { (days, label) ->
-                                DropdownMenuItem(
-                                    text = { Text(label) },
-                                    onClick = {
-                                        pruneExpanded = false
-                                        onReceiptPruneChange(days)
-                                    }
-                                )
+                            ScrollableDropdownContent {
+                                pruneOptions.forEach { (days, label) ->
+                                    DropdownMenuItem(
+                                        text = { Text(label) },
+                                        onClick = {
+                                            pruneExpanded = false
+                                            onReceiptPruneChange(days)
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -955,14 +968,16 @@ fun SettingsScreen(
                                 expanded = freqExpanded,
                                 onDismissRequest = { freqExpanded = false }
                             ) {
-                                freqOptions.forEach { (weeks, label) ->
-                                    DropdownMenuItem(
-                                        text = { Text(label) },
-                                        onClick = {
-                                            freqExpanded = false
-                                            onBackupFrequencyChange(weeks)
-                                        }
-                                    )
+                                ScrollableDropdownContent {
+                                    freqOptions.forEach { (weeks, label) ->
+                                        DropdownMenuItem(
+                                            text = { Text(label) },
+                                            onClick = {
+                                                freqExpanded = false
+                                                onBackupFrequencyChange(weeks)
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -984,14 +999,16 @@ fun SettingsScreen(
                                 expanded = retExpanded,
                                 onDismissRequest = { retExpanded = false }
                             ) {
-                                retOptions.forEach { (ret, label) ->
-                                    DropdownMenuItem(
-                                        text = { Text(label) },
-                                        onClick = {
-                                            retExpanded = false
-                                            onBackupRetentionChange(ret)
-                                        }
-                                    )
+                                ScrollableDropdownContent {
+                                    retOptions.forEach { (ret, label) ->
+                                        DropdownMenuItem(
+                                            text = { Text(label) },
+                                            onClick = {
+                                                retExpanded = false
+                                                onBackupRetentionChange(ret)
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1127,11 +1144,13 @@ fun SettingsScreen(
                         modifier = Modifier.menuAnchor().fillMaxWidth()
                     )
                     ExposedDropdownMenu(expanded = thresholdExpanded, onDismissRequest = { thresholdExpanded = false }) {
+                        ScrollableDropdownContent {
                         thresholdOptions.forEach { (value, label) ->
                             DropdownMenuItem(text = { Text(label) }, onClick = {
                                 onArchiveThresholdChange(value)
                                 thresholdExpanded = false
                             })
+                        }
                         }
                     }
                 }
