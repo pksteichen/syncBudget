@@ -160,7 +160,35 @@ Cost impact of multi-category: slightly larger output (an array instead of a sin
 
 ## Implementation status (2026-04-14)
 
-v0 skeleton merged on `dev`: share-intent routing + placeholder AI icon. No AI extractor wired yet; the icon is cosmetic.
+### Harness benchmark — locked 2026-04-14 (v0.4)
+
+Production model decision: **Gemini 2.5 Flash via Firebase AI Logic** with prompt v0.4. Benchmarked on 103 labeled receipts (3 internal screenshots + 50 SROIE English + 50 MC-OCR Vietnamese) in `tools/ocr-harness/`.
+
+Flash v0.4 final scores (after label audit):
+
+| Source | merchant | date | amount | category |
+|---|---|---|---|---|
+| English (53) | 98.1% | 100% | **100%** | 83.0% |
+| Vietnamese (50) | 90.0% | 100% | **100%** | 94.0% |
+| avg latency | — | — | 4.8s | — |
+
+Flash-Lite v0.4 for comparison (not shipping):
+
+| Source | merchant | date | amount | category |
+|---|---|---|---|---|
+| English (53) | 92.5% | 96.2% | **88.7%** | 79.2% |
+| Vietnamese (50) | 44.0% | 98.0% | **80.0%** | 82.0% |
+| avg latency | — | — | 1.4s | — |
+
+Flash-Lite is **5× cheaper and 3× faster** but loses 11pt on English amount (the field we can least afford to miss on) due to smaller-model character confusion (`169.8` vs `169.78`, `5.15` vs `5.2`). On Vietnamese it additionally hallucinates on diacritic-heavy merchants (`Thức` → `TH\nuevoC`). Deferred as a post-launch cost optimization via smart-reask; see "Smart-reask in production" below.
+
+Harness location: `tools/ocr-harness/`. Prompt v0.4 text in `src/prompt.js` is the canonical version — port directly to Kotlin. Schema in `src/schema.js` (merchant, merchantLegalName optional, date, amount required; categoryAmounts/lineItems/notes optional).
+
+Session cost: ~$0.75 across 7 full 103-receipt runs + smoke tests. Full production-run budget is negligible — 100 prompt iterations = ~$10.
+
+### Android side: v0 skeleton merged on `dev`
+
+Share-intent routing + placeholder AI icon shipped 2026-04-14 (commits `03e10cd`/`53a8616`). No AI extractor wired yet; icon is cosmetic.
 
 **Landed:**
 - `AndroidManifest.xml` — ACTION_SEND `image/*` intent-filter on MainActivity.
@@ -171,19 +199,68 @@ v0 skeleton merged on `dev`: share-intent routing + placeholder AI icon. No AI e
 - Strings added (EN/ES/AppStrings/TranslationContext): `aiOcrIconDesc`, `aiOcrComingSoon`, `upgradeForAiOcr`, `sharedImageProcessFailed`, `sharedPhotoNeedsUpgrade` (5-second free-user toast).
 
 **Not yet built (next up):**
-- `ReceiptExtractionService` (Firebase AI Logic → Gemini 2.5 Flash).
-- `responseSchema` definition + prompt in Remote Config with `promptVersion` stamp.
-- Schema-gap re-ask with partial-success context.
-- Firestore quota counter for per-user monthly caps.
-- Synthetic regression test set (SROIE + CORD + internal screenshots).
-- Gemini ↔ Anthropic bake-off.
-- Subscriber path replacing the "coming soon" placeholder with the real extraction call.
+- `ReceiptExtractionService` (Firebase AI Logic → Gemini 2.5 Flash). Use the `com.google.firebase:firebase-ai` SDK; port prompt v0.4 text from the harness.
+- `responseSchema` passed to the `GenerativeModel.generateContent` call. Schema shape matches `tools/ocr-harness/src/schema.js`.
+- Prompt loaded from Firebase Remote Config (key pattern: `ocr_receipt_prompt_v{N}`). Stamp `promptVersion` into each transaction's local provenance for A/B traceability.
+- Firestore quota counter `users/{uid}/ocrUsage/{YYYYMM}` with atomic increment before model call; decrement on failure.
+- Subscriber path replaces the placeholder "coming soon" toast with `vm.startOcrExtraction(uri)` → `ReceiptExtractionService` → `runMatchingChain(txn)`.
+- Consent dialog on first OCR use (copy draft in "Post-implementation copy" section).
+- Smart-reask path for schema-gap and format-anomaly cases (see "Smart-reask in production" below). Start with schema-gap only; add format-anomaly after launch if needed.
+- ~~Synthetic regression test set~~ **DONE** — 103 labeled receipts in `tools/ocr-harness/test-data/`.
+- ~~Gemini ↔ Anthropic bake-off~~ **DEFERRED** — Flash is strong enough that the comparison isn't needed pre-launch. Anthropic kept as a swap-in alternate via the `ReceiptExtractionService` interface.
 
 **Design decisions baked in (not to revisit without reason):**
 - Icon scope: Transaction add/edit dialog only (4 callsites — Dashboard Add Income + Add Expense, Transactions screen Add Income + Add Expense, plus the Edit variant). Not added to Recurring Expense, Savings Goal, Amortization, or Category dialogs.
 - Share-intent only lands in Add Expense (not Add Income). User confirmed 2026-04-13.
 - Subscriber gate uses `isSubscriber` only (Paid tier sees the upgrade toast too). User confirmed 2026-04-13.
 - Free users always see the Add Expense dialog on share, even though they can't attach the photo — keeps the flow consistent and gives them a path to record the transaction manually.
+- **Vietnamese deferred to post-launch.** Flash already does 90/100/100/94 on Vietnamese but we're US-English first. Localization adds in parallel after launch is stable.
+- **Flash-Lite deferred to post-launch cost optimization.** Smart-reask targeting small-digit numeric confusion may close the gap; revisit when OCR usage is high enough for the 5× cost savings to matter.
+
+## Smart-reask in production (how it works without labels)
+
+In the harness we detect mismatches by comparing to known labels. In production there are no labels — so smart-reask must work from signals available in the extraction response itself. Four tiers of signal, in decreasing reliability:
+
+**Tier 1 — Schema gaps (most reliable).** Required fields that came back null/empty/missing. Objective, no interpretation needed.
+- `merchant` is missing or empty string.
+- `amount` is null, zero, negative, or non-finite.
+- `date` is null or fails `YYYY-MM-DD` regex.
+
+If any required field is missing, fire a focused re-ask: "Look at this receipt again and return ONLY the {field}. Here's what you already extracted successfully: {other fields}."
+
+**Tier 2 — Rule violations (objective, model-independent).** The response is structurally valid but violates a sanity check.
+- `date` is outside ±60 days of today.
+- `categoryAmounts` present but sum ≠ `amount` within $0.01.
+- `categoryAmounts` references a `categoryId` not in the user's list.
+- `amount` has more than 2 decimal places when currency is USD/EUR/GBP (precision mismatch).
+
+Re-ask with the specific rule violation called out: "Your last response had categoryAmounts summing to $45.20 but amount was $43.45. Check which is correct and return a consistent breakdown."
+
+**Tier 3 — Format anomalies (locale-dependent heuristics).** The response looks suspicious given the receipt's apparent locale.
+- Amount has 3+ decimal places AND merchant/language suggests VND → likely 1000× thousand-separator bug. Example detection: `amount.toString().split(".")[1]?.length >= 3 && isVietnameseContext`.
+- Amount ≤ $1.00 for a receipt that should reasonably be larger (e.g., a supermarket receipt with multiple line items but amount = $0.10) → probably a digit miss.
+- Merchant name contains ASCII-nonsense sequences (`nuevoC`, random Latin characters in a Vietnamese merchant) → hallucination.
+
+Re-ask with the suspected issue highlighted: "You returned amount=11.616 on a Vietnamese receipt. Dots in VND are thousand separators, so this is likely 11,616 not 11.616. Re-read the total and return the integer đồng value."
+
+**Tier 4 — Self-reported confidence (least reliable).** Ask the model to include an optional `confidence: {merchant, date, amount}` object with 0–1 values. Models are overconfident — a claim of `0.95` often means `0.7` actual. Use as a secondary signal only: trigger a re-ask only if confidence is below `0.6` AND no higher-tier signal fired. Skip entirely on the Anthropic alternate path since it's more expensive per call.
+
+**Architecture:**
+1. First extraction call (always).
+2. Response hits anomaly detector — tiers 1 → 2 → 3 → 4 in order, stop at first match.
+3. If any tier fires, make ONE focused re-ask (cap at one; no recursion).
+4. Merge: keep the first call's fields for anything that wasn't flagged; take the re-ask's value for flagged fields only.
+5. If the re-ask still has a tier-1 schema gap, fall back to manual entry — drop the user into `TransactionDialog` with whatever was extracted pre-filled and the photo attached.
+6. Log `{triggered_tier, field, before, after}` to a local diagnostics file (and to Crashlytics in release if the user has analytics opted-in) so we can tune the heuristics.
+
+**Why this matters for Flash-Lite later:** of Flash-Lite's 17 amount misses, 12 are the Vietnamese 1000× bug (Tier 3 detectable, single re-ask fixes). Of the remaining 5, two are tiny digit confusion (`169.78` vs `169.8` — borderline, probably not worth re-asking). So Tier 3 smart-reask could lift Flash-Lite English amount from 88.7% to ~97% and Vietnamese amount from 80% to ~94%. At 2× average cost (same re-ask rate as Flash), Flash-Lite+reask would cost ~$0.0004/call — still 2.5× cheaper than Flash.
+
+**What NOT to smart-reask:**
+- Merchant convention differences (`VinCommerce` vs `VinMart`) — these look wrong to a dumb comparator but are actually the prompt working correctly. Don't detect, don't re-ask.
+- Diacritic variations that normalize to the same string — pass a lenient merchant match first before triggering a re-ask.
+- Low-confidence on `categoryAmounts` alone — just fall back to a single-entry `[{categoryId: auto-matched-id, amount: total}]`. Re-asking on categorization is expensive for marginal gain; `AutoCategorizer` already exists as a safety net.
+
+**Post-launch feedback loop (v1.5).** The opt-in "Help improve Receipt AI" toggle we designed will give us real ground truth from user edits. If a user consistently changes the amount from what Gemini returned, we learn which failure patterns actually matter in the wild and can tune the Tier 3 heuristics accordingly. That replaces synthetic label audits as the primary feedback mechanism once production traffic exists.
 
 ## Prompt iteration strategy (2026-04-14)
 
