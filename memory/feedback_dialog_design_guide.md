@@ -16,7 +16,7 @@ All dialogs must follow these standards. Never use raw Material3 `AlertDialog` o
 2. **Scrollable body** — content must scroll when space is limited (keyboard open, long content)
 3. **Button bar always visible** — footer/buttons stay pinned at the bottom, never scrolled off-screen
 4. **Optimal vertical space** — dialogs should use available screen space, not be a fixed size that gets clipped
-5. **PulsingScrollArrow** — show when content overflows to indicate more below
+5. **PulsingScrollArrows** (bidirectional) — pulsing up-arrow at TopStart when content can scroll up, pulsing down-arrow at BottomStart when content can scroll down. Both appear automatically via `BoxScope.PulsingScrollArrows(scrollState)` — no modifier needed, positioning is standardized (`topPadding = 36.dp` clears the DialogHeader, `bottomPadding = 50.dp` clears the footer). The older down-only `PulsingScrollArrow` is deprecated but kept for backward compatibility.
 
 `AdAwareAlertDialog` handles all of these automatically (built into Theme.kt). For `AdAwareDialog` (custom layout), you must add `.imePadding()`, `.verticalScroll()`, and `DialogFooter` manually.
 
@@ -79,7 +79,7 @@ AdAwareDialog(onDismissRequest = { ... }) {
                 // scrollable content — fields, text, etc.
             }
             DialogFooter { /* button row — always visible at bottom */ }
-            PulsingScrollArrow(scrollState = scrollState)
+            PulsingScrollArrows(scrollState = scrollState)
         }
     }
 }
@@ -110,7 +110,8 @@ AdAwareDialog(onDismissRequest = { ... }) {
 - [ ] Uses AdAwareDialog/AdAwareAlertDialog/AdAwareDatePickerDialog wrapper
 - [ ] Surface has `fillMaxWidth(0.92f)` + `imePadding()`
 - [ ] Scrollable content with `weight(1f, fill=false)` + `verticalScroll()`
-- [ ] `PulsingScrollArrow` if content may exceed visible area
+- [ ] `PulsingScrollArrows` if content may exceed visible area (bidirectional; takes just `scrollState`, no modifier)
+- [ ] For `DropdownMenu` / `ExposedDropdownMenu` with 6+ items (or any menu likely to scroll at large font): wrap items in `ScrollableDropdownContent { … }` so they get the same bidirectional scroll affordance with standard 32dp content indent for the arrow column.
 - [ ] Footer buttons outside scroll area (sticky)
 - [ ] Background tap dismisses keyboard (`pointerInput` + `FocusManager.clearFocus()`)
 - [ ] `DialogHeader` + `DialogFooter` used

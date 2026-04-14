@@ -859,14 +859,29 @@ Static composition local `LocalSyncBudgetColors` + `LocalAdBannerHeight`.
 ### 16.5 AdAware Dialogs
 
 - `AdAwareDialog`: custom-positioned `Dialog()` avoiding ad banner overlap; applies `SOFT_INPUT_ADJUST_NOTHING` so keyboard does not shift dialog
-- `AdAwareAlertDialog`: drop-in Material3 AlertDialog replacement on top of AdAwareDialog; optional `scrollState` for PulsingScrollArrow
+- `AdAwareAlertDialog`: drop-in Material3 AlertDialog replacement on top of AdAwareDialog; optional `scrollState` for the pulsing scroll-arrow affordance
 
-### 16.6 PulsingScrollArrow
+### 16.6 Scroll Affordance (bidirectional, v2.6.2)
 
-- `rememberInfiniteTransition` + `tween(600ms, Reverse)`
-- Vertical offset animates 0dp ↔ 6dp
-- Visible only when `ScrollState.canScrollForward`
-- Icon `KeyboardArrowDown`, alpha 0.5 onSurface, positioned BottomStart (start=12dp, bottom=18dp)
+Every scrollable dialog body and every dropdown body shows pulsing
+arrows to indicate further content above / below. Two composables in
+`Theme.kt`:
+
+- **`BoxScope.PulsingScrollArrows(scrollState)`** — renders an up-arrow
+  at `TopStart` when `scrollState.canScrollBackward`, and a down-arrow
+  at `BottomStart` when `scrollState.canScrollForward`. Default
+  paddings: `topPadding = 36.dp` (clears `DialogHeader`), `bottomPadding = 50.dp`
+  (clears footer buttons); both 24dp-wide icons animate with
+  `tween(600ms, Reverse)` bounce, alpha 0.5 onSurface.
+- **`ScrollableDropdownContent { … }`** — wrap inside a
+  `DropdownMenu` / `ExposedDropdownMenu` when the list may scroll at
+  default or enlarged font. Owns its own `ScrollState`, caps height
+  at `280.dp`, indents its content by `32.dp` on the start edge so
+  items clear the arrow column. Short lists wrap to content size and
+  show no arrows.
+
+Down-only `PulsingScrollArrow` still exists for backward compatibility
+but new code should prefer `PulsingScrollArrows` (plural).
 
 ## 16. SYNC System (Firestore-Native)
 
@@ -1852,6 +1867,7 @@ Do NOT upgrade `core-ktx` past 1.13.1 or Compose BOM past 2024.09.03 — newer v
 | 2.5 | Apr 2026 | BudgeTrak Dev Team | Async IO-thread load with LoadingScreen gate, EMA segment timings. Back = Home. Synchronous `recomputeCash()`. Consolidated `runPeriodicMaintenance()` (24h gate). Three-tier `BackgroundSyncWorker`. Calculated-period sleep. Transaction archiving (threshold default 10,000; `archived_transactions.json`; carry-forward). `BudgeTrakApplication` class for App Check. 93 files / 45,095 lines. |
 | 2.5.x | Apr 2026 | BudgeTrak Dev Team | SYNC rebrand; two-layer consistency check; echo suppression; App Check proactive refresh; Crashlytics observability; real-time SYNC eviction popup; admin-claim voting; TTL via `expiresAt`; subscription-expiry popup; ranked match dialogs; Auto-Capitalize; solo-user gating; help refresh; Crashlytics opt-out; SAF backup directory picker; immediate-backup-on-enable + same-day letter suffixes. Namespace/applicationId rebranded to `com.techadvantage.budgetrak`. |
 | 2.6 | 2026-04-12 | BudgeTrak Dev Team | **SSD/LLD audit against code + conversion to Markdown (2026-04-12).** Rebranded to `com.techadvantage.budgetrak` under Tech Advantage LLC (Apr 11). Full memory audit: clarified the two sync hashes (`cashHash` Layer 2 = hex via `.toString(16)` at MainViewModel.kt:835; `enc_hash` per-doc cache in FirestoreDocSync uses decimal); auto-categorize scope (CSV only, not manual entry); dropped stale `WidgetRefreshWorker` references; aligned Transaction model (no clock fields); corrected screen count (10 navigable + 10 help + QuickStartGuide overlay = 21 total); App Check TTL 4h (Console-set); Cloud Functions Node.js 22. Backup retention default 1 -> 10. Added `autoCapitalize, showWidgetLogo, incomeMode` to backup `localPrefs`. Shipped orphan-no-possession (`markNonPossession` + `checkPhotoLost`). Verified against source: 94 files / 47,192 lines; archive file is `archived_transactions.json`; manifest declares only `INTERNET` (camera/media via runtime request + pickers); `BankFormat` is `{GENERIC_CSV, US_BANK, SECURESYNC_CSV}`. |
+| 2.6.2 | 2026-04-13 | BudgeTrak Dev Team | **Bidirectional scroll affordance.** New `BoxScope.PulsingScrollArrows(scrollState)` in `Theme.kt` replaces the down-only `PulsingScrollArrow` at all 18 dialog callsites — pulsing up-arrow at TopStart when `canScrollBackward`, down-arrow at BottomStart when `canScrollForward`, with standardized paddings that clear `DialogHeader` (topPadding=36.dp) and footer (bottomPadding=50.dp). New `ScrollableDropdownContent { … }` wraps items in every `DropdownMenu` / `ExposedDropdownMenu` (12 callsites including the 24-item hour-of-day selector); caps popup height at 280.dp, indents items by 32.dp on the start edge so text clears the arrow column. Motivation: users with enlarged system font push otherwise-fitting content into scrollable territory. Down-only `PulsingScrollArrow` kept for backward compat. |
 | 2.6.1 | 2026-04-13 | BudgeTrak Dev Team | **FCM wake architecture.** Added two Cloud Functions: `onSyncDataWrite` (Firestore-triggered, fans out high-priority `sync_push` FCM to every group device except the writer — via `lastEditBy` filter) and `presenceHeartbeat` (15-min Pub/Sub cron, wakes devices whose RTDB `lastSeen` is >15 min stale). Closes the 4h46m silent-worker gap observed on Kim's Samsung device (App-Standby Bucket restrictions). Client: `FcmService` now handles `sync_push` + `heartbeat` by enqueueing `BackgroundSyncWorker.runOnce` — now `enqueueUniqueWork(ONESHOT_WORK_NAME, KEEP)` with `setExpedited(RUN_AS_NON_EXPEDITED_WORK_REQUEST)` on API 31+. `pingRtdbLastSeen` + `WakeReceiver` + FCM arrivals all log via `syncEvent()` which now writes to `token_log.txt` in debug builds (was Crashlytics + logcat only). Fixed Layer-1 consistency false-positive on `periodLedger`: `countActiveDocs` skips `deleted=false` filter for that collection since entries don't carry a `deleted` field. SYNC page UI: duplicate "Code expires in 10 minutes" label removed (dialog still shows it); group-ID row gated to debug builds only. Operations: $1 budget alert + 4 Cloud Monitoring policies (function + Firestore rate) configured on billing account `01ADA3-6ACE89-738567`; `sync-23ce9` project migrated into `techadvantagesupport-org`. |
 
 ---

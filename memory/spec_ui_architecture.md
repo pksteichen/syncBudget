@@ -53,7 +53,7 @@ Never use raw `AlertDialog` / `Dialog`. Use:
 - `AdAwareDialog` — custom form layouts; wrap with `Surface + DialogHeader + DialogFooter`; manually add `.imePadding()`, `.verticalScroll()`.
 - `AdAwareDatePickerDialog` — date pickers.
 
-Styles: `DialogStyle.DEFAULT` (green `#2E7D32`/`#1B5E20`), `DANGER` (red `#B71C1C`), `WARNING` (orange `#E65100`). Buttons: `DialogPrimaryButton / SecondaryButton / DangerButton / WarningButton` (500 ms debounce). `PulsingScrollArrow` when content overflows.
+Styles: `DialogStyle.DEFAULT` (green `#2E7D32`/`#1B5E20`), `DANGER` (red `#B71C1C`), `WARNING` (orange `#E65100`). Buttons: `DialogPrimaryButton / SecondaryButton / DangerButton / WarningButton` (500 ms debounce). Bidirectional `PulsingScrollArrows` (BoxScope extension) show up+down arrows when content overflows — standard in every dialog as of 2026-04-13. Older down-only `PulsingScrollArrow` kept for backward compat. `DropdownMenu` / `ExposedDropdownMenu` use `ScrollableDropdownContent { … }` wrapper (own `ScrollState`, 280dp height cap, 32dp content left-indent to clear the arrow column).
 
 Full guide: `feedback_dialog_design_guide.md`.
 
