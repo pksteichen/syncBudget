@@ -1,0 +1,21 @@
+{
+  "name": "budgetrak-ocr-harness",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline harness for iterating on BudgeTrak receipt OCR prompts and A/B-testing Gemini vs Anthropic before porting to the Android app.",
+  "scripts": {
+    "start": "node src/index.js",
+    "gemini": "node src/index.js --provider gemini",
+    "anthropic": "node src/index.js --provider anthropic",
+    "both": "node src/index.js --provider both"
+  },
+  "dependencies": {
+    "@google/genai": "^1.50.0",
+    "@anthropic-ai/sdk": "^0.88.0",
+    "dotenv": "^17.4.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,12 @@
+[
+  {
+    "file": "example_001.jpg",
+    "source": "internal-screenshots",
+    "difficulty": "easy",
+    "merchant": "Chipotle",
+    "date": "2026-04-14",
+    "amount": 13.47,
+    "categoryId": 2,
+    "notes": "Replace with a real receipt + filename. Delete this example when you add your own."
+  }
+]
