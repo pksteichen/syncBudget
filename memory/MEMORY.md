@@ -88,7 +88,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 ## Matching & Auto-Categorize
 - 4 ranked finders: `findDuplicates` (amount then date), `findRecurringExpenseMatches` + `findBudgetIncomeMatches` (date then amount), `findAmortizationMatches` (amount). Match confirmation dialogs show radio list, best pre-selected.
 - Merchant matching strips non-alphanumeric (Wal-Mart = Walmart).
-- **Auto-categorize fires only on CSV bank imports**, NOT manual entry. Earlier memory incorrectly claimed manual entry.
+- **Auto-categorize** runs in two modes: (1) **CSV bank imports** (US_BANK, GENERIC_CSV) — applies to every row, falls back to "other" when no match; (2) **Manual entry in TransactionDialog** — fires once when merchant ≥ `matchChars` and no category selected, applies only if a real match exists (skips "other" fallback), respects an already-picked category. BudgeTrak-native CSV imports skip auto-categorize entirely (categories already present).
 - Auto-capitalize APA Title Case (`TitleCaseUtil`) on merchant + description; Settings checkbox, default on.
 
 ## Dashboard, Simulation, Savings, Receipts, Backup

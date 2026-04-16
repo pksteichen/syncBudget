@@ -3988,8 +3988,25 @@ fun TransactionDialog(
                             if (!totalFilled) {
                                 toastState.show("Enter a total to enable this mode.", modeButtonsWindowY)
                             } else {
+                                // If activating pie from percent mode, first convert the
+                                // stored percentages to dollars so pie mode (and any later
+                                // switch back to calc/percent) sees consistent dollar data.
+                                if (!showPieChart && usePercentage) {
+                                    val total = totalAmountText.toDoubleOrNull()
+                                    if (total != null && total > 0) {
+                                        selectedCats.forEach { cat ->
+                                            val pct = (categoryAmountTexts[cat.id] ?: "").toIntOrNull()
+                                            categoryAmountTexts[cat.id] = if (pct != null) {
+                                                formatAmount(total * pct / 100.0, maxDecimals)
+                                            } else ""
+                                        }
+                                    } else {
+                                        selectedCats.forEach { cat -> categoryAmountTexts[cat.id] = "" }
+                                    }
+                                    usePercentage = false
+                                    lastEditedCatId = null
+                                }
                                 showPieChart = !showPieChart
-                                if (showPieChart) usePercentage = false
                             }
                         }) {
                             Icon(

@@ -2215,10 +2215,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun runOcrOnSlot1(receiptId: String, preSelectedCategoryIds: Set<Int> = emptySet()) {
         if (ocrState is OcrState.Loading) return
         ocrState = OcrState.Loading
-        // If the user has pre-selected categories, constrain the prompt to only
-        // those — harness A/B showed this improves multi-category accuracy on
-        // large receipts (notably when a relevant category is overlooked from
-        // the full list, e.g. Holidays/Birthdays for an Easter-candy run).
+        // Tiered routing:
+        //   0-1 pre-selected → Lite (single-cat duty, simplified prompt, ~5× cheaper).
+        //   2+ pre-selected → Pro (multi-cat duty, better cshare; Pro auto-falls-back
+        //                           to Flash on capacity failures, handled inside the service).
+        // Pre-selected set is also passed so the prompt can constrain its category
+        // list — boosts multi-cat accuracy by narrowing the model's search.
+        val tier = if (preSelectedCategoryIds.size >= 2) {
+            ReceiptOcrService.Tier.PRO
+        } else {
+            ReceiptOcrService.Tier.LITE
+        }
         val catsForOcr = if (preSelectedCategoryIds.isNotEmpty()) {
             categories.filter { it.id in preSelectedCategoryIds }
         } else {
@@ -2226,7 +2233,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
-                ReceiptOcrService.extractFromReceipt(context, receiptId, catsForOcr)
+                ReceiptOcrService.extractFromReceipt(context, receiptId, catsForOcr, tier)
             }
             ocrState = result.fold(
                 onSuccess = { OcrState.Success(it) },

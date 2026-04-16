@@ -581,3 +581,47 @@ Receipts with genuinely ambiguous items shouldn't count as OCR errors when the m
 - Holidays/Birthdays ↔ Groceries: Easter / Halloween / Christmas candy.
 
 When these show up in a cset failure, count them as acceptable. Don't change the label.
+
+## Tiered OCR architecture — v18 (2026-04-16)
+
+The OCR service now routes to different Gemini models based on user intent. Replaces the all-Flash design.
+
+### Routing rule (MainViewModel.runOcrOnSlot1)
+| Pre-selected categories (ticked in dialog before tapping AI) | Tier |
+|---|---|
+| 0 or 1 | **Lite** (`gemini-2.5-flash-lite`) |
+| 2 or more | **Pro** (`gemini-2.5-pro`), auto-falls-back to Flash on capacity failure |
+
+Rationale: Lite handles single-cat at near-Flash quality for ~1/5 the cost (harness: 95% m / 95% d / 100% a / 94% cat on 101 receipts). Pro is called on the ~5% of scans where the user explicitly signals multi-category intent, where its better visual reasoning buys real cshare lift (harness: 54% vs Flash's 37% on the 15-receipt multi-cat bank). Flash is reserved for Pro-fallback only.
+
+### Prompt variants
+- **Lite** — `buildLiteOcrPrompt()` = R11 base only (transcribe + integer cents). Multi-cat process rules (C3/C4/C6/MP) dropped because Lite no longer needs them. ~35% fewer input tokens than R7-T10, identical accuracy on single-cat.
+- **Flash / Pro** — `buildOcrPrompt()` = R7-T10 (C3+C4+C6+MP + flashBase, cat-first ordering). Shared between the two so Flash fallback uses the same prompt Pro did.
+
+### Schemas
+- **Lite** — `liteSchema` includes `transcription` (R11 pattern) and `amountCents` (integer, sidesteps locale float-parsing issues on VND etc.). Service converts to Double before returning `OcrResult`.
+- **Flash/Pro** — `flashProSchema` uses `amount` directly. No `lineItems` field (dropped 2026-04-16; harness A/B showed −53% output tokens with slightly better cset).
+
+### Resilience
+1. **Per-tier retry** — `generateWithRetry()` makes up to 4 attempts per tier with 500ms / 1s / 2s backoff on transient errors (regex: `503|UNAVAILABLE|overloaded|429|RESOURCE_EXHAUSTED|deadline|fetch failed|network|ECONNRESET|ETIMEDOUT|socket`).
+2. **Cross-tier fallback** — Pro → Flash: if Pro exhausts retries on transient errors, the service transparently re-issues the call to Flash with the same R7-T10 prompt. Non-transient errors (auth, config) skip fallback.
+3. **Per-tier timeout** — 90s each. `CancellationException` is explicitly re-thrown inside `generateWithRetry` so timeouts aren't swallowed by the catch-all.
+4. **Reconciliation** — `reconcileCategoryAmounts()` runs on every success. Rounds each amount to cents, absorbs residual drift into the largest category. Pathological outputs (adjusted amount negative or exceeding total) collapse to a single-bucket entry. Guarantees `Σcategoryamounts == amount` so the Save button never blocks on OCR output.
+
+### Projected economics (per-user/month)
+- Typical user (50 receipts, ~3 multi-cat): $0.01 Lite + $0.015 Pro ≈ **$0.025/month**
+- Previous all-Flash design: ~$0.05/month
+- Savings ~50% AND better multi-cat quality.
+
+### Harness scripts (reference the bank in `test-data/labels.json` at runtime)
+- `test-lite-singlecat.js` — Lite on 101 single-cat (baseline validation)
+- `test-lite-simplified.js` — Lite A/B/C (current vs bare vs lean prompt)
+- `test-preselect-full.js` — Flash pre-select A/B on 15 multi-cat
+- `test-pro-multicat.js` — Pro on 15 multi-cat
+- `test-sum-verify.js` — sum verification directive A/B (rejected — hurt cset)
+- `test-lineitems-ab.js` — lineItems schema A/B (rejected in app schema)
+
+### Known gotchas
+- Lite doesn't faithfully honor a restricted category list when categoryAmounts is requested (returns categories outside the pre-selected set). This is why multi-cat pre-selections route to Pro, not Lite, even though Lite would be cheaper.
+- Pro is capacity-constrained on 2.5 — 503 errors are common during peak hours. The fallback chain and per-tier retries address this.
+- Pro latency is NOT noticeably worse than Flash for most receipts (45s vs 43s avg on the bank). Don't assume Pro will be slow.

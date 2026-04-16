@@ -68,3 +68,36 @@ If a required field is genuinely not visible on the receipt, omit it rather than
     // R7-T10 cat-first ordering: category rules prepended BEFORE the base extraction prompt.
     return c3 + c4 + c6 + mp + "\n\n" + flashBase
 }
+
+/**
+ * Simplified Lite prompt for single-category duty (variant B_bare from harness
+ * A/B). Drops the multi-cat process rules (C3/C4/C6/MP) — harness showed
+ * effectively identical single-cat accuracy with ~35% fewer input tokens and
+ * a cleaner job description. Used when the user has pre-selected 0-1
+ * categories (multi-cat pre-selections route to Pro).
+ *
+ * Schema note: Lite uses amountCents (integer) to sidestep float-parsing
+ * issues on locale-specific number formats (Vietnamese VND thousand-separator
+ * dots, etc.). The service converts to a Double before returning OcrResult.
+ */
+fun buildLiteOcrPrompt(categories: List<Category>): String {
+    val filtered = categories.filter { it.tag != "supercharge" && it.tag != "recurring_income" && !it.deleted }
+    val categoryList = filtered.joinToString("\n") { c ->
+        if (c.tag.isNotEmpty()) "  - id=${c.id} name=\"${c.name}\" tag=\"${c.tag}\""
+        else                    "  - id=${c.id} name=\"${c.name}\""
+    }
+
+    return """Extract receipt data as JSON: {transcription, merchant, merchantLegalName?, date, amountCents (integer), categoryAmounts?}.
+
+Stage 1: transcription = every line of the receipt as plain text.
+Stage 2: extract remaining fields.
+
+Amount is INTEGER CENTS. Ignore GST-summary pre-tax rows.
+
+- date MUST be YYYY-MM-DD ISO.
+- merchant is the consumer brand. Preserve original language.
+- merchantLegalName is optional.
+- Do NOT return a cashier/customer personal name as merchant.
+- Category ids must come from:
+$categoryList"""
+}
