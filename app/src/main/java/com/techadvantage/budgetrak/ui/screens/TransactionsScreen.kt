@@ -295,7 +295,7 @@ fun TransactionsScreen(
     onUpdateArchivedTransaction: (Transaction) -> Unit = {},
     autoCapitalize: Boolean = true,
     ocrState: com.techadvantage.budgetrak.data.ocr.OcrState = com.techadvantage.budgetrak.data.ocr.OcrState.Idle,
-    onRunOcr: ((String) -> Unit)? = null,
+    onRunOcr: ((String, Set<Int>) -> Unit)? = null,
     onClearOcrState: (() -> Unit)? = null
 ) {
     val S = LocalStrings.current
@@ -2982,7 +2982,7 @@ fun TransactionDialog(
     isSubscriber: Boolean = false,
     initialReceiptId1: String? = null,
     ocrState: com.techadvantage.budgetrak.data.ocr.OcrState = com.techadvantage.budgetrak.data.ocr.OcrState.Idle,
-    onRunOcr: ((String) -> Unit)? = null,
+    onRunOcr: ((String, Set<Int>) -> Unit)? = null,
     onClearOcrState: (() -> Unit)? = null,
     onDismiss: () -> Unit,
     onSave: (Transaction) -> Unit,
@@ -3424,7 +3424,13 @@ fun TransactionDialog(
                                             !hasSlot1     -> toastState.show(S.settings.aiOcrAddReceiptFirst)
                                             slot1ReceiptId != null -> {
                                                 toastState.show(S.settings.aiOcrReading)
-                                                onRunOcr?.invoke(slot1ReceiptId)
+                                                // Pass any pre-selected categories so Gemini constrains its
+                                                // split to the user's intent. Empty set → full category list.
+                                                val preSelected = selectedCategoryIds
+                                                    .filter { it.value }
+                                                    .keys
+                                                    .toSet()
+                                                onRunOcr?.invoke(slot1ReceiptId, preSelected)
                                             }
                                         }
                                     }

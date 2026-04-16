@@ -220,7 +220,7 @@ object SpanishStrings : AppStrings {
         aiOcrReading = "Leyendo recibo\u2026",
         aiOcrFailed = "No se pudo leer el recibo \u2014 ingresa los datos manualmente",
         aiOcrHelpTitle = "Esc\u00e1ner de Recibos con IA",
-        aiOcrHelpBody = "Los suscriptores pueden tocar el icono de la chispa en el di\u00e1logo de transacci\u00f3n para rellenar autom\u00e1ticamente el comerciante, la fecha, el importe y la categor\u00eda a partir de la foto del recibo. Coloca la foto del recibo en la primera ranura de foto. Las fotos complementarias (primeros planos, fachada, etc.) van en las ranuras siguientes.",
+        aiOcrHelpBody = "Los suscriptores pueden tocar el icono de la chispa en el di\u00e1logo de transacci\u00f3n para rellenar autom\u00e1ticamente el comerciante, la fecha, el importe y la categor\u00eda a partir de la foto del recibo. Coloca la foto del recibo en la primera ranura de foto. Las fotos complementarias (primeros planos, fachada, etc.) van en las ranuras siguientes.\n\nConsejo para recibos de m\u00faltiples categor\u00edas: marca las categor\u00edas que esperas antes de tocar la chispa. Preseleccionar (por ejemplo, Comestibles + Suministros del Hogar en una compra de tienda mayorista) ayuda a la IA a dividir el total con m\u00e1s precisi\u00f3n que dejando que elija de la lista completa de categor\u00edas.",
         sharedImageProcessFailed = "No se pudo leer la imagen compartida",
         dataManagementSection = "Gesti\u00f3n de Datos",
         activeTransactionsTally = { count, threshold -> "Transacciones activas: %,d / %,d".format(count, threshold) },

@@ -892,7 +892,7 @@ class MainActivity : ComponentActivity() {
                 isPaidUser = vm.isPaidUser || vm.isSubscriber,
                 isSubscriber = vm.isSubscriber,
                 ocrState = vm.ocrState,
-                onRunOcr = { rid -> vm.runOcrOnSlot1(rid) },
+                onRunOcr = { rid, preSelected -> vm.runOcrOnSlot1(rid, preSelected) },
                 onClearOcrState = { vm.clearOcrState() },
                 onDismiss = {
                     vm.dashboardShowAddIncome = false
@@ -941,7 +941,7 @@ class MainActivity : ComponentActivity() {
                 isSubscriber = vm.isSubscriber,
                 initialReceiptId1 = vm.pendingSharedReceiptId,
                 ocrState = vm.ocrState,
-                onRunOcr = { rid -> vm.runOcrOnSlot1(rid) },
+                onRunOcr = { rid, preSelected -> vm.runOcrOnSlot1(rid, preSelected) },
                 onClearOcrState = { vm.clearOcrState() },
                 onDismiss = {
                     vm.dashboardShowAddExpense = false
@@ -2096,7 +2096,7 @@ class MainActivity : ComponentActivity() {
             onUpdateArchivedTransaction = { vm.updateArchivedTransaction(it) },
             autoCapitalize = vm.autoCapitalize,
             ocrState = vm.ocrState,
-            onRunOcr = { rid -> vm.runOcrOnSlot1(rid) },
+            onRunOcr = { rid, preSelected -> vm.runOcrOnSlot1(rid, preSelected) },
             onClearOcrState = { vm.clearOcrState() }
         )
     }

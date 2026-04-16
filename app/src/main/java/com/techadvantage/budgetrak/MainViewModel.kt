@@ -2212,12 +2212,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // AI OCR (subscriber-only, explicit tap trigger, reads slot-1 photo)
     // ═══════════════════════════════════════════════════════════════════
 
-    fun runOcrOnSlot1(receiptId: String) {
+    fun runOcrOnSlot1(receiptId: String, preSelectedCategoryIds: Set<Int> = emptySet()) {
         if (ocrState is OcrState.Loading) return
         ocrState = OcrState.Loading
+        // If the user has pre-selected categories, constrain the prompt to only
+        // those — harness A/B showed this improves multi-category accuracy on
+        // large receipts (notably when a relevant category is overlooked from
+        // the full list, e.g. Holidays/Birthdays for an Easter-candy run).
+        val catsForOcr = if (preSelectedCategoryIds.isNotEmpty()) {
+            categories.filter { it.id in preSelectedCategoryIds }
+        } else {
+            categories.toList()
+        }
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
-                ReceiptOcrService.extractFromReceipt(context, receiptId, categories.toList())
+                ReceiptOcrService.extractFromReceipt(context, receiptId, catsForOcr)
             }
             ocrState = result.fold(
                 onSuccess = { OcrState.Success(it) },

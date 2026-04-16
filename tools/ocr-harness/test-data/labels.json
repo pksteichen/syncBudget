@@ -2247,5 +2247,201 @@
         "amount": 22.31
       }
     ]
+  },
+  {
+    "file": "costco_1.jpg",
+    "source": "Costco",
+    "difficulty": "medium",
+    "merchant": "Costco",
+    "date": "2026-03-17",
+    "amount": 554.68,
+    "categoryId": 22695,
+    "notes": "Mostly groceries with home supplies (Tide pods, Dixie plates, shelving, fire extinguisher, storage bin, dog toy, ziploc) and rubber boots. Tax allocated proportionally.",
+    "categoryAmounts": [
+      {
+        "categoryId": 22695,
+        "amount": 341.1
+      },
+      {
+        "categoryId": 30186,
+        "amount": 200.24
+      },
+      {
+        "categoryId": 52714,
+        "amount": 13.34
+      }
+    ]
+  },
+  {
+    "file": "costco_2.jpg",
+    "source": "Costco",
+    "difficulty": "medium",
+    "merchant": "Costco",
+    "date": "2026-02-03",
+    "amount": 610,
+    "categoryId": 22695,
+    "notes": "Mostly groceries with home supplies (storage bin, ziploc, bin rack, Tampax) and one clothing item (BR flex pants). Tax allocated proportionally.",
+    "categoryAmounts": [
+      {
+        "categoryId": 22695,
+        "amount": 414.61
+      },
+      {
+        "categoryId": 30186,
+        "amount": 174.82
+      },
+      {
+        "categoryId": 52714,
+        "amount": 20.57
+      }
+    ]
+  },
+  {
+    "file": "sams_1.jpg",
+    "source": "Sams",
+    "difficulty": "medium",
+    "merchant": "Sam's Club",
+    "date": "2026-04-13",
+    "amount": 366.88,
+    "categoryId": 22695,
+    "notes": "Mostly groceries plus home/personal care items (AA batteries x2, ziploc freezer, Aussie shampoo, Dove body wash/shampoo). Tax ($9.48) largely on taxable non-food items. Batteries treated as Home Supplies per user preference.",
+    "categoryAmounts": [
+      {
+        "categoryId": 22695,
+        "amount": 269.52
+      },
+      {
+        "categoryId": 30186,
+        "amount": 97.36
+      }
+    ]
+  },
+  {
+    "file": "sams_2.jpg",
+    "source": "Sams",
+    "difficulty": "medium",
+    "merchant": "Sam's Club",
+    "date": "2026-02-24",
+    "amount": 426.65,
+    "categoryId": 22695,
+    "notes": "Groceries plus significant pet food (dog food, cat chow), cleaning (Dawn), paper (Pom tissue). Pet items grouped into Home Supplies per user preference. Tax ($19.30) on pet food, cleaning, soda, prepared pizzas.",
+    "categoryAmounts": [
+      {
+        "categoryId": 22695,
+        "amount": 232.24
+      },
+      {
+        "categoryId": 30186,
+        "amount": 194.41
+      }
+    ]
+  },
+  {
+    "file": "target_long_1.jpg",
+    "source": "Target",
+    "difficulty": "hard",
+    "merchant": "Target",
+    "date": "2025-11-07",
+    "amount": 531.9,
+    "categoryId": 52714,
+    "notes": "Large multi-section receipt. Apparel dominates (Wonderstop, AND Dress, Ava & Viv, Wild Fable, A New Day, Zoe+Liv, AND Shorts, Belt Tan, necklaces, earrings). Plus Health & Beauty (Garnier, eos, Aveeno, Kristin Ess, Dove Beauty -> Health/Pharmacy per convention), Home/Furniture/Kitchen/Garage (Brightroom, Threshold, Brica -> Home Supplies), Grocery (Market Pantry, GG, Tillamook, Celsius). Tax (MN 7.875%) and 5% Target Circle discount allocated proportionally.",
+    "categoryAmounts": [
+      {
+        "categoryId": 52714,
+        "amount": 240.14
+      },
+      {
+        "categoryId": 17351,
+        "amount": 133.18
+      },
+      {
+        "categoryId": 30186,
+        "amount": 93.1
+      },
+      {
+        "categoryId": 22695,
+        "amount": 65.48
+      }
+    ]
+  },
+  {
+    "file": "target_long_2.jpg",
+    "source": "Target",
+    "difficulty": "hard",
+    "merchant": "Target",
+    "date": "2025-11-25",
+    "amount": 432.83,
+    "categoryId": 30186,
+    "notes": "Large multi-section receipt, Buffalo MN. Home dominates (Home + Laundry + Garage/Hardware + Furniture: Brightroom, Threshold, Mrs Meyers, Method, Hefty, Everspring, Scrub Daddy, O-Cedar, Dealworthy). Plus Health & Beauty (UP Nicotine x2, Concordin, FlowFlex Covid test -> Health/Pharmacy), Groceries (Drumstick, Tillamook, GG Milk, Diet Mtn Dew, A&W), Electronics (three games: Merry, From Crook, Sonic the -> Entertainment per convention). Tax (MN 7.375%) and 5% Target Circle discount allocated proportionally.",
+    "categoryAmounts": [
+      {
+        "categoryId": 30186,
+        "amount": 220.32
+      },
+      {
+        "categoryId": 17351,
+        "amount": 117.88
+      },
+      {
+        "categoryId": 22695,
+        "amount": 64.38
+      },
+      {
+        "categoryId": 57937,
+        "amount": 30.25
+      }
+    ]
+  },
+  {
+    "file": "walmart_1.jpg",
+    "source": "Walmart",
+    "difficulty": "medium",
+    "merchant": "Walmart",
+    "date": "2026-04-02",
+    "amount": 252.86,
+    "categoryId": 49552,
+    "notes": "Easter-themed receipt: paper basket blue (Easter basket), religious egg, egg glow x3, Easter stickers x3, treat cups, treat banner, site merch Easter items, Easter bank, Cadbury Creme, Hershey Easter assorted x3, Peeps, Easter bunny candies, Reese's, Warhead pop candy, chocolate Rock bunny. Plus real eggs, Great Value hashbrowns, sirloin beef, margarine, Silk organic (groceries) and one zip bag (home). Discount -$26.68 and tax $12.94 allocated proportionally.",
+    "categoryAmounts": [
+      {
+        "categoryId": 49552,
+        "amount": 184.51
+      },
+      {
+        "categoryId": 22695,
+        "amount": 66.14
+      },
+      {
+        "categoryId": 30186,
+        "amount": 2.21
+      }
+    ]
+  },
+  {
+    "file": "walmart_2.jpg",
+    "source": "Walmart",
+    "difficulty": "hard",
+    "merchant": "Walmart",
+    "date": "2026-01-13",
+    "amount": 319.87,
+    "categoryId": 22695,
+    "notes": "Mostly groceries (salad kits, cereals, produce, pasta, dairy, bread, meat, cookies, sauces, crackers). Plus Avia pants x2 + Women joggers + License hats x2 (clothes), OxiClean + Febreze (home supplies), Minnie Bean x2 beanie toys (kid's stuff). Discount -$29.59 (mostly on apparel clearance) and tax $2.70 (7.875%) allocated proportionally.",
+    "categoryAmounts": [
+      {
+        "categoryId": 22695,
+        "amount": 263.36
+      },
+      {
+        "categoryId": 52714,
+        "amount": 41.5
+      },
+      {
+        "categoryId": 30186,
+        "amount": 11.32
+      },
+      {
+        "categoryId": 1276,
+        "amount": 3.69
+      }
+    ]
   }
 ]

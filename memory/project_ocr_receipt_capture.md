@@ -550,3 +550,34 @@ Draft language to drop into the help file and privacy policy once the feature sh
 - Harness `prompt.js` and `schema.js` still list `lineItems` — harness output is the ground truth for calibration.
 
 **Don't revert this without re-running `test-lineitems-ab.js`** — the token savings are the main driver.
+
+## Pre-selected categories boost multi-category accuracy (2026-04-16)
+
+**Change**: `MainViewModel.runOcrOnSlot1()` now accepts an optional `Set<Int>` of pre-selected category IDs. The AI-icon tap handler in `TransactionDialog` reads whatever categories the user has ticked in `selectedCategoryIds` and passes them through. Empty set → full category list (unchanged behavior).
+
+**Harness evidence** (`test-preselect-full.js`, 15 multi-category receipts × 2 variants × 2 runs, R7-T10 prompt):
+
+| Variant | Raw cset | Reasonable-adj cset | cshare | Avg output |
+|---------|----------|---------------------|--------|------------|
+| Full 18-cat list | 19/30 (63%) | 27/30 (90%) | 6/30 | 142 tok |
+| Pre-select ground-truth cats | 21/30 (70%) | **29/30 (97%)** | **11/30** | **124 tok** |
+
+Pre-select wins on every axis: more accurate splits, fewer genuine errors (1 vs 3), better share matching, 13% cheaper output, 3% faster.
+
+**Key case**: `walmart_1.jpg` is an Easter-candy-heavy receipt where the label's primary category is 49552 Holidays/Birthdays. With the full list, Flash never chose Holidays either run — it spread items across Groceries/Kid's Stuff/Other. When the pre-select constraint surfaced Holidays as an expected bucket, Flash nailed it both runs. Pre-select is strongest where the model would otherwise overlook a non-obvious category.
+
+**Help-screen tip** added (EnglishStrings / SpanishStrings): "Tip for multi-category receipts: check off the categories you expect before tapping the sparkle..."
+
+**Didn't try on Lite**: earlier harness A/B (`test-preselect-lite.js`) showed Flash-Lite doesn't faithfully honor a restricted category list — returns categories not in the pre-selected set, merges amounts oddly. Pre-select is a Flash-only feature.
+
+## Reasonable-alternative grading (2026-04-16)
+
+Receipts with genuinely ambiguous items shouldn't count as OCR errors when the model picks a defensible category. See `feedback_ocr_ambiguous_categories_not_errors.md` in global memory. Known ambiguity axes:
+
+- Groceries ↔ Restaurants/Prepared Food: rotisserie chicken, deli sandwiches, hot bar.
+- Clothes ↔ Employment Expenses ↔ Farm: steel-toed boots, work gloves, safety gear.
+- Health/Pharmacy ↔ Home Supplies: soap, shampoo, body wash, razors, toothpaste.
+- Kid's Stuff ↔ Entertainment ↔ Holidays/Birthdays: toys, games, seasonal items.
+- Holidays/Birthdays ↔ Groceries: Easter / Halloween / Christmas candy.
+
+When these show up in a cset failure, count them as acceptable. Don't change the label.

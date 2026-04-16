@@ -220,7 +220,7 @@ object EnglishStrings : AppStrings {
         aiOcrReading = "Reading receipt…",
         aiOcrFailed = "Couldn't read the receipt — please enter manually",
         aiOcrHelpTitle = "AI Receipt Scan",
-        aiOcrHelpBody = "Subscribers can tap the sparkle icon in the transaction dialog to auto-fill merchant, date, amount, and category from a receipt photo. Add your receipt photo to the first photo slot — any supplemental shots (item close-ups, storefront, etc.) belong in the later slots.",
+        aiOcrHelpBody = "Subscribers can tap the sparkle icon in the transaction dialog to auto-fill merchant, date, amount, and category from a receipt photo. Add your receipt photo to the first photo slot — any supplemental shots (item close-ups, storefront, etc.) belong in the later slots.\n\nTip for multi-category receipts: check off the categories you expect before tapping the sparkle. Pre-selecting (for example Groceries + Home Supplies on a warehouse-store run) helps the AI split the total more accurately than letting it choose from the full category list.",
         sharedImageProcessFailed = "Could not read shared image",
         dataManagementSection = "Data Management",
         activeTransactionsTally = { count, threshold -> "Active transactions: %,d / %,d".format(count, threshold) },
