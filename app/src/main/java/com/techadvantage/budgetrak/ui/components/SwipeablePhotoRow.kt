@@ -76,13 +76,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.techadvantage.budgetrak.ui.strings.LocalStrings
+import com.techadvantage.budgetrak.data.sync.ReceiptManager
 import java.io.File
 import java.util.UUID
 import kotlin.math.roundToInt
 
-private const val MAX_IMAGE_DIMENSION = 1000
-private const val THUMBNAIL_SIZE = 200
-private const val TARGET_BYTES_PER_MEGAPIXEL = 250 * 1024  // 250KB per 1M pixels
+// All receipt-photo compression lives in ReceiptManager.processAndSavePhoto.
+// This component used to duplicate that pipeline; now it just calls the service.
 private val PHOTO_ROW_HEIGHT = 56.dp
 
 /**
@@ -98,7 +98,8 @@ fun SwipeablePhotoRow(
     transactionId: Int,
     photos: List<Bitmap?>,
     receiptIds: List<String?> = emptyList(),  // parallel to photos, for rotation save
-    onPhotosAdded: (List<File>) -> Unit,
+    onPhotosAdded: (List<String>) -> Unit,    // receiptIds produced by ReceiptManager
+
     onSwipeOpen: () -> Unit = {},
     onPhotoTap: ((Int) -> Unit)? = null,    // slot index (0-4) tapped
     onPhotoDelete: ((Int) -> Unit)? = null,  // slot index (0-4) to delete
@@ -129,27 +130,41 @@ fun SwipeablePhotoRow(
     ) { success ->
         if (success && tempPhotoUri != null) {
             scope.launch {
-                val saved = withContext(Dispatchers.IO) {
-                    processAndSaveImage(context, tempPhotoUri!!, transactionId)
+                val rid = withContext(Dispatchers.IO) {
+                    ReceiptManager.processAndSavePhoto(context, tempPhotoUri!!)
                 }
-                if (saved != null) onPhotosAdded(listOf(saved))
+                if (rid != null) {
+                    // Upload-queue enqueue happens at transaction-save time
+                    // (MainViewModel.saveTransactions) — queuing here would leak
+                    // orphans if the caller never attaches the receipt.
+                    onPhotosAdded(listOf(rid))
+                }
             }
         }
     }
 
     val remainingSlots = 5 - photos.count { it != null }
 
+    // OpenMultipleDocuments (SAF) shows images + PDFs; SAF has no native max
+    // so truncate to remaining slots and toast if the user over-picked.
     val galleryLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickMultipleVisualMedia(maxItems = maxOf(remainingSlots, 2))
+        ActivityResultContracts.OpenMultipleDocuments()
     ) { uris ->
         val toProcess = uris.take(remainingSlots)
+        if (uris.size > remainingSlots) {
+            android.widget.Toast.makeText(
+                context,
+                "Only $remainingSlots slot${if (remainingSlots == 1) "" else "s"} available — added first $remainingSlots",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+        }
         scope.launch {
-            val saved = withContext(Dispatchers.IO) {
-                toProcess.mapNotNull { uri ->
-                    processAndSaveImage(context, uri, transactionId)
-                }
+            val rids = withContext(Dispatchers.IO) {
+                // Upload-queue enqueue happens at transaction-save time
+                // (MainViewModel.saveTransactions); no queue writes here.
+                toProcess.mapNotNull { uri -> ReceiptManager.processAndSavePhoto(context, uri) }
             }
-            if (saved.isNotEmpty()) onPhotosAdded(saved)
+            if (rids.isNotEmpty()) onPhotosAdded(rids)
         }
     }
 
@@ -272,7 +287,7 @@ fun SwipeablePhotoRow(
                             leadingIcon = { Icon(Icons.Filled.Collections, null) },
                             onClick = {
                                 showCameraPicker = false
-                                galleryLauncher.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                galleryLauncher.launch(arrayOf("image/*", "application/pdf"))
                             }
                         )
                     }
@@ -409,36 +424,16 @@ fun FullScreenPhotoViewer(
 
     val handleDismiss: () -> Unit = {
         if (rotationSteps % 4 != 0 && receiptId != null) {
-            // Save rotated image, regenerate thumbnail, THEN dismiss
+            // Save rotated image via ReceiptManager (handles compression + thumb),
+            // THEN dismiss on main thread.
             scope.launch {
                 kotlinx.coroutines.withContext(Dispatchers.IO) {
-                    try {
-                        val matrix = android.graphics.Matrix()
-                        matrix.postRotate((rotationSteps * 90).toFloat())
-                        val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-
-                        val fullFile = com.techadvantage.budgetrak.data.sync.ReceiptManager.getReceiptFile(context, receiptId)
-                        val area = rotated.width.toLong() * rotated.height
-                        val targetBytes = (area * TARGET_BYTES_PER_MEGAPIXEL / 1_000_000L).toInt()
-                        compressToTargetSize(rotated, fullFile, targetBytes)
-
-                        val thumbSize = 200
-                        val thumbScale = thumbSize.toFloat() / maxOf(rotated.width, rotated.height)
-                        val thumb = Bitmap.createScaledBitmap(
-                            rotated,
-                            (rotated.width * thumbScale).toInt(),
-                            (rotated.height * thumbScale).toInt(),
-                            true
-                        )
-                        com.techadvantage.budgetrak.data.sync.ReceiptManager.getThumbFile(context, receiptId).outputStream().use { out ->
-                            thumb.compress(Bitmap.CompressFormat.JPEG, 70, out)
-                        }
-                        if (thumb !== rotated) rotated.recycle()
-                    } catch (e: Exception) {
-                        android.util.Log.w("PhotoViewer", "Failed to save rotation: ${e.message}")
-                    }
+                    val matrix = android.graphics.Matrix()
+                    matrix.postRotate((rotationSteps * 90).toFloat())
+                    val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                    ReceiptManager.replaceReceipt(context, receiptId, rotated)
+                    if (rotated !== bitmap) rotated.recycle()
                 }
-                // Files are written — now refresh and dismiss on main thread
                 onRotated?.invoke()
                 onDismiss()
             }
@@ -531,142 +526,8 @@ fun FullScreenPhotoViewer(
     }
 }
 
-private fun processAndSaveImage(
-    context: android.content.Context,
-    uri: Uri,
-    transactionId: Int
-): File? {
-    return try {
-        // Read original bytes to check dimensions without re-encoding
-        val rawBytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            ?: return null
+// All receipt-photo compression lives in ReceiptManager — the duplicate
+// pipeline that used to live here (processAndSaveImage, resizeBitmap,
+// compressToTargetSize, loadReceiptThumbnail) was removed in the min-dim
+// floor refactor. Rotation-save goes through ReceiptManager.replaceReceipt.
 
-        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, opts)
-        val origWidth = opts.outWidth
-        val origHeight = opts.outHeight
-        if (origWidth <= 0 || origHeight <= 0) return null
-
-        val needsResize = origWidth > MAX_IMAGE_DIMENSION || origHeight > MAX_IMAGE_DIMENSION
-
-        val receiptDir = File(context.filesDir, "receipts")
-        receiptDir.mkdirs()
-        val fileName = "receipt_${transactionId}_${UUID.randomUUID()}.jpg"
-        val fullFile = File(receiptDir, fileName)
-
-        val bitmapForThumb: Bitmap
-        val pixelArea = origWidth.toLong() * origHeight
-        val targetBytes = (pixelArea * TARGET_BYTES_PER_MEGAPIXEL / 1_000_000L).toInt()
-        if (!needsResize && rawBytes.size <= targetBytes) {
-            // Already within size and dimension limits — copy raw
-            fullFile.writeBytes(rawBytes)
-            bitmapForThumb = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size)
-                ?: return null
-        } else {
-            // Decode (and resize if needed), then compress to target size
-            val original = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size)
-                ?: return null
-            val bitmap = if (needsResize) resizeBitmap(original, MAX_IMAGE_DIMENSION) else original
-            val area = bitmap.width.toLong() * bitmap.height
-            val target = (area * TARGET_BYTES_PER_MEGAPIXEL / 1_000_000L).toInt()
-            compressToTargetSize(bitmap, fullFile, target)
-            if (bitmap !== original) original.recycle()
-            bitmapForThumb = bitmap
-        }
-
-        // Generate thumbnail (70% is fine for small preview)
-        val thumbDir = File(context.filesDir, "receipt_thumbs")
-        thumbDir.mkdirs()
-        val thumb = resizeBitmap(bitmapForThumb, THUMBNAIL_SIZE)
-        File(thumbDir, fileName).outputStream().use { out ->
-            thumb.compress(Bitmap.CompressFormat.JPEG, 70, out)
-        }
-        if (thumb !== bitmapForThumb) bitmapForThumb.recycle()
-
-        fullFile
-    } catch (e: Exception) {
-        android.util.Log.w("SwipeablePhotoRow", "Failed to process image: ${e.message}")
-        null
-    }
-}
-
-private fun resizeBitmap(bitmap: Bitmap, maxDimension: Int): Bitmap {
-    val width = bitmap.width
-    val height = bitmap.height
-    if (width <= maxDimension && height <= maxDimension) return bitmap
-
-    val scale = maxDimension.toFloat() / maxOf(width, height)
-    val newWidth = (width * scale).toInt()
-    val newHeight = (height * scale).toInt()
-    return Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
-}
-
-/**
- * Compress a bitmap to a target file size in bytes.
- * Iterates on the ORIGINAL bitmap (never re-compresses compressed data).
- * Starts at Q=92, uses log-linear interpolation from accumulated data points.
- * Stops as soon as a result falls within ±10% of target.
- */
-private fun compressToTargetSize(bitmap: Bitmap, outFile: File, targetBytes: Int) {
-    val minTarget = (targetBytes * 0.9).toInt()
-    val maxTarget = (targetBytes * 1.1).toInt()
-    // Data points: quality -> size
-    val samples = mutableListOf<Pair<Int, Int>>()
-    var bestBytes: ByteArray? = null
-    var bestDistance = Int.MAX_VALUE
-
-    fun tryQuality(q: Int): Boolean {
-        if (samples.any { it.first == q }) return false
-        val buf = java.io.ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, q, buf)
-        val size = buf.size()
-        samples.add(q to size)
-        val dist = kotlin.math.abs(size - targetBytes)
-        if (dist < bestDistance) { bestDistance = dist; bestBytes = buf.toByteArray() }
-        return size in minTarget..maxTarget
-    }
-
-    // Attempt 1: Q=92 (high quality)
-    if (tryQuality(92)) { outFile.writeBytes(bestBytes!!); return }
-
-    // Attempt 2: go opposite direction
-    val firstSize = samples[0].second
-    val secondQ = if (firstSize > targetBytes) 50 else 98
-    if (tryQuality(secondQ)) { outFile.writeBytes(bestBytes!!); return }
-
-    // Attempt 3+: log-linear interpolation from best two bracketing points
-    for (round in 0 until 3) {
-        // Find closest points above and below target
-        val below = samples.filter { it.second <= targetBytes }.maxByOrNull { it.second }
-        val above = samples.filter { it.second > targetBytes }.minByOrNull { it.second }
-
-        val predictedQ = if (below != null && above != null) {
-            val lnTarget = kotlin.math.ln(targetBytes.toDouble())
-            val lnLo = kotlin.math.ln(below.second.toDouble())
-            val lnHi = kotlin.math.ln(above.second.toDouble())
-            val denom = lnHi - lnLo
-            if (denom > 0.001) {
-                (((lnTarget - lnLo) / denom) * (above.first - below.first) + below.first).toInt()
-            } else (below.first + above.first) / 2
-        } else {
-            // All samples on one side — extrapolate linearly
-            val s = samples.sortedBy { it.first }
-            val ratio = targetBytes.toDouble() / s.last().second
-            (s.last().first * ratio).toInt()
-        }
-
-        val clampedQ = predictedQ.coerceIn(20, 100)
-        if (tryQuality(clampedQ)) { outFile.writeBytes(bestBytes!!); return }
-    }
-
-    // Use the best attempt we have
-    outFile.writeBytes(bestBytes!!)
-}
-
-fun loadReceiptThumbnail(context: android.content.Context, fileName: String): Bitmap? {
-    return try {
-        val file = File(File(context.filesDir, "receipt_thumbs"), fileName)
-        if (!file.exists()) return null
-        BitmapFactory.decodeFile(file.absolutePath)
-    } catch (_: Exception) { null }
-}

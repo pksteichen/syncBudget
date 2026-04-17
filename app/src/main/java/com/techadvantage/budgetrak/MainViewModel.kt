@@ -200,6 +200,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         prefs.getString("lastRefreshDate", null)?.let { LocalDate.parse(it) }
     )
 
+    // Bumped whenever receipt storage changes in a way the UI should re-measure
+    // (Save Photos sweep, explicit cleanup, etc). Used as a remember() key.
+    var receiptStorageRevision by mutableIntStateOf(0)
+
     // ── Data Lists ──
     val transactions = mutableStateListOf<Transaction>()
     val categories = mutableStateListOf<Category>()
@@ -471,6 +475,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             android.util.Log.w("MainViewModel", "Deduped ${transactions.size - deduped.size} duplicate transactions")
             transactions.clear()
             transactions.addAll(deduped)
+        }
+        // Queue newly-attached receipts for cloud upload. Doing this here (rather
+        // than at photo-capture) guarantees the queue only ever contains IDs
+        // claimed by a persisted transaction — dialog-cancels, failed slot
+        // assignments, and any future ordering bugs can't leak orphans into the
+        // queue. Filter to files still on disk so re-saves of already-uploaded
+        // (and pruned) receipts don't re-enqueue.
+        val previousIds = com.techadvantage.budgetrak.data.sync.ReceiptManager
+            .collectAllReceiptIds(lastSavedTxns.values.toList())
+        val currentIds = com.techadvantage.budgetrak.data.sync.ReceiptManager
+            .collectAllReceiptIds(transactions)
+        val newlyAttached = currentIds - previousIds
+        if (newlyAttached.isNotEmpty()) {
+            for (rid in newlyAttached) {
+                if (com.techadvantage.budgetrak.data.sync.ReceiptManager.hasLocalFile(context, rid)) {
+                    com.techadvantage.budgetrak.data.sync.ReceiptManager.addToPendingQueue(context, rid)
+                }
+            }
         }
         saveCollection(transactions.toList(), TransactionRepository::save, lastSavedTxns, { it.id }, hint)
     }
@@ -2202,7 +2224,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 com.techadvantage.budgetrak.data.sync.ReceiptManager.processAndSavePhoto(context, uri)
             }
             if (receiptId != null) {
-                com.techadvantage.budgetrak.data.sync.ReceiptManager.addToPendingQueue(context, receiptId)
+                // Queue-for-upload handled by saveTransactions when the user
+                // actually saves the dialog — skipping the queue here prevents
+                // orphans if the user cancels instead.
                 pendingSharedReceiptId = receiptId
             }
             dashboardShowAddExpense = true

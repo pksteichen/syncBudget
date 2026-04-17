@@ -20,6 +20,11 @@ object ReceiptManager {
 
     private const val TAG = "ReceiptManager"
     private const val MAX_IMAGE_DIMENSION = 1000
+    // Minimum short-edge floor for full-size receipts. A naïve longest-edge cap
+    // crushes tall e-receipt screenshots (e.g. 1080x7785 → 139x1000) into an
+    // unreadable blur. Applying a 400px floor on the shorter edge keeps them
+    // legible (same input → 400x2884) at the cost of slightly larger files.
+    private const val MIN_IMAGE_DIMENSION = 400
     private const val THUMBNAIL_SIZE = 200
     private const val TARGET_BYTES_PER_MEGAPIXEL = 250 * 1024  // 250KB per 1M pixels
     private const val PENDING_QUEUE_FILE = "pending_receipt_uploads.json"
@@ -120,14 +125,57 @@ object ReceiptManager {
         getReceiptFile(context, receiptId).exists()
 
     /**
+     * Read a URI's contents as JPEG bytes. For image URIs this is the raw file
+     * contents; for PDF URIs, the first page is rasterised (white background,
+     * ~1500px long edge) and JPEG-encoded at q=95, then fed through the same
+     * downstream resize+compress pipeline as any other image.
+     */
+    private fun readAsJpegBytes(context: Context, uri: Uri): ByteArray? {
+        val mime = context.contentResolver.getType(uri).orEmpty()
+        val isPdf = mime == "application/pdf" ||
+            (mime.isEmpty() && uri.lastPathSegment?.endsWith(".pdf", ignoreCase = true) == true)
+        if (!isPdf) {
+            return context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        }
+        return try {
+            context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                android.graphics.pdf.PdfRenderer(pfd).use { renderer ->
+                    if (renderer.pageCount == 0) return null
+                    renderer.openPage(0).use { page ->
+                        // Render at ~1500px long edge; the main pipeline will then
+                        // apply its usual 1000px cap + min-dim floor + JPEG target.
+                        val longest = maxOf(page.width, page.height).coerceAtLeast(1)
+                        val scale = 1500f / longest
+                        val w = (page.width * scale).toInt().coerceAtLeast(1)
+                        val h = (page.height * scale).toInt().coerceAtLeast(1)
+                        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                        // PDFs with transparency render with a black background
+                        // unless we fill first; receipts are almost always white.
+                        android.graphics.Canvas(bmp).drawColor(android.graphics.Color.WHITE)
+                        page.render(bmp, null, null,
+                            android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        val bos = java.io.ByteArrayOutputStream()
+                        bmp.compress(Bitmap.CompressFormat.JPEG, 95, bos)
+                        bmp.recycle()
+                        bos.toByteArray()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to render PDF: ${e.message}")
+            null
+        }
+    }
+
+    /**
      * Process a photo from URI: save full (no re-encoding if ≤1000px),
      * resize only if needed (100% quality), generate thumbnail.
-     * Does NOT encrypt — encryption happens at upload time.
+     * Accepts PDFs (first page is rasterised). Does NOT encrypt —
+     * encryption happens at upload time.
      */
     fun processAndSavePhoto(context: Context, uri: Uri): String? {
         return try {
-            val rawBytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                ?: return null
+            val rawBytes = readAsJpegBytes(context, uri) ?: return null
 
             val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
             android.graphics.BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, opts)
@@ -147,7 +195,7 @@ object ReceiptManager {
             } else {
                 val original = android.graphics.BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size)
                     ?: return null
-                val bitmap = if (needsResize) resizeBitmap(original, MAX_IMAGE_DIMENSION) else original
+                val bitmap = if (needsResize) resizeBitmap(original, MAX_IMAGE_DIMENSION, MIN_IMAGE_DIMENSION) else original
                 val area = bitmap.width.toLong() * bitmap.height
                 val target = (area * TARGET_BYTES_PER_MEGAPIXEL / 1_000_000L).toInt()
                 compressToTargetSize(bitmap, fullFile, target)
@@ -174,6 +222,30 @@ object ReceiptManager {
      */
     fun processAndSaveFromCamera(context: Context, tempUri: Uri): String? =
         processAndSavePhoto(context, tempUri)
+
+    /**
+     * Overwrite an existing receipt with a new bitmap (e.g. after rotation).
+     * Re-runs the same JPEG-to-target-bytes compression as the initial save and
+     * regenerates the thumbnail. Returns true on success.
+     */
+    fun replaceReceipt(context: Context, receiptId: String, bitmap: Bitmap): Boolean {
+        return try {
+            val fullFile = getReceiptFile(context, receiptId)
+            val area = bitmap.width.toLong() * bitmap.height
+            val targetBytes = (area * TARGET_BYTES_PER_MEGAPIXEL / 1_000_000L).toInt()
+            compressToTargetSize(bitmap, fullFile, targetBytes)
+
+            val thumb = resizeBitmap(bitmap, THUMBNAIL_SIZE)
+            getThumbFile(context, receiptId).outputStream().use { out ->
+                thumb.compress(Bitmap.CompressFormat.JPEG, 70, out)
+            }
+            if (thumb !== bitmap) thumb.recycle()
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to replace receipt $receiptId: ${e.message}")
+            false
+        }
+    }
 
     fun loadThumbnail(context: Context, receiptId: String): Bitmap? {
         return try {
@@ -285,7 +357,18 @@ object ReceiptManager {
     fun cleanOrphans(context: Context, allReceiptIds: Set<String>) {
         val receiptDir = getReceiptDir(context)
         val thumbDir = getThumbDir(context)
-        val pending = loadPendingUploads(context)
+
+        // Drop pending-upload entries not attached to any transaction. The queue
+        // exists to retry cloud uploads for attached receipts; a never-attached
+        // entry (e.g. from the prior multi-photo slot-assignment bug) has no
+        // useful destination and would otherwise pin the file here forever.
+        val pendingBefore = loadPendingUploads(context)
+        val stalePending = pendingBefore - allReceiptIds
+        if (stalePending.isNotEmpty()) {
+            savePendingUploads(context, pendingBefore - stalePending)
+            Log.i(TAG, "Cleaned ${stalePending.size} stale pending uploads")
+        }
+        val pending = pendingBefore - stalePending
 
         receiptDir.listFiles()?.forEach { file ->
             val id = file.nameWithoutExtension
@@ -394,13 +477,38 @@ object ReceiptManager {
         outFile.writeBytes(bestBytes!!)
     }
 
-    private fun resizeBitmap(bitmap: Bitmap, maxDimension: Int): Bitmap {
+    /**
+     * Resize a bitmap so the longest edge ≤ [maxDimension].
+     * If [minDimension] > 0, also ensure the shortest edge stays ≥ [minDimension] —
+     * if the longest-edge scaling would push the shortest edge below the floor,
+     * we scale less aggressively (so longest exceeds maxDimension, but shortest
+     * hits the floor). Never upscales: if the source shortest edge is already
+     * below the floor, the original bitmap is returned unchanged.
+     *
+     * Called with minDimension=0 for thumbnails (small target, floor irrelevant)
+     * and minDimension=MIN_IMAGE_DIMENSION for the full-size receipt path.
+     */
+    private fun resizeBitmap(bitmap: Bitmap, maxDimension: Int, minDimension: Int = 0): Bitmap {
         val width = bitmap.width
         val height = bitmap.height
-        if (width <= maxDimension && height <= maxDimension) return bitmap
-        val scale = maxDimension.toFloat() / maxOf(width, height)
-        val newWidth = (width * scale).toInt()
-        val newHeight = (height * scale).toInt()
+        val longestEdge = maxOf(width, height)
+        val shortestEdge = minOf(width, height)
+        if (longestEdge <= maxDimension) return bitmap
+
+        val scaleFromLongest = maxDimension.toFloat() / longestEdge
+        val scale: Float = if (minDimension <= 0) {
+            scaleFromLongest
+        } else {
+            val shortestAfter = shortestEdge * scaleFromLongest
+            when {
+                shortestAfter >= minDimension -> scaleFromLongest
+                shortestEdge >= minDimension  -> minDimension.toFloat() / shortestEdge
+                else -> 1f  // source shortest already below floor; never upscale
+            }
+        }
+        if (scale >= 1f) return bitmap
+        val newWidth = (width * scale).toInt().coerceAtLeast(1)
+        val newHeight = (height * scale).toInt().coerceAtLeast(1)
         return Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
     }
 }

@@ -1147,21 +1147,15 @@ fun TransactionsScreen(
                             transactionId = transaction.id,
                             photos = thumbnails,
                             receiptIds = listOf(transaction.receiptId1, transaction.receiptId2, transaction.receiptId3, transaction.receiptId4, transaction.receiptId5),
-                            onPhotosAdded = { files ->
+                            onPhotosAdded = { rids ->
+                                // rids are receiptIds already processed & saved by
+                                // ReceiptManager.processAndSavePhoto. Upload-queue
+                                // enqueue happens in MainViewModel.saveTransactions
+                                // once the transaction is persisted.
                                 photoScope.launch(Dispatchers.IO) {
                                     var txn = transaction
-                                    for (file in files) {
+                                    for (rid in rids) {
                                         val slot = ReceiptManager.nextEmptySlot(txn) ?: break
-                                        val rid = ReceiptManager.generateReceiptId()
-                                        val dest = ReceiptManager.getReceiptFile(txnContext, rid)
-                                        file.copyTo(dest, overwrite = true)
-                                        val oldThumb = java.io.File(java.io.File(txnContext.filesDir, "receipt_thumbs"), file.name)
-                                        if (oldThumb.exists()) {
-                                            oldThumb.copyTo(ReceiptManager.getThumbFile(txnContext, rid), overwrite = true)
-                                            oldThumb.delete()
-                                        }
-                                        file.delete()
-                                        ReceiptManager.addToPendingQueue(txnContext, rid)
                                         txn = when (slot) {
                                             1 -> txn.copy(receiptId1 = rid)
                                             2 -> txn.copy(receiptId2 = rid)
@@ -3097,7 +3091,10 @@ fun TransactionDialog(
             dialogPhotoScope.launch(Dispatchers.IO) {
                 val rid = ReceiptManager.processAndSaveFromCamera(context, dialogTempPhotoUri!!)
                 if (rid != null) {
-                    ReceiptManager.addToPendingQueue(context, rid)
+                    // Queue-for-upload happens at transaction-save time in
+                    // MainViewModel.saveTransactions — not here — so a dialog
+                    // cancel or slot-assignment failure never leaks an orphan
+                    // into the pending queue.
                     withContext(Dispatchers.Main) {
                         if (isEdit && editTransaction != null) {
                             val slot = ReceiptManager.nextEmptySlot(editTransaction)
@@ -3128,8 +3125,11 @@ fun TransactionDialog(
             }
         }
     }
+    // OpenMultipleDocuments (SAF) instead of PickMultipleVisualMedia so PDFs
+    // appear alongside images. SAF has no maxItems cap, so we truncate to
+    // remaining slots client-side and toast if the user over-picked.
     val dialogGalleryLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickMultipleVisualMedia(maxItems = 5)
+        ActivityResultContracts.OpenMultipleDocuments()
     ) { uris ->
         val remaining = if (isEdit && editTransaction != null) {
             5 - listOfNotNull(editTransaction.receiptId1, editTransaction.receiptId2, editTransaction.receiptId3, editTransaction.receiptId4, editTransaction.receiptId5).size
@@ -3137,23 +3137,34 @@ fun TransactionDialog(
             5 - listOfNotNull(addModeReceiptId1, addModeReceiptId2, addModeReceiptId3, addModeReceiptId4, addModeReceiptId5).size
         }
         val toProcess = uris.take(remaining)
+        if (uris.size > remaining) {
+            toastState.show("Only $remaining slot${if (remaining == 1) "" else "s"} available — added first $remaining")
+        }
         if (toProcess.isNotEmpty()) {
             dialogPhotoScope.launch(Dispatchers.IO) {
+                // Edit-mode: thread the updated transaction through iterations.
+                // Without this, editTransaction is a fixed closure capture and
+                // every iteration writes to the same (first-empty) slot, losing
+                // 3 of 4 photos if the transaction started empty.
+                var currentTxn = editTransaction
                 for (uri in toProcess) {
                     val rid = ReceiptManager.processAndSavePhoto(context, uri) ?: continue
-                    ReceiptManager.addToPendingQueue(context, rid)
+                    // Pending-queue enqueue is done at transaction-save time
+                    // (MainViewModel.saveTransactions), so failed slot assignments
+                    // here never result in orphan upload-queue entries.
                     withContext(Dispatchers.Main) {
-                        if (isEdit && editTransaction != null) {
-                            val slot = ReceiptManager.nextEmptySlot(editTransaction)
+                        if (isEdit && currentTxn != null) {
+                            val slot = ReceiptManager.nextEmptySlot(currentTxn!!)
                             if (slot != null) {
                                 val updated = when (slot) {
-                                    1 -> editTransaction.copy(receiptId1 = rid)
-                                    2 -> editTransaction.copy(receiptId2 = rid)
-                                    3 -> editTransaction.copy(receiptId3 = rid)
-                                    4 -> editTransaction.copy(receiptId4 = rid)
-                                    5 -> editTransaction.copy(receiptId5 = rid)
-                                    else -> editTransaction
+                                    1 -> currentTxn!!.copy(receiptId1 = rid)
+                                    2 -> currentTxn!!.copy(receiptId2 = rid)
+                                    3 -> currentTxn!!.copy(receiptId3 = rid)
+                                    4 -> currentTxn!!.copy(receiptId4 = rid)
+                                    5 -> currentTxn!!.copy(receiptId5 = rid)
+                                    else -> currentTxn!!
                                 }
+                                currentTxn = updated
                                 onUpdatePhoto?.invoke(updated)
                             }
                         } else {
@@ -3526,7 +3537,7 @@ fun TransactionDialog(
                                             leadingIcon = { Icon(Icons.Filled.Collections, null) },
                                             onClick = {
                                                 showDialogCameraPicker = false
-                                                dialogGalleryLauncher.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                                dialogGalleryLauncher.launch(arrayOf("image/*", "application/pdf"))
                                             }
                                         )
                                     }

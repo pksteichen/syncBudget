@@ -247,29 +247,16 @@ object BackupManager {
                         read += n
                     }
 
-                    try {
-                        val plaintext = CryptoHelper.decryptWithKey(encrypted, derivedKey)
-                        // Save receipt file
-                        val receiptFile = ReceiptManager.getReceiptFile(context, receiptId)
-                        receiptFile.writeBytes(plaintext)
-                        // Generate thumbnail
-                        val bitmap = android.graphics.BitmapFactory.decodeByteArray(plaintext, 0, plaintext.size)
-                        if (bitmap != null) {
-                            val thumb = android.graphics.Bitmap.createScaledBitmap(
-                                bitmap,
-                                minOf(200, bitmap.width),
-                                minOf(200, bitmap.height),
-                                true
-                            )
-                            ReceiptManager.getThumbFile(context, receiptId).outputStream().use { out ->
-                                thumb.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, out)
-                            }
-                            if (thumb !== bitmap) bitmap.recycle()
-                        }
+                    // Delegate decrypt + save + aspect-preserving thumbnail to the
+                    // single pipeline in ReceiptManager. (The old inline code here
+                    // used createScaledBitmap(w=200, h=200) which distorted any
+                    // non-square receipt — ReceiptManager.resizeBitmap preserves
+                    // aspect.)
+                    if (ReceiptManager.decryptAndSave(context, receiptId, encrypted, derivedKey)) {
                         restored++
-                    } catch (ex: Exception) {
+                    } else {
                         failed++
-                        Log.w(TAG, "Failed to restore receipt $receiptId: ${ex.message}")
+                        Log.w(TAG, "Failed to restore receipt $receiptId")
                     }
                 }
             }

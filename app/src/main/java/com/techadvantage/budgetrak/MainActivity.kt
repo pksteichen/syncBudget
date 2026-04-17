@@ -1288,25 +1288,62 @@ class MainActivity : ComponentActivity() {
                 title = { Text("Save Photos") },
                 style = DialogStyle.DEFAULT,
                 text = {
-                    Text("Photos are already backed up in encrypted backups if Automatic Backups is enabled below. This will save unencrypted copies of all receipt photos to Download/BudgeTrak/photos/ on your device if you need them for other purposes.")
+                    Text("Photos are already backed up in encrypted backups if Automatic Backups is enabled below. This will save unencrypted copies of all receipt photos to Download/BudgeTrak/photos/ on your device if you need them for other purposes. Each save creates a new timestamped folder.")
                 },
                 confirmButton = {
                     DialogPrimaryButton(onClick = {
                         vm.showSavePhotosDialog = false
                         vm.launchIO {
+                            // Each run writes to a new timestamped subfolder. Avoids
+                            // Android scoped-storage overwrite failures when stale files
+                            // from a previous session/version can't be deleted by the
+                            // current app context (Kotlin copyTo throws "Tried to
+                            // overwrite the destination, but failed to delete it.").
+                            val stamp = java.text.SimpleDateFormat("yyyy-MM-dd_HHmmss", java.util.Locale.US).format(java.util.Date())
+                            val photosDir = java.io.File(BackupManager.getBudgetrakDir(), "photos/$stamp")
                             try {
-                                val photosDir = java.io.File(BackupManager.getBudgetrakDir(), "photos")
                                 photosDir.mkdirs()
+                                val activeIds = com.techadvantage.budgetrak.data.sync.ReceiptManager
+                                    .collectAllReceiptIds(vm.transactions.filter { !it.deleted })
                                 val receiptDir = java.io.File(context.filesDir, "receipts")
-                                val files = receiptDir.listFiles() ?: emptyArray()
+                                val allFiles = receiptDir.listFiles() ?: emptyArray()
+                                // Only export files referenced by a live transaction — skip
+                                // orphans from legacy bugs (e.g. pre-fix multi-photo imports)
+                                // and files belonging to deleted transactions awaiting purge.
+                                val files = allFiles.filter { it.nameWithoutExtension in activeIds }
                                 var count = 0
+                                val failed = mutableListOf<String>()
                                 for (f in files) {
-                                    f.copyTo(java.io.File(photosDir, f.name), overwrite = true)
-                                    count++
+                                    try {
+                                        // Stream-based copy — truncates target on open, no
+                                        // pre-delete required. Falls back to writing a
+                                        // uniquely-suffixed filename only if this still fails.
+                                        val target = java.io.File(photosDir, f.name)
+                                        f.inputStream().use { input ->
+                                            java.io.FileOutputStream(target).use { output ->
+                                                input.copyTo(output)
+                                            }
+                                        }
+                                        count++
+                                    } catch (inner: Exception) {
+                                        android.util.Log.w("SavePhotos", "Skip ${f.name}: ${inner.message}")
+                                        failed += f.name
+                                    }
                                 }
-                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                    toastState.show("Saved $count photos to Download/BudgeTrak/photos/")
+                                // Sweep orphans now that referenced files are safely exported.
+                                // Use all transactions (incl. soft-deleted) so a deletion that
+                                // hasn't propagated via sync doesn't take its receipts with it.
+                                val keepIds = com.techadvantage.budgetrak.data.sync.ReceiptManager
+                                    .collectAllReceiptIds(vm.transactions.toList())
+                                com.techadvantage.budgetrak.data.sync.ReceiptManager
+                                    .cleanOrphans(context, keepIds)
+                                vm.receiptStorageRevision++ // trigger Settings cache-size refresh
+                                val msg = if (failed.isEmpty()) {
+                                    "Saved $count photos to Download/BudgeTrak/photos/$stamp/"
+                                } else {
+                                    "Saved $count photos (${failed.size} skipped) to Download/BudgeTrak/photos/$stamp/"
                                 }
+                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { toastState.show(msg) }
                             } catch (e: Exception) {
                                 android.util.Log.w("SavePhotos", "Failed: ${e.message}")
                                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
@@ -1699,7 +1736,7 @@ class MainActivity : ComponentActivity() {
                 )
                 vm.saveSharedSettings()
             },
-            receiptCacheSize = remember(vm.isPaidUser) {
+            receiptCacheSize = remember(vm.isPaidUser, vm.receiptStorageRevision) {
                 com.techadvantage.budgetrak.data.sync.ReceiptManager.getTotalStorageBytes(context)
             },
             backupsEnabled = vm.backupsEnabled,
