@@ -3081,6 +3081,11 @@ fun TransactionDialog(
     var addModeReceiptId4 by remember { mutableStateOf<String?>(null) }
     var addModeReceiptId5 by remember { mutableStateOf<String?>(null) }
 
+    // Photo slot the user has highlighted (long-pressed) as the AI OCR target.
+    // -1 means no slot highlighted — AI icon tap prompts the user to long-press
+    // a photo first. Replaces the previous "always read slot 1" default.
+    var ocrTargetSlot by remember { mutableIntStateOf(-1) }
+
     // Dialog camera state (for header camera icon)
     var dialogTempPhotoUri by remember { mutableStateOf<Uri?>(null) }
     val dialogPhotoScope = rememberCoroutineScope()
@@ -3457,9 +3462,16 @@ fun TransactionDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         // AI OCR icon — subscriber-only, explicit-tap trigger.
-                        // Greyed for Free/Paid users; mid-greyed when no slot-1 photo present.
-                        val slot1ReceiptId = if (isEdit) editTransaction?.receiptId1 else addModeReceiptId1
-                        val hasSlot1 = slot1ReceiptId != null
+                        // Greyed for Free/Paid users; mid-greyed when no photo slots have content.
+                        // User long-presses a thumbnail to highlight the OCR target; tapping the
+                        // sparkle scans that highlighted photo.
+                        val aiDialogReceiptIds = if (isEdit && editTransaction != null) {
+                            listOf(editTransaction.receiptId1, editTransaction.receiptId2, editTransaction.receiptId3, editTransaction.receiptId4, editTransaction.receiptId5)
+                        } else {
+                            listOf(addModeReceiptId1, addModeReceiptId2, addModeReceiptId3, addModeReceiptId4, addModeReceiptId5)
+                        }
+                        val hasAnyPhoto = aiDialogReceiptIds.any { it != null }
+                        val targetReceiptId = aiDialogReceiptIds.getOrNull(ocrTargetSlot)
                         val isOcrLoading = ocrState is com.techadvantage.budgetrak.data.ocr.OcrState.Loading
                         if (isOcrLoading) {
                             CircularProgressIndicator(
@@ -3473,16 +3485,17 @@ fun TransactionDialog(
                                 contentDescription = S.settings.aiOcrIconDesc,
                                 tint = when {
                                     !isSubscriber -> headerTxt.copy(alpha = 0.3f)
-                                    !hasSlot1     -> headerTxt.copy(alpha = 0.5f)
+                                    !hasAnyPhoto  -> headerTxt.copy(alpha = 0.5f)
                                     else          -> headerTxt
                                 },
                                 modifier = Modifier
                                     .size(20.dp)
                                     .clickable {
                                         when {
-                                            !isSubscriber -> toastState.show(S.settings.upgradeForAiOcr)
-                                            !hasSlot1     -> toastState.show(S.settings.aiOcrAddReceiptFirst)
-                                            slot1ReceiptId != null -> {
+                                            !isSubscriber        -> toastState.show(S.settings.upgradeForAiOcr)
+                                            !hasAnyPhoto         -> toastState.show(S.settings.aiOcrAddReceiptFirst)
+                                            targetReceiptId == null -> toastState.show(S.settings.aiOcrHighlightFirst)
+                                            else -> {
                                                 toastState.show(S.settings.aiOcrReading)
                                                 // Pass any pre-selected categories so Gemini constrains its
                                                 // split to the user's intent. Empty set → full category list.
@@ -3490,7 +3503,7 @@ fun TransactionDialog(
                                                     .filter { it.value }
                                                     .keys
                                                     .toSet()
-                                                onRunOcr?.invoke(slot1ReceiptId, preSelected)
+                                                onRunOcr?.invoke(targetReceiptId, preSelected)
                                             }
                                         }
                                     }
@@ -3597,6 +3610,8 @@ fun TransactionDialog(
                                                 addedPhotoIds.remove(rid)
                                             }
                                             dialogThumbRefresh++
+                                            // Clear the OCR highlight if the deleted slot was the target.
+                                            if (ocrTargetSlot == dialogDeleteConfirmSlot) ocrTargetSlot = -1
                                             kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
                                                 ReceiptManager.deleteReceiptFull(context, rid)
                                             }
@@ -3647,18 +3662,29 @@ fun TransactionDialog(
                                 val thumb = dialogThumbnails.getOrNull(i)
                                 val rid = dialogReceiptIds.getOrNull(i)
                                 if (thumb == null && rid == null) continue
+                                val isOcrTarget = ocrTargetSlot == i
                                 Box(
                                     modifier = Modifier
                                         .size(dialogPhotoFrameSize)
                                         .clip(RoundedCornerShape(6.dp))
                                         .background(if (thumb != null) Color.Transparent else MaterialTheme.colorScheme.surface)
-                                        .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f), RoundedCornerShape(6.dp))
+                                        .border(
+                                            width = if (isOcrTarget) 2.dp else 1.dp,
+                                            color = if (isOcrTarget) Color(0xFF2196F3)
+                                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
+                                            shape = RoundedCornerShape(6.dp)
+                                        )
                                         .then(
                                             if (thumb != null) {
                                                 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
                                                 Modifier.combinedClickable(
                                                     onClick = { dialogFullScreenSlot = i },
-                                                    onLongClick = { dialogDeleteConfirmSlot = i }
+                                                    // Long-press toggles the OCR target highlight.
+                                                    // Deletion now lives in the full-screen viewer
+                                                    // (tap the thumbnail → Delete button there).
+                                                    onLongClick = {
+                                                        ocrTargetSlot = if (ocrTargetSlot == i) -1 else i
+                                                    }
                                                 )
                                             } else Modifier
                                         ),

@@ -233,6 +233,7 @@ object TranslationContext {
         "aiOcrIconDesc" to "Accessibility content description for the AI receipt scanner icon in the add-transaction dialog header.",
         "aiOcrComingSoon" to "Toast shown to subscribers who tap the placeholder AI icon while the real OCR extractor is not yet wired up.",
         "upgradeForAiOcr" to "Toast shown to non-subscribers (Free and Paid tiers) when they tap the AI icon, encouraging them to upgrade to the Subscriber tier.",
+        "aiOcrHighlightFirst" to "Toast shown when a subscriber taps the AI sparkle icon while photos exist but none is highlighted as the OCR target. Tells the user to long-press a photo thumbnail first to pick which receipt to scan. Keep it short (one line) and action-oriented.",
         // AI CSV Categorization
         "aiCsvCategorizeLabel" to "Checkbox label in Settings for enabling AI-powered categorization of bank-CSV imports. Paid and Subscriber tiers only.",
         "aiCsvCategorizeSubtitle" to "Small gray subtitle under the AI CSV categorization checkbox explaining what the toggle does.",

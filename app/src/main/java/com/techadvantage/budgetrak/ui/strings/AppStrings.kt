@@ -241,6 +241,7 @@ data class SettingsStrings(
     val aiOcrComingSoon: String,
     val upgradeForAiOcr: String,
     val aiOcrAddReceiptFirst: String,
+    val aiOcrHighlightFirst: String,    // Toast when user taps the sparkle but hasn't long-pressed a thumbnail to pick the OCR target
     val aiOcrReading: String,
     val aiOcrFailed: String,
     val aiOcrHelpTitle: String,
