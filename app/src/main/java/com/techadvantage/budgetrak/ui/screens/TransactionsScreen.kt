@@ -305,7 +305,8 @@ fun TransactionsScreen(
     autoCapitalize: Boolean = true,
     ocrState: com.techadvantage.budgetrak.data.ocr.OcrState = com.techadvantage.budgetrak.data.ocr.OcrState.Idle,
     onRunOcr: ((String, Set<Int>) -> Unit)? = null,
-    onClearOcrState: (() -> Unit)? = null
+    onClearOcrState: (() -> Unit)? = null,
+    onShowPreselectHelp: (() -> Unit)? = null
 ) {
     val S = LocalStrings.current
     val customColors = LocalSyncBudgetColors.current
@@ -1293,6 +1294,7 @@ fun TransactionsScreen(
             ocrState = ocrState,
             onRunOcr = onRunOcr,
             onClearOcrState = onClearOcrState,
+            onShowPreselectHelp = onShowPreselectHelp,
             onDismiss = {
                 showAddIncome = false
                 onClearOcrState?.invoke()
@@ -1351,6 +1353,7 @@ fun TransactionsScreen(
             ocrState = ocrState,
             onRunOcr = onRunOcr,
             onClearOcrState = onClearOcrState,
+            onShowPreselectHelp = onShowPreselectHelp,
             onDismiss = {
                 showAddExpense = false
                 onClearOcrState?.invoke()
@@ -1417,6 +1420,7 @@ fun TransactionsScreen(
             ocrState = ocrState,
             onRunOcr = onRunOcr,
             onClearOcrState = onClearOcrState,
+            onShowPreselectHelp = onShowPreselectHelp,
             onDismiss = {
                 editingTransaction = null
                 onClearOcrState?.invoke()
@@ -3045,6 +3049,7 @@ fun TransactionDialog(
     ocrState: com.techadvantage.budgetrak.data.ocr.OcrState = com.techadvantage.budgetrak.data.ocr.OcrState.Idle,
     onRunOcr: ((String, Set<Int>) -> Unit)? = null,
     onClearOcrState: (() -> Unit)? = null,
+    onShowPreselectHelp: (() -> Unit)? = null,  // navigates to Transactions Help + scrolls to preselect-cats subsection
     onDismiss: () -> Unit,
     onSave: (Transaction) -> Unit,
     onUpdatePhoto: ((Transaction) -> Unit)? = null,  // update transaction without closing dialog
@@ -3057,6 +3062,7 @@ fun TransactionDialog(
     val maxDecimals = CURRENCY_DECIMALS[currencySymbol] ?: 2
     val context = LocalContext.current
     val toastState = LocalAppToast.current
+    val customColors = LocalSyncBudgetColors.current
     val isEdit = editTransaction != null
     val isSupercharge = editTransaction?.categoryAmounts?.any { ca ->
         categories.find { it.id == ca.categoryId }?.tag == "supercharge"
@@ -3109,6 +3115,13 @@ fun TransactionDialog(
     // whether to overwrite the checkbox selection. If true, the selection is
     // preserved (user intent wins). If false, OCR's categories replace it.
     var ocrHadPreselect by remember { mutableStateOf(false) }
+
+    // Screen-Y anchors for toasts so they appear near the element that triggered
+    // them (AI sparkle icon toasts → near the header; thumbnail-bar toasts →
+    // near the bar). Populated via onGloballyPositioned; 0 means not yet laid
+    // out and the toast falls back to its default center-of-screen position.
+    var aiIconWindowY by remember { mutableIntStateOf(0) }
+    var thumbBarWindowY by remember { mutableIntStateOf(0) }
 
     // Dialog camera state (for header camera icon)
     var dialogTempPhotoUri by remember { mutableStateOf<Uri?>(null) }
@@ -3167,7 +3180,10 @@ fun TransactionDialog(
         }
         val toProcess = uris.take(remaining)
         if (uris.size > remaining) {
-            toastState.show("Only $remaining slot${if (remaining == 1) "" else "s"} available — added first $remaining")
+            toastState.show(
+                "Only $remaining slot${if (remaining == 1) "" else "s"} available — added first $remaining",
+                windowYPx = thumbBarWindowY
+            )
         }
         if (toProcess.isNotEmpty()) {
             dialogPhotoScope.launch(Dispatchers.IO) {
@@ -3388,7 +3404,7 @@ fun TransactionDialog(
                 onClearOcrState?.invoke()
             }
             is com.techadvantage.budgetrak.data.ocr.OcrState.Failed -> {
-                toastState.show(S.settings.aiOcrFailed)
+                toastState.show(S.settings.aiOcrFailed, windowYPx = aiIconWindowY)
                 onClearOcrState?.invoke()
             }
             else -> Unit
@@ -3527,13 +3543,16 @@ fun TransactionDialog(
                                 },
                                 modifier = Modifier
                                     .size(20.dp)
+                                    .onGloballyPositioned { coords ->
+                                        aiIconWindowY = coords.positionInWindow().y.toInt()
+                                    }
                                     .clickable {
                                         when {
-                                            !isSubscriber        -> toastState.show(S.settings.upgradeForAiOcr)
-                                            !hasAnyPhoto         -> toastState.show(S.settings.aiOcrAddReceiptFirst)
-                                            targetReceiptId == null -> toastState.show(S.settings.aiOcrHighlightFirst)
+                                            !isSubscriber        -> toastState.show(S.settings.upgradeForAiOcr, windowYPx = aiIconWindowY)
+                                            !hasAnyPhoto         -> toastState.show(S.settings.aiOcrAddReceiptFirst, windowYPx = aiIconWindowY)
+                                            targetReceiptId == null -> toastState.show(S.settings.aiOcrHighlightFirst, windowYPx = aiIconWindowY)
                                             else -> {
-                                                toastState.show(S.settings.aiOcrReading)
+                                                toastState.show(S.settings.aiOcrReading, windowYPx = aiIconWindowY)
                                                 // Pass any pre-selected categories so Gemini constrains its
                                                 // split to the user's intent. Empty set → full category list.
                                                 val preSelected = selectedCategoryIds
@@ -3721,7 +3740,10 @@ fun TransactionDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                .onGloballyPositioned { coords ->
+                                    thumbBarWindowY = coords.positionInWindow().y.toInt()
+                                },
                             horizontalArrangement = Arrangement.spacedBy(thumbSpacing),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -3766,7 +3788,7 @@ fun TransactionDialog(
                                         // or an explanatory toast if the bytes haven't synced yet.
                                         .clickable {
                                             if (isPending) {
-                                                toastState.show(S.settings.pendingPhotoTapped)
+                                                toastState.show(S.settings.pendingPhotoTapped, windowYPx = thumbBarWindowY)
                                             } else {
                                                 dialogFullScreenSlot = i
                                             }
@@ -4125,6 +4147,35 @@ fun TransactionDialog(
                                 Spacer(Modifier.width(4.dp))
                                 Icon(Icons.Filled.AccountBalance, contentDescription = null, modifier = Modifier.size(18.dp))
                             }
+                        }
+                    }
+
+                    // AI OCR preselect banner — subscribers only (OCR-enabled dialogs).
+                    // Tappable → navigates to the Transactions Help page and scrolls
+                    // to the subsection describing how preselected cats guide the AI.
+                    if (isSubscriber && onShowPreselectHelp != null &&
+                        categories.isNotEmpty() && linkedIncomeId == null && !isSupercharge) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(customColors.headerBackground)
+                                .clickable { onShowPreselectHelp.invoke() }
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Help,
+                                contentDescription = null,
+                                tint = customColors.headerText,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = S.settings.aiOcrPreselectBanner,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = customColors.headerText
+                            )
                         }
                     }
 

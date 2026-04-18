@@ -789,7 +789,9 @@ class MainActivity : ComponentActivity() {
                         onBack = { vm.currentScreen = "settings" }
                     )
                     "transactions_help" -> TransactionsHelpScreen(
-                        onBack = { vm.currentScreen = "transactions" }
+                        onBack = { vm.currentScreen = "transactions" },
+                        scrollTarget = vm.transactionsHelpScrollTo,
+                        onScrollTargetConsumed = { vm.transactionsHelpScrollTo = null }
                     )
                     "savings_goals_help" -> SavingsGoalsHelpScreen(
                         onBack = { vm.currentScreen = "savings_goals" }
@@ -894,6 +896,10 @@ class MainActivity : ComponentActivity() {
                 ocrState = vm.ocrState,
                 onRunOcr = { rid, preSelected -> vm.runOcrOnSlot1(rid, preSelected) },
                 onClearOcrState = { vm.clearOcrState() },
+                onShowPreselectHelp = {
+                    vm.transactionsHelpScrollTo = "preselected_cats"
+                    vm.currentScreen = "transactions_help"
+                },
                 onDismiss = {
                     vm.dashboardShowAddIncome = false
                     vm.clearOcrState()
@@ -943,6 +949,10 @@ class MainActivity : ComponentActivity() {
                 ocrState = vm.ocrState,
                 onRunOcr = { rid, preSelected -> vm.runOcrOnSlot1(rid, preSelected) },
                 onClearOcrState = { vm.clearOcrState() },
+                onShowPreselectHelp = {
+                    vm.transactionsHelpScrollTo = "preselected_cats"
+                    vm.currentScreen = "transactions_help"
+                },
                 onDismiss = {
                     vm.dashboardShowAddExpense = false
                     vm.pendingSharedReceiptId = null
@@ -2141,7 +2151,11 @@ class MainActivity : ComponentActivity() {
             autoCapitalize = vm.autoCapitalize,
             ocrState = vm.ocrState,
             onRunOcr = { rid, preSelected -> vm.runOcrOnSlot1(rid, preSelected) },
-            onClearOcrState = { vm.clearOcrState() }
+            onClearOcrState = { vm.clearOcrState() },
+            onShowPreselectHelp = {
+                vm.transactionsHelpScrollTo = "preselected_cats"
+                vm.currentScreen = "transactions_help"
+            }
         )
     }
 

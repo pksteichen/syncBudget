@@ -99,6 +99,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // ── Navigation ──
     var currentScreen by mutableStateOf("main")
+    // One-shot scroll-target hint consumed by TransactionsHelpScreen on next
+    // composition so deep-links (e.g. "explain preselected cats") can jump
+    // the user to a specific subsection instead of the top of the help.
+    var transactionsHelpScrollTo by mutableStateOf<String?>(null)
 
     // ── Dashboard quick-add dialog state ──
     var dashboardShowAddIncome by mutableStateOf(false)

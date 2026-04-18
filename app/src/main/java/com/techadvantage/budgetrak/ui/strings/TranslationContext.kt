@@ -235,6 +235,9 @@ object TranslationContext {
         "aiOcrComingSoon" to "Toast shown to subscribers who tap the placeholder AI icon while the real OCR extractor is not yet wired up.",
         "upgradeForAiOcr" to "Toast shown to non-subscribers (Free and Paid tiers) when they tap the AI icon, encouraging them to upgrade to the Subscriber tier.",
         "aiOcrHighlightFirst" to "Toast shown when a subscriber taps the AI sparkle icon while photos exist but none is highlighted as the OCR target. Tells the user to long-press a photo thumbnail first to pick which receipt to scan. Keep it short (one line) and action-oriented.",
+        "aiOcrPreselectBanner" to "One-line, clickable banner text shown above the category picker in OCR-enabled (subscriber) transaction dialogs. Nudges the user to read a specific help section about how pre-selecting categories affects receipt scanning behaviour. Keep it single-line and direct; the exclamation is intentional to draw the eye.",
+        "aiOcrPreselectHelpTitle" to "Section heading in Transactions Help for the subsection explaining pre-selected categories vs AI choice.",
+        "aiOcrPreselectHelpBody" to "Multi-paragraph help text explaining: (1) empty category selection lets the AI choose freely from the full category list; (2) pre-selected categories restrict the AI to those buckets; (3) the AI never modifies the selection itself \u2014 it only fills amounts, so a single pre-selected 'Other' will catch the entire receipt; (4) to re-evaluate categories on an existing transaction, deselect all first. Keep paragraph breaks (\\n\\n) and the bullet characters (\\u2022).",
         // AI CSV Categorization
         "aiCsvCategorizeLabel" to "Checkbox label in Settings for enabling AI-powered categorization of bank-CSV imports. Paid and Subscriber tiers only.",
         "aiCsvCategorizeSubtitle" to "Small gray subtitle under the AI CSV categorization checkbox explaining what the toggle does.",

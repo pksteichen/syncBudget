@@ -18,6 +18,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Help
@@ -49,6 +51,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -70,9 +77,27 @@ import com.techadvantage.budgetrak.ui.theme.LocalSyncBudgetColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TransactionsHelpScreen(onBack: () -> Unit) {
+fun TransactionsHelpScreen(
+    onBack: () -> Unit,
+    scrollTarget: String? = null,
+    onScrollTargetConsumed: () -> Unit = {}
+) {
     val customColors = LocalSyncBudgetColors.current
     val S = LocalStrings.current
+
+    // Anchor Y (in the scrollable column's coordinate space) for subsections
+    // that deep-links may want to jump to. Populated via onGloballyPositioned.
+    var preselectAnchorY by remember { mutableIntStateOf(-1) }
+    val scrollState = rememberScrollState()
+
+    // When a deep-link target arrives, wait for the anchor to be laid out,
+    // then smoothly scroll to it and clear the one-shot hint.
+    LaunchedEffect(scrollTarget, preselectAnchorY) {
+        if (scrollTarget == "preselected_cats" && preselectAnchorY >= 0) {
+            scrollState.animateScrollTo(preselectAnchorY)
+            onScrollTargetConsumed()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -104,7 +129,7 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
@@ -822,6 +847,19 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
             // ─── SECTION: AI RECEIPT SCAN ───
             SectionTitle(S.settings.aiOcrHelpTitle)
             BodyText(S.settings.aiOcrHelpBody)
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Anchored subsection — deep-linked from the dialog's preselect banner.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(0.dp)
+                    .onGloballyPositioned { coords ->
+                        preselectAnchorY = coords.positionInParent().y.toInt()
+                    }
+            )
+            SubSectionTitle(S.settings.aiOcrPreselectHelpTitle)
+            BodyText(S.settings.aiOcrPreselectHelpBody)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDivider()

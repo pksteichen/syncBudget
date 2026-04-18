@@ -247,6 +247,9 @@ data class SettingsStrings(
     val aiOcrFailed: String,
     val aiOcrHelpTitle: String,
     val aiOcrHelpBody: String,
+    val aiOcrPreselectBanner: String,   // One-line banner above the category box in OCR-enabled dialogs linking to the preselect help section
+    val aiOcrPreselectHelpTitle: String, // Help subsection title for preselect-vs-AI behavior
+    val aiOcrPreselectHelpBody: String,  // Help subsection body explaining empty vs pre-selected cats and that the AI won't change selections
     // AI CSV Categorization
     val aiCsvCategorizeLabel: String,
     val aiCsvCategorizeSubtitle: String,

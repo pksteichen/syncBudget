@@ -66,7 +66,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
@@ -78,6 +80,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.techadvantage.budgetrak.ui.strings.LocalStrings
+import com.techadvantage.budgetrak.ui.theme.LocalAppToast
 import com.techadvantage.budgetrak.data.sync.ReceiptManager
 import java.io.File
 import java.util.UUID
@@ -114,8 +117,12 @@ fun SwipeablePhotoRow(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
+    val toastState = LocalAppToast.current
 
     var containerWidthPx by remember { mutableIntStateOf(0) }
+    // Anchor for toasts triggered from within this row (gallery truncation,
+    // pending-placeholder tap). Updated when the photo panel is laid out.
+    var photoPanelWindowY by remember { mutableIntStateOf(0) }
     val offsetX = remember { Animatable(0f) }
 
     LaunchedEffect(enabled) {
@@ -154,11 +161,10 @@ fun SwipeablePhotoRow(
     ) { uris ->
         val toProcess = uris.take(remainingSlots)
         if (uris.size > remainingSlots) {
-            android.widget.Toast.makeText(
-                context,
+            toastState.show(
                 "Only $remainingSlots slot${if (remainingSlots == 1) "" else "s"} available — added first $remainingSlots",
-                android.widget.Toast.LENGTH_SHORT
-            ).show()
+                windowYPx = photoPanelWindowY
+            )
         }
         scope.launch {
             val rids = withContext(Dispatchers.IO) {
@@ -232,6 +238,9 @@ fun SwipeablePhotoRow(
                 .fillMaxWidth()
                 .height(PHOTO_ROW_HEIGHT)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
+                .onGloballyPositioned { coords ->
+                    photoPanelWindowY = coords.positionInWindow().y.toInt()
+                }
                 .pointerInput(Unit) {
                     detectHorizontalDragGestures(
                         onDragEnd = {
@@ -375,11 +384,10 @@ fun SwipeablePhotoRow(
                             // arrived from the SYNC device that added it.
                             .clickable {
                                 if (isPending) {
-                                    android.widget.Toast.makeText(
-                                        context,
+                                    toastState.show(
                                         S.settings.pendingPhotoTapped,
-                                        android.widget.Toast.LENGTH_SHORT
-                                    ).show()
+                                        windowYPx = photoPanelWindowY
+                                    )
                                 } else {
                                     if (onPhotoTap != null) onPhotoTap(i)
                                     else fullScreenSlot = i
