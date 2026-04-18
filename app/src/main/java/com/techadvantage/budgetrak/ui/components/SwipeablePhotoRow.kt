@@ -305,9 +305,13 @@ fun SwipeablePhotoRow(
             val strideDp = frameSize + thumbSpacing
             val strideDpFloat = with(density) { strideDp.toPx() }
 
-            // Occupied slots in visual order (skipping pending-download placeholders;
-            // those can't be reordered until their download completes).
-            val occupiedSlots = (0 until 5).filter { photos.getOrNull(it) != null }
+            // Occupied slots in visual order — includes pending-download placeholders
+            // (receiptId set but bytes not yet synced). The receiptId is the identity,
+            // so reorder is well-defined even before the image arrives; the thumbnail
+            // will land in whichever slot the receiptId ends up in when it syncs.
+            val occupiedSlots = (0 until 5).filter {
+                photos.getOrNull(it) != null || receiptIds.getOrNull(it) != null
+            }
 
             var draggedSlot by remember { mutableIntStateOf(-1) }
             var dragOffsetXPx by remember { mutableStateOf(0f) }
@@ -334,28 +338,9 @@ fun SwipeablePhotoRow(
                     val thumb = photos.getOrNull(i)
                     val rid = receiptIds.getOrNull(i)
                     if (thumb == null && rid == null) continue
-                    // Pending-download placeholder (rendered but not draggable/highlightable).
-                    if (thumb == null) {
-                        Box(
-                            modifier = Modifier
-                                .size(frameSize)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(MaterialTheme.colorScheme.surface)
-                                .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f), RoundedCornerShape(6.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.CameraAlt,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                        continue
-                    }
                     val visibleIdx = occupiedSlots.indexOf(i)
                     val isBeingDragged = draggedSlot == i
-                    val isDragTarget = isBeingDragged
+                    val isPending = thumb == null && rid != null
 
                     // Shift non-dragged items to make room; dragged item follows finger.
                     val shiftTargetPx: Float = when {
@@ -378,17 +363,24 @@ fun SwipeablePhotoRow(
                             .zIndex(if (isBeingDragged) 1f else 0f)
                             .size(frameSize)
                             .clip(RoundedCornerShape(6.dp))
-                            .background(Color.Transparent)
+                            .background(if (isPending) MaterialTheme.colorScheme.surface else Color.Transparent)
                             .border(
-                                width = if (isDragTarget) 2.dp else 1.dp,
-                                color = if (isDragTarget) Color(0xFF2196F3)
+                                width = if (isBeingDragged) 2.dp else 1.dp,
+                                color = if (isBeingDragged) Color(0xFF2196F3)
                                         else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
                                 shape = RoundedCornerShape(6.dp)
                             )
-                            .clickable {
-                                if (onPhotoTap != null) onPhotoTap(i)
-                                else fullScreenSlot = i
-                            }
+                            // Tap → full-screen viewer only when the image is actually on disk.
+                            // Pending placeholders still drag, but tapping them does nothing
+                            // (loadFullImage would return null and bounce back).
+                            .then(
+                                if (!isPending) {
+                                    Modifier.clickable {
+                                        if (onPhotoTap != null) onPhotoTap(i)
+                                        else fullScreenSlot = i
+                                    }
+                                } else Modifier
+                            )
                             .pointerInput(i) {
                                 detectDragGesturesAfterLongPress(
                                     onDragStart = {
@@ -432,14 +424,24 @@ fun SwipeablePhotoRow(
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        Image(
-                            bitmap = thumb.asImageBitmap(),
-                            contentDescription = "Receipt photo ${i + 1}",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(RoundedCornerShape(6.dp))
-                        )
+                        if (thumb != null) {
+                            Image(
+                                bitmap = thumb.asImageBitmap(),
+                                contentDescription = "Receipt photo ${i + 1}",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(RoundedCornerShape(6.dp))
+                            )
+                        } else {
+                            // Pending download placeholder
+                            Icon(
+                                imageVector = Icons.Filled.CameraAlt,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
                 }
             }
