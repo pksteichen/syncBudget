@@ -115,7 +115,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.offset
+import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
@@ -3649,22 +3655,88 @@ fun TransactionDialog(
                             }
                         }
 
-                        // Thumbnail row
+                        // Thumbnail row — supports long-press to highlight (OCR target)
+                        // and long-press-then-drag to reorder among occupied slots.
+                        val occupiedSlots = dialogReceiptIds.mapIndexedNotNull { idx, rid ->
+                            if (rid != null) idx else null
+                        }
+                        val thumbSpacing = 4.dp
+                        val strideDp = dialogPhotoFrameSize + thumbSpacing
+                        val strideDpFloat = with(LocalDensity.current) { strideDp.toPx() }
+
+                        var draggedSlot by remember { mutableIntStateOf(-1) }
+                        var dragOffsetXPx by remember { mutableStateOf(0f) }
+                        var dragDidMove by remember { mutableStateOf(false) }
+
+                        val draggedVisibleIdx = if (draggedSlot >= 0) occupiedSlots.indexOf(draggedSlot) else -1
+                        val proposedNewVisibleIdx = if (draggedVisibleIdx >= 0) {
+                            val shift = kotlin.math.round(dragOffsetXPx / strideDpFloat).toInt()
+                            (draggedVisibleIdx + shift).coerceIn(0, occupiedSlots.size - 1)
+                        } else -1
+
+                        fun commitReorder(fromVis: Int, toVis: Int) {
+                            if (fromVis == toVis || fromVis < 0 || toVis < 0) return
+                            val newOrder = occupiedSlots.toMutableList().apply {
+                                val item = removeAt(fromVis)
+                                add(toVis, item)
+                            }
+                            val newRids = newOrder.map { dialogReceiptIds[it] }
+                            if (isEdit && editTransaction != null) {
+                                val updated = editTransaction.copy(
+                                    receiptId1 = newRids.getOrNull(0),
+                                    receiptId2 = newRids.getOrNull(1),
+                                    receiptId3 = newRids.getOrNull(2),
+                                    receiptId4 = newRids.getOrNull(3),
+                                    receiptId5 = newRids.getOrNull(4),
+                                )
+                                onUpdatePhoto?.invoke(updated)
+                            } else {
+                                addModeReceiptId1 = newRids.getOrNull(0)
+                                addModeReceiptId2 = newRids.getOrNull(1)
+                                addModeReceiptId3 = newRids.getOrNull(2)
+                                addModeReceiptId4 = newRids.getOrNull(3)
+                                addModeReceiptId5 = newRids.getOrNull(4)
+                            }
+                            // Highlight follows the moved photo to its new slot index (post-compact).
+                            ocrTargetSlot = toVis
+                            dialogThumbRefresh++
+                        }
+
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
                                 .padding(horizontal = 12.dp, vertical = 6.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(thumbSpacing),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            for (i in 0 until 5) {
+                            occupiedSlots.forEachIndexed { visibleIdx, i ->
                                 val thumb = dialogThumbnails.getOrNull(i)
                                 val rid = dialogReceiptIds.getOrNull(i)
-                                if (thumb == null && rid == null) continue
+                                if (thumb == null && rid == null) return@forEachIndexed
                                 val isOcrTarget = ocrTargetSlot == i
+                                val isBeingDragged = draggedSlot == i
+
+                                // Non-dragged items: shift to make room for the dragged item.
+                                // Dragged item: follow finger directly (no animation).
+                                val shiftTargetPx: Float = when {
+                                    draggedVisibleIdx < 0 -> 0f
+                                    isBeingDragged -> dragOffsetXPx
+                                    draggedVisibleIdx < visibleIdx && proposedNewVisibleIdx >= visibleIdx -> -strideDpFloat
+                                    draggedVisibleIdx > visibleIdx && proposedNewVisibleIdx <= visibleIdx -> strideDpFloat
+                                    else -> 0f
+                                }
+                                val animatedShiftPx by animateIntAsState(
+                                    targetValue = shiftTargetPx.toInt(),
+                                    animationSpec = if (isBeingDragged) tween(0) else tween(150),
+                                    label = "thumbShift"
+                                )
+                                val renderShiftPx = if (isBeingDragged) shiftTargetPx.toInt() else animatedShiftPx
+
                                 Box(
                                     modifier = Modifier
+                                        .offset { IntOffset(renderShiftPx, 0) }
+                                        .zIndex(if (isBeingDragged) 1f else 0f)
                                         .size(dialogPhotoFrameSize)
                                         .clip(RoundedCornerShape(6.dp))
                                         .background(if (thumb != null) Color.Transparent else MaterialTheme.colorScheme.surface)
@@ -3676,16 +3748,40 @@ fun TransactionDialog(
                                         )
                                         .then(
                                             if (thumb != null) {
-                                                @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-                                                Modifier.combinedClickable(
-                                                    onClick = { dialogFullScreenSlot = i },
-                                                    // Long-press toggles the OCR target highlight.
-                                                    // Deletion now lives in the full-screen viewer
-                                                    // (tap the thumbnail → Delete button there).
-                                                    onLongClick = {
-                                                        ocrTargetSlot = if (ocrTargetSlot == i) -1 else i
+                                                Modifier
+                                                    .clickable { dialogFullScreenSlot = i }
+                                                    .pointerInput(i, occupiedSlots.size) {
+                                                        detectDragGesturesAfterLongPress(
+                                                            onDragStart = {
+                                                                draggedSlot = i
+                                                                dragOffsetXPx = 0f
+                                                                dragDidMove = false
+                                                                ocrTargetSlot = i  // highlight on long-press
+                                                            },
+                                                            onDrag = { change, dragAmount ->
+                                                                change.consume()
+                                                                dragOffsetXPx += dragAmount.x
+                                                                if (kotlin.math.abs(dragAmount.x) > 0.5f) dragDidMove = true
+                                                            },
+                                                            onDragEnd = {
+                                                                if (dragDidMove && draggedVisibleIdx >= 0 &&
+                                                                    proposedNewVisibleIdx != draggedVisibleIdx) {
+                                                                    commitReorder(draggedVisibleIdx, proposedNewVisibleIdx)
+                                                                } else if (!dragDidMove) {
+                                                                    // Pure long-press (no drag) toggles highlight.
+                                                                    ocrTargetSlot = if (ocrTargetSlot == i) -1 else i
+                                                                }
+                                                                draggedSlot = -1
+                                                                dragOffsetXPx = 0f
+                                                                dragDidMove = false
+                                                            },
+                                                            onDragCancel = {
+                                                                draggedSlot = -1
+                                                                dragOffsetXPx = 0f
+                                                                dragDidMove = false
+                                                            }
+                                                        )
                                                     }
-                                                )
                                             } else Modifier
                                         ),
                                     contentAlignment = Alignment.Center
