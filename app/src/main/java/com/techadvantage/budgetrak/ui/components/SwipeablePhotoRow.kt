@@ -6,13 +6,13 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -56,6 +56,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -70,6 +71,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.Dispatchers
@@ -92,7 +94,6 @@ private val PHOTO_ROW_HEIGHT = 56.dp
  * same position. The transaction row slides left via offset, revealing
  * the photo panel underneath. This avoids wide-Row layout issues.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SwipeablePhotoRow(
     transactionId: Int,
@@ -104,6 +105,7 @@ fun SwipeablePhotoRow(
     onPhotoTap: ((Int) -> Unit)? = null,    // slot index (0-4) tapped
     onPhotoDelete: ((Int) -> Unit)? = null,  // slot index (0-4) to delete
     onPhotoRotated: (() -> Unit)? = null,    // called after rotation save to refresh thumbnails
+    onReorder: ((List<String?>) -> Unit)? = null, // new full receiptIds list (length 5, nulls trailing) after drag-reorder
     enabled: Boolean = true,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
@@ -294,61 +296,54 @@ fun SwipeablePhotoRow(
                 }
             }
 
-            // Photo frames — only show occupied slots + pending-download placeholders
+            // Photo frames — only show occupied slots + pending-download placeholders.
+            // Supports long-press to highlight (blue outline) and long-press-then-drag
+            // to reorder among occupied slots. Highlight does NOT persist after
+            // release — it's purely a drag-in-progress visual.
             val frameSize = PHOTO_ROW_HEIGHT - 8.dp
+            val thumbSpacing = 4.dp
+            val strideDp = frameSize + thumbSpacing
+            val strideDpFloat = with(density) { strideDp.toPx() }
+
+            // Occupied slots in visual order (skipping pending-download placeholders;
+            // those can't be reordered until their download completes).
+            val occupiedSlots = (0 until 5).filter { photos.getOrNull(it) != null }
+
+            var draggedSlot by remember { mutableIntStateOf(-1) }
+            var dragOffsetXPx by remember { mutableStateOf(0f) }
+            var dragDidMove by remember { mutableStateOf(false) }
+
+            val draggedVisibleIdx = if (draggedSlot >= 0) occupiedSlots.indexOf(draggedSlot) else -1
+            val proposedNewVisibleIdx = if (draggedVisibleIdx >= 0) {
+                val shift = kotlin.math.round(dragOffsetXPx / strideDpFloat).toInt()
+                val maxIdx = (occupiedSlots.size - 1).coerceAtLeast(0)
+                (draggedVisibleIdx + shift).coerceIn(0, maxIdx)
+            } else -1
+
+            val occupiedSlotsState = rememberUpdatedState(occupiedSlots)
+            val receiptIdsSnapshot = rememberUpdatedState(receiptIds)
+
             Row(
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(thumbSpacing),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 for (i in 0 until 5) {
                     val thumb = photos.getOrNull(i)
                     val rid = receiptIds.getOrNull(i)
-                    // Skip empty slots (no receiptId = truly empty, not pending download)
                     if (thumb == null && rid == null) continue
-                    // Show placeholder only if receiptId exists but file missing (pending download)
-                    val isPendingDownload = thumb == null && rid != null
-                    Box(
-                        modifier = Modifier
-                            .size(frameSize)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(
-                                if (thumb != null) Color.Transparent
-                                else MaterialTheme.colorScheme.surface
-                            )
-                            .border(
-                                1.dp,
-                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
-                                RoundedCornerShape(6.dp)
-                            )
-                            .then(
-                                if (thumb != null) {
-                                    Modifier.combinedClickable(
-                                        onClick = {
-                                            if (onPhotoTap != null) onPhotoTap(i)
-                                            else fullScreenSlot = i
-                                        },
-                                        onLongClick = {
-                                            if (onPhotoDelete != null) deleteConfirmSlot = i
-                                        }
-                                    )
-                                } else Modifier
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (thumb != null) {
-                            Image(
-                                bitmap = thumb.asImageBitmap(),
-                                contentDescription = "Receipt photo ${i + 1}",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(RoundedCornerShape(6.dp))
-                            )
-                        } else {
-                            // Pending download placeholder
+                    // Pending-download placeholder (rendered but not draggable/highlightable).
+                    if (thumb == null) {
+                        Box(
+                            modifier = Modifier
+                                .size(frameSize)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(MaterialTheme.colorScheme.surface)
+                                .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f), RoundedCornerShape(6.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Icon(
                                 imageVector = Icons.Filled.CameraAlt,
                                 contentDescription = null,
@@ -356,6 +351,95 @@ fun SwipeablePhotoRow(
                                 modifier = Modifier.size(16.dp)
                             )
                         }
+                        continue
+                    }
+                    val visibleIdx = occupiedSlots.indexOf(i)
+                    val isBeingDragged = draggedSlot == i
+                    val isDragTarget = isBeingDragged
+
+                    // Shift non-dragged items to make room; dragged item follows finger.
+                    val shiftTargetPx: Float = when {
+                        draggedVisibleIdx < 0 -> 0f
+                        isBeingDragged -> dragOffsetXPx
+                        draggedVisibleIdx < visibleIdx && proposedNewVisibleIdx >= visibleIdx -> -strideDpFloat
+                        draggedVisibleIdx > visibleIdx && proposedNewVisibleIdx <= visibleIdx -> strideDpFloat
+                        else -> 0f
+                    }
+                    val animatedShiftPx by animateIntAsState(
+                        targetValue = shiftTargetPx.toInt(),
+                        animationSpec = if (isBeingDragged) tween(0) else tween(150),
+                        label = "rowThumbShift"
+                    )
+                    val renderShiftPx = if (isBeingDragged) shiftTargetPx.toInt() else animatedShiftPx
+
+                    Box(
+                        modifier = Modifier
+                            .offset { IntOffset(renderShiftPx, 0) }
+                            .zIndex(if (isBeingDragged) 1f else 0f)
+                            .size(frameSize)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color.Transparent)
+                            .border(
+                                width = if (isDragTarget) 2.dp else 1.dp,
+                                color = if (isDragTarget) Color(0xFF2196F3)
+                                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
+                                shape = RoundedCornerShape(6.dp)
+                            )
+                            .clickable {
+                                if (onPhotoTap != null) onPhotoTap(i)
+                                else fullScreenSlot = i
+                            }
+                            .pointerInput(i) {
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = {
+                                        draggedSlot = i
+                                        dragOffsetXPx = 0f
+                                        dragDidMove = false
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        dragOffsetXPx += dragAmount.x
+                                        if (kotlin.math.abs(dragAmount.x) > 0.5f) dragDidMove = true
+                                    },
+                                    onDragEnd = {
+                                        val curOccupied = occupiedSlotsState.value
+                                        val curRids = receiptIdsSnapshot.value
+                                        val curVisIdx = curOccupied.indexOf(i)
+                                        val shiftCells = kotlin.math.round(dragOffsetXPx / strideDpFloat).toInt()
+                                        val maxIdx = (curOccupied.size - 1).coerceAtLeast(0)
+                                        val curProposed = (curVisIdx + shiftCells).coerceIn(0, maxIdx)
+                                        if (dragDidMove && curVisIdx >= 0 && curProposed != curVisIdx && onReorder != null) {
+                                            val newOrder = curOccupied.toMutableList().apply {
+                                                val item = removeAt(curVisIdx)
+                                                add(curProposed, item)
+                                            }
+                                            val newRids = newOrder.map { curRids.getOrNull(it) }
+                                            val padded = List(5) { idx -> newRids.getOrNull(idx) }
+                                            onReorder.invoke(padded)
+                                        }
+                                        // Highlight does NOT persist on the list-row variant;
+                                        // just clear drag state regardless of outcome.
+                                        draggedSlot = -1
+                                        dragOffsetXPx = 0f
+                                        dragDidMove = false
+                                    },
+                                    onDragCancel = {
+                                        draggedSlot = -1
+                                        dragOffsetXPx = 0f
+                                        dragDidMove = false
+                                    }
+                                )
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Image(
+                            bitmap = thumb.asImageBitmap(),
+                            contentDescription = "Receipt photo ${i + 1}",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(6.dp))
+                        )
                     }
                 }
             }

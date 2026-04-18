@@ -1196,6 +1196,17 @@ fun TransactionsScreen(
                                 }
                             },
                             onPhotoRotated = { photoThumbRefreshKey++ },
+                            onReorder = { newRids ->
+                                val updated = transaction.copy(
+                                    receiptId1 = newRids.getOrNull(0),
+                                    receiptId2 = newRids.getOrNull(1),
+                                    receiptId3 = newRids.getOrNull(2),
+                                    receiptId4 = newRids.getOrNull(3),
+                                    receiptId5 = newRids.getOrNull(4),
+                                )
+                                onUpdateTransaction(updated)
+                                photoThumbRefreshKey++
+                            },
                             onSwipeOpen = { expandedIds[transaction.id] = false },
                             enabled = !selectionMode
                         ) {
