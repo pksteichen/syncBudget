@@ -18,24 +18,24 @@ import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
 
 /**
- * 3-call Gemini 2.5 Flash-Lite receipt OCR pipeline.
+ * 2-call Gemini 2.5 Flash-Lite receipt OCR pipeline (V10, shipped 2026-04-19).
  *
- *   Call 1 (header): merchant, date, amountCents
- *   Call 2 (items):  {description, categoryId} per line, with category rules
- *   Call 3 (prices): priceCents per line, using multiplier / coupon / rebate cues
+ *   Call 1 (header + per-item scoring):
+ *     merchant, date, amountCents +
+ *     items[{description, scores[{categoryId, score, reason}]}] +
+ *     multiCategoryLikely + topChoice.
+ *   Call 3 (prices): priceCents per item, using multiplier/coupon cues.
  *
- * Post-processing:
- *   - Invalid categoryId remap (Gemini sometimes invents ids for tax lines when
- *     the provided cat list has no natural tax home).
- *   - Proportional reconciliation so Σ(item prices) = Call 1's amountCents.
- *     Receipt-level discounts (Target Circle, Walmart DISCOUNT GIVEN) are
- *     absorbed here since line items encode only pre-discount printed prices.
- *   - Aggregate by category → OcrResult.categoryAmounts (tax allocated to the
- *     dominant non-tax bucket, matching the app's labelling convention).
+ * Single-cat receipts short-circuit after Call 1 (1 API call).
+ * Multi-cat receipts run Call 1 + Call 3 (2 API calls). No Call 2.
  *
- * Source of truth: tools/ocr-harness/scripts/test-bakeoff-lite3-vs-pro.js.
- * Measured on 14 multi-cat receipts: cset 12/14, cshr 4/14, avg $0.00078,
- * avg 9.5s. Beats Pro single-call on cset, ~4× cheaper, ~4× faster.
+ * Category-agnostic: the prompt never names any category by id or name
+ * except referring to "Other" as a concept. "Other" is resolved at runtime
+ * via tag == "other", not by a hard-coded id — works for any user's list.
+ *
+ * Reference implementation: tools/ocr-harness/scripts/validate-v10-2call.js.
+ * Validation on a 33-receipt subset: combined 25, 20/28 singles correct,
+ * 5/5 multi routed, 3/5 multi cset, 3/3 Amazon receipts correct.
  */
 object ReceiptOcrService {
     private const val TAG = "ReceiptOcrService"
@@ -43,36 +43,36 @@ object ReceiptOcrService {
 
     // ── Schemas ────────────────────────────────────────────────────
 
-    // Call 1 always runs. It returns the receipt header plus — when no
-    // categories have been pre-selected — a routing hint (multiCategoryLikely)
-    // and a best-fit categoryId. The service then decides whether to continue
-    // to Calls 2+3 or short-circuit to a single-cat result, avoiding a
-    // duplicate header call.
     private val call1Schema = Schema.obj(
         name = "Call1Result",
-        description = "Receipt header and optional single-cat routing hint",
+        description = "Receipt header, per-item category scoring, routing",
         Schema.str("merchant", "Consumer brand on the receipt header"),
         Schema.str("merchantLegalName", "Optional legal operator entity"),
         Schema.str("date", "Transaction date in YYYY-MM-DD"),
         Schema.int("amountCents", "Final total paid, integer cents"),
-        Schema.bool("multiCategoryLikely", "Optional: true if receipt spans multiple BudgeTrak categories, false if single-cat. Only requested when user hasn't pre-selected categories."),
-        Schema.int("singleCategoryId", "Optional: best-fit category id when multiCategoryLikely is false. Only requested when user hasn't pre-selected categories."),
-        Schema.str("notes", "Optional free-form note")
-    )
-
-    private val call2Schema = Schema.obj(
-        name = "Call2Result",
-        description = "Itemized receipt with categories",
         Schema.arr(
-            "lineItems",
-            "One entry per purchased line plus Sales Tax",
+            "items",
+            "Every purchased line; skip promos/discounts/subtotals; include Sales Tax as a line",
             Schema.obj(
-                name = "LineItem",
-                description = "A purchased line item",
+                name = "ItemWithScores",
+                description = "A line item with up to 3 scored category candidates",
                 Schema.str("description", "Item text as printed on the receipt"),
-                Schema.int("categoryId", "Category id from the provided list")
+                Schema.arr(
+                    "scores",
+                    "Up to 3 best-fit categories, descending by score",
+                    Schema.obj(
+                        name = "CatScore",
+                        description = "A category candidate with a 0-100 match score",
+                        Schema.int("categoryId", "Category id from the provided list"),
+                        Schema.int("score", "Match strength 0-100"),
+                        Schema.str("reason", "Brief (≤15 words) justification")
+                    )
+                )
             )
-        )
+        ),
+        Schema.bool("multiCategoryLikely", "True when items' top domains differ"),
+        Schema.int("topChoice", "Best-fit category id for whole receipt when multiCategoryLikely is false"),
+        Schema.str("notes", "Optional free-form note")
     )
 
     private val call3Schema = Schema.obj(
@@ -90,10 +90,9 @@ object ReceiptOcrService {
         )
     )
 
-    // ── Models (separate instances per call — SDK binds schema to config) ─
+    // ── Models ─────────────────────────────────────────────────────
 
     private val call1Model by lazy { liteModel(call1Schema) }
-    private val call2Model by lazy { liteModel(call2Schema) }
     private val call3Model by lazy { liteModel(call3Schema) }
 
     private fun liteModel(schema: Schema<*>) = GenerativeModel(
@@ -108,27 +107,6 @@ object ReceiptOcrService {
 
     // ── Public API ─────────────────────────────────────────────────
 
-    /**
-     * Extract receipt data.
-     *
-     * Unified pipeline:
-     *   1. Call 1 always runs (header + optional routing hint + single-cat
-     *      suggestion when no cats are pre-selected).
-     *   2. Decide whether Calls 2+3 are needed:
-     *        • preSelect.size >= 2 → run Calls 2+3 (explicit multi-cat intent)
-     *        • preSelect.size == 1 → skip (user picked one cat, use it)
-     *        • preSelect.isEmpty():
-     *            - multiCategoryLikely == true  → run Calls 2+3
-     *            - multiCategoryLikely == false → skip, use singleCategoryId from Call 1
-     *   3. If skipped: build single-cat result from Call 1 alone.
-     *      If continued: Calls 2+3 itemise, price, reconcile to Call 1's total.
-     *
-     * This design:
-     *   • Single-cat receipts cost 1 API call (common case — gas, fast food).
-     *   • Multi-cat receipts cost 3 calls — whether detected by pre-selection
-     *     or by the model's hint when no pre-selection happened.
-     *   • No duplicate Call 1 — the header call always earns its keep.
-     */
     suspend fun extractFromReceipt(
         context: Context,
         receiptId: String,
@@ -160,15 +138,19 @@ object ReceiptOcrService {
         }
     }
 
-    // ── Unified pipeline ────────────────────────────────────────────
+    // ── Pipeline ──────────────────────────────────────────────────
+
+    internal data class ScoredCandidate(val categoryId: Int, val score: Int)
+    internal data class ScoredItem(val description: String, val scores: List<ScoredCandidate>)
 
     private data class Call1Result(
         val merchant: String,
         val merchantLegalName: String?,
         val date: String,
         val amountCents: Int,
+        val items: List<ScoredItem>,
         val multiCategoryLikely: Boolean?,
-        val singleCategoryId: Int?,
+        val topChoice: Int?,
         val notes: String?
     )
 
@@ -184,19 +166,20 @@ object ReceiptOcrService {
             allCategories.filter { it.tag != "supercharge" && it.tag != "recurring_income" && !it.deleted }
         }
 
-        // Call 1 — always runs. When no preselection, also asks the model to
-        // predict multi/single and pick a best-fit category for the single case.
         val c1 = runCall1(bitmap, preSelectedCategoryIds, promptCats)
 
-        // Decide whether to continue.
-        val continueToItems = when {
-            preSelectedCategoryIds.size >= 2 -> true
+        // Route:
+        //   preSelect.size == 1  → trust the single preselected cat (1 call)
+        //   preSelect.size >= 2  → multi path always (2 calls)
+        //   preSelect.isEmpty()  → derive from items' top-1 cats (2 calls when multi)
+        val multiPath = when {
             preSelectedCategoryIds.size == 1 -> false
-            else -> c1.multiCategoryLikely == true
+            preSelectedCategoryIds.size >= 2 -> true
+            else -> deriveMulti(c1.items, promptCats, c1.multiCategoryLikely)
         }
 
-        return if (continueToItems) {
-            runItemsAndPrices(bitmap, c1, promptCats, preselected)
+        return if (multiPath) {
+            runMultiCat(bitmap, c1, promptCats)
         } else {
             buildSingleCatResult(c1, preSelectedCategoryIds, promptCats)
         }
@@ -215,10 +198,26 @@ object ReceiptOcrService {
             ?: throw IllegalStateException("Missing date in Call 1")
         val amountCents = json.optInt("amountCents", -1).takeIf { it >= 0 }
             ?: throw IllegalStateException("Missing amountCents in Call 1")
+        val items = json.optJSONArray("items")?.let { arr ->
+            (0 until arr.length()).mapNotNull { i ->
+                val o = arr.optJSONObject(i) ?: return@mapNotNull null
+                val desc = o.optString("description").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val scoresArr = o.optJSONArray("scores")
+                val scores = if (scoresArr != null) {
+                    (0 until scoresArr.length()).mapNotNull { j ->
+                        val s = scoresArr.optJSONObject(j) ?: return@mapNotNull null
+                        val cid = s.optInt("categoryId", -1).takeIf { it > 0 } ?: return@mapNotNull null
+                        val score = s.optInt("score", -1).takeIf { it >= 0 } ?: return@mapNotNull null
+                        ScoredCandidate(cid, score)
+                    }
+                } else emptyList()
+                ScoredItem(desc, scores)
+            }
+        } ?: emptyList()
         val multiCategoryLikely = if (json.has("multiCategoryLikely")) json.optBoolean("multiCategoryLikely") else null
-        val singleCategoryId = json.optInt("singleCategoryId", -1).takeIf { it > 0 }
+        val topChoice = json.optInt("topChoice", -1).takeIf { it > 0 }
         val notes = json.optString("notes").takeIf { it.isNotBlank() }
-        return Call1Result(merchant, merchantLegalName, date, amountCents, multiCategoryLikely, singleCategoryId, notes)
+        return Call1Result(merchant, merchantLegalName, date, amountCents, items, multiCategoryLikely, topChoice, notes)
     }
 
     private fun buildSingleCatResult(
@@ -227,14 +226,12 @@ object ReceiptOcrService {
         promptCats: List<Category>
     ): OcrResult {
         val validSet = promptCats.mapTo(mutableSetOf()) { it.id }
+        val otherId = promptCats.firstOrNull { it.tag == "other" }?.id
         val categoryId = when {
             preSelectedCategoryIds.size == 1 -> preSelectedCategoryIds.first()
-            c1.singleCategoryId != null && c1.singleCategoryId in validSet -> c1.singleCategoryId
-            c1.singleCategoryId != null -> when {
-                30426 in validSet -> 30426
-                else -> promptCats.firstOrNull()?.id
-            }
-            else -> null
+            c1.topChoice != null && c1.topChoice in validSet -> c1.topChoice
+            otherId != null -> otherId
+            else -> promptCats.firstOrNull()?.id
         }
         val categoryAmounts = categoryId?.let {
             listOf(OcrCategoryAmount(categoryId = it, amount = c1.amountCents / 100.0))
@@ -250,26 +247,13 @@ object ReceiptOcrService {
         )
     }
 
-    private suspend fun runItemsAndPrices(
+    private suspend fun runMultiCat(
         bitmap: Bitmap,
         c1: Call1Result,
-        promptCats: List<Category>,
-        preselected: Boolean
+        promptCats: List<Category>
     ): OcrResult {
-        // Call 2 — items + categories
-        val c2Json = generateWithRetry(call2Model, bitmap, buildCall2Prompt(promptCats, preselected))
-        val c2 = JSONObject(c2Json)
-        val itemsRaw = c2.optJSONArray("lineItems")?.let { arr ->
-            (0 until arr.length()).mapNotNull { i ->
-                val o = arr.optJSONObject(i) ?: return@mapNotNull null
-                val desc = o.optString("description").takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                val cid = o.optInt("categoryId", -1).takeIf { it != -1 } ?: return@mapNotNull null
-                LineItem(desc, cid)
-            }
-        } ?: emptyList()
-        val items = remapInvalidCategoryIds(itemsRaw, promptCats)
+        val items = collapseItemsToLineItems(c1.items, promptCats)
 
-        // Call 3 — per-item prices
         val c3Json = generateWithRetry(call3Model, bitmap, buildCall3Prompt(items.map { it.description }))
         val c3 = JSONObject(c3Json)
         val priceCentsRaw = c3.optJSONArray("prices")?.let { arr ->
@@ -277,13 +261,9 @@ object ReceiptOcrService {
                 arr.optJSONObject(i)?.optInt("priceCents", 0) ?: 0
             }
         } ?: List(items.size) { 0 }
-        // Align lengths — model occasionally returns fewer entries than requested.
         val priceCents = List(items.size) { i -> priceCentsRaw.getOrNull(i) ?: 0 }
 
-        // Reconcile to Call 1's amountCents
         val reconciled = reconcilePrices(items, priceCents, c1.amountCents)
-
-        // Aggregate categoryAmounts (tax rolled into dominant non-tax bucket)
         val categoryAmounts = aggregateCategoryAmounts(items, reconciled)
 
         return OcrResult(
@@ -310,10 +290,9 @@ object ReceiptOcrService {
 - date: YYYY-MM-DD ISO. Receipts often have multiple dates; prefer the transaction date over print/due dates. DD/MM locales: Malaysia, Singapore, Vietnam, most of Europe. MM/DD: US.
 - amountCents: INTEGER number of cents for the final paid total (tax and tip included). Ignore subtotal, pre-tax lines, and separate GST/VAT summary tables. Vietnamese đồng (VND) has no fractional unit — dots in VND amounts are thousand separators; return the integer đồng value."""
 
-        // When the user has NOT pre-selected any categories, ask Call 1 to
-        // double as a routing probe + single-cat suggestion so we can skip
-        // Calls 2+3 when the receipt is genuinely single-category.
-        if (preSelectedCategoryIds.isNotEmpty()) return base
+        // When preSelect is a single category, skip item-level scoring entirely
+        // — the shopper has already picked the bucket, we just need the header.
+        if (preSelectedCategoryIds.size == 1) return base
 
         val categoryList = promptCats.joinToString("\n") { c ->
             if (c.tag.isNotEmpty()) "  - id=${c.id} name=\"${c.name}\" tag=\"${c.tag}\""
@@ -321,36 +300,21 @@ object ReceiptOcrService {
         }
         return base + """
 
-Also return two routing hints:
-- multiCategoryLikely: true if the items on this receipt clearly span 2+ BudgeTrak consumer categories (e.g. a Target mixed trip with apparel + groceries + home). Set to false if nearly all items fit one category (gas fill-up, fast-food order, grocery-only trip, drugstore visit, single-item online order).
-- singleCategoryId: only when multiCategoryLikely is false, the best-fit category id for the whole receipt. Pick from the list below. Stationery / office / pens / paper / bookstores → Other unless clearly kids' school supplies (→ Kid's Stuff). Hardware / electrical / plumbing / paint → Home Supplies.
+For each PURCHASED item on the receipt, follow these 5 steps:
+  Step 1 (ITEM): name the literal thing (e.g. "rubber disc", "leather collar").
+  Step 2 (FUNCTION): describe what it's used for (e.g. "creates friction on a car wheel"; "worn by a pet").
+  Step 3 (DOMAIN): name the real-world domain in 1-3 nouns (e.g. "vehicle repair part"; "pet accessory").
+  Step 4 (SCAN): for each category, evaluate whether its NAME contains a noun matching the Step 3 domain directly OR via a close synonym.
+  Step 5 (SCORE): score up to 3 categories 0-100 based on how directly the name names the domain. Direct name-match = 80-100. Synonym match = 50-75. Weak fit = 20-50.
+
+Return items[] with { description, scores: [{categoryId, score, reason}] }. Skip discounts/promos/subtotals; include "Sales Tax" as a line item.
+Also return multiCategoryLikely (true if items' top-1 domains differ) and topChoice (when false, the single best-fit category id for the whole receipt).
+
+Category-picking constraints:
+  - "Other" is reserved for items that no other category name plausibly describes.
+  - Do NOT invent categoryIds not in the list.
 
 Categories:
-$categoryList
-
-Do not invent categoryIds not in the list."""
-    }
-
-    private fun buildCall2Prompt(cats: List<Category>, preselected: Boolean): String {
-        val categoryList = cats.joinToString("\n") { c ->
-            if (c.tag.isNotEmpty()) "  - id=${c.id} name=\"${c.name}\" tag=\"${c.tag}\""
-            else                    "  - id=${c.id} name=\"${c.name}\""
-        }
-        val preselectNudge = if (preselected) {
-            """
-
-  - The categories below are pre-selected by the shopper for this receipt. Try to cover as many of them as reasonably fit — the shopper expects to see items in these specific buckets. But skip a category if no item on the receipt plausibly fits it; never force-fit an item into a bucket that clearly doesn't match (the shopper may have pre-selected a category by accident).
-  - When an item could plausibly fit either a niche/specialty category (e.g. Holidays/Birthdays, Kid's Stuff, Entertainment, Clothes, Health/Pharmacy) or a general catch-all (e.g. Groceries, Home Supplies, Other), prefer the niche category. Niche categories are under-filled by default; err toward the specific bucket when the item has a clear specialty signal."""
-        } else ""
-
-        return """List every PURCHASED item with a category. Return JSON {lineItems: [{description, categoryId}]}.
-
-Rules:
-  - Skip promos, coupons, discounts, tenders, subtotals.
-  - Prefer a concrete consumer category (Groceries, Home Supplies, Health/Pharmacy, Clothes, Entertainment, Holidays, Kid's Stuff) over "Other".
-  - Avoid these unless the item is unambiguously that type: Mortgage/Insurance/PropTax (42007), Insurance (36973), Transportation/Gas (48281 — only fuel/parking/transit), Electric/Gas (17132 — only utility bills), Phone/Internet/Computer (62776 — only service bills), Business, Employment, Farm, Charity.$preselectNudge
-
-Include "Sales Tax" as a line item. Categories:
 $categoryList"""
     }
 
@@ -414,32 +378,49 @@ $listed"""
     internal data class LineItem(val description: String, val categoryId: Int)
 
     /**
-     * Remap any line-item categoryId not in the provided cats list to a safe
-     * fallback. Needed because when the model can't place an item (commonly
-     * "Sales Tax" when no preselected cat is a natural tax home), it sometimes
-     * emits a hallucinated integer like 99999 or 10000.
+     * Derive multiCategoryLikely from per-item top-1 cats, excluding tax lines.
+     * Falls back to the model's own flag when items[] is empty or unscored.
      */
-    internal fun remapInvalidCategoryIds(
-        items: List<LineItem>,
+    internal fun deriveMulti(
+        items: List<ScoredItem>,
+        cats: List<Category>,
+        modelFlag: Boolean?
+    ): Boolean {
+        val validSet = cats.mapTo(mutableSetOf()) { it.id }
+        val cids = HashSet<Int>()
+        for (it in items) {
+            if (isTaxLine(it.description)) continue
+            val top = it.scores.filter { s -> s.categoryId in validSet }.maxByOrNull { s -> s.score } ?: continue
+            cids.add(top.categoryId)
+        }
+        return when {
+            cids.size >= 2 -> true
+            cids.size == 1 -> false
+            else -> modelFlag == true
+        }
+    }
+
+    /**
+     * Collapse Call 1's scored items to {description, categoryId} by top score.
+     * Invalid/empty cats fall back to "Other" (resolved via tag, not id).
+     */
+    internal fun collapseItemsToLineItems(
+        items: List<ScoredItem>,
         cats: List<Category>
     ): List<LineItem> {
         val validSet = cats.mapTo(mutableSetOf()) { it.id }
-        if (items.all { it.categoryId in validSet }) return items
-
-        val fallback = when {
-            30426 in validSet -> 30426  // "Other" if available
-            else -> {
-                val counts = HashMap<Int, Int>()
-                for (it in items) if (it.categoryId in validSet) counts[it.categoryId] = (counts[it.categoryId] ?: 0) + 1
-                counts.maxByOrNull { it.value }?.key ?: cats.firstOrNull()?.id ?: return items
-            }
+        val fallback = cats.firstOrNull { it.tag == "other" }?.id
+            ?: cats.firstOrNull()?.id
+            ?: return emptyList()
+        return items.map { it ->
+            val top = it.scores.filter { s -> s.categoryId in validSet }.maxByOrNull { s -> s.score }
+            LineItem(it.description, top?.categoryId ?: fallback)
         }
-        return items.map { if (it.categoryId in validSet) it else it.copy(categoryId = fallback) }
     }
 
     /**
      * Scale non-tax items so Σ(prices) == amountCents exactly. Receipt-level
-     * discounts (Target Circle 5%, Walmart DISCOUNT GIVEN, loyalty savings at
+     * discounts (Target Circle, Walmart DISCOUNT GIVEN, loyalty savings at
      * subtotal) don't attach to any one line, so we distribute the delta
      * proportionally and keep the tax line exact. Residual from rounding is
      * absorbed into the largest non-tax item.
@@ -475,8 +456,12 @@ $listed"""
         return reconciled
     }
 
+    // Widened to match any receipt line containing the word "tax" — catches
+    // both "Sales Tax" and Amazon-style "Estimated tax to be collected". A
+    // narrower /sales\s*tax/i let Amazon single-item receipts be treated as
+    // 2-item multi-cat receipts, over-routing to Call 3.
     private fun isTaxLine(desc: String): Boolean =
-        Regex("sales\\s*tax", RegexOption.IGNORE_CASE).containsMatchIn(desc)
+        Regex("\\btax\\b", RegexOption.IGNORE_CASE).containsMatchIn(desc)
 
     /**
      * Build categoryAmounts by summing reconciled line prices per categoryId.
@@ -499,7 +484,6 @@ $listed"""
             }
         }
         if (byCat.isEmpty()) {
-            // Nothing but tax? Fall through as a single-entry result.
             val cid = items.firstOrNull()?.categoryId ?: return null
             return listOf(OcrCategoryAmount(categoryId = cid, amount = taxCents / 100.0))
         }

@@ -2423,5 +2423,53 @@
         "amount": 3.69
       }
     ]
+  },
+  {
+    "file": "amazon_charger.jpg",
+    "source": "internal-screenshots",
+    "difficulty": "medium",
+    "merchant": "Meigo",
+    "date": "2026-04-18",
+    "amount": 24.46,
+    "categoryId": 62776,
+    "notes": "Amazon order for iPhone USB-C charger/cable set (sold by Meigo). Expected category: Phone/Internet/Computer. Amazon wordmark not on the page — merchant will read as 'Meigo' (the seller); acceptable.",
+    "categoryAmounts": [
+      {
+        "categoryId": 62776,
+        "amount": 24.46
+      }
+    ]
+  },
+  {
+    "file": "amazon_brakepads.jpg",
+    "source": "internal-screenshots",
+    "difficulty": "medium",
+    "merchant": "Amazon.com",
+    "date": "2026-04-18",
+    "amount": 26.87,
+    "categoryId": 48281,
+    "notes": "Amazon order confirmation email for BOSCH BE964H brake pads. Expected category: Transportation/Gas (auto parts). 'Amazon.com' is in the page header so merchant should be recoverable.",
+    "categoryAmounts": [
+      {
+        "categoryId": 48281,
+        "amount": 26.87
+      }
+    ]
+  },
+  {
+    "file": "amazon_tierodboots.jpg",
+    "source": "internal-screenshots",
+    "difficulty": "medium",
+    "merchant": "Zikefest",
+    "date": "2026-04-18",
+    "amount": 10.73,
+    "categoryId": 48281,
+    "notes": "Amazon order for Zikefest 14PCS tie rod boots (sold by Zikefest AUTO-US). Expected category: Transportation/Gas (auto parts). Amazon wordmark not on the page — merchant will read as 'Zikefest'; acceptable.",
+    "categoryAmounts": [
+      {
+        "categoryId": 48281,
+        "amount": 10.73
+      }
+    ]
   }
 ]
