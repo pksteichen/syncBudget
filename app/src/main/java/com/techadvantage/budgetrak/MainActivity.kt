@@ -2200,7 +2200,8 @@ class MainActivity : ComponentActivity() {
             onDialogOpenStateChange = { open -> if (open) vm.transactionDialogOpenCount++ else vm.transactionDialogOpenCount-- },
             pendingSharedImageUris = vm.pendingSharedImageUris,
             onConsumeSharedImageUris = { vm.pendingSharedImageUris.clear() },
-            onShareOverflow = { vm.shareOverflowToastPending = true }
+            onShareOverflow = { vm.shareOverflowToastPending = true },
+            onCsvImportInProgressChange = { vm.csvImportInProgress = it }
         )
     }
 

@@ -131,6 +131,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // them or opening a competing second dialog.
     var transactionDialogOpenCount by mutableIntStateOf(0)
     val transactionDialogOpen: Boolean get() = transactionDialogOpenCount > 0
+    // Set by TransactionsScreen when the sequential CSV import is in its user-
+    // driven duplicate-check phase. Interrupting that phase would lose the user's
+    // progress through the match queue, so shares arriving mid-import are blocked.
+    // Other CSV stages (format select, parsing, complete) are safe to navigate away
+    // from — they don't carry multi-step user state.
+    var csvImportInProgress by mutableStateOf(false)
 
     // ── AI OCR ──
     var ocrState by mutableStateOf<OcrState>(OcrState.Idle)
@@ -2217,16 +2223,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * True when any dialog that would lose unsaved state if interrupted is open,
-     * EXCLUDING the TransactionDialog (which we route shared images INTO).
+     * True when any dialog or user-driven multi-step process would lose unsaved
+     * state if interrupted — EXCLUDING the TransactionDialog (which we route
+     * shared images INTO).
      *
-     * Checked in consumePendingSharedImages so shares arriving mid-edit of a
-     * Recurring / Income / Savings Goal / Amortization / Backup / etc. dialog
-     * are bounced with a friendly toast rather than silently absorbed into the
-     * wrong place or forcing a competing dialog open.
+     * Being on a non-dashboard screen (Transactions list, Settings, Help pages,
+     * etc.) by itself is NOT a blocker — those are navigable views with no
+     * mid-flow state. `consumePendingSharedImages` navigates to the dashboard
+     * before opening the Add Expense dialog when needed.
+     *
+     * Fatally-interruptible conditions:
+     *   - Any dashboard-level matching dialog (duplicate / recurring / amortization
+     *     / budget income) — the user is confirming a match and losing the choice
+     *     dumps them into a weird re-prompt state.
+     *   - Backup / restore password prompts + "save photos?" confirmation.
+     *   - RE/IS amount-change confirmations (mid-flow user decisions).
+     *   - CSV import's sequential duplicate-check phase (losing the queue progress
+     *     is the classic fatal-interrupt case users flag).
      */
     fun anyNonTransactionDialogOpen(): Boolean {
-        if (currentScreen != "main") return true
         return dashShowManualDuplicateDialog ||
             dashShowRecurringDialog ||
             dashShowAmortizationDialog ||
@@ -2236,7 +2251,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             showRestoreDialog ||
             showSavePhotosDialog ||
             pendingREAmountUpdate != null ||
-            pendingISAmountUpdate != null
+            pendingISAmountUpdate != null ||
+            csvImportInProgress
     }
 
     /**

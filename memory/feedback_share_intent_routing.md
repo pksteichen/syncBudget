@@ -15,24 +15,32 @@ edits, or the CSV import dedup/match flow getting interrupted.
 
 **How to apply (routing rules, implemented in `MainViewModel.consumePendingSharedImages`):**
 
-1. **Any non-transaction dialog open OR off-dashboard screen** → discard the
-   URIs and show `strings.settings.shareBlockedByOpenDialog`. The user keeps
-   their current work intact and re-shares once they're back.
-   `anyNonTransactionDialogOpen()` checks: `currentScreen != "main"`,
+1. **Any DIALOG or in-flight multi-step user process** → discard URIs and show
+   `strings.settings.shareBlockedByOpenDialog`. Being on a non-dashboard SCREEN
+   (Transactions list, Help pages, Settings, etc.) by itself is NOT a blocker;
+   the share handler navigates to the dashboard before opening the Add
+   Expense dialog in those cases.
+   `anyNonTransactionDialogOpen()` checks:
    `dashShowManualDuplicateDialog`, `dashShowRecurringDialog`,
    `dashShowAmortizationDialog`, `dashShowBudgetIncomeDialog`,
    `showBackupPasswordDialog`, `showDisableBackupDialog`, `showRestoreDialog`,
-   `showSavePhotosDialog`, and the pending-amount-update prompts.
+   `showSavePhotosDialog`, pending-amount-update prompts, and
+   `csvImportInProgress` (set by TransactionsScreen while the sequential CSV
+   duplicate-check phase is active; losing the match-queue progress was the
+   one "screen-level" case worth protecting). Other CSV stages (format select,
+   parsing, complete) are safe — navigation just discards the UI and the user
+   re-imports if they care.
 2. **TransactionDialog already open** → route URIs into that dialog's next
    empty receipt slots, silently discard overflow beyond 5, fire
    `strings.settings.shareOverflowDiscarded` if any overflow occurred.
    Transaction dialog signals its aliveness via
    `vm.transactionDialogOpenCount` (incremented/decremented by a
    `DisposableEffect` inside `TransactionDialog`).
-3. **No dialog open** → existing behavior: process first URI to a receiptId
-   (slot 1 seed via `pendingSharedReceiptId` + `initialReceiptId1`), open the
-   Add Expense dialog, let the dialog's absorber fill slots 2-5 from the
-   remainder. Overflow toast same as case 2.
+3. **No dialog open** → set `currentScreen = "main"`, process first URI to a
+   receiptId (slot 1 seed via `pendingSharedReceiptId` + `initialReceiptId1`),
+   open the Add Expense dialog, let the dialog's absorber fill slots 2-5 from
+   the remainder. Overflow toast same as case 2. Works whether the user was
+   on the dashboard or anywhere else when the share arrived.
 
 Free (non-paid) users still see the dialog open, but every shared photo is
 discarded and the 5-second "upgrade required" toast fires (existing behavior

@@ -311,7 +311,8 @@ fun TransactionsScreen(
     onDialogOpenStateChange: ((open: Boolean) -> Unit)? = null,
     pendingSharedImageUris: List<android.net.Uri> = emptyList(),
     onConsumeSharedImageUris: (() -> Unit)? = null,
-    onShareOverflow: (() -> Unit)? = null
+    onShareOverflow: (() -> Unit)? = null,
+    onCsvImportInProgressChange: ((inProgress: Boolean) -> Unit)? = null
 ) {
     val S = LocalStrings.current
     val customColors = LocalSyncBudgetColors.current
@@ -419,6 +420,18 @@ fun TransactionsScreen(
     var aiImportBusy by remember { mutableStateOf(false) }
     var selectedBankFormat by remember { mutableStateOf(BankFormat.GENERIC_CSV) }
     var importStage by remember { mutableStateOf<ImportStage?>(null) }
+
+    // Share-intent guard: flag the VM while the user is in the sequential CSV
+    // duplicate-check phase so share intents are bounced rather than wiping the
+    // user's progress through the match queue. Other stages (format select,
+    // parsing, parse error, complete) are safe to navigate away from.
+    LaunchedEffect(importStage) {
+        onCsvImportInProgressChange?.invoke(importStage == ImportStage.DUPLICATE_CHECK)
+    }
+    DisposableEffect(Unit) {
+        onDispose { onCsvImportInProgressChange?.invoke(false) }
+    }
+
     val parsedTransactions = remember { mutableStateListOf<Transaction>() }
     var totalFileTransactions by remember { mutableIntStateOf(0) }
     val importApproved = remember { mutableStateListOf<Transaction>() }
