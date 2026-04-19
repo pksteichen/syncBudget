@@ -462,6 +462,12 @@ internal fun AddEditAmortizationDialog(
 ) {
     val S = LocalStrings.current
 
+    val shareBlockingRegistrar = com.techadvantage.budgetrak.ui.theme.LocalShareBlockingDialogRegistrar.current
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        shareBlockingRegistrar(true)
+        onDispose { shareBlockingRegistrar(false) }
+    }
+
     var source by remember { mutableStateOf(initialSource) }
     var description by remember { mutableStateOf(initialDescription) }
     var amountText by remember { mutableStateOf(initialAmount) }

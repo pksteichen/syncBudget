@@ -137,6 +137,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Other CSV stages (format select, parsing, complete) are safe to navigate away
     // from — they don't carry multi-step user state.
     var csvImportInProgress by mutableStateOf(false)
+    // ⚠️  SCOPE: share-intent blocking ONLY. Do not read this counter for
+    // other purposes (e.g. suppressing back-navigation, deferring background
+    // work). The AdAware dialog wrappers increment this on every dialog —
+    // including brief pickers and confirmations — and any other consumer
+    // would block on those spuriously. If a new mechanism needs a similar
+    // signal, add a separately-named counter with its own CompositionLocal.
+    //
+    // Each dialog increments on compose and decrements on dispose via the
+    // LocalShareBlockingDialogRegistrar CompositionLocal. The share handler
+    // treats any non-zero value as "don't wipe the user's in-progress edit."
+    var shareBlockingDialogCount by mutableIntStateOf(0)
 
     // ── AI OCR ──
     var ocrState by mutableStateOf<OcrState>(OcrState.Idle)
@@ -2252,7 +2263,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             showSavePhotosDialog ||
             pendingREAmountUpdate != null ||
             pendingISAmountUpdate != null ||
-            csvImportInProgress
+            csvImportInProgress ||
+            shareBlockingDialogCount > 0
     }
 
     /**

@@ -611,6 +611,12 @@ private fun AddEditSavingsGoalDialog(
     val S = LocalStrings.current
     val maxDecimalPlaces = CURRENCY_DECIMALS[currencySymbol] ?: 2
 
+    val shareBlockingRegistrar = com.techadvantage.budgetrak.ui.theme.LocalShareBlockingDialogRegistrar.current
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        shareBlockingRegistrar(true)
+        onDispose { shareBlockingRegistrar(false) }
+    }
+
     var name by remember { mutableStateOf(initialName) }
     var targetAmountText by remember { mutableStateOf(initialTargetAmount) }
     var startingSavedText by remember { mutableStateOf(initialStartingSaved) }

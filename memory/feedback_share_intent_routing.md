@@ -59,3 +59,13 @@ keyed on the list size processes up to (5 - occupied) URIs per arrival, calls
 double-consume races), and fires `onShareOverflow` if needed. This mirrors the
 existing `dialogGalleryLauncher` multi-pick pipeline so behavior stays
 consistent whether the user gallery-picked or shared.
+
+**Cross-screen dialog tracking** uses `LocalShareBlockingDialogRegistrar` (a
+CompositionLocal defined in `Theme.kt`). `AdAwareDialog` auto-registers via
+`DisposableEffect`, so every dialog in the app that uses the AdAware wrapper
+is automatically counted in `MainViewModel.shareBlockingDialogCount` without
+per-site wiring. ⚠️ Purpose-scoped: only `consumePendingSharedImages` reads
+this counter. Since every dialog (pickers, confirmations, Add/Edit forms) is
+registered, other consumers would fire spuriously. If a new mechanism needs a
+similar "is there a dialog open?" signal, add a separate counter — don't
+repurpose this one.

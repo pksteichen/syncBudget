@@ -189,6 +189,17 @@ fun DialogSecondaryButton(
 
 val LocalAppToast = staticCompositionLocalOf { AppToastState() }
 
+// ── Share-intent blocking registrar ───────────────────────────────
+// ⚠️ Purpose-scoped: consumed ONLY by MainViewModel.consumePendingSharedImages
+// to bounce incoming shares arriving mid-dialog. Do NOT repurpose this
+// registrar for other "is there a dialog open?" needs — the AdAware dialog
+// wrappers auto-register EVERY dialog (pickers, confirmations, Add/Edit
+// forms alike), so any other consumer would fire on benign popups too. If
+// a new mechanism needs a different signal, add a separate registrar.
+//
+// Default is a no-op so previews without a provider still render.
+val LocalShareBlockingDialogRegistrar = staticCompositionLocalOf<(Boolean) -> Unit> { { } }
+
 class AppToastState {
     var message by mutableStateOf<String?>(null)
         private set
@@ -421,6 +432,15 @@ fun AdAwareDialog(
 ) {
     val adPadding = LocalAdBannerHeight.current
     val appToast = LocalAppToast.current
+    // Register with the blocking-dialog counter so incoming share intents
+    // don't wipe the user's in-progress interaction with this dialog.
+    // Every dialog in the app uses this wrapper, so a single hook here
+    // covers Add/Edit forms, confirmations, pickers, info popups — all of it.
+    val shareBlockingRegistrar = LocalShareBlockingDialogRegistrar.current
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        shareBlockingRegistrar(true)
+        onDispose { shareBlockingRegistrar(false) }
+    }
     Dialog(
         onDismissRequest = onDismissRequest,
         properties = properties

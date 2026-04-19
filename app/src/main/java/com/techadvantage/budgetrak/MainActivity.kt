@@ -265,6 +265,11 @@ class MainActivity : ComponentActivity() {
             val adBannerHeight = if (!vm.isPaidUser) 50.dp else 0.dp
             SyncBudgetTheme(strings = vm.strings, adBannerHeight = adBannerHeight) {
               val toastState = LocalAppToast.current
+              androidx.compose.runtime.CompositionLocalProvider(
+                  com.techadvantage.budgetrak.ui.theme.LocalShareBlockingDialogRegistrar provides { open: Boolean ->
+                      if (open) vm.shareBlockingDialogCount++ else vm.shareBlockingDialogCount--
+                  }
+              ) {
               // Archive toast
               LaunchedEffect(vm.archiveToastMessage) {
                   vm.archiveToastMessage?.let { msg ->
@@ -897,6 +902,7 @@ class MainActivity : ComponentActivity() {
                     }
                 )
             }
+              } // CompositionLocalProvider(LocalShareBlockingDialogRegistrar)
             } // SyncBudgetTheme
         }
     }

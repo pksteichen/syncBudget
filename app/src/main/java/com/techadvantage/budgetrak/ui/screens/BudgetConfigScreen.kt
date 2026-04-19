@@ -591,6 +591,12 @@ private fun AddEditIncomeDialog(
 
     val maxDecimalPlaces = CURRENCY_DECIMALS[currencySymbol] ?: 2
 
+    val shareBlockingRegistrar = com.techadvantage.budgetrak.ui.theme.LocalShareBlockingDialogRegistrar.current
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        shareBlockingRegistrar(true)
+        onDispose { shareBlockingRegistrar(false) }
+    }
+
     var sourceName by remember { mutableStateOf(existingSource?.source ?: "") }
     var amountText by remember {
         mutableStateOf(
