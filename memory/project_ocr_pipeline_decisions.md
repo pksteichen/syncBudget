@@ -69,23 +69,26 @@ in stable text.
 
 # Measured performance
 
-**V10 2-call on 33-receipt no-preselect subset (2026-04-19)** — 28 singles (≤5 per cat) + 5 multi-cat:
+**V17 split-pipeline on 33-receipt no-preselect subset (2026-04-20)** — 28 singles (≤5 per cat) + 5 multi-cat:
 
-| Metric | V10 2-call (shipped) | Baseline 3-call (prev shipped) |
-|---|---|---|
-| Combined score | 25/33 | 25/33 |
-| Singles correct | 20/28 | 20/28 |
-| Multi routed | 5/5 | 5/5 |
-| Multi cset | 3/5 | ~3/5 |
-| **Amazon receipts** | **3/3** | **0/3** |
-| API calls (single) | 1 | 1 |
-| API calls (multi) | **2** | 3 |
-| Category-agnostic | **yes** | no (hardcoded IDs) |
+| Metric | V17 split (shipped) | V10 all-in-one (prev) | Baseline 3-call |
+|---|---|---|---|
+| Combined score | 24/33 | 25/33 | 25/33 |
+| Singles correct | 19/28 | 20/28 | 20/28 |
+| Multi routed | 5/5 | 5/5 | 5/5 |
+| Multi cset | 3/5 | 3/5 | ~3/5 |
+| **Amazon on device** | **3/3** | **0/3** | **0/3** |
+| Amazon on harness | 3/3 | 3/3 | — |
+| API calls (single) | 2 | 1 | 1 |
+| API calls (multi) | 3 | 2 | 3 |
+| Category-agnostic | yes | yes | no |
 
-**V10 2-call wins over baseline on Amazon receipts** (the stubborn user failures —
-phone charger, brake pads, tie rod boots — all now correct). Matches baseline on
-overall combined score. Drops one API call on the multi path. Works for any user
-category list, not just the BudgeTrak defaults.
+**V17 ties V10 on harness but WINS on device** — Amazon charger, brake pads, and
+tie rod boots all now land in the correct category on the user's phone. V10's
+single Call-1 was sensitive to JPEG-encoder variance between test harness and
+Android Bitmap.compress; V17's split decouples categorisation (text-reasoning,
+stable across encoders) from image extraction. The extra API call per receipt
+buys deterministic on-device behaviour across any device/encoder combination.
 
 **Prior 14 multi-cat bake-off (pre-V10, preselected cats only)** — still useful historical reference:
 
@@ -114,9 +117,16 @@ category list, not just the BudgeTrak defaults.
 
 **What backfired:**
 - Long rule sheets (product-override paragraphs for pets/batteries/frozen/seasonal) added noise and regressions
-- "Transcribe first, then categorize" two-step split (step 2 + step 2.5) — loses section-heading spatial context; single call with integrated categorization wins
+- V14: "transcribe first, then categorize" WITHIN a single call — uses up output
+  tokens, disperses the model's attention, hurts Amazon recall. (V17's split
+  pipeline is different — separate API call for categorisation, item names as
+  text prompt input, not as model-generated output.)
 - `PickMultipleVisualMedia` schema-enum with integer IDs — Gemini wants string enums; even when fixed, enum didn't improve recall (model still picked valid-but-wrong IDs)
 - Aggressive seasonal rules (walmart_1 Easter candy) — model still tends to classify generic "Cadbury Creme" as Groc even with explicit seasonal guidance; this failure mode is hard to fix prompt-only
+- V11: strict anti-broad "IMPORTANT: do NOT score Supplies/Goods above..." —
+  fixed Amazon brakes but broke target_long_1 (women's dresses → Kid's Stuff in
+  2-cat race). Don't force specific-vs-specific reordering through the same
+  rule that handles specific-vs-catch-all.
 
 **Caching (not useful for Lite):**
 - **Implicit prefix caching on Flash-Lite: did NOT fire** during 2232-token shared prefix tests across multi-call pipelines. Caching seems to be Pro/Flash-primary feature. Don't plan around caching savings on Lite.
@@ -134,27 +144,23 @@ category list, not just the BudgeTrak defaults.
 - **Seasonal goods ambiguity** (Easter candy, Halloween items) — model splits inconsistently between Holidays and Groceries even with explicit seasonal rules.
 - **Bookstore/stationery categorization** — sroie_0070 shows bookstore receipts ambiguous between Entertainment/Kid's/Other, varies by prompt.
 
-# V10 iteration (how we got here, 2026-04-19)
+# Iteration history (how we got to V17)
 
-Five rounds of 10-variant iteration on a 33-receipt no-preselect subset:
+**Phase 1: 4 rounds of 10-variant iteration (2026-04-19), 33-receipt subset:**
+- **Round 1 (T-prefix)** — T7 (3-step procedure) won. Step decomposition was the load-bearing lever.
+- **Round 2** — rule tweaks on T7 didn't stack. Structure matters more than wording.
+- **Round 3 (richer decomposition)** — U10 (5-step + fictional + synonyms) and U2 (5-step alone) beat T7.
+- **Round 4 (scoring variants)** — V10 (per-item 0-100 scoring + 5-step) hit combined 24. Scoring fixes multi-routing (5/5) because multi-vs-single falls out of per-item scores instead of being a separate model judgment.
+- Call 1 vs Call 2 comparison: 82% agreement; Call 2 added no value over V10's per-item scoring → dropped.
+- `\btax\b` regex widening — "Estimated tax to be collected" was slipping past `/sales\s*tax/i`.
 
-- **Round 1 (10 variants of T-prefix)** — T7 (3-step procedure: identify product
-  type → scan names → pick) won. Step decomposition was the load-bearing lever.
-- **Round 2 (10 variants seeded from T7)** — T7 control tied all perturbations.
-  Rule-tweaks don't stack on the 3-step structure.
-- **Round 3 (10 variants with richer step decomposition)** — U10 (5-step +
-  fictional + synonyms) and U2 (5-step alone) both hit combined 23, beating the
-  T7 control's 22. Finer decomposition = real gain.
-- **Round 4 (10 scoring-based variants)** — V10 (per-item scoring 0-100 + the
-  5-step procedure) hit combined 24. Scoring alone (V2) matched T7 at 22 but via
-  a different mechanism: scoring fixes multi-routing (5/5) at a small cost to
-  singles. V10 combines both wins.
-- **Call 1 vs Call 2 comparison** — 82% agreement on items. When they disagree,
-  Call 1 is often right (e.g. "TZATZIKI DIP" → Groceries vs Call 2 → Restaurants).
-  Call 2 adds no value on top of V10's per-item scoring.
-- **`\btax\b` regex widening** — fixed Amazon single-item receipts being
-  over-routed to multi because "Estimated tax to be collected" slipped past the
-  old `/sales\s*tax/i`. All 3 Amazon receipts then short-circuit correctly.
+**Phase 2: device-variance discovery + split pipeline (2026-04-20):**
+- User reports Amazon brakes → Home Supplies ON DEVICE despite V10 harness showing 3/3 correct.
+- Investigation ruled out: caller cat list (matches), API endpoint (both v1beta), temperature (both 0), prompt text (byte-identical).
+- **Root cause: Google GenerativeAI Android SDK's `content { image(bitmap) }` re-encodes every Bitmap at JPEG quality 80 before sending** — silently degrading the q=95+ bytes we store. Fixed with `content { blob("image/jpeg", rawBytes) }` which bypasses the re-encode. See `feedback_genai_sdk_bitmap_reencode.md`.
+- **Secondary cause: Amazon "Order Summary" sections** (Item(s) Subtotal, Shipping, Grand Total) on tie-rod and charger screenshots were being read as line items at higher device quality — summary text is crisper at q=95+ so the model treats it as content. Fixed in V17 with an explicit EXCLUDE list in Call 1's prompt.
+- **V11 through V16 were dead ends** — strict anti-broad rules, transcribe-first, narrow catch-all tiebreaks all either failed to fix brakes or regressed other receipts (target_long_1 clothes → Kid's Stuff). V17 split pipeline is what worked.
+- **V17 split-pipeline insight**: Call 1 does image → item names only. Call 2 receives the item names AS TEXT in its prompt plus the image for disambiguation. Text anchor is stable across JPEG encoders → categorisation is deterministic on device.
 
 **Category-agnostic rule (from prompt-design feedback 2026-04-19):** the prompt
 must not name any specific user category (by id or by name) in its examples.
@@ -164,13 +170,29 @@ Travel/Lodging, Books/Reading) and fictional products (leash, hotel, novel).
 Otherwise the prompt overfits to the BudgeTrak default list and breaks for users
 with customised categories.
 
+**Harness-device parity tooling (2026-04-20):**
+`tools/ocr-harness/scripts/simulate-app-compression.js` ports the Kotlin
+`ReceiptManager.processAndSavePhoto` compression algorithm to Node —
+resize-to-1000px with 400px shortest-edge floor via bilinear (Triangle filter),
+iterative quality starting q=92 targeting 256KB/MP ±10%, 4:4:4 subsampling at
+q≥90 and 4:2:0 below. Run `--batch inDir outDir` to produce app-equivalent JPEGs
+for any test corpus. Validation: V17 gives identical aggregate scores on
+original images vs app-simulated images, including 3/3 Amazon correct — so the
+harness now predicts device behaviour. Byte-identical output isn't achievable
+(ImageMagick's libjpeg-turbo build vs Android's build produce slightly different
+bytes at the same quality+subsampling) but algorithmic parity closes the ~70%
+of the gap that mattered.
+
 # Where to find things
 
 - **Production impl:** `app/src/main/java/com/techadvantage/budgetrak/data/ocr/ReceiptOcrService.kt`
-  - Public API: `extractFromReceipt(context, receiptId, categories, preSelectedCategoryIds)`
-  - Internals: `runPipeline` orchestrates Calls 1 & 3; `buildCall1Prompt` / `buildCall3Prompt` build prompts; `deriveMulti` + `collapseItemsToLineItems` + `reconcilePrices` + `aggregateCategoryAmounts` post-process. No Call 2.
+  - Public API: `extractFromReceipt(context, receiptId, categories, preSelectedCategoryIds)`.
+  - Internals: `runPipeline` orchestrates Calls 1 / 2 / 3; `runCall1` extracts header + item names; `runCall2` scores categories; `runMultiCat` runs Call 3 + reconciles; `collapseItemsToLineItems` + `reconcilePrices` + `aggregateCategoryAmounts` post-process.
+  - Debug logging (BuildConfig.DEBUG only) dumps full Call 1 + Call 2 JSON to logcat with tag `ReceiptOcrService` so on-device issues are diagnosable via the Dump button.
 - **Caller:** `MainViewModel.runOcrOnSlot1(receiptId, preSelectedCategoryIds)` — routes the UI's pre-selected cat set into the pipeline. (Function name is historical; as of 2026-04-18 the receiptId can be any slot the user highlighted, not just slot 1.)
-- **Harness reference (kept in sync):** `tools/ocr-harness/scripts/validate-v10-2call.js` — mirrors the Kotlin pipeline exactly.
-- **V10 iteration scripts:** `tools/ocr-harness/scripts/iterate-nopresel-round{1,2,3,4}.js` (10 variants each) + `compare-c1-vs-c2.js` (ablation that killed Call 2).
-- **Test data:** single-cat subset picked ≤5 per cat from `test-data/labels.json`, plus the 5 most-cats multi-cat receipts, plus 3 Amazon edge cases (`amazon_charger.jpg`, `amazon_brakepads.jpg`, `amazon_tierodboots.jpg`).
-- **Historical iteration results:** `results/iterate-nopresel-r{1,2,3,4}-*.json`, `results/validate-v10-2call-*.json`, `results/c1-vs-c2-*.json`.
+- **Harness reference (kept in sync):** `tools/ocr-harness/scripts/validate-v17.js` — mirrors the Kotlin V17 pipeline exactly on original test images. `validate-v17-appsim.js` runs it on app-simulated bytes (see below).
+- **App-compression simulator:** `tools/ocr-harness/scripts/simulate-app-compression.js` — Node port of `ReceiptManager.processAndSavePhoto`. Produces JPEGs with matching dimensions, quality, subsampling, and target size. Use `--batch inDir outDir`.
+- **Phase-1 iteration scripts (kept as history):** `tools/ocr-harness/scripts/iterate-nopresel-round{1,2,3,4}.js` (10 variants each) + `compare-c1-vs-c2.js` (ablation that killed Call 2 in V10).
+- **Phase-2 iteration scripts:** `test-specificity-rule.js` (V11 anti-broad rule test), `test-v12.js` (transcribe + narrow rule), `test-v13.js` (strict + transcribe + clarifier), `test-v14.js` (V10 + transcribe only), `test-v15-split.js` (text-only Call 2), `test-v16-split-with-image.js` (winner — text + image Call 2), `test-v17-c1-prompt.js` (Call 1 EXCLUDE-list sweep).
+- **Test data:** single-cat subset picked ≤5 per cat from `test-data/labels.json`, plus the 5 most-cats multi-cat receipts, plus 3 Amazon edge cases (`amazon_charger.jpg`, `amazon_brakepads.jpg`, `amazon_tierodboots.jpg`). App-simulated copies at `test-data/app_sim/`.
+- **Historical iteration results:** `results/iterate-nopresel-r{1,2,3,4}-*.json`, `results/validate-v{10,11,12,13,14,15,16,17}-*.json`, `results/c1-vs-c2-*.json`.
