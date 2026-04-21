@@ -168,13 +168,15 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 ## Future Work
 - [Subscriber feature ideas](project_subscriber_feature_ideas.md).
 - [OCR/AI receipt capture plan](project_ocr_receipt_capture.md).
-- [OCR pipeline decisions — V17 split-pipeline shipped](project_ocr_pipeline_decisions.md) — image→itemNames + image+text→scored categories + prices; text-anchor decouples categorisation from JPEG encoder variance; explicit EXCLUDE list in Call 1 for Amazon-style Order Summary rows; 3/3 Amazon receipts correct on device.
+- [OCR pipeline decisions — V18 split-pipeline + C1.5 reconciliation shipped](project_ocr_pipeline_decisions.md) — image→itemNames+fullTranscript, text-only reconcile of date+amount (parallelized with C2), image+text→scored categories, prices; C1.5 catches digit OCR errors + locale date swaps (+6pp amount, +2pp date on harness); 4 calls max for multi-cat with zero added wall-clock via parallel launch.
 - [GenerativeAI Android SDK re-encodes Bitmaps at q=80](feedback_genai_sdk_bitmap_reencode.md) — use `blob("image/jpeg", bytes)` not `image(bitmap)` in content DSL; the latter silently drops stored q=95 receipts to q=80 before sending to Gemini.
 - [AI CSV categorization](project_ai_csv_categorization.md) — **shipped 2026-04-16**. Flash-Lite, hybrid heuristic+AI (≥5 matches & ≥80% agreement skips AI), opt-in, Paid+Sub.
 - [Widget photo support (designed)](project_widget_photos.md).
 - [Pre-launch TODO](project_prelaunch_todo.md) — most done; App Check integrity level deferred.
 - [Play Store launch plan](project_play_store_launch.md) — personal-first then transfer-to-org strategy, address plan, DUNS timeline.
 - [Billing + runaway-bug alerts (configured 2026-04-13)](project_billing_alerts.md) — $1 budget + 4 Monitoring policies + SMS channel. Killswitch still optional.
+- [Compression long-edge cap (TODO)](project_compression_long_edge_cap.md) — clamp long edge at 3072px in ReceiptManager + harness prep script; narrow-tall receipts currently grow unbounded.
+- [OCR Spanish / Country setting](project_ocr_spanish_country_setting.md) — when adding Spanish or LatAm launch, add a Country dropdown driving locale/currency/date/tax-vocab hints into the OCR prompt; integer-only currencies (CLP/COP/PYG) block launch without this.
 
 ## Documentation
 - SSD/LLD v2.6 at `docs/BudgeTrak_SSD_v2.6.md` + `docs/BudgeTrak_LLD_v2.6.md`. Verified against code on 2026-04-12; bump on any structural change.

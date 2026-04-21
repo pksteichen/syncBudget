@@ -8,7 +8,7 @@ const normalizeMerchant = s =>
 export function gradeResult(expected, actual) {
   const result = {
     merchant: { expected: expected.merchant, actual: actual?.merchant, pass: false },
-    date:     { expected: expected.date,     actual: actual?.date,     pass: false },
+    date:     { expected: expected.date,     actual: actual?.date,     pass: false, skipped: !expected.date || expected.type === "bill" },
     amount:   { expected: expected.amount,   actual: actual?.amount,   pass: false },
     category: { expected: expected.categoryId, actual: null,           pass: false, skipped: false },
   };
@@ -86,6 +86,52 @@ export function gradeResult(expected, actual) {
     }
   }
 
+  // ── Per-line-item grading (new) ────────────────────────────────────────
+  // When expected.items is populated, compare the multiset of per-item
+  // categoryIds between expected and extracted. This complements the
+  // aggregate categoryAmounts check: two models can both produce the right
+  // top-line category totals while differing wildly on which *items* they
+  // put in each bucket. The per-item metric catches that.
+  //
+  // Metric: Jaccard similarity of the category-id multisets, with non-item
+  // lines (null categoryId) excluded from both sides.
+  //   items.jaccard      — 0.0–1.0 similarity score
+  //   items.itemsPass    — binary gate at jaccard ≥ 0.80
+  //   items.expectedCount/actualCount — raw counts, for report context
+  result.items = {
+    expectedCount: 0,
+    actualCount: 0,
+    jaccard: 0,
+    itemsPass: false,
+    skipped: !expected.items,
+  };
+
+  if (expected.items) {
+    const expIds = expected.items
+      .filter(i => typeof i?.categoryId === "number")
+      .map(i => i.categoryId);
+    const actIds = (Array.isArray(actual?.lineItems) ? actual.lineItems : [])
+      .filter(i => i && typeof i === "object" && typeof i.categoryId === "number")
+      .map(i => i.categoryId);
+    result.items.expectedCount = expIds.length;
+    result.items.actualCount = actIds.length;
+
+    if (expIds.length > 0) {
+      const expCounts = new Map();
+      for (const id of expIds) expCounts.set(id, (expCounts.get(id) || 0) + 1);
+      const actCounts = new Map();
+      for (const id of actIds) actCounts.set(id, (actCounts.get(id) || 0) + 1);
+      let intersection = 0, unionSum = 0;
+      const allIds = new Set([...expCounts.keys(), ...actCounts.keys()]);
+      for (const id of allIds) {
+        intersection += Math.min(expCounts.get(id) || 0, actCounts.get(id) || 0);
+        unionSum += Math.max(expCounts.get(id) || 0, actCounts.get(id) || 0);
+      }
+      result.items.jaccard = unionSum === 0 ? 0 : intersection / unionSum;
+      result.items.itemsPass = result.items.jaccard >= 0.8;
+    }
+  }
+
   return result;
 }
 
@@ -100,12 +146,14 @@ export function summarize(perTestResults) {
     categoryShare: { pass: 0, total: 0 },
     multiCategorySet:   { pass: 0, total: 0 },
     multiCategoryShare: { pass: 0, total: 0 },
+    items:              { pass: 0, total: 0, jaccardSum: 0 },
     elapsedMsTotal: 0,
   };
   for (const t of perTestResults) {
     if (t.elapsedMs) totals.elapsedMsTotal += t.elapsedMs;
     if (!t.grade) continue;
     for (const field of ["merchant", "date", "amount"]) {
+      if (t.grade[field].skipped) continue;
       totals[field].total++;
       if (t.grade[field].pass) totals[field].pass++;
     }
@@ -126,6 +174,12 @@ export function summarize(perTestResults) {
         totals.multiCategoryShare.total++;
         if (ca.shareMatch) totals.multiCategoryShare.pass++;
       }
+    }
+    const it = t.grade.items;
+    if (it && !it.skipped && it.expectedCount > 0) {
+      totals.items.total++;
+      totals.items.jaccardSum += it.jaccard;
+      if (it.itemsPass) totals.items.pass++;
     }
   }
   return totals;

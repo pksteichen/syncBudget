@@ -26,7 +26,15 @@ export const RESPONSE_SCHEMA = {
     },
     lineItems: {
       type: "array",
-      items: { type: "string" },
+      items: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Line-item label as printed on the receipt." },
+          price: { type: "number", description: "Pre-tax line total for this item; negative for refunds, coupons, or rewards redemption." },
+          categoryId: { type: "integer", description: "Best-fit category for this individual item. Omit for non-item lines (shipping, fees, discounts)." },
+        },
+        required: ["name", "price"],
+      },
     },
     notes: { type: "string" },
   },

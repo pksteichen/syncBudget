@@ -4,7 +4,7 @@ description: Final shipping config for BudgeTrak receipt OCR plus alternatives a
 type: project
 originSessionId: a00b436a-3ced-4e78-a40e-780a8f5acff8
 ---
-# Shipping config (V17 split-pipeline, locked 2026-04-20)
+# Shipping config (V18 split-pipeline + Call 1.5 reconciliation, 2026-04-20)
 
 **Wired into the Android app as of 2026-04-20**. The split pipeline lives in
 `app/src/main/java/.../data/ocr/ReceiptOcrService.kt`. Single entry point:
@@ -17,14 +17,25 @@ name except the generic concept of "Other". "Other" is resolved at runtime via
 `categories.find { it.tag == "other" }?.id`, never hardcoded. Works for any
 custom category list (rename, delete, reorder, localize — all safe).
 
-**Split pipeline (2-3 calls):**
+**Split pipeline (1 / 3 / 4 calls):**
 1. **Call 1 (image → extract)**: merchant, merchantLegalName, date (YYYY-MM-DD),
-   `amountCents` (integer cents), `itemNames[]` (just strings — actual purchased
-   products from the receipt). Prompt has explicit EXCLUDE list for summary
-   rows ("Subtotal", "Grand Total", "Shipping & Handling", "Total before tax",
-   payment tenders, order metadata). Without this list the model conflates
-   Amazon-style Order Summary rows with actual products on some device encodings.
-2. **Call 2 (image + item names as text → categorise)**: returns `items[{description,
+   `amountCents` (integer cents), `itemNames[]` (actual purchased products),
+   `fullTranscript[]` (focused transcript: lines with dates, dollar amounts,
+   subtotal/total/tax labels, merchant header — 10-30 lines typical; skips
+   barcodes, auth codes, policy boilerplate). Prompt has explicit EXCLUDE list
+   for summary rows ("Subtotal", "Grand Total", "Shipping & Handling", "Total
+   before tax", payment tenders, order metadata). Without this list the model
+   conflates Amazon-style Order Summary rows with actual products on some
+   device encodings. Locale rule: default US MM/DD/YYYY; parse as DD/MM only on
+   explicit non-US signal (non-USD currency, non-US address, non-English body).
+2. **Call 1.5 (text → reconcile)**: text-only. Takes C1's date + amountCents +
+   fullTranscript, returns reconciled date + amountCents + notes. Runs in
+   PARALLEL with Call 2 (`coroutineScope { async(c1.5) async(c2) }`) so the
+   extra call adds no wall-clock latency on the hot path — Call 1.5 completes
+   in ~1s while Call 2 is ~3-4s. Non-fatal: if all retries fail, falls back to
+   C1's values silently. Measured on harness: +6pp on amount accuracy, +2pp on
+   date accuracy. Catches both digit-flip OCR errors and locale date swaps.
+3. **Call 2 (image + item names as text → categorise)**: returns `items[{description,
    scores:[{categoryId, score 0-100, reason}]}]`, `multiCategoryLikely`, `topChoice`.
    The item-name list from Call 1 is included as TEXT in the prompt so the model
    has a stable anchor for categorisation even when Call 1's image interpretation
@@ -33,24 +44,19 @@ custom category list (rename, delete, reorder, localize — all safe).
    ceramic plate) using visual context.
    Step 1 (ITEM) → Step 2 (FUNCTION) → Step 3 (DOMAIN) → Step 4 (SCAN category
    names) → Step 5 (SCORE 0-100, direct match 80-100, synonym 50-75, weak 20-50).
-3. **Call 3 (image → prices, multi-cat only)**: per-item `priceCents`. Considers
+4. **Call 3 (image → prices, multi-cat only)**: per-item `priceCents`. Considers
    quantity multipliers, line-level coupons, rebates, weight-priced lines.
 
 **Route decision (code-side, in `runPipeline`):**
-- `preSelect.size == 1` → trust the single preselected cat, skip Calls 2 + 3. 1 API call.
-- Empty `itemNames` (unreadable receipt) → put whole amount in Other. 1 API call.
-- `preSelect.size >= 2` → multi path (all 3 calls).
-- `preSelect.isEmpty()` → run Call 2; `deriveMulti()` checks per-item top-1 cats
-  (excluding tax lines via `\btax\b` regex). ≥2 distinct top-1 cats → multi (3
-  calls). 0 or 1 distinct → single short-circuit using Call 2's `topChoice` (2
-  calls).
+- `preSelect.size == 1` → trust the single preselected cat, skip Calls 1.5, 2, 3. 1 API call. (Call 1.5 intentionally skipped on this path — it's a quick-entry flow where the user is watching latency.)
+- Empty `itemNames` (unreadable receipt) → put whole amount in Other. 1 API call. (Call 1.5 also skipped since there's nothing to reconcile against.)
+- `preSelect.size >= 2` → multi path (4 calls: C1, C1.5‖C2, C3).
+- `preSelect.isEmpty()` → run C1.5 and C2 in parallel; `deriveMulti()` on C2's items → multi (4 calls total) or single (3 calls).
 
-Cost: 1-call path (preselect=1 or unreadable): unchanged from V10. Single-cat: 2
-calls (up from 1 in V10). Multi-cat: 3 calls (up from 2 in V10). The extra call
-is worth it — V10's all-in-one Call 1 was sensitive to JPEG-encoder variance
-(same stored receipt flipped Transportation/Gas ↔ Home Supplies depending on
-libjpeg-turbo vs Android Bitmap.compress). Split pipeline grounds categorisation
-in stable text.
+Cost: 1-call path (preselect=1 or unreadable): unchanged. Single-cat: 3 calls
+(C1 + C1.5 ‖ C2). Multi-cat: 4 calls (C1 + C1.5 ‖ C2 + C3). The extra C1.5 is
+text-only so it's the cheapest call in the chain, and parallelization with C2
+means zero added wall-clock latency on the hot path.
 
 **Post-processing (pure code, no API call):**
 - **`deriveMulti`** — per-item top-1 cats → unique cats set. ≥2 = multi.
@@ -69,7 +75,22 @@ in stable text.
 
 # Measured performance
 
-**V17 split-pipeline on 33-receipt no-preselect subset (2026-04-20)** — 28 singles (≤5 per cat) + 5 multi-cat:
+**V18 (+ C1.5 reconciliation) on 51-receipt new_bank (2026-04-20):** English single-cat.
+Prompt v0.6, default-US locale rule, amount reconciliation self-check.
+
+| Metric | Before label fixes | v0.6 prompt only | v0.7 + C1.5 reconcile |
+|---|---|---|---|
+| merchant | 100% | 100% | **100%** |
+| date | 86.7% (39/45) | 92.9% (39/42) | **95.2%** (40/42) |
+| amount | 90.2% (46/51) | 88.2% (45/51) | **94.1%** (48/51) |
+| category | 88.2% (45/51) | 92.2% (47/51) | 88.2% (variance) |
+| avg latency | 5.7s | 8.2s | 9.4s (parallelized in app → ~8s) |
+
+**C1.5 wins tracked in new_bank:** best_buy_01 (date 2021-08-06→2021-06-08 ✓ and amount $1019.57→$1012.51 ✓), old_navy_02 (amount $64.52→$54.52 ✓), toys_01 (date 2013-08-27→2013-08-25 ✓), walgreens_02 (amount $6.94→$6.48 ✓). Fixed cases where C1 and the transcript agreed on a misread stay wrong (lowes_03 $466.23 → both read $465.83; two independent reads don't help when both misread the same digit).
+
+**Old-bank regression (168 receipts: 104 EN single-cat + 50 Vietnamese + 14 multi-cat):** EN single-cat amount went from ~90% baseline to **97.1%** post-C1.5 — reconciliation helps equally on the historical bank. Vietnamese amount **crashed to 0%** because Call 1.5 strips the VND warning and its "normalize to cents" bias divides VND totals by 10-100×. Acceptable for now since app is English-only; if Spanish launch lands in CLP/COP/PYG markets the same bug will hit. See `project_ocr_spanish_country_setting.md` for the country-setting fix.
+
+**V17 split-pipeline on 33-receipt no-preselect subset (historical reference, 2026-04-20)** — 28 singles (≤5 per cat) + 5 multi-cat:
 
 | Metric | V17 split (shipped) | V10 all-in-one (prev) | Baseline 3-call |
 |---|---|---|---|

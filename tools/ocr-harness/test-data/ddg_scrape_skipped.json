@@ -1,0 +1,30 @@
+{
+  "_doc": "Historical record of DDG-scrape files that did NOT make it into labels.json, with reasons. Files themselves were deleted from ddg_scrape/ and ddg_app_sized/ on 2026-04-20 (user: 'Lets only save the valid receipts, and delete the rest'). Kept as reference for future scrape iterations — use the reasons below to tune BLOCK_HOST_RE / query terms in scripts/scrape-ddg-receipts.js.",
+  "totals": {
+    "scraped": 69,
+    "labeled_into_labels_json": 49,
+    "skipped": 20
+  },
+  "skipped": [
+    { "file": "amc_movie_01_e96e5666.jpg", "reason": "Marketing graphic (AMC/Aloft ADMIT ONE styled design), not a transaction" },
+    { "file": "auto_repair_01_610e61ac.jpg", "reason": "Etsy/DocsByBud Ozark Auto Repair invoice template" },
+    { "file": "auto_repair_02_34ecbf29.jpg", "reason": "Canva auto-repair-invoice blank template" },
+    { "file": "auto_repair_03_9694e5b2.jpg", "reason": "Blank Estimate of Auto Repairs form template" },
+    { "file": "auto_repair_04_b8ddb240.jpg", "reason": "Blank YOUR COMPANY NAME tow-truck repair-form template" },
+    { "file": "costco_gas_03_e9f47b20.jpg", "reason": "Truncated — no date, no total visible; pixFueler watermark" },
+    { "file": "electric_bill_01_a746a40c.jpg", "reason": "Sarawak Energy bill with red SAMPLE stamp (specimen)" },
+    { "file": "gas_bill_01_0eaab7a2.jpg", "reason": "Sample MI Gas Utilities bill — JOHN Q CUSTOMER + numbered section-key diagram overlay" },
+    { "file": "gas_bill_02_77670859.jpg", "reason": "shotempl.com / gotempl.com ConEdison template (JOHN CITIZEN placeholder)" },
+    { "file": "hair_salon_01_72b41715.jpg", "reason": "Chic Cuts Hair Studio invoice template (LOGO placeholder + Jane Doe sample data)" },
+    { "file": "hair_salon_02_72bb5ad4.jpg", "reason": "Beauty Salon invoice template with Lorem Ipsum filler text and $00,00 placeholder amounts" },
+    { "file": "hotel_01_cf69e424.jpg", "reason": "Blank Hotel Receipt template with decorative scratch borders" },
+    { "file": "hotel_02_75ee9148.jpg", "reason": "Blank Hotel Name template with Item 3/4/5 placeholders and '$' placeholder amounts" },
+    { "file": "lowes_01_1f8c5a46.jpg", "reason": "Receipt photographed at store-aisle distance — line items and totals not legibly readable" },
+    { "file": "lowes_02_604a512b.jpg", "reason": "Multi-invoice/exchange receipt with multiple subtotals that do not reconcile cleanly; total is ambiguous between $167.22 Balance Due and $262.51 M/C authorized" },
+    { "file": "macys_01_03c74ba6.jpg", "reason": "Bottom of receipt cut off — only Mens Belts $32.00 line visible, no subtotal/tax/total" },
+    { "file": "petsmart_04_139d0253.jpg", "reason": "Receipt photographed mid-frame against product packaging; only first 2 line items visible, no subtotal or total" },
+    { "file": "verizon_bill_01_1d342a65.jpg", "reason": "Appears to be a sample/marketing bill image — account & invoice numbers are 123456789 placeholders and a circled '3' callout matches the style of educational annotated samples" },
+    { "file": "walgreens_01_15975c89.jpg", "reason": "Photo-finishing pickup receipt with $0.00 total — zero-value edge case with no clean category; not useful for harness scoring" },
+    { "file": "walgreens_03_1d98205c.jpg", "reason": "Tiny photo of receipt on carpet — all line items, subtotal, and total are illegible at this resolution" }
+  ]
+}

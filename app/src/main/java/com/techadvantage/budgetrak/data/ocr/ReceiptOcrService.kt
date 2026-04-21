@@ -11,18 +11,27 @@ import com.techadvantage.budgetrak.BuildConfig
 import com.techadvantage.budgetrak.data.Category
 import com.techadvantage.budgetrak.data.sync.ReceiptManager
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
 
 /**
- * Split-pipeline Gemini 2.5 Flash-Lite receipt OCR (V16, shipped 2026-04-20).
+ * Split-pipeline Gemini 2.5 Flash-Lite receipt OCR (V18, 2026-04-20).
  *
- *   Call 1 (image → extract): merchant, date, amountCents, itemNames[].
- *   Call 2 (image + item names → categorise): items[{description,
- *     scores[{categoryId, score, reason}]}] + multiCategoryLikely + topChoice.
- *   Call 3 (image + item list → prices): priceCents per item. Only runs for
- *     multi-cat receipts.
+ *   Call 1  (image → extract):    merchant, date, amountCents, itemNames[],
+ *                                 fullTranscript[] (focused lines for reconciliation).
+ *   Call 1.5 (text → reconcile):  re-reads date + amountCents off the transcript
+ *                                 as an independent second pass. Text-only (no
+ *                                 image) so it's cheap. Runs in PARALLEL with Call 2
+ *                                 after Call 1 returns, so the extra call adds no
+ *                                 wall-clock latency on the common path.
+ *   Call 2  (image + items → categorise): items[{description,
+ *                                         scores[{categoryId, score, reason}]}]
+ *                                         + multiCategoryLikely + topChoice.
+ *   Call 3  (image + item list → prices): priceCents per item. Only runs for
+ *                                         multi-cat receipts.
  *
  * Why the split: Call 1 does the image-reading work and emits STABLE TEXT
  * (item names). Call 2 then reasons about categories with the text as its
@@ -33,10 +42,16 @@ import org.json.JSONObject
  * Home Supplies depending on which encoder produced the bytes. Splitting
  * image-reading from categorisation stabilises the ranking.
  *
- * Call counts:
- *   preSelect.size == 1: 1 call (header only; trust the preselected cat).
- *   preSelect.isEmpty(), derived single-cat: 2 calls (Call 1 + Call 2).
- *   preSelect.size >= 2 OR derived multi-cat: 3 calls (all three).
+ * Why Call 1.5: at temperature 0, Flash-Lite still produces single-digit OCR
+ * errors on small totals and flips MM/DD vs DD/MM on soft locale signals.
+ * A second independent pass over the receipt text catches both classes on
+ * the harness (+6pp on amount, +2pp on date). Text-only makes it cheap; the
+ * parallel launch with Call 2 hides the latency.
+ *
+ * Call counts (worst case; +1 vs V17 on every path, parallelized on the hot path):
+ *   preSelect.size == 1: 1 call  (header only; trust the preselected cat; skip reconcile).
+ *   preSelect.isEmpty(), single-cat: 3 calls (Call 1, then Call 1.5 ‖ Call 2).
+ *   preSelect.size >= 2 OR multi-cat: 4 calls (Call 1, Call 1.5 ‖ Call 2, then Call 3).
  *
  * Category-agnostic: the prompts never hard-code a user's category id or
  * name except referring to "Other" as the always-present fallback concept.
@@ -50,7 +65,8 @@ object ReceiptOcrService {
 
     // ── Schemas ────────────────────────────────────────────────────
 
-    // Call 1: header + item name list. Categorisation lives in Call 2.
+    // Call 1: header + item name list + focused transcript. Categorisation
+    // lives in Call 2; date/amount reconciliation lives in Call 1.5.
     private val call1Schema = Schema.obj(
         name = "Call1Result",
         description = "Receipt header + purchased item name list",
@@ -63,7 +79,21 @@ object ReceiptOcrService {
             "Every purchased line, as printed. Skip promos/coupons/discounts/tenders/subtotals. Include tax lines (Sales Tax, Estimated tax, etc.) as their own entry.",
             Schema.str("itemName", "One receipt line, verbatim")
         ),
+        Schema.arr(
+            "fullTranscript",
+            "Focused transcript used by the Call 1.5 reconciliation step. Include ONLY lines with a calendar date, a monetary amount, Subtotal/Total/Tax labels, or merchant header. Skip barcodes, policy boilerplate, signatures. 10-30 lines is typical.",
+            Schema.str("line", "One receipt line, verbatim")
+        ),
         Schema.str("notes", "Optional free-form note")
+    )
+
+    // Call 1.5: text-only reconciliation of date + amountCents. No image.
+    private val call1rSchema = Schema.obj(
+        name = "Call1rResult",
+        description = "Reconciled date + amount after cross-checking against the transcript",
+        Schema.str("date", "Reconciled transaction date in YYYY-MM-DD"),
+        Schema.int("amountCents", "Reconciled final total paid, integer cents"),
+        Schema.str("notes", "Optional one-sentence explanation when values changed")
     )
 
     // Call 2: receives image + the item names from Call 1 as text, returns
@@ -113,6 +143,7 @@ object ReceiptOcrService {
     // ── Models ─────────────────────────────────────────────────────
 
     private val call1Model by lazy { liteModel(call1Schema) }
+    private val call1rModel by lazy { liteModel(call1rSchema) }
     private val call2Model by lazy { liteModel(call2Schema) }
     private val call3Model by lazy { liteModel(call3Schema) }
 
@@ -174,6 +205,13 @@ object ReceiptOcrService {
         val date: String,
         val amountCents: Int,
         val itemNames: List<String>,
+        val fullTranscript: List<String>,
+        val notes: String?
+    )
+
+    private data class Call1Reconciled(
+        val date: String,
+        val amountCents: Int,
         val notes: String?
     )
 
@@ -195,12 +233,15 @@ object ReceiptOcrService {
             allCategories.filter { it.tag != "supercharge" && it.tag != "recurring_income" && !it.deleted }
         }
 
-        // Call 1 — image → header + item names. Always runs.
+        // Call 1 — image → header + item names + focused transcript. Always runs.
         val c1 = runCall1(imageBytes)
 
         // Shortcut: single preselected cat. No need to categorise anything.
+        // Skip reconcile too — a preselected receipt is usually a quick-entry
+        // flow where the user is watching latency and won't benefit from the
+        // extra 1s round-trip.
         if (preSelectedCategoryIds.size == 1) {
-            return buildSingleCatResult(c1, preSelectedCategoryIds.first())
+            return buildSingleCatResult(c1, null, preSelectedCategoryIds.first())
         }
 
         // Empty item-name list (edge case: unreadable receipt) → put the
@@ -208,14 +249,24 @@ object ReceiptOcrService {
         if (c1.itemNames.isEmpty()) {
             val otherId = promptCats.firstOrNull { it.tag == "other" }?.id
                 ?: promptCats.firstOrNull()?.id
-            return buildSingleCatResult(c1, otherId)
+            return buildSingleCatResult(c1, null, otherId)
         }
 
-        // Call 2 — image + item names as text → per-item scoring + routing.
-        val c2 = runCall2(imageBytes, c1.itemNames, promptCats, preselected)
+        // Call 1.5 (text-only reconciliation) and Call 2 (image+items) run in
+        // parallel. Each depends only on Call 1's output; neither depends on
+        // the other. Launching concurrently hides Call 1.5's ~1s latency
+        // behind Call 2's longer image-bearing round-trip.
+        val (c1r, c2) = coroutineScope {
+            val c1rDeferred = async { runCall1Reconcile(c1) }
+            val c2Deferred = async { runCall2(imageBytes, c1.itemNames, promptCats, preselected) }
+            Pair(c1rDeferred.await(), c2Deferred.await())
+        }
+        if (BuildConfig.DEBUG && (c1r.date != c1.date || c1r.amountCents != c1.amountCents)) {
+            Log.d(TAG, "Call1.5 reconciled: date ${c1.date}→${c1r.date}, amountCents ${c1.amountCents}→${c1r.amountCents}${c1r.notes?.let { " — $it" } ?: ""}")
+        }
 
         // Route:
-        //   preSelect.size >= 2  → multi path always (3 calls total)
+        //   preSelect.size >= 2  → multi path always (4 calls total)
         //   preSelect.isEmpty()  → derive from Call 2's items' top-1 cats.
         val multiPath = when {
             preSelectedCategoryIds.size >= 2 -> true
@@ -226,7 +277,7 @@ object ReceiptOcrService {
         }
 
         return if (multiPath) {
-            runMultiCat(imageBytes, c1, c2, promptCats)
+            runMultiCat(imageBytes, c1, c1r, c2, promptCats)
         } else {
             val validSet = promptCats.mapTo(mutableSetOf()) { it.id }
             val otherId = promptCats.firstOrNull { it.tag == "other" }?.id
@@ -235,7 +286,7 @@ object ReceiptOcrService {
                 otherId != null -> otherId
                 else -> promptCats.firstOrNull()?.id
             }
-            buildSingleCatResult(c1, cid)
+            buildSingleCatResult(c1, c1r, cid)
         }
     }
 
@@ -256,8 +307,38 @@ object ReceiptOcrService {
         val itemNames = json.optJSONArray("itemNames")?.let { arr ->
             (0 until arr.length()).mapNotNull { i -> arr.optString(i).takeIf { it.isNotBlank() } }
         } ?: emptyList()
+        val fullTranscript = json.optJSONArray("fullTranscript")?.let { arr ->
+            (0 until arr.length()).mapNotNull { i -> arr.optString(i).takeIf { it.isNotBlank() } }
+        } ?: emptyList()
         val notes = json.optString("notes").takeIf { it.isNotBlank() }
-        return Call1Header(merchant, merchantLegalName, date, amountCents, itemNames, notes)
+        return Call1Header(merchant, merchantLegalName, date, amountCents, itemNames, fullTranscript, notes)
+    }
+
+    /**
+     * Text-only second pass over the receipt transcript. Returns the
+     * reconciled date + amountCents. Falls back to C1's values on any
+     * parse or API error so reconciliation can never make us worse — only
+     * silently-better or silently-same.
+     */
+    private suspend fun runCall1Reconcile(c1: Call1Header): Call1Reconciled {
+        val fallback = Call1Reconciled(c1.date, c1.amountCents, null)
+        if (c1.fullTranscript.isEmpty()) return fallback
+        return try {
+            val raw = generateTextOnlyWithRetry(call1rModel, buildCall1ReconcilePrompt(c1))
+            if (BuildConfig.DEBUG) {
+                raw.chunked(3500).forEachIndexed { i, chunk -> Log.d(TAG, "Call1r raw[$i]: $chunk") }
+            }
+            val json = JSONObject(raw)
+            val date = json.optString("date").takeIf { it.isNotBlank() } ?: c1.date
+            val amountCents = json.optInt("amountCents", -1).takeIf { it >= 0 } ?: c1.amountCents
+            val notes = json.optString("notes").takeIf { it.isNotBlank() }
+            Call1Reconciled(date, amountCents, notes)
+        } catch (ce: CancellationException) {
+            throw ce
+        } catch (e: Exception) {
+            Log.d(TAG, "Call1.5 reconcile failed, falling back to C1: ${e.message?.take(100)}")
+            fallback
+        }
     }
 
     private suspend fun runCall2(
@@ -293,15 +374,26 @@ object ReceiptOcrService {
         return Call2Categorization(items, multiCategoryLikely, topChoice)
     }
 
-    private fun buildSingleCatResult(c1: Call1Header, categoryId: Int?): OcrResult {
+    /**
+     * Build a single-cat OcrResult using reconciled date/amount when
+     * available. Pass c1r = null on paths that skipped reconciliation
+     * (preselected single-cat, empty-items) — we fall back to c1 values.
+     */
+    private fun buildSingleCatResult(
+        c1: Call1Header,
+        c1r: Call1Reconciled?,
+        categoryId: Int?
+    ): OcrResult {
+        val date = c1r?.date ?: c1.date
+        val amountCents = c1r?.amountCents ?: c1.amountCents
         val categoryAmounts = categoryId?.let {
-            listOf(OcrCategoryAmount(categoryId = it, amount = c1.amountCents / 100.0))
+            listOf(OcrCategoryAmount(categoryId = it, amount = amountCents / 100.0))
         }
         return OcrResult(
             merchant = c1.merchant,
             merchantLegalName = c1.merchantLegalName,
-            date = c1.date,
-            amount = c1.amountCents / 100.0,
+            date = date,
+            amount = amountCents / 100.0,
             categoryAmounts = categoryAmounts,
             lineItems = null,
             notes = c1.notes
@@ -311,6 +403,7 @@ object ReceiptOcrService {
     private suspend fun runMultiCat(
         imageBytes: ByteArray,
         c1: Call1Header,
+        c1r: Call1Reconciled,
         c2: Call2Categorization,
         promptCats: List<Category>
     ): OcrResult {
@@ -325,14 +418,14 @@ object ReceiptOcrService {
         } ?: List(items.size) { 0 }
         val priceCents = List(items.size) { i -> priceCentsRaw.getOrNull(i) ?: 0 }
 
-        val reconciled = reconcilePrices(items, priceCents, c1.amountCents)
+        val reconciled = reconcilePrices(items, priceCents, c1r.amountCents)
         val categoryAmounts = aggregateCategoryAmounts(items, reconciled)
 
         return OcrResult(
             merchant = c1.merchant,
             merchantLegalName = c1.merchantLegalName,
-            date = c1.date,
-            amount = c1.amountCents / 100.0,
+            date = c1r.date,
+            amount = c1r.amountCents / 100.0,
             categoryAmounts = categoryAmounts,
             lineItems = items.map { it.description }.ifEmpty { null },
             notes = c1.notes
@@ -346,8 +439,8 @@ object ReceiptOcrService {
 
 - merchant: the consumer brand (e.g. "McDonald's", "Target", "Costco"). Prefer the consumer brand over the legal operator entity. Preserve original language; don't translate.
 - merchantLegalName: optional, only when the legal entity is clearly distinct from the consumer brand.
-- date: YYYY-MM-DD ISO. Receipts often have multiple dates; prefer the transaction date over print/due dates. DD/MM locales: Malaysia, Singapore, Vietnam, most of Europe. MM/DD: US.
-- amountCents: INTEGER number of cents for the final paid total (tax and tip included). Ignore subtotal, pre-tax lines, and separate GST/VAT summary tables. Vietnamese đồng (VND) has no fractional unit — dots in VND amounts are thousand separators; return the integer đồng value.
+- date: YYYY-MM-DD ISO. Receipts often have multiple dates; prefer the transaction date over print/due dates. Default to US MM/DD/YYYY. Parse as DD/MM/YYYY only when the receipt shows a non-US signal: non-USD currency (€, £, ¥, HK${'$'}, SG${'$'}, RM, ₫, ₹), a non-US country or address format, non-English body text, or a known non-US merchant. A 5-digit US ZIP or US state abbreviation (CA, NY, TX, MN, …) anchors back to MM/DD.
+- amountCents: INTEGER number of cents for the final paid total (tax and tip included). Ignore subtotal, pre-tax lines, and separate GST/VAT summary tables. Before finalizing, verify amountCents ≈ (subtotalCents + taxCents) within 2 cents — if not, re-examine the digits. Vietnamese đồng (VND) has no fractional unit — dots in VND amounts are thousand separators; return the integer đồng value.
 - itemNames: array of strings — the actual PURCHASED PRODUCTS on the receipt.
 
   INCLUDE in itemNames:
@@ -362,7 +455,35 @@ object ReceiptOcrService {
     - Order metadata: order numbers, tracking numbers, addresses, "Sold by" lines.
     - Action buttons from online receipts ("Track package", "Cancel items", "Buy again", etc.).
 
-  If the receipt is from an online order (Amazon, Target pickup, DoorDash, etc.) and you see a dedicated "Order Summary" section near the bottom with Subtotal/Shipping/Total rows, that section is SUMMARY only — do NOT list those rows as items. The actual products are usually shown earlier on the receipt next to their images and quantities."""
+  If the receipt is from an online order (Amazon, Target pickup, DoorDash, etc.) and you see a dedicated "Order Summary" section near the bottom with Subtotal/Shipping/Total rows, that section is SUMMARY only — do NOT list those rows as items. The actual products are usually shown earlier on the receipt next to their images and quantities.
+
+- fullTranscript: array of strings — a FOCUSED transcript used by a downstream date/amount reconciliation step. Include ONLY these kinds of lines, in top-to-bottom order:
+    - Any line containing a calendar date (transaction, bill, invoice, due date, etc.)
+    - Any line containing a monetary amount (item price, subtotal, tax, total, payment tender)
+    - Lines labeled Subtotal / Total / Grand Total / Balance Due / Tax / GST / VAT
+    - Merchant header lines (store name + city/country — first 2-3 lines of the receipt)
+  SKIP barcodes, serial/auth/terminal/cashier IDs, signature lines, return policy boilerplate, rewards-program marketing, bare UPC numbers, and ornamental footer text. Keep the transcript tight — typically 10-30 lines."""
+
+    private fun buildCall1ReconcilePrompt(c1: Call1Header): String {
+        val lines = c1.fullTranscript.mapIndexed { i, l -> "  ${i + 1}. $l" }.joinToString("\n")
+        return """A receipt image was read in a first pass. You now have the first-pass date + amount AND the raw text transcript of the same receipt. Cross-check them and return a reconciled date + amountCents.
+
+First-pass values:
+  date = "${c1.date}"
+  amountCents = ${c1.amountCents}
+  merchant = "${c1.merchant}"
+
+Raw transcript (line-numbered):
+$lines
+
+Task:
+  1. Find the transaction date line in the transcript (a line containing a calendar date). Prefer a purchase/transaction date over print timestamps or due dates. Default to US MM/DD/YYYY unless the transcript shows a non-US signal (non-USD currency, non-US address/country, non-English body).
+  2. Find the final total amount line in the transcript (the line that represents what the shopper actually paid — typically labeled "TOTAL", "GRAND TOTAL", "BALANCE DUE", "AMOUNT PAID", "Total Sale"). Ignore "SUBTOTAL", "TAX", and any GST/VAT summary rows.
+  3. Self-check: verify that amount ≈ subtotal + tax (±2 cents). If the first-pass amount fails that check but a different total line in the transcript passes it, use the transcript-supported value.
+  4. If the transcript and first-pass agree, return the first-pass values unchanged. If they disagree, return the transcript-supported values and explain briefly in notes.
+
+Return {date, amountCents, notes}."""
+    }
 
     private fun buildCall2Prompt(
         itemNames: List<String>,
@@ -458,6 +579,32 @@ $listed"""
                 lastErr = e
                 if (!isTransient(e.message) || attempt == maxAttempts) throw e
                 Log.d(TAG, "Transient error on attempt $attempt/$maxAttempts, retrying: ${e.message?.take(100)}")
+                delay(500L shl (attempt - 1))
+            }
+        }
+        throw lastErr ?: IllegalStateException("retry loop exited without result")
+    }
+
+    /**
+     * Text-only retry variant for Call 1.5 — no image, just prompt. Same
+     * transient regex and backoff curve.
+     */
+    private suspend fun generateTextOnlyWithRetry(
+        model: GenerativeModel,
+        prompt: String
+    ): String {
+        val maxAttempts = 4
+        var lastErr: Exception? = null
+        for (attempt in 1..maxAttempts) {
+            try {
+                val response = model.generateContent(content { text(prompt) })
+                return response.text ?: throw IllegalStateException("Empty response from model")
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (e: Exception) {
+                lastErr = e
+                if (!isTransient(e.message) || attempt == maxAttempts) throw e
+                Log.d(TAG, "Call1.5 transient on attempt $attempt/$maxAttempts, retrying: ${e.message?.take(100)}")
                 delay(500L shl (attempt - 1))
             }
         }

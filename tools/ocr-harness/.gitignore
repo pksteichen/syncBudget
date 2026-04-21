@@ -12,3 +12,11 @@ test-data/images/*
 test-data/images-original/*
 !test-data/images-original/.gitkeep
 test-data/staging-*/
+# App-sized / scraped / staging receipt banks — all PII-risky like images/.
+test-data/amazon_app_sized/
+test-data/app_sim/
+test-data/ddg_app_sized/
+test-data/ddg_scrape/
+test-data/new_bank/
+test-data/new_bank_app_sized/
+test-data/new_bank_downloads/

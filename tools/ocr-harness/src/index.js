@@ -113,6 +113,10 @@ async function runProvider(providerName, extract, labels, prompt, args) {
   console.log(`    date      ${pct(summary.date.pass, summary.date.total)}  (${summary.date.pass}/${summary.date.total})`);
   console.log(`    amount    ${pct(summary.amount.pass, summary.amount.total)}  (${summary.amount.pass}/${summary.amount.total})`);
   console.log(`    category  ${pct(summary.category.pass, summary.category.total)}  (${summary.category.pass}/${summary.category.total})`);
+  if (summary.items.total > 0) {
+    const avgJac = (summary.items.jaccardSum / summary.items.total);
+    console.log(`    items     ${pct(summary.items.pass, summary.items.total)}  (${summary.items.pass}/${summary.items.total}, avg Jaccard ${avgJac.toFixed(3)})`);
+  }
   const avgMs = summary.tests ? Math.round(summary.elapsedMsTotal / summary.tests) : 0;
   console.log(`    avg latency  ${avgMs}ms`);
 
