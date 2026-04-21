@@ -16,6 +16,7 @@ import { execFileSync } from "node:child_process";
 
 const MAX_DIM = 1000;
 const MIN_DIM = 400;  // short-edge floor; keep in sync with ReceiptManager.MIN_IMAGE_DIMENSION
+const LONG_EDGE_HARD_CAP = 3072;  // Gemini accepts up to ~3072px/edge; above that the SDK tiles/resamples
 const TARGET_BYTES_PER_MP = 250 * 1024;
 
 // Replicates ReceiptManager.resizeBitmap (Kotlin) exactly.
@@ -34,6 +35,13 @@ function computeTargetDims(w, h) {
     scale = MIN_DIM / shortestEdge;
   } else {
     scale = 1;  // source shortest already below floor; never upscale
+  }
+  // Hard cap on longest edge: if the min-dim floor would let long edge
+  // exceed LONG_EDGE_HARD_CAP, tighten scale even though it pushes the
+  // short edge below MIN_DIM. Correct tradeoff for very-tall receipts.
+  const longestAfter = longestEdge * scale;
+  if (longestAfter > LONG_EDGE_HARD_CAP) {
+    scale = LONG_EDGE_HARD_CAP / longestEdge;
   }
   if (scale >= 1) return { w, h };
   return {

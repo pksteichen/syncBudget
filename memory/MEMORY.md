@@ -175,7 +175,6 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [Pre-launch TODO](project_prelaunch_todo.md) — most done; App Check integrity level deferred.
 - [Play Store launch plan](project_play_store_launch.md) — personal-first then transfer-to-org strategy, address plan, DUNS timeline.
 - [Billing + runaway-bug alerts (configured 2026-04-13)](project_billing_alerts.md) — $1 budget + 4 Monitoring policies + SMS channel. Killswitch still optional.
-- [Compression long-edge cap (TODO)](project_compression_long_edge_cap.md) — clamp long edge at 3072px in ReceiptManager + harness prep script; narrow-tall receipts currently grow unbounded.
 - [OCR Spanish / Country setting](project_ocr_spanish_country_setting.md) — when adding Spanish or LatAm launch, add a Country dropdown driving locale/currency/date/tax-vocab hints into the OCR prompt; integer-only currencies (CLP/COP/PYG) block launch without this.
 
 ## Documentation

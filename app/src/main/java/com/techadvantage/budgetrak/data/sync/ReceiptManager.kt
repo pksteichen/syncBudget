@@ -20,6 +20,16 @@ object ReceiptManager {
 
     private const val TAG = "ReceiptManager"
     private const val MAX_IMAGE_DIMENSION = 1000
+
+    // Hard upper bound on the LONGEST edge, overriding the min-dim floor when
+    // they conflict. A very tall receipt with a 400px short-edge floor would
+    // otherwise grow unbounded on the long edge (e.g. a 1080x15000 screenshot
+    // would become 400x5555). Gemini accepts up to ~3072px per edge before
+    // the SDK starts tiling/resampling in ways we don't control; beyond that
+    // we're paying bandwidth + tokens with no OCR benefit. When this cap
+    // fires, the short edge necessarily drops below MIN_IMAGE_DIMENSION —
+    // that's the right tradeoff for the rare very-tall-receipt case.
+    private const val LONG_EDGE_HARD_CAP = 3072
     // Minimum short-edge floor for full-size receipts. A naïve longest-edge cap
     // crushes tall e-receipt screenshots (e.g. 1080x7785 → 139x1000) into an
     // unreadable blur. Applying a 400px floor on the shorter edge keeps them
@@ -496,7 +506,7 @@ object ReceiptManager {
         if (longestEdge <= maxDimension) return bitmap
 
         val scaleFromLongest = maxDimension.toFloat() / longestEdge
-        val scale: Float = if (minDimension <= 0) {
+        var scale: Float = if (minDimension <= 0) {
             scaleFromLongest
         } else {
             val shortestAfter = shortestEdge * scaleFromLongest
@@ -505,6 +515,13 @@ object ReceiptManager {
                 shortestEdge >= minDimension  -> minDimension.toFloat() / shortestEdge
                 else -> 1f  // source shortest already below floor; never upscale
             }
+        }
+        // Hard cap on longest edge: if the min-dim floor would let the long
+        // edge exceed LONG_EDGE_HARD_CAP, override with a tighter scale even
+        // though it pushes the short edge below minDimension.
+        val longestAfter = longestEdge * scale
+        if (longestAfter > LONG_EDGE_HARD_CAP) {
+            scale = LONG_EDGE_HARD_CAP.toFloat() / longestEdge
         }
         if (scale >= 1f) return bitmap
         val newWidth = (width * scale).toInt().coerceAtLeast(1)
