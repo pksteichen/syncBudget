@@ -87,10 +87,11 @@ object ReceiptOcrService {
         Schema.str("notes", "Optional free-form note")
     )
 
-    // Call 1.5: text-only reconciliation of date + amountCents. No image.
+    // Call 1.5: text-only reconciliation of merchant + date + amountCents. No image.
     private val call1rSchema = Schema.obj(
         name = "Call1rResult",
-        description = "Reconciled date + amount after cross-checking against the transcript",
+        description = "Reconciled merchant + date + amount after cross-checking against the transcript",
+        Schema.str("merchant", "Reconciled consumer-brand merchant name"),
         Schema.str("date", "Reconciled transaction date in YYYY-MM-DD"),
         Schema.int("amountCents", "Reconciled final total paid, integer cents"),
         Schema.str("notes", "Optional one-sentence explanation when values changed")
@@ -210,6 +211,7 @@ object ReceiptOcrService {
     )
 
     private data class Call1Reconciled(
+        val merchant: String,
         val date: String,
         val amountCents: Int,
         val notes: String?
@@ -261,8 +263,8 @@ object ReceiptOcrService {
             val c2Deferred = async { runCall2(imageBytes, c1.itemNames, promptCats, preselected) }
             Pair(c1rDeferred.await(), c2Deferred.await())
         }
-        if (BuildConfig.DEBUG && (c1r.date != c1.date || c1r.amountCents != c1.amountCents)) {
-            Log.d(TAG, "Call1.5 reconciled: date ${c1.date}→${c1r.date}, amountCents ${c1.amountCents}→${c1r.amountCents}${c1r.notes?.let { " — $it" } ?: ""}")
+        if (BuildConfig.DEBUG && (c1r.merchant != c1.merchant || c1r.date != c1.date || c1r.amountCents != c1.amountCents)) {
+            Log.d(TAG, "Call1.5 reconciled: merchant ${c1.merchant}→${c1r.merchant}, date ${c1.date}→${c1r.date}, amountCents ${c1.amountCents}→${c1r.amountCents}${c1r.notes?.let { " — $it" } ?: ""}")
         }
 
         // Route:
@@ -300,8 +302,10 @@ object ReceiptOcrService {
         val merchant = json.optString("merchant").takeIf { it.isNotBlank() }
             ?: throw IllegalStateException("Missing merchant in Call 1")
         val merchantLegalName = json.optString("merchantLegalName").takeIf { it.isNotBlank() }
-        val date = json.optString("date").takeIf { it.isNotBlank() }
-            ?: throw IllegalStateException("Missing date in Call 1")
+        // Empty date is allowed — model returns "" when no calendar date is
+        // visible on the receipt. TransactionDialog leaves selectedDate at
+        // its current default (today) when date fails to parse.
+        val date = json.optString("date")
         val amountCents = json.optInt("amountCents", -1).takeIf { it >= 0 }
             ?: throw IllegalStateException("Missing amountCents in Call 1")
         val itemNames = json.optJSONArray("itemNames")?.let { arr ->
@@ -321,7 +325,7 @@ object ReceiptOcrService {
      * silently-better or silently-same.
      */
     private suspend fun runCall1Reconcile(c1: Call1Header): Call1Reconciled {
-        val fallback = Call1Reconciled(c1.date, c1.amountCents, null)
+        val fallback = Call1Reconciled(c1.merchant, c1.date, c1.amountCents, null)
         if (c1.fullTranscript.isEmpty()) return fallback
         return try {
             val raw = generateTextOnlyWithRetry(call1rModel, buildCall1ReconcilePrompt(c1))
@@ -329,10 +333,11 @@ object ReceiptOcrService {
                 raw.chunked(3500).forEachIndexed { i, chunk -> Log.d(TAG, "Call1r raw[$i]: $chunk") }
             }
             val json = JSONObject(raw)
+            val merchant = json.optString("merchant").takeIf { it.isNotBlank() } ?: c1.merchant
             val date = json.optString("date").takeIf { it.isNotBlank() } ?: c1.date
             val amountCents = json.optInt("amountCents", -1).takeIf { it >= 0 } ?: c1.amountCents
             val notes = json.optString("notes").takeIf { it.isNotBlank() }
-            Call1Reconciled(date, amountCents, notes)
+            Call1Reconciled(merchant, date, amountCents, notes)
         } catch (ce: CancellationException) {
             throw ce
         } catch (e: Exception) {
@@ -384,13 +389,14 @@ object ReceiptOcrService {
         c1r: Call1Reconciled?,
         categoryId: Int?
     ): OcrResult {
+        val merchant = c1r?.merchant ?: c1.merchant
         val date = c1r?.date ?: c1.date
         val amountCents = c1r?.amountCents ?: c1.amountCents
         val categoryAmounts = categoryId?.let {
             listOf(OcrCategoryAmount(categoryId = it, amount = amountCents / 100.0))
         }
         return OcrResult(
-            merchant = c1.merchant,
+            merchant = merchant,
             merchantLegalName = c1.merchantLegalName,
             date = date,
             amount = amountCents / 100.0,
@@ -422,7 +428,7 @@ object ReceiptOcrService {
         val categoryAmounts = aggregateCategoryAmounts(items, reconciled)
 
         return OcrResult(
-            merchant = c1.merchant,
+            merchant = c1r.merchant,
             merchantLegalName = c1.merchantLegalName,
             date = c1r.date,
             amount = c1r.amountCents / 100.0,
@@ -437,9 +443,9 @@ object ReceiptOcrService {
     private fun buildCall1Prompt(): String =
         """Extract receipt data as JSON.
 
-- merchant: the consumer brand (e.g. "McDonald's", "Target", "Costco"). Prefer the consumer brand over the legal operator entity. Preserve original language; don't translate.
+- merchant: the consumer brand (e.g. "McDonald's", "Target", "Costco"). Prefer the consumer brand over the legal operator entity. Preserve original language; don't translate. If the receipt contains "Sold by:" or "Seller" or "Order placed" or "Shipping & Handling", it's an online-marketplace (Amazon, eBay, Etsy, Walmart.com, Target.com). Set merchant to the platform.
 - merchantLegalName: optional, only when the legal entity is clearly distinct from the consumer brand.
-- date: YYYY-MM-DD ISO. Receipts often have multiple dates; prefer the transaction date over print/due dates. Default to US MM/DD/YYYY. Parse as DD/MM/YYYY only when the receipt shows a non-US signal: non-USD currency (€, £, ¥, HK${'$'}, SG${'$'}, RM, ₫, ₹), a non-US country or address format, non-English body text, or a known non-US merchant. A 5-digit US ZIP or US state abbreviation (CA, NY, TX, MN, …) anchors back to MM/DD.
+- date: YYYY-MM-DD ISO. Receipts often have multiple dates; prefer the transaction date over print/due dates. Default to US MM/DD/YYYY. Parse as DD/MM/YYYY only when the receipt shows a non-US signal: non-USD currency (€, £, ¥, HK${'$'}, SG${'$'}, RM, ₫, ₹), a non-US country or address format, non-English body text, or a known non-US merchant. A 5-digit US ZIP or US state abbreviation (CA, NY, TX, MN, …) anchors back to MM/DD. **If NO calendar date is visible anywhere on the receipt, return an empty string "" — do NOT invent or guess a date from context.** Partial dates without a year (e.g. a ship-tracker line showing only "Arriving tomorrow" or "Delivered Mon") are NOT dates — return empty in that case too.
 - amountCents: INTEGER number of cents for the final paid total (tax and tip included). Ignore subtotal, pre-tax lines, and separate GST/VAT summary tables. Before finalizing, verify amountCents ≈ (subtotalCents + taxCents) within 2 cents — if not, re-examine the digits. Vietnamese đồng (VND) has no fractional unit — dots in VND amounts are thousand separators; return the integer đồng value.
 - itemNames: array of strings — the actual PURCHASED PRODUCTS on the receipt.
 
@@ -466,23 +472,24 @@ object ReceiptOcrService {
 
     private fun buildCall1ReconcilePrompt(c1: Call1Header): String {
         val lines = c1.fullTranscript.mapIndexed { i, l -> "  ${i + 1}. $l" }.joinToString("\n")
-        return """A receipt image was read in a first pass. You now have the first-pass date + amount AND the raw text transcript of the same receipt. Cross-check them and return a reconciled date + amountCents.
+        return """A receipt image was read in a first pass. You now have the first-pass merchant + date + amount AND the raw text transcript of the same receipt. Cross-check them and return reconciled values.
 
 First-pass values:
+  merchant = "${c1.merchant}"
   date = "${c1.date}"
   amountCents = ${c1.amountCents}
-  merchant = "${c1.merchant}"
 
 Raw transcript (line-numbered):
 $lines
 
 Task:
-  1. Find the transaction date line in the transcript (a line containing a calendar date). Prefer a purchase/transaction date over print timestamps or due dates. Default to US MM/DD/YYYY unless the transcript shows a non-US signal (non-USD currency, non-US address/country, non-English body).
-  2. Find the final total amount line in the transcript (the line that represents what the shopper actually paid — typically labeled "TOTAL", "GRAND TOTAL", "BALANCE DUE", "AMOUNT PAID", "Total Sale"). Ignore "SUBTOTAL", "TAX", and any GST/VAT summary rows.
-  3. Self-check: verify that amount ≈ subtotal + tax (±2 cents). If the first-pass amount fails that check but a different total line in the transcript passes it, use the transcript-supported value.
-  4. If the transcript and first-pass agree, return the first-pass values unchanged. If they disagree, return the transcript-supported values and explain briefly in notes.
+  1. Verify the merchant. If the transcript contains "Sold by:" or "Seller" or "Order placed" or "Shipping & Handling", it's an online-marketplace order (Amazon, eBay, Etsy, Walmart.com, Target.com) — the merchant should be the PLATFORM, NOT a product brand (e.g. "QZIIW iPhone Charger") or the third-party seller named after "Sold by:" (e.g. "Meigo"). If the first-pass merchant is one of those product brands or third-party sellers and the transcript contains those marketplace signals, correct the merchant to the platform inferred from the receipt layout (Amazon orders show "Order placed" + "Item(s) Subtotal" + "Grand Total"; eBay shows order-number patterns; etc.). Otherwise keep the first-pass merchant.
+  2. Find the transaction date line in the transcript (a line containing a calendar date). Prefer a purchase/transaction date over print timestamps or due dates. Default to US MM/DD/YYYY unless the transcript shows a non-US signal (non-USD currency, non-US address/country, non-English body). **If NO calendar date appears anywhere in the transcript, return empty string "" — NEVER invent a date from training data or outside context. Ship-tracker phrases like "Arriving tomorrow" or "Delivered Mon" are NOT dates.**
+  3. Find the final total amount line in the transcript (the line that represents what the shopper actually paid — typically labeled "TOTAL", "GRAND TOTAL", "BALANCE DUE", "AMOUNT PAID", "Total Sale"). Ignore "SUBTOTAL", "TAX", and any GST/VAT summary rows.
+  4. Self-check: verify that amount ≈ subtotal + tax (±2 cents). If the first-pass amount fails that check but a different total line in the transcript passes it, use the transcript-supported value.
+  5. If the transcript and first-pass agree, return the first-pass values unchanged. If they disagree, return the transcript-supported values and explain briefly in notes.
 
-Return {date, amountCents, notes}."""
+Return {merchant, date, amountCents, notes}."""
     }
 
     private fun buildCall2Prompt(

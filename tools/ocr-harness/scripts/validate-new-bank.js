@@ -29,9 +29,9 @@ function categoryList(cats) {
 
 const C1_PROMPT = `Extract receipt data as JSON.
 
-- merchant: the consumer brand (e.g. "McDonald's", "Target", "Costco"). Prefer the consumer brand over the legal operator entity. Preserve original language; don't translate.
+- merchant: the consumer brand (e.g. "McDonald's", "Target", "Costco"). Prefer the consumer brand over the legal operator entity. Preserve original language; don't translate. If the receipt contains "Sold by:" or "Seller" or "Order placed" or "Shipping & Handling", it's an online-marketplace (Amazon, eBay, Etsy, Walmart.com, Target.com). Set merchant to the platform.
 - merchantLegalName: optional, only when the legal entity is clearly distinct from the consumer brand.
-- date: YYYY-MM-DD ISO. Receipts often have multiple dates; prefer the transaction date over print/due dates. Default to US MM/DD/YYYY. Parse as DD/MM/YYYY only when the receipt shows a non-US signal: non-USD currency (€, £, ¥, HK$, SG$, RM, ₫, ₹), a non-US country or address format, non-English body text, or a known non-US merchant. A 5-digit US ZIP or US state abbreviation (CA, NY, TX, MN, …) anchors back to MM/DD.
+- date: YYYY-MM-DD ISO. Receipts often have multiple dates; prefer the transaction date over print/due dates. Default to US MM/DD/YYYY. Parse as DD/MM/YYYY only when the receipt shows a non-US signal: non-USD currency (€, £, ¥, HK$, SG$, RM, ₫, ₹), a non-US country or address format, non-English body text, or a known non-US merchant. A 5-digit US ZIP or US state abbreviation (CA, NY, TX, MN, …) anchors back to MM/DD. **If NO calendar date is visible anywhere on the receipt, return an empty string "" — do NOT invent or guess a date from context.** Partial dates without a year (e.g. a ship-tracker line showing only "Arriving tomorrow" or "Delivered Mon") are NOT dates — return empty in that case too.
 - amountCents: INTEGER number of cents for the final paid total (tax and tip included). Ignore subtotal, pre-tax lines, and separate GST/VAT summary tables. Before finalizing, verify amountCents ≈ (subtotalCents + taxCents) within 2 cents — if not, re-examine the digits. Vietnamese đồng (VND) has no fractional unit — dots in VND amounts are thousand separators; return the integer đồng value.
 - itemNames: array of strings — the actual PURCHASED PRODUCTS on the receipt.
 
@@ -76,33 +76,35 @@ const C1_SCHEMA = {
 function c1rPrompt(c1, localeHint = null) {
   const lines = (c1.fullTranscript || []).map((l, i) => `  ${i + 1}. ${l}`).join("\n");
   const localeLine = localeHint ? `Caller locale hint: "${localeHint}".` : "Default date locale: US MM/DD/YYYY unless the transcript shows a non-US signal (non-USD currency, non-US address/country, non-English body).";
-  return `A receipt image was read in a first pass. You now have the first-pass date + amount AND the raw text transcript of the same receipt. Cross-check them and return a reconciled date + amountCents.
+  return `A receipt image was read in a first pass. You now have the first-pass merchant + date + amount AND the raw text transcript of the same receipt. Cross-check them and return reconciled values.
 
 First-pass values:
+  merchant = "${c1.merchant}"
   date = "${c1.date}"
   amountCents = ${c1.amountCents}
-  merchant = "${c1.merchant}"
 
 Raw transcript (line-numbered):
 ${lines}
 
 Task:
-  1. Find the transaction date line in the transcript (a line containing a calendar date). Prefer a purchase/transaction date over print timestamps or due dates. ${localeLine}
-  2. Find the final total amount line in the transcript (the line that represents what the shopper actually paid — typically labeled "TOTAL", "GRAND TOTAL", "BALANCE DUE", "AMOUNT PAID", "Total Sale"). Ignore "SUBTOTAL", "TAX", and any GST/VAT summary rows.
-  3. Self-check: verify that amount ≈ subtotal + tax (±2 cents). If the first-pass amount fails that check but a different total line in the transcript passes it, use the transcript-supported value.
-  4. If the transcript and first-pass agree, return the first-pass values unchanged. If they disagree, return the transcript-supported values and explain briefly in notes.
+  1. Verify the merchant. If the transcript contains "Sold by:" or "Seller" or "Order placed" or "Shipping & Handling", it's an online-marketplace order (Amazon, eBay, Etsy, Walmart.com, Target.com) — the merchant should be the PLATFORM, NOT a product brand (e.g. "QZIIW iPhone Charger") or the third-party seller named after "Sold by:" (e.g. "Meigo"). If the first-pass merchant is one of those product brands or third-party sellers and the transcript contains those marketplace signals, correct the merchant to the platform inferred from the receipt layout (Amazon orders show "Order placed" + "Item(s) Subtotal" + "Grand Total"; eBay shows order-number patterns; etc.). Otherwise keep the first-pass merchant.
+  2. Find the transaction date line in the transcript (a line containing a calendar date). Prefer a purchase/transaction date over print timestamps or due dates. ${localeLine} **If NO calendar date appears anywhere in the transcript, return empty string "" — NEVER invent a date from training data or outside context. Ship-tracker phrases like "Arriving tomorrow" or "Delivered Mon" are NOT dates.**
+  3. Find the final total amount line in the transcript (the line that represents what the shopper actually paid — typically labeled "TOTAL", "GRAND TOTAL", "BALANCE DUE", "AMOUNT PAID", "Total Sale"). Ignore "SUBTOTAL", "TAX", and any GST/VAT summary rows.
+  4. Self-check: verify that amount ≈ subtotal + tax (±2 cents). If the first-pass amount fails that check but a different total line in the transcript passes it, use the transcript-supported value.
+  5. If the transcript and first-pass agree, return the first-pass values unchanged. If they disagree, return the transcript-supported values and explain briefly in notes.
 
-Return {date, amountCents, notes}.`;
+Return {merchant, date, amountCents, notes}.`;
 }
 
 const C1R_SCHEMA = {
   type: "object",
   properties: {
+    merchant: { type: "string" },
     date: { type: "string" },
     amountCents: { type: "integer" },
     notes: { type: "string" },
   },
-  required: ["date", "amountCents"],
+  required: ["merchant", "date", "amountCents"],
 };
 
 function c2Prompt(itemNames, cats) {
@@ -203,7 +205,7 @@ async function runSplit(imgBytes, mimeType, cats) {
 
   // Call 1.5: text-only reconciliation. Cheap (~2k tokens, no image)
   // but forces a second, independent pass over the receipt text.
-  let reconciled = { date: c1.date, amountCents: c1.amountCents, notes: null };
+  let reconciled = { merchant: c1.merchant, date: c1.date, amountCents: c1.amountCents, notes: null };
   if ((c1.fullTranscript || []).length > 0) {
     try {
       const c1rRes = await generateWithRetry({
@@ -214,7 +216,7 @@ async function runSplit(imgBytes, mimeType, cats) {
       reconciled = JSON.parse(c1rRes.text);
     } catch (e) {
       // If reconciliation fails, fall back to C1 values silently.
-      reconciled = { date: c1.date, amountCents: c1.amountCents, notes: `c1r-error: ${e.message?.slice(0, 60)}` };
+      reconciled = { merchant: c1.merchant, date: c1.date, amountCents: c1.amountCents, notes: `c1r-error: ${e.message?.slice(0, 60)}` };
     }
   }
 
@@ -260,7 +262,7 @@ async function runSplit(imgBytes, mimeType, cats) {
   }
 
   return {
-    parsed: { merchant: c1.merchant, merchantLegalName: c1.merchantLegalName, date: reconciled.date, amount: (reconciled.amountCents || 0) / 100, categoryAmounts, lineItems },
+    parsed: { merchant: reconciled.merchant || c1.merchant, merchantLegalName: c1.merchantLegalName, date: reconciled.date, amount: (reconciled.amountCents || 0) / 100, categoryAmounts, lineItems },
     c1, c2, multi, reconciled,
   };
 }
@@ -306,10 +308,10 @@ async function runSplit(imgBytes, mimeType, cats) {
         grade.amount.pass ? "A" : "a",
         grade.category.pass ? "C" : "c",
       ].join("");
-      const c1d = res.c1?.date, c1a = res.c1?.amountCents;
-      const rd = res.reconciled?.date, ra = res.reconciled?.amountCents;
-      const recChanged = (c1d !== rd) || (c1a !== ra);
-      const recMark = recChanged ? ` [R: ${c1d}→${rd}, ${c1a}→${ra}]` : "";
+      const c1m = res.c1?.merchant, c1d = res.c1?.date, c1a = res.c1?.amountCents;
+      const rm = res.reconciled?.merchant, rd = res.reconciled?.date, ra = res.reconciled?.amountCents;
+      const recChanged = (c1m !== rm) || (c1d !== rd) || (c1a !== ra);
+      const recMark = recChanged ? ` [R: m='${c1m}'→'${rm}', d=${c1d}→${rd}, a=${c1a}→${ra}]` : "";
       console.log(`${marks}  exp=${nm[exp] || exp} got=${nm[got] || got}  (${elapsedMs}ms)${recMark}`);
     } catch (e) {
       const elapsedMs = Date.now() - t0;

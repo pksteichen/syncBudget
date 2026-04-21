@@ -28,13 +28,30 @@ custom category list (rename, delete, reorder, localize — all safe).
    conflates Amazon-style Order Summary rows with actual products on some
    device encodings. Locale rule: default US MM/DD/YYYY; parse as DD/MM only on
    explicit non-US signal (non-USD currency, non-US address, non-English body).
-2. **Call 1.5 (text → reconcile)**: text-only. Takes C1's date + amountCents +
-   fullTranscript, returns reconciled date + amountCents + notes. Runs in
-   PARALLEL with Call 2 (`coroutineScope { async(c1.5) async(c2) }`) so the
-   extra call adds no wall-clock latency on the hot path — Call 1.5 completes
-   in ~1s while Call 2 is ~3-4s. Non-fatal: if all retries fail, falls back to
-   C1's values silently. Measured on harness: +6pp on amount accuracy, +2pp on
-   date accuracy. Catches both digit-flip OCR errors and locale date swaps.
+   **Marketplace rule**: if the receipt contains "Sold by:" or "Seller" or
+   "Order placed" or "Shipping & Handling", it's an online-marketplace order
+   (Amazon, eBay, Etsy, Walmart.com, Target.com) — merchant = the platform,
+   NOT a product brand (e.g. "QZIIW iPhone Charger") or the third-party seller
+   after "Sold by:" (e.g. "Meigo"). **No-hallucinated-date rule**: if NO
+   calendar date is visible anywhere, return empty string "" — never invent a
+   date from training data or context (ship-tracker phrases like "Arriving
+   tomorrow" are NOT dates). Parser accepts empty date; TransactionDialog's
+   `runCatching { LocalDate.parse(...) }.getOrNull()?.let { selectedDate = it }`
+   silently leaves `selectedDate` at today when date is empty.
+2. **Call 1.5 (text → reconcile)**: text-only. Takes C1's merchant + date +
+   amountCents + fullTranscript, returns reconciled {merchant, date,
+   amountCents, notes}. Runs in PARALLEL with Call 2 (`coroutineScope {
+   async(c1.5) async(c2) }`) so the extra call adds no wall-clock latency on
+   the hot path — Call 1.5 completes in ~1s while Call 2 is ~3-4s. Non-fatal:
+   if all retries fail, falls back to C1's values silently. Measured on
+   harness: +6pp on amount accuracy, +2pp on date accuracy. Catches
+   digit-flip OCR errors, locale date swaps, AND marketplace-merchant
+   confusion (safety net when C1's marketplace rule doesn't fire).
+   Includes the same marketplace signal list ("Sold by:" / "Seller" /
+   "Order placed" / "Shipping & Handling") so Amazon/eBay/Etsy orders get
+   merchant = platform regardless of what C1 picked. Also carries the
+   no-hallucinated-date rule forward — returns "" if the transcript lacks
+   a calendar date rather than echoing C1's invented date.
 3. **Call 2 (image + item names as text → categorise)**: returns `items[{description,
    scores:[{categoryId, score 0-100, reason}]}]`, `multiCategoryLikely`, `topChoice`.
    The item-name list from Call 1 is included as TEXT in the prompt so the model
