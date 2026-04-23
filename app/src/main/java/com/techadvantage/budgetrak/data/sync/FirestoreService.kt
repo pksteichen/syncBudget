@@ -511,32 +511,34 @@ object FirestoreService {
     suspend fun uploadDebugFiles(
         groupId: String, deviceId: String, deviceName: String,
         syncLog: String, syncDiag: String,
-        encryptionKey: ByteArray? = null
+        encryptionKey: ByteArray? = null,
+        logcat: String? = null
     ) = withTimeout(OP_TIMEOUT_MS) {
         // Encrypt debug data before storing in Firestore.
         // Even in debug builds, financial data should not be plaintext.
         val shortId = deviceId.take(8)
-        val logData = if (encryptionKey != null) {
+        fun encodeCapped(s: String): String = if (encryptionKey != null) {
             android.util.Base64.encodeToString(
                 com.techadvantage.budgetrak.data.CryptoHelper.encryptWithKey(
-                    syncLog.takeLast(50_000).toByteArray(), encryptionKey
+                    s.takeLast(50_000).toByteArray(), encryptionKey
                 ), android.util.Base64.NO_WRAP
             )
-        } else syncLog.takeLast(50_000)
-        val diagData = if (encryptionKey != null) {
-            android.util.Base64.encodeToString(
-                com.techadvantage.budgetrak.data.CryptoHelper.encryptWithKey(
-                    syncDiag.takeLast(50_000).toByteArray(), encryptionKey
-                ), android.util.Base64.NO_WRAP
-            )
-        } else syncDiag.takeLast(50_000)
-        val data = mapOf(
+        } else s.takeLast(50_000)
+
+        val data = mutableMapOf<String, Any>(
             "debug_${shortId}_name" to deviceName,
-            "debug_${shortId}_log" to logData,
-            "debug_${shortId}_diag" to diagData,
+            "debug_${shortId}_log" to encodeCapped(syncLog),
+            "debug_${shortId}_diag" to encodeCapped(syncDiag),
             "debug_${shortId}_enc" to (encryptionKey != null),
             "debug_${shortId}_at" to System.currentTimeMillis()
         )
+        // logcat is a third, optional slot. Absent for remote devices on
+        // release builds (DebugDumpWorker is debug-only) or when the capture
+        // failed. Downloader writes it as `logcat_<deviceName>.txt` when
+        // present; when absent the file isn't created.
+        if (!logcat.isNullOrEmpty()) {
+            data["debug_${shortId}_logcat"] = encodeCapped(logcat)
+        }
         db.collection("groups").document(groupId)
             .set(data, SetOptions.merge()).await()
     }
@@ -556,28 +558,27 @@ object FirestoreService {
             val name = doc.getString("debug_${id}_name") ?: id
             var log = doc.getString("debug_${id}_log") ?: ""
             var diag = doc.getString("debug_${id}_diag") ?: ""
+            var logcat = doc.getString("debug_${id}_logcat") ?: ""
             val encrypted = doc.getBoolean("debug_${id}_enc") ?: false
             val at = doc.getLong("debug_${id}_at") ?: 0L
             // Decrypt if encrypted and we have the key
             if (encrypted && encryptionKey != null) {
                 try {
-                    if (log.isNotEmpty()) log = String(
+                    fun decrypt(b64: String): String = String(
                         com.techadvantage.budgetrak.data.CryptoHelper.decryptWithKey(
-                            android.util.Base64.decode(log, android.util.Base64.NO_WRAP), encryptionKey
+                            android.util.Base64.decode(b64, android.util.Base64.NO_WRAP), encryptionKey
                         )
                     )
-                    if (diag.isNotEmpty()) diag = String(
-                        com.techadvantage.budgetrak.data.CryptoHelper.decryptWithKey(
-                            android.util.Base64.decode(diag, android.util.Base64.NO_WRAP), encryptionKey
-                        )
-                    )
+                    if (log.isNotEmpty()) log = decrypt(log)
+                    if (diag.isNotEmpty()) diag = decrypt(diag)
+                    if (logcat.isNotEmpty()) logcat = decrypt(logcat)
                 } catch (e: Exception) {
                     android.util.Log.w("FirestoreService", "Debug file decrypt failed: ${e.message}")
                     continue
                 }
             }
-            if (log.isNotEmpty() || diag.isNotEmpty()) {
-                results.add(DebugFileSet(name, log, diag, at))
+            if (log.isNotEmpty() || diag.isNotEmpty() || logcat.isNotEmpty()) {
+                results.add(DebugFileSet(name, log, diag, logcat, at))
             }
         }
         results
@@ -618,4 +619,10 @@ object FirestoreService {
     }
 }
 
-data class DebugFileSet(val deviceName: String, val syncLog: String, val syncDiag: String, val updatedAt: Long = 0L)
+data class DebugFileSet(
+    val deviceName: String,
+    val syncLog: String,
+    val syncDiag: String,
+    val logcat: String = "",
+    val updatedAt: Long = 0L
+)

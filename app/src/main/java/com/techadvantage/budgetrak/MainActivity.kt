@@ -1881,17 +1881,20 @@ class MainActivity : ComponentActivity() {
                                     extraDebug.appendLine(f.readText())
                                 }
                             }
-                            try {
-                                val lp = Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-t", "500"))
-                                val lt = lp.inputStream.bufferedReader().readText()
-                                lp.waitFor()
-                                if (lt.isNotEmpty()) {
-                                    extraDebug.appendLine("\n=== logcat (last 500) ===")
-                                    extraDebug.appendLine(lt)
-                                }
-                            } catch (_: Exception) {}
+                            // Logcat uploads into its own slot (see FirestoreService
+                            // uploadDebugFiles `logcat` param) so the downloader
+                            // writes a dedicated `logcat_<name>.txt` instead of
+                            // burying it inside sync_diag_<name>.txt.
+                            val localLogcat: String? = if (BuildConfig.DEBUG) {
+                                try {
+                                    val lp = Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-t", "1000"))
+                                    val lt = lp.inputStream.bufferedReader().readText()
+                                    lp.waitFor()
+                                    lt.takeIf { it.isNotEmpty() }
+                                } catch (_: Exception) { null }
+                            } else null
                             val debugKey = GroupManager.getEncryptionKey(context)
-                            FirestoreService.uploadDebugFiles(gId, vm.localDeviceId, devName, syncLogText, extraDebug.toString(), debugKey)
+                            FirestoreService.uploadDebugFiles(gId, vm.localDeviceId, devName, syncLogText, extraDebug.toString(), debugKey, localLogcat)
 
                             // 4. Request all devices upload fresh files
                             FirestoreService.requestDebugDump(gId)
@@ -1930,6 +1933,7 @@ class MainActivity : ComponentActivity() {
                                         val rName = DiagDumpBuilder.sanitizeDeviceName(remote.deviceName)
                                         if (remote.syncLog.isNotEmpty()) DiagDumpBuilder.writeDiagToMediaStore(context, "sync_log_${rName}.txt", remote.syncLog)
                                         if (remote.syncDiag.isNotEmpty()) DiagDumpBuilder.writeDiagToMediaStore(context, "sync_diag_${rName}.txt", remote.syncDiag)
+                                        if (remote.logcat.isNotEmpty()) DiagDumpBuilder.writeDiagToMediaStore(context, "logcat_${rName}.txt", remote.logcat)
                                     }
                                     gotFreshRemote = true
                                     break

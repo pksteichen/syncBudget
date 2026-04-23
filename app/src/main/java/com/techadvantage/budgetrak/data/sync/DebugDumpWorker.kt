@@ -70,7 +70,23 @@ class DebugDumpWorker(
                     val combinedLog = if (tokenLogText.isNotEmpty())
                         "$syncLogText\n\n── Token Log ──\n$tokenLogText"
                     else syncLogText
-                    FirestoreService.uploadDebugFiles(groupId, deviceId, devName, combinedLog, diagText, key)
+                    // Capture logcat so remote-triggered dumps (FCM debug_request)
+                    // include the same level of forensic detail the local Dump
+                    // button captures. Debug builds only — release FcmService
+                    // never enqueues DebugDumpWorker anyway, but the guard
+                    // mirrors the local path's BuildConfig.DEBUG check.
+                    val logcatText = if (com.techadvantage.budgetrak.BuildConfig.DEBUG) {
+                        try {
+                            val p = Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-t", "1000"))
+                            val t = p.inputStream.bufferedReader().readText()
+                            p.waitFor()
+                            t
+                        } catch (e: Exception) {
+                            android.util.Log.w("DebugDumpWorker", "Logcat capture failed: ${e.message}")
+                            null
+                        }
+                    } else null
+                    FirestoreService.uploadDebugFiles(groupId, deviceId, devName, combinedLog, diagText, key, logcatText)
                 }
             } catch (e: Exception) {
                 android.util.Log.e("DebugDumpWorker", "Debug upload failed: ${e.message}")
