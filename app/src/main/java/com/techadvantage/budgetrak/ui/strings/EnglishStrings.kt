@@ -140,8 +140,8 @@ object EnglishStrings : AppStrings {
         showWidgetLogo = "Show logo on widget",
         autoCapitalize = "Auto Capitalize",
         privacySection = "Privacy",
-        crashReports = "Send crash reports",
-        crashReportsDesc = "Help us catch and fix bugs by sharing anonymous crash data. No financial information is sent.",
+        crashReports = "Send crash reports and anonymous usage data",
+        crashReportsDesc = "Help us catch and fix bugs by sharing anonymous crash and usage data. No financial information is sent.",
         categories = "Categories",
         charted = "Charted",
         widget = "Widget",
@@ -951,14 +951,17 @@ object EnglishStrings : AppStrings {
         widgetLogoTitle = "Show Logo on Widget",
         widgetLogoBody = "When checked, the BudgeTrak SYNC logo appears between the transaction buttons on the " +
             "home screen widget. Uncheck to hide the logo for a minimalist widget appearance.",
-        crashReportsTitle = "Send Crash Reports",
-        crashReportsBody = "When enabled (default), BudgeTrak shares anonymous crash data so we can detect and fix " +
-            "problems quickly and ship a repair update. We strongly encourage leaving this on \u2014 it's the main " +
-            "way we hear about bugs that affect real users. Your privacy is protected: no transaction details, " +
-            "merchant names, amounts, dates, or receipt photos are ever sent. Only crash stack traces, anonymous " +
-            "device information, sync status, and basic counts (number of transactions, recurring expenses, etc.). " +
-            "Even your available cash is converted to a one-way hash before being included \u2014 the actual value " +
-            "never leaves your device. You can opt out at any time using this toggle.",
+        crashReportsTitle = "Send Crash Reports and Anonymous Usage Data",
+        crashReportsBody = "When enabled (default), BudgeTrak shares anonymous crash and usage data so we can detect " +
+            "and fix problems quickly and ship a repair update. We strongly encourage leaving this on \u2014 it's the " +
+            "main way we hear about bugs that affect real users, and the usage data (e.g. how often receipt OCR gets " +
+            "a field wrong) drives real quality improvements for everyone. Your privacy is protected: no transaction " +
+            "details, merchant names, amounts, dates, or receipt photos are ever sent. Only crash stack traces, " +
+            "anonymous device information, sync status, basic counts (number of transactions, recurring expenses, " +
+            "etc.), and OCR correction deltas (true/false whether you changed a field; the cents difference if you " +
+            "changed the amount; but not the values themselves). Even your available cash is converted to a one-way " +
+            "hash before being included \u2014 the actual value never leaves your device. You can opt out at any " +
+            "time using this toggle.",
         receiptPhotosTitle = "Receipt Photos",
         receiptPhotosBody = "Paid users can attach up to 5 photos per transaction. Swipe left on a transaction to reveal the photo panel, or use the camera icon in the edit dialog. Images and PDFs are both supported; PDFs are rendered to an image on import.\n\nInteracting with the photo bar: tap a thumbnail to open the full-screen viewer (with a Delete button). Long-press a thumbnail to pick it up and drag left or right to reorder \u2014 the other photos slide out of the way in real time.\n\nSYNC'd receipts: if a photo was added on another device and its file hasn't finished downloading here yet, you'll see a camera-icon placeholder. It can still be reordered; tapping shows a short toast noting the download is in progress.",
         receiptPhotosBullet1 = "Photos are stored locally and synced across linked devices when SYNC is enabled",

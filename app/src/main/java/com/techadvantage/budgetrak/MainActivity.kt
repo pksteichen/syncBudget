@@ -1721,6 +1721,9 @@ class MainActivity : ComponentActivity() {
                 try {
                     com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance()
                         .setCrashlyticsCollectionEnabled(newValue)
+                    // Same toggle also gates Analytics (ocr_feedback, health_beacon).
+                    com.google.firebase.analytics.FirebaseAnalytics.getInstance(this)
+                        .setAnalyticsCollectionEnabled(newValue)
                 } catch (_: Exception) {}
             },
             categories = vm.activeCategories,

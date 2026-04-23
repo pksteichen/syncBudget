@@ -3455,12 +3455,19 @@ fun TransactionDialog(
         unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
     )
 
+    // Snapshot of the most-recent OCR result that populated this dialog.
+    // Compared against the user's final values on save to emit an
+    // `ocr_feedback` Analytics event (measures how much the user had to
+    // correct OCR). Null for non-OCR entries and after clearing.
+    var ocrSnapshot by remember { mutableStateOf<com.techadvantage.budgetrak.data.ocr.OcrResult?>(null) }
+
     // AI OCR: observe ocrState and prefill fields on Success, toast on Failure.
     LaunchedEffect(ocrState) {
         val state = ocrState
         when (state) {
             is com.techadvantage.budgetrak.data.ocr.OcrState.Success -> {
                 val r = state.result
+                ocrSnapshot = r  // captured here; re-scan overwrites.
 
                 // Merchant — always overwrite (user review expected; verified=false below).
                 source = if (autoCapitalize) com.techadvantage.budgetrak.data.toApaTitleCase(r.merchant) else r.merchant
@@ -4868,6 +4875,32 @@ fun TransactionDialog(
                                     receiptId4 = addModeReceiptId4,
                                     receiptId5 = addModeReceiptId5
                                 )
+                            }
+                            // OCR feedback telemetry: fires once if this save came
+                            // from an OCR-populated dialog. Compares final values
+                            // against the OCR snapshot captured at Success time.
+                            // No-op if Crashlytics/Analytics opt-out is off.
+                            val snap = ocrSnapshot
+                            if (snap != null) {
+                                val normMerchant = { s: String -> s.trim().lowercase().replace(Regex("[^a-z0-9]"), "") }
+                                val merchantChanged = normMerchant(txn.source) != normMerchant(snap.merchant)
+                                val dateChanged = runCatching { LocalDate.parse(snap.date) }.getOrNull() != txn.date
+                                val amountDeltaCents = (txn.amount * 100).toLong() - (snap.amount * 100).toLong()
+                                val ocrCatIds = snap.categoryAmounts.orEmpty().map { it.categoryId }.toSet()
+                                val finalCatIds = txn.categoryAmounts.map { it.categoryId }.toSet()
+                                val catsAdded = (finalCatIds - ocrCatIds).size
+                                val catsRemoved = (ocrCatIds - finalCatIds).size
+                                val hadMultiCat = (snap.categoryAmounts?.size ?: 0) >= 2
+                                com.techadvantage.budgetrak.data.telemetry.AnalyticsEvents.logOcrFeedback(
+                                    context = context,
+                                    merchantChanged = merchantChanged,
+                                    dateChanged = dateChanged,
+                                    amountDeltaCents = amountDeltaCents.toInt().coerceIn(Int.MIN_VALUE, Int.MAX_VALUE),
+                                    catsAdded = catsAdded,
+                                    catsRemoved = catsRemoved,
+                                    hadMultiCat = hadMultiCat,
+                                )
+                                ocrSnapshot = null
                             }
                             onSave(txn)
                         }

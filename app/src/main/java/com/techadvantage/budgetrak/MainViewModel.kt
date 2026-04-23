@@ -653,10 +653,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun runPeriodicMaintenance() {
         android.util.Log.i("Maintenance", "Running periodic maintenance")
 
-        // ── Daily health beacon (Crashlytics) ──
-        // Records a non-fatal snapshot once per day so production devices
-        // are visible in the Crashlytics dashboard even when nothing is wrong.
-        // Skipped entirely when user has opted out of crash reporting.
+        // ── Daily health beacon ──
+        // Migrated 2026-04-22 from a Crashlytics non-fatal to a Firebase
+        // Analytics event (health_beacon). Analytics is the right channel for
+        // per-period heartbeat telemetry — it doesn't pollute the crash
+        // dashboard and has no per-session rate limit. Crashlytics diag keys
+        // are still updated below so they attach to any real crash that does
+        // happen. Skipped entirely when user has opted out.
         if (isSyncConfigured && crashlyticsEnabled) {
             val maintenanceCashDigest = availableCash.toString().hashCode().toString(16)
             BudgeTrakApplication.updateDiagKeys(mapOf(
@@ -669,8 +672,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 "plCount" to periodLedger.size.toString()
             ))
             BudgeTrakApplication.syncEvent("Daily health: listeners=${if (docSync?.isListening == true) "up" else "down"} txn=${transactions.count { !it.deleted }} devices=${syncDevices.size}")
-            BudgeTrakApplication.recordNonFatal("HEALTH_BEACON",
-                "pl=${periodLedger.size} txn=${transactions.count { !it.deleted }} re=${recurringExpenses.count { !it.deleted }}")
+            com.techadvantage.budgetrak.data.telemetry.AnalyticsEvents.logHealthBeacon(
+                context = context,
+                listenerUp = docSync?.isListening == true,
+                activeDevices = syncDevices.size,
+                txnCount = transactions.count { !it.deleted },
+                reCount = recurringExpenses.count { !it.deleted },
+                plCount = periodLedger.size,
+            )
         }
 
         // ── Backup check ──

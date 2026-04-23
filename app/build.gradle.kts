@@ -97,6 +97,7 @@ dependencies {
     implementation("com.google.firebase:firebase-appcheck-playintegrity")
     implementation("com.google.firebase:firebase-appcheck-debug")
     implementation("com.google.firebase:firebase-crashlytics")
+    implementation("com.google.firebase:firebase-analytics-ktx")
 
     // Google AI (Gemini) — direct SDK, uses API key from local.properties
     implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
