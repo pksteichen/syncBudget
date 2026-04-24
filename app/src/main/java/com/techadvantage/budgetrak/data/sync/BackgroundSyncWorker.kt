@@ -142,6 +142,43 @@ class BackgroundSyncWorker(
 
                     // Ping RTDB lastSeen so device roster stays fresh
                     pingRtdbLastSeen(applicationContext)
+
+                    // Receipt sync (paid / subscriber). Cheap no-op if there's
+                    // nothing to do: pending queue empty, flag clock unchanged,
+                    // no missing referenced receipts. The foreground drainers
+                    // on viewModelScope may not be firing reliably while
+                    // backgrounded (Doze / CPU scheduling), so this is a
+                    // periodic catch-up.
+                    if (vm.isPaidUser || vm.isSubscriber) {
+                        // Skip if foreground receipt-sync coroutines are
+                        // already doing this work — they hold the same
+                        // semantics (per-receipt queue atomicity, same
+                        // retry-counter prefs). Tier 2 is a backstop for when
+                        // Doze / CPU scheduling stalls the fg coroutines,
+                        // not a parallel worker.
+                        if (vm.isReceiptSyncActive()) {
+                            Log.i(TAG, "Tier 2 receipt sync skipped: foreground drainer/retry active")
+                        } else try {
+                            // Snapshot all VM state at entry so a concurrent
+                            // subscription / group change can't produce torn
+                            // reads mid-sync.
+                            val gid = vm.syncGroupId
+                            val deviceId = vm.localDeviceId
+                            val txns = vm.transactions.toList()
+                            val key = GroupManager.getEncryptionKey(applicationContext)
+                            if (gid != null && key != null && deviceId.isNotBlank()) {
+                                val devices = RealtimePresenceService.getDevices(gid)
+                                val receiptSync = ReceiptSyncManager(
+                                    applicationContext, gid, deviceId, key
+                                ) { msg -> Log.i(TAG, "Receipt (Tier 2): $msg") }
+                                receiptSync.syncReceipts(txns, devices)
+                            } else {
+                                Log.i(TAG, "Tier 2 receipt sync skipped: gid=${gid != null} key=${key != null} device=${deviceId.isNotBlank()}")
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Tier 2 receipt sync failed: ${e.message}")
+                        }
+                    }
                 }
 
                 return Result.success()

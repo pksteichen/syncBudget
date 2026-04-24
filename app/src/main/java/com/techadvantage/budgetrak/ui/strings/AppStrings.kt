@@ -239,6 +239,8 @@ data class SettingsStrings(
     val shareBlockedByOpenDialog: String,  // Toast when user shares an image but a non-transaction dialog is open; URIs are dropped
     val shareOverflowDiscarded: String,    // Toast when shared images exceed remaining receipt slots; overflow is discarded
     val pendingPhotoTapped: String,  // Toast when user taps a receipt photo placeholder whose bytes haven't synced from the other SYNC device yet
+    val receiptRotationNoLocalFile: String,  // Toast when user tries to rotate a pending-download photo (no local file)
+    val receiptRotationSaveFailed: String,   // Toast when rotation save fails (disk full, OOM, compression failure)
     // AI OCR
     val aiOcrIconDesc: String,
     val aiOcrComingSoon: String,

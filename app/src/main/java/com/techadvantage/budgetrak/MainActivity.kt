@@ -1687,11 +1687,16 @@ class MainActivity : ComponentActivity() {
                 vm.isPaidUser = newValue
                 vm.prefs.edit().putBoolean("isPaidUser", newValue).apply()
                 com.techadvantage.budgetrak.widget.BudgetWidgetProvider.updateAllWidgets(context)
+                // Downgrade — stop Layer 0 / Layer 2 receipt sync coroutines;
+                // they'd otherwise keep pushing to Cloud Storage after the
+                // user has lost paid status.
+                if (!newValue && !vm.isSubscriber) vm.cancelReceiptSyncJobs()
             },
             isSubscriber = vm.isSubscriber,
             onSubscriberChange = { newValue ->
                 vm.isSubscriber = newValue
                 vm.prefs.edit().putBoolean("isSubscriber", newValue).apply()
+                if (!newValue && !vm.isPaidUser) vm.cancelReceiptSyncJobs()
             },
             subscriptionExpiry = vm.subscriptionExpiry,
             onSubscriptionExpiryChange = { newValue ->
@@ -2214,7 +2219,8 @@ class MainActivity : ComponentActivity() {
             pendingSharedImageUris = vm.pendingSharedImageUris,
             onConsumeSharedImageUris = { vm.pendingSharedImageUris.clear() },
             onShareOverflow = { vm.shareOverflowToastPending = true },
-            onCsvImportInProgressChange = { vm.csvImportInProgress = it }
+            onCsvImportInProgressChange = { vm.csvImportInProgress = it },
+            onPhotoContentChanged = { vm.kickUploadDrainer() }
         )
     }
 

@@ -312,7 +312,8 @@ fun TransactionsScreen(
     pendingSharedImageUris: List<android.net.Uri> = emptyList(),
     onConsumeSharedImageUris: (() -> Unit)? = null,
     onShareOverflow: (() -> Unit)? = null,
-    onCsvImportInProgressChange: ((inProgress: Boolean) -> Unit)? = null
+    onCsvImportInProgressChange: ((inProgress: Boolean) -> Unit)? = null,
+    onPhotoContentChanged: (() -> Unit)? = null
 ) {
     val S = LocalStrings.current
     val customColors = LocalSyncBudgetColors.current
@@ -1214,7 +1215,10 @@ fun TransactionsScreen(
                                     ReceiptManager.deleteReceiptFull(txnContext, rid)
                                 }
                             },
-                            onPhotoRotated = { photoThumbRefreshKey++ },
+                            onPhotoRotated = {
+                                photoThumbRefreshKey++
+                                onPhotoContentChanged?.invoke()
+                            },
                             onReorder = { newRids ->
                                 val updated = transaction.copy(
                                     receiptId1 = newRids.getOrNull(0),
@@ -1347,7 +1351,8 @@ fun TransactionsScreen(
             onOpenStateChange = onDialogOpenStateChange,
             pendingSharedImageUris = pendingSharedImageUris,
             onConsumeSharedImageUris = onConsumeSharedImageUris,
-            onShareOverflow = onShareOverflow
+            onShareOverflow = onShareOverflow,
+            onPhotoContentChanged = onPhotoContentChanged
         )
     }
 
@@ -1417,7 +1422,8 @@ fun TransactionsScreen(
             onOpenStateChange = onDialogOpenStateChange,
             pendingSharedImageUris = pendingSharedImageUris,
             onConsumeSharedImageUris = onConsumeSharedImageUris,
-            onShareOverflow = onShareOverflow
+            onShareOverflow = onShareOverflow,
+            onPhotoContentChanged = onPhotoContentChanged
         )
     }
 
@@ -1514,7 +1520,8 @@ fun TransactionsScreen(
             onOpenStateChange = onDialogOpenStateChange,
             pendingSharedImageUris = pendingSharedImageUris,
             onConsumeSharedImageUris = onConsumeSharedImageUris,
-            onShareOverflow = onShareOverflow
+            onShareOverflow = onShareOverflow,
+            onPhotoContentChanged = onPhotoContentChanged
         )
     }
 
@@ -3096,7 +3103,8 @@ fun TransactionDialog(
     onOpenStateChange: ((open: Boolean) -> Unit)? = null,
     pendingSharedImageUris: List<android.net.Uri> = emptyList(),
     onConsumeSharedImageUris: (() -> Unit)? = null,
-    onShareOverflow: (() -> Unit)? = null
+    onShareOverflow: (() -> Unit)? = null,
+    onPhotoContentChanged: (() -> Unit)? = null
 ) {
     val S = LocalStrings.current
     val maxDecimals = CURRENCY_DECIMALS[currencySymbol] ?: 2
@@ -3174,13 +3182,24 @@ fun TransactionDialog(
 
     // Dialog camera state (for header camera icon)
     var dialogTempPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    var dialogTempPhotoFile by remember { mutableStateOf<java.io.File?>(null) }
     val dialogPhotoScope = rememberCoroutineScope()
     val dialogCameraLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture()
     ) { success ->
-        if (success && dialogTempPhotoUri != null) {
+        val capturedUri = dialogTempPhotoUri
+        val capturedFile = dialogTempPhotoFile
+        dialogTempPhotoUri = null
+        dialogTempPhotoFile = null
+        if (success && capturedUri != null) {
             dialogPhotoScope.launch(Dispatchers.IO) {
-                val rid = ReceiptManager.processAndSaveFromCamera(context, dialogTempPhotoUri!!)
+                val rid = try {
+                    ReceiptManager.processAndSaveFromCamera(context, capturedUri)
+                } finally {
+                    // Delete the camera temp file now that its bytes are
+                    // safely copied into filesDir/receipts/.
+                    capturedFile?.delete()
+                }
                 if (rid != null) {
                     // Queue-for-upload happens at transaction-save time in
                     // MainViewModel.saveTransactions — not here — so a dialog
@@ -3214,6 +3233,9 @@ fun TransactionDialog(
                     }
                 }
             }
+        } else {
+            // Capture failed / cancelled — clean up the temp file.
+            capturedFile?.delete()
         }
     }
     // OpenMultipleDocuments (SAF) instead of PickMultipleVisualMedia so PDFs
@@ -3710,6 +3732,7 @@ fun TransactionDialog(
                                                 dialogTempPhotoUri = androidx.core.content.FileProvider.getUriForFile(
                                                     context, "${context.packageName}.fileprovider", file
                                                 )
+                                                dialogTempPhotoFile = file
                                                 dialogCameraLauncher.launch(dialogTempPhotoUri!!)
                                             }
                                         )
@@ -3810,7 +3833,10 @@ fun TransactionDialog(
                                         dialogFullScreenSlot = -1
                                         dialogDeleteConfirmSlot = slot
                                     },
-                                    onRotated = { dialogThumbRefresh++ }
+                                    onRotated = {
+                                        dialogThumbRefresh++
+                                        onPhotoContentChanged?.invoke()
+                                    }
                                 )
                             } else {
                                 dialogFullScreenSlot = -1

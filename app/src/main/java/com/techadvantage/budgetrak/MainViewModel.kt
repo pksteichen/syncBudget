@@ -73,6 +73,7 @@ import com.techadvantage.budgetrak.ui.strings.EnglishStrings
 import com.techadvantage.budgetrak.ui.strings.SpanishStrings
 import com.techadvantage.budgetrak.data.sync.AdminClaim
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.time.LocalDate
@@ -524,11 +525,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .collectAllReceiptIds(transactions)
         val newlyAttached = currentIds - previousIds
         if (newlyAttached.isNotEmpty()) {
+            var anyQueued = false
             for (rid in newlyAttached) {
                 if (com.techadvantage.budgetrak.data.sync.ReceiptManager.hasLocalFile(context, rid)) {
                     com.techadvantage.budgetrak.data.sync.ReceiptManager.addToPendingQueue(context, rid)
+                    anyQueued = true
                 }
             }
+            // Kick the upload drainer so the photo reaches Cloud Storage without
+            // waiting for the next manual Sync-Now or BG Tier 3.
+            if (anyQueued) kickUploadDrainer()
         }
         saveCollection(transactions.toList(), TransactionRepository::save, lastSavedTxns, { it.id }, hint)
     }
@@ -1330,6 +1336,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         com.techadvantage.budgetrak.data.sync.RealtimePresenceService.cleanup()
         imageLedgerListener?.remove(); imageLedgerListener = null
 
+        // Stop any in-flight receipt sync coroutines — their captured groupId
+        // and encryption key are about to become invalid.
+        cancelReceiptSyncJobs()
+
         // Clear sync state — app now functions as solo device
         viewModelScope.launch { GroupManager.leaveGroup(context, localOnly = true) }
         isSyncConfigured = false
@@ -1448,6 +1458,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Reset all sync-related state to "off" (used by leave, dissolve, evict). */
     fun resetSyncState() {
+        // Stop any in-flight receipt sync coroutines — their captured groupId
+        // and encryption key are about to become invalid.
+        cancelReceiptSyncJobs()
         syncPrefs.edit().remove("catIdRemap").remove("lastSuccessfulSync").apply()
         isSyncConfigured = false
         syncGroupId = null
@@ -1677,7 +1690,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
-            // Check for missing receipt photos from newly-arrived transactions
+            // Check for missing receipt photos from newly-arrived transactions.
+            // Fast path: download in parallel. On any miss, hand off to the
+            // foreground retry coroutine (Layer 2) which applies backoff +
+            // the 3-retry-then-recovery-request escalation in ReceiptSyncManager.
             if ((isPaidUser || isSubscriber) && isSyncConfigured) {
                 val updatedTxns = result.transactions
                 if (updatedTxns != null) {
@@ -1686,21 +1702,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     if (missingReceiptIds.isNotEmpty()) {
                         val currentGroupId = syncGroupId ?: return
                         val currentKey = GroupManager.getEncryptionKey(context) ?: return
+                        val photoCapableDeviceIds = syncDevices
+                            .filter { it.photoCapable }
+                            .map { it.deviceId }
+                            .toSet()
+                        val receiptSync = com.techadvantage.budgetrak.data.sync.ReceiptSyncManager(
+                            context, currentGroupId, localDeviceId, currentKey
+                        ) { msg -> android.util.Log.i("ReceiptSync", msg) }
                         viewModelScope.launch {
-                            // Download up to 5 receipts in parallel
                             missingReceiptIds.chunked(5).forEach { chunk ->
                                 kotlinx.coroutines.coroutineScope {
                                     for (receiptId in chunk) {
                                         launch {
                                             try {
-                                                val data = com.techadvantage.budgetrak.data.sync.ImageLedgerService.downloadFromCloud(currentGroupId, receiptId)
-                                                if (data != null) {
-                                                    com.techadvantage.budgetrak.data.sync.ReceiptManager.decryptAndSave(context, receiptId, data, currentKey)
-                                                    com.techadvantage.budgetrak.data.sync.ImageLedgerService.markPossession(currentGroupId, receiptId, localDeviceId)
-                                                    android.util.Log.i("ReceiptSync", "Downloaded receipt $receiptId on transaction arrival")
-                                                }
+                                                val ok = receiptSync.downloadReceiptWithRetry(
+                                                    receiptId, photoCapableDeviceIds
+                                                )
+                                                if (!ok) kickFgDownloadRetry(receiptId)
                                             } catch (e: Exception) {
-                                                android.util.Log.w("ReceiptSync", "Failed to download receipt $receiptId: ${e.message}")
+                                                android.util.Log.w("ReceiptSync", "Download exception $receiptId: ${e.message}")
+                                                kickFgDownloadRetry(receiptId)
                                             }
                                         }
                                     }
@@ -2005,7 +2026,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                         if (encrypted != null) {
                                             val uploaded = com.techadvantage.budgetrak.data.sync.ImageLedgerService.uploadToCloud(currentGroupId, receiptId, encrypted)
                                             if (uploaded) {
-                                                com.techadvantage.budgetrak.data.sync.ImageLedgerService.markReuploadComplete(currentGroupId, receiptId)
+                                                com.techadvantage.budgetrak.data.sync.ImageLedgerService.markReuploadComplete(currentGroupId, receiptId, localDeviceId)
                                                 android.util.Log.i("ReceiptLedger", "Re-uploaded $receiptId for recovery")
                                             }
                                         }
@@ -2138,6 +2159,151 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 lastSyncActivity = System.currentTimeMillis()
             } catch (_: Exception) {
                 syncStatus = "error"
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // RECEIPT PHOTO PIPELINE — FOREGROUND DRAINERS
+    // ═══════════════════════════════════════════════════════════════════
+
+    // Layer 0 — Continuous upload drainer. Runs on viewModelScope whenever the
+    // pending-upload queue is non-empty. Kicked by saveTransactions after it
+    // adds newly-attached receipts to the queue, and on VM init if the queue
+    // was persisted with items (crash recovery). Exits when the queue drains;
+    // on upload failure, backs off (30s → 60s → 2m → 5m → 10m cap) before
+    // retrying the same queue.
+    private var uploadDrainerJob: kotlinx.coroutines.Job? = null
+
+    fun kickUploadDrainer() {
+        if (!(isPaidUser || isSubscriber)) return
+        if (!isSyncConfigured) return
+        if (uploadDrainerJob?.isActive == true) return
+        val gId = syncGroupId ?: return
+        val key = GroupManager.getEncryptionKey(context) ?: return
+
+        uploadDrainerJob = viewModelScope.launch(Dispatchers.IO) {
+            var backoffMs = 30_000L
+            val receiptSync = com.techadvantage.budgetrak.data.sync.ReceiptSyncManager(
+                context, gId, localDeviceId, key
+            ) { msg -> android.util.Log.i("UploadDrainer", msg) }
+            try {
+                while (isActive) {
+                    val pendingBefore = com.techadvantage.budgetrak.data.sync.ReceiptManager
+                        .loadPendingUploads(context).size
+                    if (pendingBefore == 0) break
+
+                    val uploaded = receiptSync.processPendingUploads()
+                    val pendingAfter = com.techadvantage.budgetrak.data.sync.ReceiptManager
+                        .loadPendingUploads(context).size
+
+                    if (pendingAfter == 0) break
+                    if (uploaded == 0) {
+                        // Made no forward progress — back off before retrying
+                        android.util.Log.i("UploadDrainer", "No progress, sleeping ${backoffMs / 1000}s")
+                        kotlinx.coroutines.delay(backoffMs)
+                        backoffMs = minOf(backoffMs * 2, 10 * 60_000L)
+                    } else {
+                        backoffMs = 30_000L
+                    }
+                }
+                android.util.Log.i("UploadDrainer", "Queue drained, exiting")
+            } catch (e: Exception) {
+                android.util.Log.w("UploadDrainer", "Exception: ${e.message}")
+            }
+        }
+    }
+
+    // Layer 2 — Foreground download retry. onBatchChanged's fast-path tries
+    // once; anything that misses gets handed here. The coroutine drains the
+    // in-memory set with exponential backoff, using ReceiptSyncManager's
+    // downloadReceiptWithRetry (which applies the 3-retry-then-recovery-request
+    // escalation internally). Exits when the set is empty.
+    private val fgDownloadRetryQueue = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+    private var fgDownloadRetryJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * Whether any foreground receipt-sync coroutine is currently running.
+     * Used by `BackgroundSyncWorker` Tier 2 to skip its own receipt sync
+     * when the foreground already has it covered — avoids two `syncReceipts()`
+     * runs racing on the same ledger / pending queue / download paths.
+     */
+    fun isReceiptSyncActive(): Boolean =
+        uploadDrainerJob?.isActive == true || fgDownloadRetryJob?.isActive == true
+
+    /**
+     * Cancel Layer 0 (upload drainer) and Layer 2 (foreground download retry)
+     * and clear the retry queue. Called when the device leaves/changes its
+     * group, dissolves the group, is evicted, or loses its paid/subscriber
+     * status — any transition that invalidates the captured `syncGroupId` or
+     * `encryptionKey` that the running coroutines are mid-flight against.
+     */
+    fun cancelReceiptSyncJobs() {
+        uploadDrainerJob?.cancel()
+        uploadDrainerJob = null
+        fgDownloadRetryJob?.cancel()
+        fgDownloadRetryJob = null
+        fgDownloadRetryQueue.clear()
+    }
+
+    fun kickFgDownloadRetry(receiptId: String) {
+        if (!(isPaidUser || isSubscriber)) return
+        if (!isSyncConfigured) return
+        fgDownloadRetryQueue.add(receiptId)
+        if (fgDownloadRetryJob?.isActive == true) return
+        val gId = syncGroupId ?: return
+        val key = GroupManager.getEncryptionKey(context) ?: return
+
+        fgDownloadRetryJob = viewModelScope.launch(Dispatchers.IO) {
+            val backoffs = longArrayOf(30_000L, 60_000L, 2 * 60_000L, 5 * 60_000L, 10 * 60_000L)
+            var step = 0
+            val receiptSync = com.techadvantage.budgetrak.data.sync.ReceiptSyncManager(
+                context, gId, localDeviceId, key
+            ) { msg -> android.util.Log.i("FgDownloadRetry", msg) }
+            try {
+                while (isActive) {
+                    kotlinx.coroutines.delay(backoffs[step.coerceAtMost(backoffs.size - 1)])
+                    val snapshot = synchronized(fgDownloadRetryQueue) { fgDownloadRetryQueue.toList() }
+                    if (snapshot.isEmpty()) break
+                    val photoCapableDeviceIds = syncDevices
+                        .filter { it.photoCapable }
+                        .map { it.deviceId }
+                        .toSet()
+                    // Re-filter: drop ids we've since obtained (another path recovered them),
+                    // or that are no longer referenced in any transaction.
+                    val referenced = com.techadvantage.budgetrak.data.sync.ReceiptManager
+                        .collectAllReceiptIds(transactions.toList())
+                    val toTry = snapshot.filter { rid ->
+                        rid in referenced && !com.techadvantage.budgetrak.data.sync.ReceiptManager
+                            .hasLocalFile(context, rid)
+                    }
+                    fgDownloadRetryQueue.retainAll(toTry.toSet())
+                    if (toTry.isEmpty()) break
+
+                    var anySuccess = false
+                    for (chunk in toTry.chunked(5)) {
+                        kotlinx.coroutines.coroutineScope {
+                            for (rid in chunk) {
+                                launch {
+                                    val ok = try {
+                                        receiptSync.downloadReceiptWithRetry(rid, photoCapableDeviceIds)
+                                    } catch (e: Exception) {
+                                        android.util.Log.w("FgDownloadRetry", "Exception $rid: ${e.message}")
+                                        false
+                                    }
+                                    if (ok) {
+                                        fgDownloadRetryQueue.remove(rid)
+                                        anySuccess = true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    step = if (anySuccess) 0 else (step + 1)
+                }
+                android.util.Log.i("FgDownloadRetry", "Retry queue drained, exiting")
+            } catch (e: Exception) {
+                android.util.Log.w("FgDownloadRetry", "Exception: ${e.message}")
             }
         }
     }
@@ -2593,6 +2759,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 android.util.Log.i("DataLoad", "DONE: txns=${transactions.size} cats=${categories.size} re=${recurringExpenses.size} is=${incomeSources.size} ae=${amortizationEntries.size} sg=${savingsGoals.size} pl=${periodLedger.size}")
                 dataLoaded = true
                 android.util.Log.i("DataLoad", "dataLoaded=true, availableCash=$availableCash")
+                // Crash-recovery: if the pending upload queue survived from a
+                // prior session, drain it now.
+                kickUploadDrainer()
             }
         }
 

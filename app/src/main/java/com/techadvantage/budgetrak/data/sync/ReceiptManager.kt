@@ -199,7 +199,7 @@ object ReceiptManager {
             val targetBytes = (pixelArea * TARGET_BYTES_PER_MEGAPIXEL / 1_000_000L).toInt()
             val bitmapForThumb: android.graphics.Bitmap
             if (!needsResize && rawBytes.size <= targetBytes) {
-                fullFile.writeBytes(rawBytes)
+                atomicWriteBytes(fullFile, rawBytes)
                 bitmapForThumb = android.graphics.BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size)
                     ?: return null
             } else {
@@ -213,11 +213,11 @@ object ReceiptManager {
                 bitmapForThumb = bitmap
             }
 
-            // Save thumbnail (70% is fine for small preview)
+            // Save thumbnail atomically (70% is fine for small preview)
             val thumb = resizeBitmap(bitmapForThumb, THUMBNAIL_SIZE)
-            getThumbFile(context, receiptId).outputStream().use { out ->
-                thumb.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, out)
-            }
+            val thumbBuf = java.io.ByteArrayOutputStream()
+            thumb.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, thumbBuf)
+            atomicWriteBytes(getThumbFile(context, receiptId), thumbBuf.toByteArray())
             if (thumb !== bitmapForThumb) bitmapForThumb.recycle()
 
             receiptId
@@ -235,21 +235,38 @@ object ReceiptManager {
 
     /**
      * Overwrite an existing receipt with a new bitmap (e.g. after rotation).
-     * Re-runs the same JPEG-to-target-bytes compression as the initial save and
-     * regenerates the thumbnail. Returns true on success.
+     * Re-runs the same JPEG-to-target-bytes compression as the initial save,
+     * regenerates the thumbnail, and re-adds the receiptId to the pending
+     * upload queue so Layer 0 drainer re-uploads the new content and peers
+     * pick up the rotation via the ledger `contentVersion` bump. Returns
+     * true on success.
      */
     fun replaceReceipt(context: Context, receiptId: String, bitmap: Bitmap): Boolean {
         return try {
             val fullFile = getReceiptFile(context, receiptId)
-            val area = bitmap.width.toLong() * bitmap.height
-            val targetBytes = (area * TARGET_BYTES_PER_MEGAPIXEL / 1_000_000L).toInt()
-            compressToTargetSize(bitmap, fullFile, targetBytes)
 
-            val thumb = resizeBitmap(bitmap, THUMBNAIL_SIZE)
-            getThumbFile(context, receiptId).outputStream().use { out ->
-                thumb.compress(Bitmap.CompressFormat.JPEG, 70, out)
-            }
-            if (thumb !== bitmap) thumb.recycle()
+            // Defense-in-depth: `processAndSavePhoto` already clamps stored
+            // receipts to [MAX_IMAGE_DIMENSION, MIN_IMAGE_DIMENSION,
+            // LONG_EDGE_HARD_CAP], and rotation preserves pixel count, so the
+            // invariant holds for the sole legitimate caller today. Re-apply
+            // the clamp anyway so a future caller that passes a fresh or
+            // oversized bitmap can't slip past the size contract.
+            val bounded = resizeBitmap(bitmap, MAX_IMAGE_DIMENSION, MIN_IMAGE_DIMENSION)
+            val area = bounded.width.toLong() * bounded.height
+            val targetBytes = (area * TARGET_BYTES_PER_MEGAPIXEL / 1_000_000L).toInt()
+            compressToTargetSize(bounded, fullFile, targetBytes)
+
+            val thumb = resizeBitmap(bounded, THUMBNAIL_SIZE)
+            val thumbBuf = java.io.ByteArrayOutputStream()
+            thumb.compress(Bitmap.CompressFormat.JPEG, 70, thumbBuf)
+            atomicWriteBytes(getThumbFile(context, receiptId), thumbBuf.toByteArray())
+            if (thumb !== bounded) thumb.recycle()
+            if (bounded !== bitmap) bounded.recycle()
+
+            // Requeue for re-upload so peers get the rotated version. No-op
+            // for solo users — their drainer is never kicked (see guards in
+            // MainViewModel.kickUploadDrainer).
+            addToPendingQueue(context, receiptId)
             true
         } catch (e: Exception) {
             Log.w(TAG, "Failed to replace receipt $receiptId: ${e.message}")
@@ -327,17 +344,17 @@ object ReceiptManager {
         return try {
             val plaintext = CryptoHelper.decryptWithKey(encryptedData, key)
 
-            // Save full-size
+            // Save full-size atomically
             val fullFile = getReceiptFile(context, receiptId)
-            fullFile.writeBytes(plaintext)
+            atomicWriteBytes(fullFile, plaintext)
 
-            // Generate thumbnail from saved image
+            // Generate thumbnail from saved image — compress to buffer, write atomically
             val bitmap = BitmapFactory.decodeByteArray(plaintext, 0, plaintext.size)
             if (bitmap != null) {
                 val thumb = resizeBitmap(bitmap, THUMBNAIL_SIZE)
-                getThumbFile(context, receiptId).outputStream().use { out ->
-                    thumb.compress(Bitmap.CompressFormat.JPEG, 70, out)
-                }
+                val thumbBuf = java.io.ByteArrayOutputStream()
+                thumb.compress(Bitmap.CompressFormat.JPEG, 70, thumbBuf)
+                atomicWriteBytes(getThumbFile(context, receiptId), thumbBuf.toByteArray())
                 if (thumb !== bitmap) bitmap.recycle()
             }
 
@@ -442,9 +459,33 @@ object ReceiptManager {
     }
 
     /**
+     * Atomic write: bytes go to `<target>.tmp` in the same directory, fsync'd
+     * via rename. On mid-write crash, the target is either the old version
+     * or fully the new one, never half-written.
+     */
+    private fun atomicWriteBytes(target: File, bytes: ByteArray) {
+        val tmp = File(target.parentFile, "${target.name}.tmp")
+        try {
+            tmp.writeBytes(bytes)
+            if (!tmp.renameTo(target)) {
+                // Fallback: copy (some filesystems block renames across security contexts)
+                tmp.inputStream().use { input ->
+                    target.outputStream().use { output -> input.copyTo(output) }
+                }
+                tmp.delete()
+            }
+        } catch (e: Exception) {
+            tmp.delete()
+            throw e
+        }
+    }
+
+    /**
      * Compress a bitmap to a target file size in bytes.
      * Iterates on the ORIGINAL bitmap (never re-compresses compressed data).
      * Starts at Q=92, uses log-linear interpolation from accumulated data points.
+     * Writes atomically via temp-file + rename so a crash mid-write can't
+     * leave a truncated JPEG on disk.
      */
     private fun compressToTargetSize(bitmap: Bitmap, outFile: File, targetBytes: Int) {
         val minTarget = (targetBytes * 0.9).toInt()
@@ -464,9 +505,9 @@ object ReceiptManager {
             return size in minTarget..maxTarget
         }
 
-        if (tryQuality(92)) { outFile.writeBytes(bestBytes!!); return }
+        if (tryQuality(92)) { atomicWriteBytes(outFile, bestBytes!!); return }
         val secondQ = if (samples[0].second > targetBytes) 50 else 98
-        if (tryQuality(secondQ)) { outFile.writeBytes(bestBytes!!); return }
+        if (tryQuality(secondQ)) { atomicWriteBytes(outFile, bestBytes!!); return }
 
         for (round in 0 until 3) {
             val below = samples.filter { it.second <= targetBytes }.maxByOrNull { it.second }
@@ -482,9 +523,9 @@ object ReceiptManager {
                 val s = samples.sortedBy { it.first }
                 (s.last().first * (targetBytes.toDouble() / s.last().second)).toInt()
             }
-            if (tryQuality(predictedQ.coerceIn(20, 100))) { outFile.writeBytes(bestBytes!!); return }
+            if (tryQuality(predictedQ.coerceIn(20, 100))) { atomicWriteBytes(outFile, bestBytes!!); return }
         }
-        outFile.writeBytes(bestBytes!!)
+        atomicWriteBytes(outFile, bestBytes!!)
     }
 
     /**

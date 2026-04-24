@@ -1278,7 +1278,7 @@ Encrypted SharedPreferences wrapper over `androidx.security:security-crypto`.
 
 | Type | Handler | Notes |
 |---|---|---|
-| `sync_push` | `BackgroundSyncWorker.runOnce(applicationContext)` | Fired by server-side `onSyncDataWrite` Cloud Function on every write to a sync collection, targeted at every group device except the writer (filtered via `lastEditBy`). High-priority FCM → wakes process through Doze. |
+| `sync_push` | `BackgroundSyncWorker.runOnce(applicationContext)` | Fired by server-side Cloud Functions on meaningful Firestore writes: `onSyncDataWrite` for every write to a sync data collection (transactions, recurringExpenses, …), and `onImageLedgerWrite` for filtered `imageLedger` writes (rotation contentVersion bump, recovery complete, recovery request). Targeted at every group device except the writer (filtered via `lastEditBy`). High-priority FCM → wakes process through Doze. `enqueueUniqueWork(KEEP)` client-side dedup collapses bursts into one sync run. |
 | `heartbeat` | `BackgroundSyncWorker.runOnce(applicationContext)` | Fired by server-side `presenceHeartbeat` Cloud Function every 15 min to devices whose RTDB `lastSeen` is >15 min stale. Backstop when Android stops scheduling the periodic worker (App-Standby `rare`/`restricted` buckets). |
 | `debug_request` | One-shot `DebugDumpWorker` | **Silently ignored in release** (`BuildConfig.DEBUG` gate). Sets `fcm_debug_requested=true` and enqueues the worker. |
 
@@ -1412,15 +1412,16 @@ Firestore CRUD for `groups/{gid}/imageLedger/*` and Cloud Storage for `groups/{g
 | `downloadFromCloud(gid, rid): ByteArray?` | 60 s, 2 MB max |
 | `existsInCloud(gid, rid)` / `deleteFromCloud(gid, rid)` | Metadata read / hard delete |
 | `purgeOrphanedCloudFiles(gid): Int` | Lists cloud + reads full ledger; deletes files with no ledger entry and >10 min old |
-| `createLedgerEntry(gid, rid, originatorDeviceId)` | After successful upload; bumps `imageLedgerFlagClock` |
-| `createRecoveryRequest(gid, rid, originatorDeviceId)` | File lost; empty `possessions`; bumps flag clock |
+| `createLedgerEntry(gid, rid, originatorDeviceId)` | After successful upload of a fresh receipt; writes `contentVersion = 0`. **Does NOT bump flag clock** — peers discover via transaction-sync `onBatchChanged`, and pruning is triggered inline at every download site |
+| `incrementContentVersion(gid, rid, editingDeviceId)` | After rotation / edit re-upload: batch-writes `possessions = {editor: true}`, `uploadedAt = now`, `contentVersion += 1`, `lastEditBy = editingDeviceId`, bumps flag clock. Cloud Function `onImageLedgerWrite` fires `sync_push` to all non-writer peers; their BG worker kicks `syncReceipts()` which invalidates stale local copies via `lastSeenContentVersion` mismatch |
+| `createRecoveryRequest(gid, rid, originatorDeviceId, preserveContentVersion = 0L)` | File lost; empty `possessions`; bumps flag clock. Stamps `lastEditBy = originatorDeviceId`. `preserveContentVersion` keeps the monotonic counter across a `deleteLedgerEntry → createRecoveryRequest` recovery cycle so stale peers still invalidate through future rotations. Cloud Function pushes peers to consider re-uploading |
 | `markPossession(gid, rid, did)` / `markNonPossession(gid, rid, did)` | Dot-notation `update("possessions.$did", true/false)` |
 | `checkPhotoLost(gid, rid, photoCapableDeviceIds): Boolean` | Transaction: confirms permanent loss when all photo-capable devices have `false` and deletes ledger entry |
-| `pruneCheckTransaction(gid, rid, allDeviceIds): Boolean` | Transaction: if all devices possess it, delete ledger + Cloud Storage |
+| `pruneCheckTransaction(gid, rid, allDeviceIds): Boolean` | Transaction: if all devices possess it, delete ledger + Cloud Storage. Called inline inside `downloadReceiptWithRetry` and the `processLedgerOperations` "have-it" branch |
 | `getLedgerEntry/getFullLedger/deleteLedgerEntry` | CRUD |
 | `getFlagClock(gid)` / `bumpFlagClock(gid)` | Flag-clock polling primitive |
 | `claimUploadAssignment(gid, rid, myDid, expectedAssignee, expectedAssignedAt)` | CAS transaction |
-| `markReuploadComplete(gid, rid)` | Sets `uploadedAt`; bumps flag clock |
+| `markReuploadComplete(gid, rid, reuploaderDeviceId)` | Sets `uploadedAt` + `lastEditBy = reuploaderDeviceId`; bumps flag clock. Cloud Function fires `sync_push` to non-writer peers so waiting requester downloads immediately |
 | `getCleanupState(gid): CleanupState` | Reads `imageLastCleanupDate` from group doc (`CleanupState(lastCleanupDate: String?)`) |
 | `markCleanupDone(gid, todayDate)` | Plain `update("imageLastCleanupDate", todayDate)` — no CAS, idempotent |
 | Snapshot ops | `getSnapshotEntry/createSnapshotRequest/claimSnapshotBuilder/updateSnapshotStatus/markSnapshotConsumed/deleteSnapshotEntry/uploadSnapshotArchive/downloadSnapshotArchive/uploadJoinSnapshot/downloadJoinSnapshot/deleteJoinSnapshot/deleteSnapshotArchive` |
@@ -1433,14 +1434,19 @@ Coordinates receipt photo sync. Paid devices only. Constructor: `(context, group
 
 Constants: `STALE_ASSIGNMENT_MS = 5 min`, `FOURTEEN_DAYS_MS`, `MAX_DOWNLOAD_RETRIES = 3`, `SPEED_STALENESS_MS = 24 h`, `SNAPSHOT_THRESHOLD = 50`, `SNAPSHOT_STALE_MS = 2 h`, `BATCH_RECOVERY_CAP = 50`, `SNAPSHOT_GRACE_PERIOD_MS = 5 min`, `SNAPSHOT_MAGIC = "SNAP"`.
 
-**`syncReceipts(transactions, allDevices: List<DeviceInfo>): List<Transaction>`** — 5 steps:
+**Public entry points** (called from `MainViewModel` foreground drainers and `BackgroundSyncWorker` Tier 2/3):
+- `syncReceipts(transactions, allDevices)` — full 5-step pipeline below.
+- `processPendingUploads(): Int` — drains upload queue in chunks of 5; returns # completed. Used by `MainViewModel.kickUploadDrainer` in a backoff loop so photos reach Cloud Storage without waiting for Sync-Now.
+- `downloadReceiptWithRetry(receiptId, photoCapableDeviceIds): Boolean` — single-receipt download + save + `markPossession` + `pruneCheckTransaction` + retry counter. On 3rd real failure with `uploadedAt > 0`, deletes ledger entry and creates recovery request. Used by `onBatchChanged` fast path, `kickFgDownloadRetry` coroutine, and `processRecovery`.
+
+**`syncReceipts` — 5 steps:**
 1. `processPendingUploads` — upload-first: encrypt → upload → create ledger entry.
-2. `processLedgerOperations` — flag-clock check + ledger cache; handles re-upload requests (CAS via `claimUploadAssignment`) and parallel downloads (5 concurrent via `async`).
-3. `processRecovery` — missing local files; 3 **real** download failures (skip transient network errors) → replace entry with request. Re-uploader selected by online filter + fastest `uploadSpeedBps` in last 24 h + `abs(hash(receiptId+deviceId)) % 1000` tiebreak.
+2. `processLedgerOperations` — flag-clock check + ledger cache. Handles (a) re-upload requests when we have the file, (b) non-possession marking + `checkPhotoLost` for recovery requests, (c) `markPossession` + `pruneCheckTransaction` for entries we already have locally. **Does not download** — the old `handleDownload` branch was removed.
+3. `processRecovery` — missing local files referenced in transactions. Delegates per-receipt to `downloadReceiptWithRetry`; if no ledger entry exists at all, creates one (recovery request). Re-uploader selected by online filter + fastest `uploadSpeedBps` in last 24 h + `abs(hash(receiptId+deviceId)) % 1000` tiebreak.
 4. `processSnapshotLifecycle` — build/download snapshot archives when ≥ 50 missing (also used by join).
 5. `processStalePruning` — 14-day cleanup, noon trigger, local 24 h skip gate (`lastStalePruneRun`) + group `imageLastCleanupDate` check, plain `markCleanupDone` write (no CAS; idempotent).
 
-Foreground polls `imageLedgerMeta` (single-field doc, flag-clock style) — **not** a dedicated listener. Transaction-arrival downloads are driven by the business collection listener.
+Foreground polls `imageLedgerFlagClock` (single field on the group doc) — **not** a dedicated listener. Transaction-arrival downloads are driven by the business collection listener. See SSD §17.5 for the full four-layer architecture.
 
 ---
 
@@ -1535,10 +1541,29 @@ Triggered by `onWrite` on `groups/{groupId}/{collection}/{docId}`. Filters colle
 
 Flow:
 1. Read `lastEditBy` (fallback `deviceId`) from the new doc — the writer to exclude from fan-out.
-2. `collectRecipientTokens(gid, writerDeviceId)` walks `groups/{gid}/devices`, returning `fcmToken` for every device where `removed != true` and the device ID isn't the writer.
+2. `collectRecipientTokens(gid, writerDeviceId)` walks `groups/{gid}/devices`, returning `fcmToken` for every device where `removed != true` and the device ID isn't the writer. **Defense-in-depth writer validation (v2.7):** before building the token list, the helper searches the same snapshot for `writerDeviceId`; if the writer isn't found or is flagged `removed`, the helper returns `[]` and the fan-out is suppressed. Free — uses the snapshot already fetched. Catches Firestore-rule regressions where a non-member write could otherwise trigger group-wide FCM spam.
 3. `sendFcm(tokens, {type:"sync_push", collection, groupId}, "sync_push")` — chunks at 500 tokens per `sendEachForMulticast`, `android.priority = "high"`, logs per-token failures.
 
 Purpose: cross-device sync in near-real-time despite Android Doze / App-Standby bucket restrictions on peer devices. Client receiver in §7.11.
+
+### 7.26.2a `onImageLedgerWrite` — Firestore onWrite (v2.7)
+
+Triggered by `onWrite` on `groups/{groupId}/imageLedger/{receiptId}`. `imageLedger` is intentionally NOT in `SYNC_PUSH_COLLECTIONS` because most of its writes are bookkeeping chatter (`markPossession`, `markNonPossession`, `pruneCheckTransaction` deletions) that peers don't need to react to. This trigger applies a content filter so only meaningful writes fan out.
+
+Filter — fire `sync_push` only when one of:
+- **Rotation**: `after.contentVersion > before.contentVersion`.
+- **Recovery re-upload complete**: `before.uploadedAt === 0 && after.uploadedAt > 0`.
+- **Recovery request created**: `!before.exists && after.uploadedAt === 0`.
+
+Skipped:
+- Fresh `createLedgerEntry` — already covered by the concurrent `onSyncDataWrite` push on the `transactions` collection (peer's `onBatchChanged` fast-path downloads the photo).
+- Possession updates (`markPossession`, `markNonPossession`) — informational.
+- Prune / deletion — transaction-level changes already propagate.
+- Snapshot-request doc (`_snapshot_request` docId) — uses its own signaling.
+
+Writer skipped via `after.lastEditBy` (client writes `incrementContentVersion`, `createRecoveryRequest`, `markReuploadComplete` stamp this field).
+
+Peers' `BackgroundSyncWorker.runOnce` uses `enqueueUniqueWork(KEEP)` so bursts (e.g. batch rotation) collapse into one `syncReceipts()` run per peer.
 
 ### 7.26.3 `presenceHeartbeat` — scheduled (v2.6)
 

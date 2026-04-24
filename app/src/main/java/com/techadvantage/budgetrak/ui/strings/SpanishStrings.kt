@@ -216,6 +216,8 @@ object SpanishStrings : AppStrings {
         shareBlockedByOpenDialog = "Cierra el di\u00e1logo abierto e intenta compartir de nuevo",
         shareOverflowDiscarded = "Solo 5 fotos por transacci\u00f3n \u2014 las fotos adicionales se descartaron",
         pendingPhotoTapped = "Esperando a que esta foto se descargue del dispositivo que la agreg\u00f3",
+        receiptRotationNoLocalFile = "No se puede rotar \u2014 la foto a\u00fan se est\u00e1 descargando. Int\u00e9ntalo cuando aparezca la miniatura.",
+        receiptRotationSaveFailed = "No se pudo guardar la foto rotada. Puede que el dispositivo est\u00e9 bajo en almacenamiento \u2014 int\u00e9ntalo de nuevo.",
         aiOcrIconDesc = "Esc\u00e1ner de Recibos con IA",
         aiOcrComingSoon = "El esc\u00e1ner de recibos con IA est\u00e1 en camino",
         upgradeForAiOcr = "Suscr\u00edbete para activar el esc\u00e1ner de recibos con IA",

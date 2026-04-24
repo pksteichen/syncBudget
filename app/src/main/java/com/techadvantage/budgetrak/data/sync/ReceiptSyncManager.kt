@@ -40,6 +40,8 @@ class ReceiptSyncManager(
         private const val KEY_RETRY_PREFIX = "download_retry_"
         private const val KEY_LAST_UPLOAD_SPEED_BPS = "lastUploadSpeedBps"
         private const val KEY_LAST_SPEED_MEASURED_AT = "lastSpeedMeasuredAt"
+        private const val KEY_CONTENT_VERSION_PREFIX = "content_version_"
+        private const val KEY_INITIAL_SYNC_COMPLETE = "initial_sync_complete"
         private const val MAX_DOWNLOAD_RETRIES = 3
         private const val SPEED_STALENESS_MS = 24 * 60 * 60 * 1000L  // 24 hours
         private const val SNAPSHOT_THRESHOLD = 50
@@ -47,6 +49,9 @@ class ReceiptSyncManager(
         private const val BATCH_RECOVERY_CAP = 50
         private const val SNAPSHOT_GRACE_PERIOD_MS = 5 * 60 * 1000L   // 5 min before cleanup
         private val SNAPSHOT_MAGIC = byteArrayOf(0x53, 0x4E, 0x41, 0x50) // "SNAP"
+        private const val SNAPSHOT_FORMAT_VERSION = 1
+        private const val SNAPSHOT_MAX_MANIFEST_BYTES = 10 * 1024 * 1024  // 10 MB — manifest is JSON index, plenty of slack
+        private const val SNAPSHOT_MAX_ENTRY_BYTES = 10 * 1024 * 1024     // 10 MB — single encrypted receipt; typical is ~200 KB
     }
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -65,7 +70,7 @@ class ReceiptSyncManager(
         var txns = transactions.toMutableList()
 
         // Step 1: Process pending uploads (upload-first, then create ledger)
-        txns = processPendingUploads(txns)
+        processPendingUploads()
 
         // Step 2: Check flag clock and handle ledger-driven operations
         val ledgerCache = processLedgerOperations(txns, photoCapableDeviceIds, allDevices)
@@ -80,18 +85,46 @@ class ReceiptSyncManager(
         // Step 4: Check for stale pruning duty (14-day cleanup, reuses ledger if cached)
         processStalePruning(photoCapableDeviceIds, allDevices, ledgerCache.second)
 
+        // Mark this device as "caught up" so future `processLedgerOperations`
+        // can safely contribute non-possession markers to photo-lost detection.
+        // Before this flag, a newly-joined device might mark every recovery
+        // request as non-possessed before its recovery sweep had a chance to
+        // pull the files, prematurely tipping the photo-lost tally to "all
+        // devices report false" and deleting still-recoverable photos.
+        if (!prefs.getBoolean(KEY_INITIAL_SYNC_COMPLETE, false)) {
+            prefs.edit().putBoolean(KEY_INITIAL_SYNC_COMPLETE, true).apply()
+            syncLog("Receipt sync: initial sync complete — non-possession gate lifted")
+        }
+
         return txns
     }
 
+    private fun hasCompletedInitialSync(): Boolean =
+        prefs.getBoolean(KEY_INITIAL_SYNC_COMPLETE, false)
+
     // ── Step 1: Process Pending Uploads ─────────────────────────
 
-    private suspend fun processPendingUploads(transactions: MutableList<Transaction>): MutableList<Transaction> {
+    /**
+     * Drain the pending-upload queue. Up to 5 concurrent uploads per chunk.
+     * Public so the foreground upload drainer and BG Tier 2/3 workers can call
+     * it directly (without going through full `syncReceipts`). Returns the
+     * number of receipts successfully resolved — uploaded + ledger-entry or
+     * dropped because the local file was already deleted.
+     *
+     * Completed ids are removed from the queue individually (not batched) so
+     * concurrent `addToPendingQueue` calls (from `saveTransactions`) don't
+     * get clobbered by a stale batch save. Two invocations overlapping (e.g.
+     * foreground drainer + BG Tier 2) upload the same files twice at worst —
+     * Cloud Storage overwrites are idempotent; `createLedgerEntry` is a
+     * `.set()` so last-writer-wins on the same content is benign.
+     */
+    suspend fun processPendingUploads(): Int {
         val pending = ReceiptManager.loadPendingUploads(context)
-        if (pending.isEmpty()) return transactions
+        if (pending.isEmpty()) return 0
 
         syncLog("Receipt sync: ${pending.size} pending uploads")
 
-        val completed = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+        val completedCount = java.util.concurrent.atomic.AtomicInteger(0)
         for (chunk in pending.toList().chunked(5)) {
             coroutineScope {
                 chunk.map { receiptId ->
@@ -100,7 +133,8 @@ class ReceiptSyncManager(
                             val encrypted = ReceiptManager.encryptForUpload(context, receiptId, encryptionKey)
                             if (encrypted == null) {
                                 syncLog("Receipt $receiptId: no local file, removing from queue")
-                                completed.add(receiptId)
+                                ReceiptManager.removeFromPendingQueue(context, receiptId)
+                                completedCount.incrementAndGet()
                                 return@async
                             }
 
@@ -116,16 +150,45 @@ class ReceiptSyncManager(
                                         .apply()
                                 }
 
-                                val ledgerCreated = ImageLedgerService.createLedgerEntry(groupId, receiptId, deviceId)
-                                if (ledgerCreated) {
-                                    syncLog("Receipt $receiptId: uploaded + ledger created")
-                                    completed.add(receiptId)
+                                // Rotation-aware ledger write: if the entry
+                                // already exists with uploadedAt > 0, this is
+                                // a rotation/edit re-upload — increment the
+                                // contentVersion (bumps flag clock so peers
+                                // invalidate stale local copies). Otherwise,
+                                // it's a fresh upload: createLedgerEntry
+                                // (no flag clock bump; peers discover via
+                                // transaction sync).
+                                val existing = ImageLedgerService.getLedgerEntry(groupId, receiptId)
+                                val ledgerWritten = if (existing != null && existing.uploadedAt > 0L) {
+                                    val ok = ImageLedgerService.incrementContentVersion(
+                                        groupId, receiptId, deviceId
+                                    )
+                                    if (ok) {
+                                        // Mirror the new version locally — we just re-uploaded,
+                                        // so our lastSeen matches what's now in the ledger.
+                                        setLocalContentVersion(receiptId, existing.contentVersion + 1)
+                                        syncLog("Receipt $receiptId: re-uploaded (content v${existing.contentVersion + 1})")
+                                    }
+                                    ok
+                                } else {
+                                    val ok = ImageLedgerService.createLedgerEntry(
+                                        groupId, receiptId, deviceId
+                                    )
+                                    if (ok) {
+                                        setLocalContentVersion(receiptId, 0L)
+                                        syncLog("Receipt $receiptId: uploaded + ledger created")
+                                    }
+                                    ok
+                                }
+                                if (ledgerWritten) {
+                                    ReceiptManager.removeFromPendingQueue(context, receiptId)
+                                    completedCount.incrementAndGet()
                                     prefs.edit().putLong(KEY_LAST_UPLOAD_TIME, System.currentTimeMillis()).apply()
                                 } else {
-                                    syncLog("Receipt $receiptId: uploaded but ledger creation failed, will retry")
+                                    syncLog("Receipt $receiptId: uploaded but ledger write failed, will retry")
                                 }
                             } else {
-                                syncLog("Receipt $receiptId: upload failed (${ImageLedgerService.lastUploadError}), will retry next sync")
+                                syncLog("Receipt $receiptId: upload failed (${ImageLedgerService.lastUploadError}), will retry next cycle")
                             }
                         } catch (e: Exception) {
                             syncLog("Receipt $receiptId: upload exception: ${e.message}")
@@ -135,12 +198,7 @@ class ReceiptSyncManager(
             }
         }
 
-        if (completed.isNotEmpty()) {
-            val remaining = pending - completed
-            ReceiptManager.savePendingUploads(context, remaining)
-        }
-
-        return transactions
+        return completedCount.get()
     }
 
     // ── Step 2: Ledger-Driven Operations ────────────────────────
@@ -162,29 +220,55 @@ class ReceiptSyncManager(
         for (entry in ledger) {
             when {
                 entry.uploadedAt == 0L && ReceiptManager.hasLocalFile(context, entry.receiptId) -> {
+                    // A peer is asking for this photo and we have it — maybe re-upload
                     handleReuploadRequest(entry, photoCapableDeviceIds, allDevices)
                 }
                 entry.uploadedAt == 0L && !ReceiptManager.hasLocalFile(context, entry.receiptId) -> {
-                    // Recovery request and we don't have the file — mark non-possession
-                    if (entry.possessions[deviceId] != false) {
-                        ImageLedgerService.markNonPossession(groupId, entry.receiptId, deviceId)
+                    // Recovery request and we don't have the file. We contribute
+                    // to the all-devices-report-false → photo-confirmed-lost
+                    // tally — but ONLY after our first completed syncReceipts.
+                    // Before that, a newly-joined or long-offline device hasn't
+                    // had a chance to pull its own photos via processRecovery,
+                    // and contributing a premature `false` could drive
+                    // `checkPhotoLost` to delete a still-recoverable entry.
+                    if (!hasCompletedInitialSync()) {
+                        syncLog("Receipt ${entry.receiptId}: skipping non-possession mark (initial sync not complete)")
+                    } else {
+                        if (entry.possessions[deviceId] != false) {
+                            ImageLedgerService.markNonPossession(groupId, entry.receiptId, deviceId)
+                        }
+                        val lost = ImageLedgerService.checkPhotoLost(groupId, entry.receiptId, photoCapableDeviceIds)
+                        if (lost) {
+                            clearLostReceiptSlot(transactions, entry.receiptId)
+                            syncLog("Receipt ${entry.receiptId}: confirmed lost, cleared slot")
+                        }
                     }
-                    // Check if all devices have reported non-possession (photo confirmed lost)
-                    val lost = ImageLedgerService.checkPhotoLost(groupId, entry.receiptId, photoCapableDeviceIds)
-                    if (lost) {
-                        clearLostReceiptSlot(transactions, entry.receiptId)
-                        syncLog("Receipt ${entry.receiptId}: confirmed lost, cleared slot")
-                    }
-                }
-                entry.uploadedAt > 0L && !ReceiptManager.hasLocalFile(context, entry.receiptId) -> {
-                    handleDownload(entry, photoCapableDeviceIds)
                 }
                 entry.uploadedAt > 0L && ReceiptManager.hasLocalFile(context, entry.receiptId) -> {
-                    if (!entry.possessions.containsKey(deviceId)) {
-                        ImageLedgerService.markPossession(groupId, entry.receiptId, deviceId)
+                    // Rotation detection: if the ledger's contentVersion
+                    // advanced past what we last downloaded, our local copy
+                    // is stale — delete it so `processRecovery` (same cycle)
+                    // re-downloads the new content.
+                    val localVersion = getLocalContentVersion(entry.receiptId)
+                    if (entry.contentVersion > localVersion) {
+                        syncLog("Receipt ${entry.receiptId}: content v$localVersion → v${entry.contentVersion}, invalidating local")
+                        ReceiptManager.deleteLocalReceipt(context, entry.receiptId)
+                        clearLocalContentVersion(entry.receiptId)
+                        // Possession for us is now stale — drop it so the
+                        // ledger reflects our actual (empty) state.
+                        ImageLedgerService.markNonPossession(groupId, entry.receiptId, deviceId)
+                    } else {
+                        // We have the current content — mark possession if absent and check prune
+                        if (!entry.possessions.containsKey(deviceId)) {
+                            ImageLedgerService.markPossession(groupId, entry.receiptId, deviceId)
+                        }
+                        ImageLedgerService.pruneCheckTransaction(groupId, entry.receiptId, photoCapableDeviceIds)
                     }
-                    ImageLedgerService.pruneCheckTransaction(groupId, entry.receiptId, photoCapableDeviceIds)
                 }
+                // Intentionally no "uploadedAt > 0 && !hasLocalFile" branch —
+                // downloads for receipts we reference are handled by processRecovery
+                // (with the 3-retry-then-recovery-request self-healing logic).
+                // Ledger entries for receipts we don't reference are ignored.
             }
         }
 
@@ -242,40 +326,100 @@ class ReceiptSyncManager(
                         .putLong(KEY_LAST_SPEED_MEASURED_AT, System.currentTimeMillis())
                         .apply()
                 }
-                ImageLedgerService.markReuploadComplete(groupId, entry.receiptId)
+                ImageLedgerService.markReuploadComplete(groupId, entry.receiptId, deviceId)
                 prefs.edit().putLong(KEY_LAST_UPLOAD_TIME, System.currentTimeMillis()).apply()
                 syncLog("Receipt ${entry.receiptId}: re-upload complete")
             }
         }
     }
 
-    private suspend fun handleDownload(entry: ImageLedgerEntry, photoCapableDeviceIds: Set<String>) {
-        val data = ImageLedgerService.downloadFromCloud(groupId, entry.receiptId)
+    /**
+     * Download a single receipt with 3-retry-then-recovery-request semantics.
+     * Shared by `processRecovery`, `MainViewModel.onBatchChanged` fast-path, and
+     * the foreground retry coroutine.
+     *
+     * Returns true on successful download + save. Returns false for transient
+     * failures (caller may retry later); on the 3rd real failure the ledger
+     * entry gets replaced with a recovery request and a re-uploader takes over.
+     *
+     * If no ledger entry exists at all (possible race on a freshly-added
+     * transaction whose originator hasn't uploaded yet), caller should just
+     * wait and retry later — we don't create a recovery request in that case,
+     * since the originator may still be queued to upload.
+     */
+    suspend fun downloadReceiptWithRetry(
+        receiptId: String,
+        photoCapableDeviceIds: Set<String>
+    ): Boolean {
+        val data = ImageLedgerService.downloadFromCloud(groupId, receiptId)
         if (data != null) {
-            val saved = ReceiptManager.decryptAndSave(context, entry.receiptId, data, encryptionKey)
+            val saved = ReceiptManager.decryptAndSave(context, receiptId, data, encryptionKey)
             if (saved) {
-                ImageLedgerService.markPossession(groupId, entry.receiptId, deviceId)
-                ImageLedgerService.pruneCheckTransaction(groupId, entry.receiptId, photoCapableDeviceIds)
-                prefs.edit().remove(KEY_RETRY_PREFIX + entry.receiptId).apply()
-                syncLog("Receipt ${entry.receiptId}: downloaded + saved")
-            }
-        } else {
-            val freshEntry = ImageLedgerService.getLedgerEntry(groupId, entry.receiptId)
-            if (freshEntry != null && freshEntry.uploadedAt > 0L) {
-                val retryKey = KEY_RETRY_PREFIX + entry.receiptId
-                val retries = prefs.getInt(retryKey, 0) + 1
-                prefs.edit().putInt(retryKey, retries).apply()
-
-                if (retries >= MAX_DOWNLOAD_RETRIES) {
-                    syncLog("Receipt ${entry.receiptId}: $retries download failures, creating new request")
-                    ImageLedgerService.deleteLedgerEntry(groupId, entry.receiptId)
-                    ImageLedgerService.createRecoveryRequest(groupId, entry.receiptId, deviceId)
-                    prefs.edit().remove(retryKey).apply()
-                } else {
-                    syncLog("Receipt ${entry.receiptId}: download failed (retry $retries/$MAX_DOWNLOAD_RETRIES)")
+                ImageLedgerService.markPossession(groupId, receiptId, deviceId)
+                ImageLedgerService.pruneCheckTransaction(groupId, receiptId, photoCapableDeviceIds)
+                // Record the contentVersion we just downloaded so later
+                // rotation-detection compares correctly.
+                val entry = ImageLedgerService.getLedgerEntry(groupId, receiptId)
+                if (entry != null) {
+                    setLocalContentVersion(receiptId, entry.contentVersion)
                 }
+                prefs.edit().remove(KEY_RETRY_PREFIX + receiptId).apply()
+                syncLog("Receipt $receiptId: downloaded + saved")
+                return true
             }
         }
+
+        // Download failed — decide whether to retry or create a recovery request
+        val existing = ImageLedgerService.getLedgerEntry(groupId, receiptId)
+        if (existing == null) {
+            // No ledger entry — originator probably hasn't uploaded yet. Wait.
+            syncLog("Receipt $receiptId: no ledger entry yet, will retry later")
+            return false
+        }
+        if (existing.uploadedAt == 0L) {
+            // Already a recovery request — another device's in-flight re-upload will land.
+            return false
+        }
+
+        // Ledger claims uploaded but download failed — track retries
+        val retryKey = KEY_RETRY_PREFIX + receiptId
+        val retries = prefs.getInt(retryKey, 0) + 1
+        prefs.edit().putInt(retryKey, retries).apply()
+
+        if (retries >= MAX_DOWNLOAD_RETRIES) {
+            syncLog("Receipt $receiptId: $retries download failures, converting to recovery request")
+            // Atomic replacement inside a Firestore transaction: preserves
+            // contentVersion + createdAt, resets to recovery-request state,
+            // bumps flag clock. Avoids the delete-then-create race window
+            // where a concurrent re-uploader could duplicate the entry or
+            // reset the version counter.
+            ImageLedgerService.resetEntryToRecoveryRequest(
+                groupId, receiptId, deviceId,
+                fallbackContentVersion = existing.contentVersion
+            )
+            prefs.edit().remove(retryKey).apply()
+        } else {
+            syncLog("Receipt $receiptId: download failed (retry $retries/$MAX_DOWNLOAD_RETRIES)")
+        }
+        return false
+    }
+
+    // ── Local content-version tracking (for rotation detection) ──
+
+    /**
+     * Record the contentVersion of a receipt we've just saved locally. On
+     * future sync cycles, if the ledger's contentVersion exceeds this value,
+     * we know our local copy is stale and needs re-download.
+     */
+    fun setLocalContentVersion(receiptId: String, version: Long) {
+        prefs.edit().putLong(KEY_CONTENT_VERSION_PREFIX + receiptId, version).apply()
+    }
+
+    fun getLocalContentVersion(receiptId: String): Long =
+        prefs.getLong(KEY_CONTENT_VERSION_PREFIX + receiptId, 0L)
+
+    fun clearLocalContentVersion(receiptId: String) {
+        prefs.edit().remove(KEY_CONTENT_VERSION_PREFIX + receiptId).apply()
     }
 
     // ── Step 3: Recovery (with snapshot support + batch cap) ─────
@@ -341,25 +485,30 @@ class ReceiptSyncManager(
             coroutineScope {
                 chunk.map { receiptId ->
                     async {
-                        val cloudData = ImageLedgerService.downloadFromCloud(groupId, receiptId)
-                        if (cloudData != null) {
-                            val saved = ReceiptManager.decryptAndSave(context, receiptId, cloudData, encryptionKey)
-                            if (saved) {
-                                ImageLedgerService.markPossession(groupId, receiptId, deviceId)
-                                ImageLedgerService.pruneCheckTransaction(groupId, receiptId, photoCapableDeviceIds)
-                                syncLog("Receipt $receiptId: recovered from cloud")
-                                return@async
+                        // downloadReceiptWithRetry handles: download, save, mark possession,
+                        // prune check, retry counter, and 3rd-failure → recovery request.
+                        // If there's no ledger entry at all (originator may not have
+                        // uploaded yet), it returns false without creating a request —
+                        // we only want to issue recovery requests when someone claims to
+                        // have uploaded already.
+                        val ok = downloadReceiptWithRetry(receiptId, photoCapableDeviceIds)
+                        if (!ok) {
+                            // If no ledger entry exists, this receipt is brand-new and
+                            // the originator's upload is likely still queued. If the
+                            // ledger entry does exist but download failed, the retry
+                            // counter in downloadReceiptWithRetry handles escalation.
+                            val existing = ImageLedgerService.getLedgerEntry(groupId, receiptId)
+                            if (existing == null) {
+                                // Entry truly missing — this is a "we reference a
+                                // photo that nobody has uploaded yet" case. Create a
+                                // recovery request so peers help (originator will
+                                // notice if asked and re-upload from its queue).
+                                val created = ImageLedgerService.createRecoveryRequest(groupId, receiptId, deviceId)
+                                if (created) {
+                                    ImageLedgerService.markNonPossession(groupId, receiptId, deviceId)
+                                    syncLog("Receipt $receiptId: no ledger entry, created recovery request")
+                                }
                             }
-                        }
-
-                        val existing = ImageLedgerService.getLedgerEntry(groupId, receiptId)
-                        if (existing != null) return@async
-
-                        val created = ImageLedgerService.createRecoveryRequest(groupId, receiptId, deviceId)
-                        if (created) {
-                            // Immediately mark self as non-possession (we're the one requesting)
-                            ImageLedgerService.markNonPossession(groupId, receiptId, deviceId)
-                            syncLog("Receipt $receiptId: created recovery request")
                         }
                     }
                 }
@@ -487,7 +636,7 @@ class ReceiptSyncManager(
             // Assemble final archive: header + manifest + entries
             archiveFile.outputStream().buffered().use { out ->
                 out.write(SNAPSHOT_MAGIC)
-                out.write(intToBytes(1)) // version
+                out.write(intToBytes(SNAPSHOT_FORMAT_VERSION))
                 out.write(intToBytes(manifestBytes.size))
                 out.write(manifestBytes)
                 tempEntries.inputStream().buffered().use { it.copyTo(out) }
@@ -540,8 +689,25 @@ class ReceiptSyncManager(
                 if (!magic.contentEquals(SNAPSHOT_MAGIC)) {
                     throw IllegalStateException("Invalid snapshot magic")
                 }
+                // Reject unsupported format versions. A future build that
+                // writes v2 would be silently mis-parsed by this reader,
+                // potentially saving garbage bytes as local receipts. Fall
+                // back to batch recovery (one file at a time) instead.
                 val version = readInt(inp)
+                if (version != SNAPSHOT_FORMAT_VERSION) {
+                    throw IllegalStateException(
+                        "Unsupported snapshot version $version (this build reads v$SNAPSHOT_FORMAT_VERSION)"
+                    )
+                }
+                // Bounds-check the manifest length before allocating. A
+                // corrupted or maliciously-crafted archive could declare
+                // Int.MAX_VALUE and OOM the process on the allocation.
                 val manifestLen = readInt(inp)
+                if (manifestLen <= 0 || manifestLen > SNAPSHOT_MAX_MANIFEST_BYTES) {
+                    throw IllegalStateException(
+                        "Snapshot manifest length $manifestLen out of allowed range [1, $SNAPSHOT_MAX_MANIFEST_BYTES]"
+                    )
+                }
                 val manifestEncrypted = ByteArray(manifestLen)
                 dis.readFully(manifestEncrypted)
                 val manifestJson = String(
@@ -556,6 +722,15 @@ class ReceiptSyncManager(
                     val e = entries.getJSONObject(i)
                     val receiptId = e.getString("receiptId")
                     val length = e.getInt("length")
+
+                    // Per-entry bounds: ≤10 MB. Typical encrypted receipt is
+                    // ~200 KB; 10 MB is ~50× headroom. A larger value
+                    // indicates a malformed or hostile archive.
+                    if (length <= 0 || length > SNAPSHOT_MAX_ENTRY_BYTES) {
+                        throw IllegalStateException(
+                            "Snapshot entry[$i] length $length out of allowed range [1, $SNAPSHOT_MAX_ENTRY_BYTES]"
+                        )
+                    }
 
                     if (ReceiptManager.hasLocalFile(context, receiptId)) {
                         // Skip — already have this file. Must still read past it.

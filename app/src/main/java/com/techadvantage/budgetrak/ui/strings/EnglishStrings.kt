@@ -216,6 +216,8 @@ object EnglishStrings : AppStrings {
         shareBlockedByOpenDialog = "Please finish or close the open dialog, then try sharing again",
         shareOverflowDiscarded = "Only 5 photos per transaction — extra shared photos were discarded",
         pendingPhotoTapped = "Waiting for this photo to download from the device that added it",
+        receiptRotationNoLocalFile = "Can't rotate — photo still downloading. Try again once the thumbnail appears.",
+        receiptRotationSaveFailed = "Couldn't save rotated photo. Device may be low on storage — try again.",
         aiOcrIconDesc = "AI Receipt Scanner",
         aiOcrComingSoon = "AI receipt scanning is coming soon",
         upgradeForAiOcr = "Subscribe to unlock AI receipt scanning",

@@ -131,16 +131,31 @@ fun SwipeablePhotoRow(
 
     var showCameraPicker by remember { mutableStateOf(false) }
     var tempPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    // Track the underlying temp file so we can delete it after the camera
+    // callback (whether success or failure). Without this, `cacheDir`
+    // accumulates `receipt_capture_<uuid>.jpg` files across every capture.
+    var tempPhotoFile by remember { mutableStateOf<java.io.File?>(null) }
     var deleteConfirmSlot by remember { mutableIntStateOf(-1) }
     var fullScreenSlot by remember { mutableIntStateOf(-1) }
 
     val cameraLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture()
     ) { success ->
-        if (success && tempPhotoUri != null) {
+        val capturedUri = tempPhotoUri
+        val capturedFile = tempPhotoFile
+        // Clear refs immediately so a second capture can't interfere
+        tempPhotoUri = null
+        tempPhotoFile = null
+        if (success && capturedUri != null) {
             scope.launch {
                 val rid = withContext(Dispatchers.IO) {
-                    ReceiptManager.processAndSavePhoto(context, tempPhotoUri!!)
+                    try {
+                        ReceiptManager.processAndSavePhoto(context, capturedUri)
+                    } finally {
+                        // Always delete the temp file — process-and-save already
+                        // copied the bytes into filesDir/receipts/.
+                        capturedFile?.delete()
+                    }
                 }
                 if (rid != null) {
                     // Upload-queue enqueue happens at transaction-save time
@@ -149,6 +164,9 @@ fun SwipeablePhotoRow(
                     onPhotosAdded(listOf(rid))
                 }
             }
+        } else {
+            // Capture failed / user cancelled — still delete the temp file.
+            capturedFile?.delete()
         }
     }
 
@@ -290,6 +308,7 @@ fun SwipeablePhotoRow(
                                 tempPhotoUri = androidx.core.content.FileProvider.getUriForFile(
                                     context, "${context.packageName}.fileprovider", file
                                 )
+                                tempPhotoFile = file
                                 cameraLauncher.launch(tempPhotoUri!!)
                             }
                         )
@@ -511,32 +530,81 @@ fun FullScreenPhotoViewer(
     var offsetY by remember { mutableStateOf(0f) }
     var rotationSteps by remember { mutableIntStateOf(0) } // 0, 1, 2, 3 = 0°, 90°, 180°, 270°
 
+    // Tracks the most recent rotated copy so we can recycle it when the user
+    // rotates again or dismisses the viewer. Without this, every rotation tap
+    // leaks a full-size Bitmap; four taps on a 24 MB receipt = 96 MB in memory.
+    val previousRotatedRef = remember { androidx.compose.runtime.mutableStateOf<Bitmap?>(null) }
     val displayBitmap = remember(bitmap, rotationSteps) {
-        if (rotationSteps == 0) bitmap
-        else {
+        // Recycle the prior rotated bitmap (if any) before allocating a new one.
+        previousRotatedRef.value?.let { prev ->
+            if (prev !== bitmap && !prev.isRecycled) prev.recycle()
+            previousRotatedRef.value = null
+        }
+        if (rotationSteps == 0) {
+            bitmap
+        } else {
             val matrix = android.graphics.Matrix()
             matrix.postRotate((rotationSteps * 90).toFloat())
-            Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            previousRotatedRef.value = rotated
+            rotated
+        }
+    }
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose {
+            previousRotatedRef.value?.let { prev ->
+                if (prev !== bitmap && !prev.isRecycled) prev.recycle()
+            }
+            previousRotatedRef.value = null
         }
     }
 
-    val handleDismiss: () -> Unit = {
-        if (rotationSteps % 4 != 0 && receiptId != null) {
-            // Save rotated image via ReceiptManager (handles compression + thumb),
-            // THEN dismiss on main thread.
-            scope.launch {
-                kotlinx.coroutines.withContext(Dispatchers.IO) {
+    val appToast = LocalAppToast.current
+    // Rate-limit repeated save attempts so a disk-full / OOM retry storm can't
+    // spin up multiple concurrent compression passes.
+    var rotationSaveInFlight by remember { mutableStateOf(false) }
+
+    val handleDismiss: () -> Unit = handleDismiss@{
+        if (rotationSteps % 4 == 0 || receiptId == null) {
+            onDismiss()
+            return@handleDismiss
+        }
+
+        // Gate: if the local file is missing (pending-download placeholder, or
+        // file was pruned between viewer open and rotation save), refuse and
+        // show a toast. Saving rotation without a source file would leave a
+        // stale or missing blob that peers would later invalidate as corrupt.
+        if (!ReceiptManager.hasLocalFile(context, receiptId)) {
+            appToast.show(S.settings.receiptRotationNoLocalFile)
+            onDismiss()
+            return@handleDismiss
+        }
+        if (rotationSaveInFlight) return@handleDismiss
+        rotationSaveInFlight = true
+
+        scope.launch {
+            val saved = kotlinx.coroutines.withContext(Dispatchers.IO) {
+                try {
                     val matrix = android.graphics.Matrix()
                     matrix.postRotate((rotationSteps * 90).toFloat())
                     val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-                    ReceiptManager.replaceReceipt(context, receiptId, rotated)
+                    val ok = ReceiptManager.replaceReceipt(context, receiptId, rotated)
                     if (rotated !== bitmap) rotated.recycle()
+                    ok
+                } catch (e: Exception) {
+                    android.util.Log.w("RotationSave", "Failed to save rotation for $receiptId: ${e.message}")
+                    false
                 }
+            }
+            rotationSaveInFlight = false
+            if (saved) {
                 onRotated?.invoke()
                 onDismiss()
+            } else {
+                // Keep the viewer open so the user can retry or cancel by
+                // tapping outside. Toast the reason.
+                appToast.show(S.settings.receiptRotationSaveFailed)
             }
-        } else {
-            onDismiss()
         }
     }
 

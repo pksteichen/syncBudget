@@ -2,8 +2,8 @@
 name: Receipt Photo Specification
 description: Capture, compression, local + cloud storage, flag-clock-driven sync, pruning, recovery, snapshot archives, rotation — the full receipt photo subsystem
 type: reference
+originSessionId: ea9e173a-ca3d-4f87-b67a-ceac73953250
 ---
-
 # Receipt Photo Specification
 
 ## Data model
@@ -14,12 +14,18 @@ type: reference
 - Swipe-left on a transaction row reveals the photo panel.
 - Camera: `ActivityResultContracts.TakePicture()`.
 - Gallery: `ActivityResultContracts.PickMultipleVisualMedia(maxItems = remainingSlots)`.
-- Full-screen viewer supports **rotation** (persisted back to disk + thumbnail regenerated).
+- Full-screen viewer supports **rotation**. Rotation rewrites the local file + thumbnail via `ReceiptManager.replaceReceipt`, which also re-queues the receiptId for upload. `onPhotoContentChanged` callback threads up to `MainActivity` → `vm.kickUploadDrainer()`, so Layer 0 pushes the new bytes to Cloud Storage. See "Content version + rotation propagation" below.
 
 ## Compression — `ReceiptManager.kt`
-- Max dimension 1000 px (proportional resize).
+- Longest-edge target 1000 px (`MAX_IMAGE_DIMENSION`), shortest-edge floor 400 px (`MIN_IMAGE_DIMENSION`), hard ceiling 3072 px (`LONG_EDGE_HARD_CAP`). The floor takes priority when a naive longest-edge resize would squash a tall narrow receipt below readability; the hard cap overrides the floor for pathologically tall images (e.g., 1080 × 15 000 → 3072 × 221). So stored JPEGs live in the range `longest ∈ [1000, 3072]` with `shortest ≥ 400` in the normal case.
 - Target 250 KB per megapixel, iterative JPEG quality search: start Q = 92, log-linear interpolate, ± 10 % tolerance; quality clamped to 20–100. Never re-compresses an already-encoded JPEG.
-- Original file is decoded once; thumbnail (200 px, Q = 70) saved alongside.
+- Original file is decoded once; thumbnail (200 px long edge, Q = 70) saved alongside with no shortest-edge floor (thumbnails of tall receipts are narrow).
+
+## Rotation / resave behavior
+- `ReceiptManager.replaceReceipt` is called exactly once per viewer session — on dismiss with `rotationSteps % 4 != 0`. Rotating multiple times within a single viewer open leaves `bitmap` untouched (all transient rotated bitmaps are derived from the original `bitmap` via `Bitmap.createBitmap + matrix`), so generation loss is one JPEG encode per dismiss.
+- Rotation does NOT change pixel count or file-size target — `targetBytes = area × TARGET_BYTES_PER_MEGAPIXEL / 1_000_000` is orientation-invariant. A 2880×400 stored receipt rotates to 400×2880 with the same ~287 KB target.
+- `replaceReceipt` does NOT re-enforce `MAX_IMAGE_DIMENSION` / `MIN_IMAGE_DIMENSION` / `LONG_EDGE_HARD_CAP` — it relies on the invariant that the incoming bitmap was loaded from an already-bounded stored file. Holds today (sole caller is `FullScreenPhotoViewer.handleDismiss`, whose bitmap comes from `loadFullImage`). If a future caller is added, either add a defensive `resizeBitmap(bitmap, MAX_IMAGE_DIMENSION, MIN_IMAGE_DIMENSION)` pass, or document the invariant.
+- Repeated viewer open → rotate → dismiss cycles DO compound generation loss (one JPEG re-encode per session). Negligible for a few rotations; avoid showing rotation as a primary edit flow that users trigger dozens of times.
 
 ## Local storage
 - Full: `filesDir/receipts/{receiptId}.jpg`
@@ -30,26 +36,79 @@ type: reference
 
 - Encryption: ChaCha20-Poly1305 AEAD with the group sync key (`CryptoHelper.encryptWithKey`).
 - Upload target: `groups/{groupId}/receipts/{receiptId}.enc` in Cloud Storage.
-- Metadata: Firestore `imageLedger/{receiptId}` with `{receiptId, originatorDeviceId, createdAt, possessions: Map<String,Bool>, uploadAssignee?, assignedAt?, uploadedAt?}`.
+- Metadata: Firestore `imageLedger/{receiptId}` with `{receiptId, originatorDeviceId, createdAt, possessions: Map<String,Bool>, uploadAssignee?, assignedAt?, uploadedAt?, contentVersion: Long}`. `contentVersion` is a monotonic counter that increments on rotation/edit re-upload (see below); `0` for never-edited receipts.
 - `photoCapable` flag on each device's RTDB presence tells the group whether this device participates in cloud sync.
 
 ### Upload-first, ledger-second
 The originator uploads the encrypted blob, then creates the ledger entry (`ReceiptSyncManager.processPendingUploads`). The pending-upload queue is persisted to JSON so a crash between upload and ledger-create doesn't orphan data — the next run finishes the ledger step.
 
-## Foreground sync — flag-clock polling (not a listener)
+## Four-layer sync architecture (uploads + downloads, foreground + background)
 
-Contrary to older memory, there is **no dedicated Firestore snapshot listener on `imageLedger`**. Instead:
+Photo propagation is driven by the transaction sync (not the flag clock). The four layers cover every path a byte can take between local disk and Cloud Storage:
 
-1. `ReceiptSyncManager.syncReceipts()` reads a one-field `imageLedgerMeta` doc (flag clock).
-2. If the flag clock changed since the last cached value, pull the full ledger and diff.
-3. New entries → download; new requests → evaluate as assignee; removed entries → local cleanup.
-4. Parallel downloads up to 5 concurrent when new transactions arrive via `onBatchChanged` delivers new `receiptId*` values.
+### Layer 0 — Foreground upload drainer (`MainViewModel.kickUploadDrainer`)
+Continuous coroutine on `viewModelScope`. Drains the pending-upload queue as items are added. Triggered by `saveTransactions` when a transaction save attaches a new `receiptIdN`, and on VM init if the queue was persisted non-empty from a prior session. Loops with 30s→60s→2m→5m→10m exponential backoff on network failure; exits cleanly when queue is empty. Calls `ReceiptSyncManager.processPendingUploads` which does the upload + `createLedgerEntry` per receipt, up to 5 in parallel. This is what gets the photo into Cloud Storage within seconds of `saveTransactions`, rather than waiting for manual Sync-Now or BG Tier 3.
 
-The flag clock is bumped on: recovery request, re-upload complete, cleanup, request replacement. It is **not** bumped on initial entry creation (originator already has the photo locally, so other devices don't need an immediate refresh).
+### Layer 1 — Transaction-sync fast path for downloads (`MainViewModel.onBatchChanged`)
+When `FirestoreDocSync` delivers transactions, the VM scans arriving `receiptIdN` fields and downloads any missing locally (5 parallel). Uses `ReceiptSyncManager.downloadReceiptWithRetry` which does download + save + `markPossession` + `pruneCheckTransaction` inline (the last device to download triggers the actual prune). On any failure, hands the receiptId to Layer 2.
 
-## Background sync
+### Layer 2 — Foreground download retry coroutine (`MainViewModel.kickFgDownloadRetry`)
+Catches Layer 1 misses. In-memory set of stuck receiptIds; coroutine on `viewModelScope` drains it with 30s→60s→2m→5m→10m backoff. Each attempt goes through `downloadReceiptWithRetry`, which handles the 3-retry counter and escalates to a recovery request on persistent failure. Self-filters: drops ids no longer referenced in transactions, or that appeared locally via another path. Resets backoff on any success; exits when set is empty.
 
-`BackgroundSyncWorker` (Tier 3 only — ViewModel dead) constructs a `ReceiptSyncManager(photoCapable = isPaidUser)` and calls `syncReceipts()`. Tiers 1 and 2 skip receipt sync.
+### Layer 3 — Background coverage (`BackgroundSyncWorker` Tier 2 + Tier 3)
+- **Tier 2** (ViewModel alive, app backgrounded): creates a transient `ReceiptSyncManager`, calls `syncReceipts()`. Catches cases where foreground drainers didn't fire (Doze, CPU throttling). Cheap no-op when nothing's to do (pending queue empty + flag clock unchanged + no missing referenced receipts).
+- **Tier 3** (ViewModel dead, process restarted): already calls `syncReceipts()` as part of full BG sync.
+
+All four layers ultimately funnel their download logic through `ReceiptSyncManager.downloadReceiptWithRetry` — the single download helper with the 3-retry-then-convert-to-recovery-request self-healing. All four funnel their upload logic through `ReceiptSyncManager.processPendingUploads`.
+
+## Flag clock bumps (and why creation doesn't)
+
+The flag clock is bumped on: `createRecoveryRequest`, `markReuploadComplete`, stale-prune deletions, `createSnapshotRequest`, explicit deletion (`deleteReceiptFull`). It is **NOT** bumped on `createLedgerEntry` (initial upload). Peers discover new photos via Layer 1 (transaction-sync listener), not via the flag clock. Pruning is triggered inline at every download site. Re-adding the bump would just cause peers to redundantly re-pull the full ledger on every new upload.
+
+## Prune-check is fired at every download site (three sites, all consistent)
+
+After saving a downloaded photo and calling `markPossession`, `pruneCheckTransaction` fires inline. This is what makes possession-based pruning work without a flag-clock bump on creation:
+- `MainViewModel.onBatchChanged` (Layer 1 fast path, via `downloadReceiptWithRetry`)
+- `ReceiptSyncManager.downloadReceiptWithRetry` body (used by Layers 1, 2, 3)
+- `ReceiptSyncManager.processLedgerOperations` "have-it" branch — catches cases where we already had the file but peers don't know yet
+
+The transactional read inside `pruneCheckTransaction` early-exits when not all devices have the file, so intermediate downloads are cheap; only the last device triggers the actual cloud+ledger delete.
+
+## Content version + rotation propagation
+
+Ledger entries carry a monotonic `contentVersion: Long` (default 0). Every rotation (or future edit) that overwrites the local blob re-queues the receiptId for upload; `processPendingUploads` detects an existing ledger entry with `uploadedAt > 0` and calls `ImageLedgerService.incrementContentVersion` (vs `createLedgerEntry` for fresh uploads). `incrementContentVersion` is a batch write that:
+1. Sets `possessions = {editorDeviceId: true}` — only the editor has the new content until peers re-download.
+2. Sets `uploadedAt = now`.
+3. `FieldValue.increment(1)` on `contentVersion`.
+4. Bumps the flag clock.
+
+**Peer invalidation.** Each device tracks `lastSeenContentVersion[receiptId]` in `receipt_sync_prefs` (prefixed `content_version_`). `ReceiptSyncManager.downloadReceiptWithRetry` records the entry's current `contentVersion` on successful save. In `processLedgerOperations`, the "uploadedAt > 0 && hasLocalFile" branch compares: if `entry.contentVersion > localVersion`, the local copy is stale → `deleteLocalReceipt` + `clearLocalContentVersion` + `markNonPossession`. Same-cycle `processRecovery` sees the now-missing file and calls `downloadReceiptWithRetry`, which downloads the new content and records the new version.
+
+**Recovery preserves version.** When `downloadReceiptWithRetry` converts an entry to a recovery request after 3 failures, it passes the existing `contentVersion` via `createRecoveryRequest(..., preserveContentVersion = existing.contentVersion)`. Otherwise peers with stale local copies (version N) would compare against the reset (version 0) and never invalidate through subsequent rotations.
+
+**Propagation cadence.** Near-real-time — Cloud Function `onImageLedgerWrite` fires a `sync_push` FCM on interesting ledger writes. Rotation → peer receives push within seconds → `BackgroundSyncWorker.runOnce` → Tier 2 or Tier 3 → `syncReceipts()` → `processLedgerOperations` detects the version mismatch → same-cycle `processRecovery` downloads the new content. `enqueueUniqueWork(KEEP)` client-side dedup collapses bursts (e.g. 50-photo batch rotation) into a single BG worker run per peer.
+
+**What triggers `onImageLedgerWrite` to fire a push (filtered):**
+- Rotation / edit: `after.contentVersion > before.contentVersion`.
+- Recovery re-upload complete: `before.uploadedAt === 0 && after.uploadedAt > 0`.
+- Recovery request created: new entry with `after.uploadedAt === 0`.
+
+Skipped (no push):
+- Fresh `createLedgerEntry` for a brand-new receipt — the concurrent transaction-collection write (`SyncWriteHelper.pushTransaction`) already fires a `sync_push` on `transactions` that wakes peers, who then fast-path-download via `onBatchChanged`.
+- `markPossession` / `markNonPossession` — informational.
+- `pruneCheckTransaction` deletions — transaction-level changes propagate deletes.
+- Snapshot-request doc (`_snapshot_request` receiptId) — uses its own signaling.
+
+**Writer skipped.** All three meaningful client writes (`incrementContentVersion`, `createRecoveryRequest`, `markReuploadComplete`) stamp `lastEditBy = ourDeviceId`. Cloud Function's `collectRecipientTokens(groupId, writerDeviceId)` filters the writer out of the recipient list so the editing device doesn't get its own FCM back.
+
+## `processLedgerOperations` does NOT download (important)
+
+The old `handleDownload` branch has been removed. `processLedgerOperations` iterates the ledger only for:
+- Re-upload-request handling (we have the file, a peer asked — maybe re-upload)
+- Non-possession marking + `checkPhotoLost` (all photo-capable devices report false → photo confirmed lost)
+- `markPossession` + `pruneCheckTransaction` (we have it, catch up with the group)
+
+Downloads for receipts the device references in its transactions are always routed through `processRecovery` or the foreground paths. This prevents the pathological case where a flag-clock bump caused every device to re-download ledger entries they don't need (including ones they'd locally pruned).
 
 ## Possession model (three-state)
 - `possessions["deviceId"] = true` — device holds a valid local copy of the encrypted blob. Marked on successful upload (originator) or download (receiver).
@@ -60,8 +119,9 @@ The flag clock is bumped on: recovery request, re-upload complete, cleanup, requ
 
 ## Recovery — download retry
 
-- Per download: 3 **real** failures (skips transient network errors) → replace the ledger entry with a *recovery request*, bump flag clock.
-- Other devices receive the request, select a re-uploader by `(online filter + fastest `uploadSpeedBps` in last 24 h)`, fall back to `abs(hash(receiptId+deviceId)) % 1000` tie-break. CAS `claimUploadAssignment` transaction prevents duplicate work. 5-minute stale-assignment failover.
+- Per-receipt retry counter (in `receipt_sync_prefs` via `KEY_RETRY_PREFIX + receiptId`): incremented inside `downloadReceiptWithRetry` when the ledger still claims `uploadedAt > 0` but the download fails. On the 3rd failure: delete the ledger entry and create a recovery request (which bumps the flag clock). Counter cleared on any successful download.
+- "No ledger entry" and "recovery request already in flight" are NOT counted against the retry budget — the caller just waits and retries later.
+- Other devices receive the recovery request, select a re-uploader by `(online filter + fastest `uploadSpeedBps` in last 24 h)`, fall back to `abs(hash(receiptId+deviceId)) % 1000` tie-break. CAS `claimUploadAssignment` transaction prevents duplicate work. 5-minute stale-assignment failover.
 
 ## Batch / snapshot recovery
 
@@ -150,7 +210,9 @@ Other devices receiving the transaction update see `old receiptId != null → ne
 | File | Purpose |
 |---|---|
 | `data/sync/ReceiptManager.kt` | local FS, compression, pending queue, encrypt/decrypt on device |
-| `data/sync/ReceiptSyncManager.kt` | top-level `syncReceipts()`, flag-clock polling, upload/download, recovery, snapshot archives, pruning |
+| `data/sync/ReceiptSyncManager.kt` | `syncReceipts()`, `processPendingUploads()` (public), `downloadReceiptWithRetry()` (public), flag-clock polling, recovery, snapshot archives, pruning |
 | `data/sync/ImageLedgerService.kt` | Firestore CRUD on `imageLedger`, Cloud Storage ops, possession CAS, flag-clock read/bump, snapshot ledger, join-snapshot ops |
 | `data/sync/ImageLedgerEntry.kt` | data class |
 | `ui/components/SwipeablePhotoRow.kt` | capture UI + full-screen viewer with rotation |
+| `MainViewModel.kt` | Layer 0 (`kickUploadDrainer`), Layer 1 (fast-path download in `onBatchChanged`), Layer 2 (`kickFgDownloadRetry`) |
+| `data/sync/BackgroundSyncWorker.kt` | Layer 3 Tier 2 (lightweight `syncReceipts()` while VM alive + backgrounded) and Tier 3 (full BG sync when VM dead) |

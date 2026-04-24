@@ -1333,22 +1333,104 @@ pipeline; dedupe landed in 2.7 at ~160 LOC removed).
 - `ReceiptManager.cleanOrphans` deletes files not referenced by any
   active transaction and not in the pending-upload queue.
 
-### 17.5 Cloud Sync (Paid Only) — Flag-Clock Polling
+### 17.5 Cloud Sync (Paid Only) — Four-Layer Architecture
 
-**No dedicated listener on `imageLedger`.**
+**No dedicated listener on `imageLedger`.** Photo propagation runs
+across four complementary layers so originator-side uploads drain
+immediately and peer-side downloads are retried with backoff + eventual
+escalation to recovery requests.
 
-1. `ReceiptSyncManager.syncReceipts()` reads single-field
-   `imageLedgerMeta` (the *flag clock*).
-2. If changed vs cached value → pull full `imageLedger` and diff.
-3. New entries → download; new recovery requests → maybe claim as
-   re-uploader; removed entries → local cleanup.
-4. **Arrival path**: when `onBatchChanged` delivers transactions with
-   new `receiptId*` values, up to 5 parallel Cloud Storage downloads
-   fire inline.
+**Layer 0 — Foreground upload drainer.** `MainViewModel.kickUploadDrainer`
+launches a coroutine on `viewModelScope` that drains the pending-upload
+queue (`pending_receipt_uploads.json`). Kicked by `saveTransactions`
+whenever a transaction save attaches a new `receiptIdN`, and on VM
+init if the queue survived from a prior session. Backs off
+30s→60s→2m→5m→10m on failure; exits when queue is empty. Uses
+`ReceiptSyncManager.processPendingUploads` (5 parallel). Eliminates
+the window where a transaction reaches peers before its photo reaches
+Cloud Storage.
 
-Flag clock bumps on recovery request, re-upload complete, cleanup,
-and request replacement. **Not** bumped on originator upload (that
-device already has it locally).
+**Layer 1 — Transaction-sync fast path for downloads.** When
+`FirestoreDocSync` delivers a transaction batch via `onBatchChanged`,
+`MainViewModel` scans arriving `receiptId*` fields and calls
+`ReceiptSyncManager.downloadReceiptWithRetry` for any not-locally-
+present blob (5 in parallel). The helper does download + save +
+`markPossession` + `pruneCheckTransaction` inline. On miss, hands off
+to Layer 2.
+
+**Layer 2 — Foreground download retry.**
+`MainViewModel.kickFgDownloadRetry` maintains an in-memory set of
+stuck receiptIds; coroutine on `viewModelScope` drains with
+30s→60s→2m→5m→10m backoff via the same `downloadReceiptWithRetry`
+helper. Self-filters each tick (drops ids now referenced elsewhere or
+that appeared locally via another path). Resets backoff on success;
+exits when set is empty.
+
+**Layer 3 — Background coverage.**
+- **Tier 2** (ViewModel alive, app backgrounded): creates a transient
+  `ReceiptSyncManager`, calls `syncReceipts()`. Catch-up for cases
+  where foreground drainers didn't fire (Doze, CPU throttling). Cheap
+  no-op when there's nothing to do.
+- **Tier 3** (ViewModel dead): already calls `syncReceipts()` as part
+  of full BG sync.
+
+**Shared retry semantics.**
+`ReceiptSyncManager.downloadReceiptWithRetry` is the single download
+helper used by Layers 1, 2, `processRecovery`, and (via
+`syncReceipts()`) Layer 3. It tracks a per-receipt retry counter in
+SharedPrefs (`KEY_RETRY_PREFIX`); on the 3rd **real** failure when
+the ledger claims `uploadedAt > 0`, it deletes the ledger entry and
+creates a recovery request, triggering a peer re-upload. Transient
+"no ledger entry yet" cases are distinguished from "ledger claims
+uploaded but blob is broken" and handled separately.
+
+Flag clock bumps on: recovery request (`createRecoveryRequest`),
+re-upload complete (`markReuploadComplete`), explicit deletion
+(`deleteReceiptFull`), stale-prune deletions, snapshot request
+(`createSnapshotRequest`). **Not** bumped on originator upload
+(`createLedgerEntry`) — Layer 1 conveys discovery, and the inline
+prune check at every download site keeps cloud storage tidy without
+the extra round-trip.
+
+**`processLedgerOperations` does NOT download.** The old
+`handleDownload` branch was removed. It now handles only: re-upload
+requests (we have the file, peer asked for help), non-possession
+marking + `checkPhotoLost`, and possession + prune + **rotation
+detection** for locally-present entries. Downloads for receipts this
+device references are always routed through `processRecovery` or the
+foreground paths — this prevents flag-clock bumps from causing
+indiscriminate re-downloads of entries we've locally pruned or don't
+care about.
+
+**Rotation / edit propagation via `contentVersion`.** Ledger entries
+carry a monotonic `contentVersion: Long` (default 0 for fresh
+uploads). Rotating a photo rewrites the local bytes via
+`ReceiptManager.replaceReceipt`, which also re-queues the receiptId
+for upload. `processPendingUploads` detects the existing ledger
+entry and calls `incrementContentVersion` (vs `createLedgerEntry` for
+brand-new uploads): bumps the counter, resets `possessions` to just
+the editor, stamps `lastEditBy`, bumps the flag clock. Peers track
+`lastSeenContentVersion[receiptId]` in SharedPrefs and, on flag-clock
+sync, the "uploadedAt > 0 && hasLocalFile" branch of
+`processLedgerOperations` compares — mismatch →
+`deleteLocalReceipt`, then same-cycle `processRecovery` downloads
+the new content and records the new version. Recovery requests
+preserve `contentVersion` across the delete-and-recreate so stale
+peers still invalidate after subsequent rotations.
+
+**Near-real-time push via Cloud Function `onImageLedgerWrite`.** The
+function (`functions/index.js`) triggers on every `imageLedger` write
+and fires a filtered `sync_push` FCM (high priority, skips the
+writer by `lastEditBy`) when the write is meaningful to peers:
+rotation (`contentVersion` incremented), recovery re-upload
+complete (`uploadedAt` went 0 → >0), or recovery request created
+(new entry with `uploadedAt === 0`). Fresh uploads are NOT pushed
+(the concurrent `transactions` write already fires a `sync_push`
+that peers act on via `onBatchChanged`). Possession / prune /
+non-possession writes are ignored (bookkeeping only). Peers'
+`BackgroundSyncWorker.runOnce` dedups bursts (50-photo batch
+rotation = 1 `syncReceipts()` run per peer via
+`enqueueUniqueWork(KEEP)`).
 
 Upload target: `groups/{gid}/receipts/{receiptId}.enc`
 (ChaCha20-Poly1305 AEAD with group sync key).

@@ -7,7 +7,8 @@ data class ImageLedgerEntry(
     val possessions: Map<String, Boolean>,  // deviceId -> has file
     val uploadAssignee: String? = null,     // device responsible for re-upload
     val assignedAt: Long = 0L,             // when re-upload assignment was made
-    val uploadedAt: Long = 0L              // 0 = not yet in cloud
+    val uploadedAt: Long = 0L,             // 0 = not yet in cloud
+    val contentVersion: Long = 0L          // incremented when photo content changes (e.g., rotation)
 )
 
 data class SnapshotLedgerEntry(

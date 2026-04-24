@@ -149,7 +149,10 @@ object ImageLedgerService {
 
     /**
      * Create a ledger entry after successful upload (normal flow).
-     * Bumps flag clock so other devices discover the new entry promptly.
+     * Does NOT bump the flag clock — peers discover the new photo via the
+     * transaction-sync path (`onBatchChanged` sees the new `receiptIdN` and
+     * downloads directly from Cloud Storage). A flag-clock bump here would
+     * cause every peer to re-pull the full ledger redundantly.
      */
     suspend fun createLedgerEntry(
         groupId: String,
@@ -165,11 +168,11 @@ object ImageLedgerService {
                     "possessions" to mapOf(originatorDeviceId to true),
                     "uploadAssignee" to null,
                     "assignedAt" to 0L,
-                    "uploadedAt" to System.currentTimeMillis()
+                    "uploadedAt" to System.currentTimeMillis(),
+                    "contentVersion" to 0L
                 )
                 ledgerRef(groupId).document(receiptId).set(data).await()
             }
-            bumpFlagClock(groupId)
             true
         } catch (e: Exception) {
             Log.w(TAG, "Create ledger entry failed for $receiptId: ${e.message}")
@@ -178,13 +181,53 @@ object ImageLedgerService {
     }
 
     /**
+     * Called after a rotation (or any edit) re-uploads the photo: increments
+     * `contentVersion`, resets `possessions` to just the editing device, and
+     * bumps the flag clock. Peers notice the `contentVersion` bump against
+     * their `lastSeenContentVersion`, invalidate their stale local copies,
+     * and re-download via `processRecovery`.
+     */
+    suspend fun incrementContentVersion(
+        groupId: String,
+        receiptId: String,
+        editingDeviceId: String
+    ): Boolean {
+        return try {
+            withTimeout(TIMEOUT_MS) {
+                firestore.runBatch { batch ->
+                    batch.update(
+                        ledgerRef(groupId).document(receiptId), mapOf(
+                            "possessions" to mapOf(editingDeviceId to true),
+                            "uploadedAt" to System.currentTimeMillis(),
+                            "contentVersion" to FieldValue.increment(1),
+                            "lastEditBy" to editingDeviceId
+                        )
+                    )
+                    batch.update(groupRef(groupId), "imageLedgerFlagClock", FieldValue.increment(1))
+                }.await()
+            }
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "Increment content version failed for $receiptId: ${e.message}")
+            false
+        }
+    }
+
+    /**
      * Create a recovery request entry (file not in cloud, need re-upload).
      * DOES bump flag clock so other devices see the request.
+     *
+     * `preserveContentVersion` lets callers that detected the cloud blob is
+     * broken (via 3 failed downloads) keep the monotonic content version
+     * across the delete→re-upload cycle. Without this, peers with stale
+     * local copies would compare against the reset version and never
+     * invalidate.
      */
     suspend fun createRecoveryRequest(
         groupId: String,
         receiptId: String,
-        originatorDeviceId: String
+        originatorDeviceId: String,
+        preserveContentVersion: Long = 0L
     ): Boolean {
         return try {
             withTimeout(TIMEOUT_MS) {
@@ -196,7 +239,9 @@ object ImageLedgerService {
                         "possessions" to emptyMap<String, Boolean>(),
                         "uploadAssignee" to null,
                         "assignedAt" to 0L,
-                        "uploadedAt" to 0L
+                        "uploadedAt" to 0L,
+                        "contentVersion" to preserveContentVersion,
+                        "lastEditBy" to originatorDeviceId
                     )
                     batch.set(ledgerRef(groupId).document(receiptId), data)
                     batch.update(groupRef(groupId), "imageLedgerFlagClock", FieldValue.increment(1))
@@ -205,6 +250,64 @@ object ImageLedgerService {
             true
         } catch (e: Exception) {
             Log.w(TAG, "Create recovery request failed for $receiptId: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Atomic replacement: if the entry exists, rewrite it to recovery-request
+     * state preserving `contentVersion` from whatever is currently there; if
+     * absent, create a fresh recovery request with the caller-provided
+     * fallback version. Used by `downloadReceiptWithRetry` on the 3rd real
+     * failure instead of `delete + create`, which opened a window where a
+     * concurrent re-uploader could race and either duplicate work or reset
+     * the version counter.
+     *
+     * Bumps `imageLedgerFlagClock` atomically with the ledger write so the
+     * Cloud Function `onImageLedgerWrite` fires exactly once for this
+     * transition.
+     */
+    suspend fun resetEntryToRecoveryRequest(
+        groupId: String,
+        receiptId: String,
+        requestingDeviceId: String,
+        fallbackContentVersion: Long = 0L
+    ): Boolean {
+        return try {
+            withTimeout(TIMEOUT_MS) {
+                firestore.runTransaction { tx ->
+                    val entryRef = ledgerRef(groupId).document(receiptId)
+                    val groupDocRef = groupRef(groupId)
+                    val existing = tx.get(entryRef)
+                    val preservedVersion = if (existing.exists()) {
+                        existing.getLong("contentVersion") ?: fallbackContentVersion
+                    } else {
+                        fallbackContentVersion
+                    }
+                    val preservedCreatedAt = if (existing.exists()) {
+                        existing.getLong("createdAt") ?: System.currentTimeMillis()
+                    } else {
+                        System.currentTimeMillis()
+                    }
+                    val data = mapOf(
+                        "receiptId" to receiptId,
+                        "originatorDeviceId" to requestingDeviceId,
+                        "createdAt" to preservedCreatedAt,
+                        "possessions" to emptyMap<String, Boolean>(),
+                        "uploadAssignee" to null,
+                        "assignedAt" to 0L,
+                        "uploadedAt" to 0L,
+                        "contentVersion" to preservedVersion,
+                        "lastEditBy" to requestingDeviceId
+                    )
+                    tx.set(entryRef, data)
+                    tx.update(groupDocRef, "imageLedgerFlagClock", FieldValue.increment(1))
+                    null
+                }.await()
+            }
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "Reset to recovery request failed for $receiptId: ${e.message}")
             false
         }
     }
@@ -436,15 +539,22 @@ object ImageLedgerService {
     }
 
     /**
-     * Mark re-upload complete: set uploadedAt and bump flag clock.
+     * Mark re-upload complete: set uploadedAt, stamp `lastEditBy` so the
+     * Cloud Function skips us for `sync_push`, and bump flag clock.
      */
-    suspend fun markReuploadComplete(groupId: String, receiptId: String): Boolean {
+    suspend fun markReuploadComplete(
+        groupId: String,
+        receiptId: String,
+        reuploaderDeviceId: String
+    ): Boolean {
         return try {
             withTimeout(TIMEOUT_MS) {
                 firestore.runBatch { batch ->
                     batch.update(
-                        ledgerRef(groupId).document(receiptId),
-                        "uploadedAt", System.currentTimeMillis()
+                        ledgerRef(groupId).document(receiptId), mapOf(
+                            "uploadedAt" to System.currentTimeMillis(),
+                            "lastEditBy" to reuploaderDeviceId
+                        )
                     )
                     batch.update(groupRef(groupId), "imageLedgerFlagClock", FieldValue.increment(1))
                 }.await()
@@ -496,7 +606,8 @@ object ImageLedgerService {
                 possessions = (snap.get("possessions") as? Map<String, Boolean>) ?: emptyMap(),
                 uploadAssignee = snap.getString("uploadAssignee"),
                 assignedAt = snap.getLong("assignedAt") ?: 0L,
-                uploadedAt = snap.getLong("uploadedAt") ?: 0L
+                uploadedAt = snap.getLong("uploadedAt") ?: 0L,
+                contentVersion = snap.getLong("contentVersion") ?: 0L
             )
         } catch (e: Exception) {
             Log.w(TAG, "Parse ledger entry failed: ${e.message}")

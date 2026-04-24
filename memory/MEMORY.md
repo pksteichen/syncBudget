@@ -134,6 +134,8 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [JIT extraction lambda overhead](feedback_jit_extraction.md).
 - [Compose state-seed order + LaunchedEffect cancellation](feedback_compose_state_seed_order.md) — seed VM fields before the visibility flag; hoist long work to viewModelScope.
 - [Receipt pruning design](feedback_receipt_pruning_design.md) — cloud 14-day and local prune age are independent.
+- [No flag-clock bump on imageLedger creation](feedback_image_ledger_no_create_bump.md) — peers discover via transaction sync; prune fires inline at every download site; don't re-add the bump.
+- [Firebase rules — source of truth + audit findings](reference_firebase_rules.md) — firestore.rules / storage.rules / database.rules.json committed; `node tools/fetch-rules.js` refreshes from live project.
 - [AI feature UX — explicit trigger, tier per-feature](feedback_ai_feature_ux.md) — OCR sub-only; CSV categorization Paid+Sub; OCR prefill always overwrites scalars and preserves cat selection when pre-selected; CSV payload is merchant+amount only (no date).
 - [Share-intent routing when dialogs are open](feedback_share_intent_routing.md) — block with toast for non-transaction dialogs, absorb into open transaction dialog, fall through to new Add dialog otherwise; multi-share supported.
 - [APK naming — always BudgeTrak.apk](feedback_apk_naming.md) — one file in Downloads, overwritten each build; no versioned names.
@@ -179,7 +181,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [OCR Spanish / Country setting](project_ocr_spanish_country_setting.md) — when adding Spanish or LatAm launch, add a Country dropdown driving locale/currency/date/tax-vocab hints into the OCR prompt; integer-only currencies (CLP/COP/PYG) block launch without this.
 
 ## Documentation
-- SSD/LLD v2.6 at `docs/BudgeTrak_SSD_v2.6.md` + `docs/BudgeTrak_LLD_v2.6.md`. Verified against code on 2026-04-12; bump on any structural change.
+- SSD/LLD v2.7 at `docs/BudgeTrak_SSD_v2.7.md` + `docs/BudgeTrak_LLD_v2.7.md`. Bump on any structural change.
 - [Legal repo location](reference_legal_repo.md) — privacy.md + branding live in separate `budgetrak-legal` repo at `/storage/emulated/0/Download/BudgeTrak Legal Files`.
 
 ## Audit Follow-ups

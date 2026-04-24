@@ -1,0 +1,17 @@
+{
+  "rules": {
+    "groups": {
+      "$groupId": {
+        "presence": {
+          ".read": "auth != null",
+          "$deviceId": {
+            ".write": "auth != null",
+            ".validate": "newData.hasChildren(['online', 'lastSeen', 'deviceName']) && newData.child('online').isBoolean() && newData.child('lastSeen').isNumber()"
+          }
+        }
+      }
+    },
+    ".read": false,
+    ".write": false
+  }
+}

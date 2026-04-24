@@ -105,6 +105,61 @@ exports.onSyncDataWrite = functions.firestore
     await sendFcm(tokens, { type: 'sync_push', collection, groupId }, 'sync_push');
   });
 
+// ─── 2b. Event-driven sync_push on meaningful imageLedger writes ──────
+//
+// imageLedger is intentionally NOT in SYNC_PUSH_COLLECTIONS because most
+// of its writes are bookkeeping chatter that doesn't need to wake peers:
+// markPossession, markNonPossession, pruneCheckTransaction deletions, etc.
+// This trigger fires `sync_push` only on the writes that change what peers
+// see and need to react to:
+//
+//   - Rotation / edit: contentVersion increased.
+//   - Recovery re-upload complete: uploadedAt went 0 → >0.
+//   - Recovery request created: new entry with uploadedAt === 0 (peers with
+//     the file should consider re-uploading).
+//
+// Fresh uploads (createLedgerEntry for a brand-new receipt) are NOT pushed
+// here — the concurrent write to the `transactions` collection (via
+// SyncWriteHelper.pushTransaction on saveTransactions) already fires a
+// sync_push that wakes peers, and their onBatchChanged fast-path downloads
+// the photo via Cloud Storage.
+//
+// Client writes carry `lastEditBy` so the Cloud Function skips the writer.
+
+exports.onImageLedgerWrite = functions.firestore
+  .document('groups/{groupId}/imageLedger/{receiptId}')
+  .onWrite(async (change, context) => {
+    const { groupId, receiptId } = context.params;
+
+    // Skip snapshot-request doc — it uses its own signaling path.
+    if (receiptId === '_snapshot_request') return;
+
+    const before = change.before.exists ? change.before.data() : null;
+    const after  = change.after.exists  ? change.after.data()  : null;
+    if (!after) return;  // deletion handled by transaction-sync path
+
+    const beforeVer = (before && before.contentVersion) || 0;
+    const afterVer  = after.contentVersion || 0;
+    const beforeUp  = (before && before.uploadedAt) || 0;
+    const afterUp   = after.uploadedAt || 0;
+
+    const isRotation         = before && afterVer > beforeVer;
+    const isRecoveryComplete = before && beforeUp === 0 && afterUp > 0;
+    const isRecoveryRequest  = !before && afterUp === 0;
+
+    if (!isRotation && !isRecoveryComplete && !isRecoveryRequest) return;
+
+    const writerDeviceId = after.lastEditBy || after.originatorDeviceId || null;
+    const tokens = await collectRecipientTokens(groupId, writerDeviceId);
+    if (tokens.length === 0) return;
+
+    await sendFcm(
+      tokens,
+      { type: 'sync_push', collection: 'imageLedger', groupId },
+      'sync_push_ledger'
+    );
+  });
+
 // ─── 3. Heartbeat: wake devices whose RTDB presence has gone stale ───
 
 const HEARTBEAT_STALE_MS = 15 * 60 * 1000;  // 15 min
@@ -154,6 +209,24 @@ async function collectRecipientTokens(groupId, writerDeviceId) {
   const devicesSnap = await db()
     .collection(`groups/${groupId}/devices`)
     .get();
+
+  // Defense-in-depth membership check (option A — free because we already
+  // read the devices collection). Firestore security rules are the
+  // authoritative gate; if they're ever misconfigured and a write slips
+  // through from a device that isn't a current group member (or was
+  // removed), suppress the fan-out so a rule regression can't be amplified
+  // into a group-wide FCM spam. Writer membership is validated against the
+  // same snapshot — no extra read.
+  if (writerDeviceId) {
+    const writerDoc = devicesSnap.docs.find(d => d.id === writerDeviceId);
+    if (!writerDoc || writerDoc.data()?.removed === true) {
+      console.warn(
+        `Fan-out suppressed: writer ${writerDeviceId} is not a current member of ${groupId}`
+      );
+      return [];
+    }
+  }
+
   const tokens = [];
   devicesSnap.forEach(doc => {
     if (doc.id === writerDeviceId) return;
