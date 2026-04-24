@@ -1908,7 +1908,9 @@ class MainActivity : ComponentActivity() {
                             try {
                                 val fcmTokens = FirestoreService.getFcmTokens(gId, vm.localDeviceId)
                                 val debugLog = java.io.File(supportDir, "fcm_debug.txt")
-                                if (debugLog.exists() && debugLog.length() > 50_000) debugLog.writeText("")
+                                // Rotate to _prev at 64KB (events are rare; primary
+                                // + prev together retain many months of history).
+                                BudgeTrakApplication.rotateLogToPrev(debugLog, 64_000L)
                                 debugLog.appendText("[${java.time.LocalDateTime.now()}] FCM tokens found: ${fcmTokens.size}\n")
                                 for (token in fcmTokens) {
                                     debugLog.appendText("  token: ${token.take(20)}...\n")
@@ -1919,8 +1921,9 @@ class MainActivity : ComponentActivity() {
                                     debugLog.appendText("  No FCM tokens found for remote devices\n")
                                 }
                             } catch (e: Exception) {
-                                java.io.File(supportDir, "fcm_debug.txt")
-                                    .appendText("[${java.time.LocalDateTime.now()}] FCM exception: ${e.javaClass.simpleName}: ${e.message}\n")
+                                val debugLog = java.io.File(supportDir, "fcm_debug.txt")
+                                BudgeTrakApplication.rotateLogToPrev(debugLog, 64_000L)
+                                debugLog.appendText("[${java.time.LocalDateTime.now()}] FCM exception: ${e.javaClass.simpleName}: ${e.message}\n")
                             }
 
                             // 5. Poll for remote files (wait up to 90s for other devices)
@@ -2064,9 +2067,17 @@ class MainActivity : ComponentActivity() {
                             vm.saveSavingsGoals(listOf(vm.savingsGoals[gIdx]))
                         }
                     }
-                    vm.transactions[idx] = t.copy(deleted = true)
-                    vm.saveTransactions(listOf(vm.transactions[idx]))
                     val receiptIds = listOfNotNull(t.receiptId1, t.receiptId2, t.receiptId3, t.receiptId4, t.receiptId5)
+                    // Null receiptIdN on the tombstone so peers don't chase
+                    // dangling references via processRecovery once the blob +
+                    // ledger entry are gone. Capture the ids first (above) so
+                    // deleteReceiptFull still runs for each.
+                    vm.transactions[idx] = t.copy(
+                        deleted = true,
+                        receiptId1 = null, receiptId2 = null,
+                        receiptId3 = null, receiptId4 = null, receiptId5 = null
+                    )
+                    vm.saveTransactions(listOf(vm.transactions[idx]))
                     if (receiptIds.isNotEmpty()) {
                         coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                             for (rid in receiptIds) {
@@ -2080,6 +2091,9 @@ class MainActivity : ComponentActivity() {
             onDeleteTransactions = { ids ->
                 val changedGoals = mutableListOf<SavingsGoal>()
                 val changedTxns = mutableListOf<Transaction>()
+                // Capture receiptIds BEFORE we null them on the tombstones,
+                // so deleteReceiptFull still has the list to clean up.
+                val deletedReceiptIds = mutableListOf<String>()
                 vm.transactions.forEachIndexed { index, txn ->
                     if (txn.id in ids && !txn.deleted) {
                         if (txn.linkedSavingsGoalId != null && txn.linkedSavingsGoalAmount > 0.0) {
@@ -2090,17 +2104,20 @@ class MainActivity : ComponentActivity() {
                                 changedGoals.add(vm.savingsGoals[gIdx])
                             }
                         }
-                        vm.transactions[index] = txn.copy(deleted = true)
+                        deletedReceiptIds.addAll(
+                            listOfNotNull(txn.receiptId1, txn.receiptId2, txn.receiptId3, txn.receiptId4, txn.receiptId5)
+                        )
+                        vm.transactions[index] = txn.copy(
+                            deleted = true,
+                            receiptId1 = null, receiptId2 = null,
+                            receiptId3 = null, receiptId4 = null, receiptId5 = null
+                        )
                         changedTxns.add(vm.transactions[index])
                     }
                 }
                 if (changedGoals.isNotEmpty()) vm.saveSavingsGoals(changedGoals)
                 vm.saveTransactions(changedTxns)
                 vm.recomputeCash()
-                val deletedReceiptIds = ids.flatMap { id ->
-                    val txn = vm.transactions.find { it.id == id } ?: return@flatMap emptyList()
-                    listOfNotNull(txn.receiptId1, txn.receiptId2, txn.receiptId3, txn.receiptId4, txn.receiptId5)
-                }
                 if (deletedReceiptIds.isNotEmpty()) {
                     coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                         for (rid in deletedReceiptIds) {

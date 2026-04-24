@@ -415,6 +415,12 @@ object ReceiptManager {
     fun collectAllReceiptIds(transactions: List<com.techadvantage.budgetrak.data.Transaction>): Set<String> {
         val ids = mutableSetOf<String>()
         for (t in transactions) {
+            // Skip tombstoned transactions. Delete flow should null the
+            // receiptIdN fields at delete time (MainActivity onDeleteTransaction),
+            // but older tombstones from pre-fix builds still carry dangling
+            // refs — filter here so processRecovery doesn't chase blobs that
+            // were legitimately deleted weeks ago.
+            if (t.deleted) continue
             t.receiptId1?.let { ids.add(it) }
             t.receiptId2?.let { ids.add(it) }
             t.receiptId3?.let { ids.add(it) }

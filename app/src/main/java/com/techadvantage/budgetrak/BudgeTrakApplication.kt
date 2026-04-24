@@ -9,6 +9,31 @@ class BudgeTrakApplication : Application() {
     companion object {
         private val crashlytics: FirebaseCrashlytics? get() = try { FirebaseCrashlytics.getInstance() } catch (_: Exception) { null }
 
+        /**
+         * Rotate a debug log file when it exceeds `maxBytes`: current file
+         * becomes `<name>_prev.<ext>`, previous `_prev` is discarded. Preserves
+         * ~2× the cap worth of history with no in-band "wipe" that loses
+         * everything older than the most recent write.
+         *
+         * Replaces the ad-hoc `if (len > N) writeText("")` pattern that used
+         * to live in `tokenLog` / `syncEvent`. Caps are sized so the primary
+         * file typically holds ≥ 2 days of history at observed write rates.
+         */
+        fun rotateLogToPrev(file: java.io.File, maxBytes: Long) {
+            try {
+                if (!file.exists() || file.length() <= maxBytes) return
+                val dir = file.parentFile ?: return
+                val base = file.nameWithoutExtension
+                val ext = file.extension.ifEmpty { "txt" }
+                val prev = java.io.File(dir, "${base}_prev.${ext}")
+                if (prev.exists()) prev.delete()
+                file.renameTo(prev)
+            } catch (_: Exception) {}
+        }
+
+        private const val TOKEN_LOG_MAX_BYTES = 128_000L   // ~3 days typical
+        private const val FCM_DEBUG_MAX_BYTES = 64_000L    // events are rare; cap for safety
+
         /** Log to Crashlytics custom log (attached to next crash/non-fatal).
          *  File output only in debug builds. */
         fun tokenLog(msg: String) {
@@ -18,7 +43,7 @@ class BudgeTrakApplication : Application() {
                 try {
                     val dir = com.techadvantage.budgetrak.data.BackupManager.getSupportDir()
                     val file = java.io.File(dir, "token_log.txt")
-                    if (file.exists() && file.length() > 100_000) file.writeText("")
+                    rotateLogToPrev(file, TOKEN_LOG_MAX_BYTES)
                     val ts = java.time.LocalDateTime.now().toString()
                     file.appendText("[$ts] $msg\n")
                 } catch (_: Exception) {}
@@ -41,7 +66,7 @@ class BudgeTrakApplication : Application() {
                 try {
                     val dir = com.techadvantage.budgetrak.data.BackupManager.getSupportDir()
                     val file = java.io.File(dir, "token_log.txt")
-                    if (file.exists() && file.length() > 100_000) file.writeText("")
+                    rotateLogToPrev(file, TOKEN_LOG_MAX_BYTES)
                     val ts = java.time.LocalDateTime.now().toString()
                     file.appendText("[$ts] $msg\n")
                 } catch (_: Exception) {}

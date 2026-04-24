@@ -39,7 +39,10 @@ class FirestoreDocSync(
          *  Longer because background workers run every 15 min. */
         private const val BG_ECHO_SUPPRESS_MS = 20 * 60 * 1000L
         private const val LOG_FILE = "native_sync_log.txt"
-        private const val MAX_LOG_SIZE = 512_000L // 512KB
+        // ~200KB per rotation = typically ≥ 2 days of sync-event history at
+        // observed rates (2-3 KB/hr), with the rotated _prev file preserving
+        // an additional window. Total retention ~4-6 days.
+        private const val MAX_LOG_SIZE = 200_000L
         /** Minimum gap between full PERMISSION_DENIED restarts (ms). */
         private const val PERMISSION_DENIED_RESTART_COOLDOWN_MS = 30_000L
 
@@ -70,11 +73,8 @@ class FirestoreDocSync(
             try {
                 val dir = BackupManager.getSupportDir()
                 val file = java.io.File(dir, LOG_FILE)
-                if (file.exists() && file.length() > MAX_LOG_SIZE) {
-                    val prev = java.io.File(dir, "native_sync_log_prev.txt")
-                    file.renameTo(prev)
-                }
-                java.io.File(dir, LOG_FILE).appendText("[${LocalDateTime.now()}] $msg\n")
+                com.techadvantage.budgetrak.BudgeTrakApplication.rotateLogToPrev(file, MAX_LOG_SIZE)
+                file.appendText("[${LocalDateTime.now()}] $msg\n")
             } catch (_: Exception) {}
         }
     }
