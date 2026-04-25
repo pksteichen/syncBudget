@@ -68,6 +68,21 @@ All four layers ultimately funnel their download logic through `ReceiptSyncManag
 - **Persistent logging**: all five `ReceiptSyncManager` construction sites (MainViewModel × 4 + BGWorker × 2) route `syncLog` through `BudgeTrakApplication.syncEvent`, so events land in `token_log.txt` (128KB rotate) + Crashlytics + logcat. Survives process death. Context-prefixed: `ReceiptSync(Tier2)`, `ReceiptSync(Tier3)`, `ReceiptSync(SyncNow)`, `ReceiptSync(onBatch)`, `ReceiptSync(UploadDrainer)`, `ReceiptSync(FgRetry)`.
 - **`BackgroundSyncWorker` cancellation log** records `stopReason` (API 31+) + message when worker is stopped by system — distinguishes power-management / quota / standby-bucket causes in post-mortem dumps.
 
+### `photoCapable` resolution fallback chain (v2.7)
+
+Cold-start Tier 3 calls `RealtimePresenceService.getDevices(groupId)` which reads RTDB presence. RTDB hasn't completed its auth handshake yet (Firebase Auth signs in synchronously but the RTDB SDK propagates the auth state asynchronously, ~hundreds of ms), so the read returns empty / no photo-capable devices. Receipt sync then runs as a no-op for photo work because `photoCapableDeviceIds` is the empty set.
+
+**Observed**: Paul's overnight dump (2026-04-25) showed `photoCapable=0` in 6 of 6 Tier 3 receipt-sync calls vs. `photoCapable=2` in 49 of 50 Tier 2 calls.
+
+**Fix**: `BackgroundSyncWorker.resolveDevicesForReceiptSync(groupId, vm)` runs a four-tier fallback chain. Each successful tier writes to a SharedPref cache keyed `receipt_sync_prefs/photo_capable_devices_<gid>` so subsequent fallback attempts can hit the cache before re-trying network reads:
+
+1. **VM `syncDevices`** — used in Tier 2 only; VM has fresh data from its persistent presence listener.
+2. **RTDB presence** — `RealtimePresenceService.getDevices(groupId)`. Original path; works once RTDB auth has propagated (typically Tier 2, sometimes Tier 3).
+3. **Firestore device docs** — `FirestoreService.getDevices(groupId)`. The `photoCapable` field is mirrored to Firestore via `updateDeviceMetadata` during foreground sync setup. Auth via Firestore is established by Tier 3's syncFromFirestore (step 3), so this works even when RTDB hasn't connected yet. Result merges any partial RTDB data (online flag, uploadSpeed) for re-uploader selection.
+4. **SharedPref cache** — last-resort synthesizes minimal `DeviceInfo` entries with `photoCapable=true`. Lacks online/uploadSpeed but degrades gracefully (re-uploader hash-tiebreak still works).
+
+If all four fail, returns whatever RTDB gave us (likely empty). `syncEvent` log entries record which tier was used so we can monitor effectiveness in post-mortem dumps.
+
 ## Flag clock bumps (and why creation doesn't)
 
 The flag clock is bumped on: `createRecoveryRequest`, `markReuploadComplete`, stale-prune deletions, `createSnapshotRequest`, explicit deletion (`deleteReceiptFull`). It is **NOT** bumped on `createLedgerEntry` (initial upload). Peers discover new photos via Layer 1 (transaction-sync listener), not via the flag clock. Pruning is triggered inline at every download site. Re-adding the bump would just cause peers to redundantly re-pull the full ledger on every new upload.

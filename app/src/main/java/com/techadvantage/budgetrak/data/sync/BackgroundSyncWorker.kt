@@ -167,7 +167,7 @@ class BackgroundSyncWorker(
                             val txns = vm.transactions.toList()
                             val key = GroupManager.getEncryptionKey(applicationContext)
                             if (gid != null && key != null && deviceId.isNotBlank()) {
-                                val devices = RealtimePresenceService.getDevices(gid)
+                                val devices = resolveDevicesForReceiptSync(gid, vm)
                                 val receiptSync = ReceiptSyncManager(
                                     applicationContext, gid, deviceId, key
                                 ) { msg ->
@@ -276,7 +276,11 @@ class BackgroundSyncWorker(
                             appPrefsReceipt.getBoolean("isSubscriber", false)
                     if (photoCapable) {
                         val txns = TransactionRepository.load(applicationContext)
-                        val devices = RealtimePresenceService.getDevices(groupId)
+                        // Tier 3 cold-start: RTDB hasn't completed auth handshake
+                        // yet, so getDevices often returns empty / no-photo-capable
+                        // (observed: 6/6 Tier 3 calls overnight had photoCapable=0
+                        // while Tier 2 had photoCapable=2). Use the fallback chain.
+                        val devices = resolveDevicesForReceiptSync(groupId, vm = null)
                         val receiptSync = ReceiptSyncManager(
                             applicationContext, groupId, deviceId, encryptionKey
                         ) { msg ->
@@ -366,6 +370,134 @@ class BackgroundSyncWorker(
             return Result.success() // don't retry, wait for next scheduled run
         } finally {
             isRunning.set(false)
+        }
+    }
+
+    // ── Resolve photo-capable device list with fallback chain ──────────
+    //
+    // Cold-start Tier 3 calls `RealtimePresenceService.getDevices()` which
+    // reads RTDB presence. RTDB hasn't completed its auth handshake yet
+    // (Firebase Auth signs in synchronously but the RTDB SDK propagates
+    // the auth state asynchronously), so the read returns empty / no
+    // photo-capable devices. Receipt sync then runs as a no-op for photo
+    // work because `photoCapableDeviceIds` is the empty set.
+    //
+    // Fallback chain (each tier writes to a SharedPref cache on success
+    // so subsequent fallback attempts can hit the cache instead of network):
+    //   1. VM's `syncDevices` (Tier 2 only — VM has fresh data already)
+    //   2. RTDB presence read (the original path)
+    //   3. Firestore `groups/{gid}/devices/*` device docs (auth via Firestore
+    //      is established by Tier 3 step 3 syncFromFirestore, so this works
+    //      even when RTDB hasn't connected yet)
+    //   4. SharedPref cache from prior successful sync
+    //
+    // Returns an empty list if all four tiers fail. syncReceipts will then
+    // run with an empty `photoCapableDeviceIds` set — same as old broken
+    // behavior, but at least our diagnostic logs will show the source.
+    private suspend fun resolveDevicesForReceiptSync(
+        groupId: String,
+        vm: com.techadvantage.budgetrak.MainViewModel?
+    ): List<DeviceInfo> {
+        // Layer 1: VM's syncDevices (foreground / Tier 2)
+        if (vm != null) {
+            val vmDevices = vm.syncDevices
+            if (vmDevices.any { it.photoCapable }) {
+                cachePhotoCapableDevices(groupId, vmDevices)
+                return vmDevices
+            }
+        }
+
+        // Layer 2: RTDB presence
+        val rtdbDevices = try {
+            RealtimePresenceService.getDevices(groupId)
+        } catch (e: Exception) {
+            Log.w(TAG, "RTDB getDevices failed: ${e.message}")
+            emptyList()
+        }
+        if (rtdbDevices.any { it.photoCapable }) {
+            cachePhotoCapableDevices(groupId, rtdbDevices)
+            return rtdbDevices
+        }
+
+        // Layer 3: Firestore device docs (works once syncFromFirestore established auth)
+        val fsDevices = try {
+            FirestoreService.getDevices(groupId).map { rec ->
+                // Merge any RTDB data we DID get for this device (online,
+                // uploadSpeed are only in RTDB).
+                val rt = rtdbDevices.find { it.deviceId == rec.deviceId }
+                DeviceInfo(
+                    deviceId = rec.deviceId,
+                    deviceName = rec.deviceName.ifEmpty { rt?.deviceName ?: "" },
+                    isAdmin = rec.isAdmin,
+                    lastSeen = maxOf(rec.lastSeen, rt?.lastSeen ?: 0L),
+                    online = rt?.online ?: false,
+                    photoCapable = rec.photoCapable,
+                    uploadSpeedBps = if ((rt?.uploadSpeedBps ?: 0L) > 0) rt!!.uploadSpeedBps else rec.uploadSpeedBps,
+                    uploadSpeedMeasuredAt = if ((rt?.uploadSpeedMeasuredAt ?: 0L) > 0) rt!!.uploadSpeedMeasuredAt else rec.uploadSpeedMeasuredAt
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Firestore getDevices fallback failed: ${e.message}")
+            emptyList()
+        }
+        if (fsDevices.any { it.photoCapable }) {
+            cachePhotoCapableDevices(groupId, fsDevices)
+            com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent(
+                "resolveDevices: RTDB empty, used Firestore fallback (n=${fsDevices.count { it.photoCapable }})"
+            )
+            return fsDevices
+        }
+
+        // Layer 4: SharedPref cache
+        val cachedIds = readCachedPhotoCapableDevices(groupId)
+        if (cachedIds.isNotEmpty()) {
+            com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent(
+                "resolveDevices: RTDB+Firestore empty, used SharedPref cache (n=${cachedIds.size})"
+            )
+            // Synthesize minimal DeviceInfo entries — only photoCapable matters
+            // for the call sites that consume this list (processLedgerOperations
+            // possession/non-possession marking, processRecovery). uploadSpeed
+            // info is missing but degrades gracefully (re-uploader picks
+            // anyone, hash-tiebreak).
+            return cachedIds.map { id ->
+                DeviceInfo(
+                    deviceId = id,
+                    deviceName = "",
+                    isAdmin = false,
+                    lastSeen = 0L,
+                    online = false,
+                    photoCapable = true
+                )
+            }
+        }
+
+        // All four failed — return whatever RTDB gave us (likely empty)
+        com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent(
+            "resolveDevices: ALL fallbacks failed for group $groupId — receipt sync will no-op"
+        )
+        return rtdbDevices
+    }
+
+    private fun cachePhotoCapableDevices(groupId: String, devices: List<DeviceInfo>) {
+        val ids = devices.filter { it.photoCapable }.map { it.deviceId }
+        if (ids.isEmpty()) return  // don't overwrite a good cache with empty
+        try {
+            applicationContext.getSharedPreferences("receipt_sync_prefs", Context.MODE_PRIVATE)
+                .edit()
+                .putString("photo_capable_devices_$groupId", ids.joinToString(","))
+                .apply()
+        } catch (_: Exception) {}
+    }
+
+    private fun readCachedPhotoCapableDevices(groupId: String): List<String> {
+        return try {
+            applicationContext.getSharedPreferences("receipt_sync_prefs", Context.MODE_PRIVATE)
+                .getString("photo_capable_devices_$groupId", null)
+                ?.split(",")
+                ?.filter { it.isNotEmpty() }
+                ?: emptyList()
+        } catch (_: Exception) {
+            emptyList()
         }
     }
 

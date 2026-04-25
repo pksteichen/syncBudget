@@ -1343,6 +1343,8 @@ One-shot worker triggered by FCM `debug_request` (debug builds only). Replaced t
 
 **Diagnostic logs (v2.7):** Tier 3 entry emits `Worker Tier 3: ViewModel dead, full sync (standbyBucket=N)` via `UsageStatsManager.appStandbyBucket`; exit emits `Worker Tier 3: complete in Xms`. On cancellation the outer catch logs `BackgroundSyncWorker: CANCELLED (stopReason=N msg=…)` before rethrowing (API 31+ `stopReason` distinguishes power / quota / standby-bucket causes).
 
+**`resolveDevicesForReceiptSync(groupId, vm)` (v2.7):** four-tier fallback resolver replacing direct `RealtimePresenceService.getDevices()` calls in both Tier 2 and Tier 3 receipt-sync paths. Cold-start Tier 3's RTDB read returns empty before RTDB auth handshake completes (observed: 6/6 Tier 3 calls had `photoCapable=0` while Tier 2 had `photoCapable=2` overnight 2026-04-25). Layers, in order: (1) VM's `syncDevices` if VM alive, (2) RTDB presence read, (3) Firestore `groups/{gid}/devices/*` (which mirrors `photoCapable` via `FirestoreService.updateDeviceMetadata`), (4) SharedPref cache `receipt_sync_prefs/photo_capable_devices_<gid>` populated by every successful resolution. Each successful tier writes to the cache so subsequent tiers can use it. `syncEvent` logs which tier was used.
+
 Exceptions are caught and converted to `Result.success()` so the next scheduled run isn't penalized. `CancellationException` is rethrown explicitly so WorkManager records the stop.
 
 ---
