@@ -52,6 +52,24 @@ class ReceiptSyncManager(
         private const val SNAPSHOT_FORMAT_VERSION = 1
         private const val SNAPSHOT_MAX_MANIFEST_BYTES = 10 * 1024 * 1024  // 10 MB — manifest is JSON index, plenty of slack
         private const val SNAPSHOT_MAX_ENTRY_BYTES = 10 * 1024 * 1024     // 10 MB — single encrypted receipt; typical is ~200 KB
+
+        /**
+         * Bump the local content version for a receipt by 1. Called from
+         * `ReceiptManager.replaceReceipt` (rotation path) immediately after
+         * the new file content is written and before the receipt is added
+         * back to the pending-upload queue. The upload pipeline reads this
+         * value to distinguish "rotation pending — bump cloud version" from
+         * "resume of a partial commit — already at desired state". Without
+         * the pre-bump, a worker cancellation between createLedgerEntry /
+         * incrementContentVersion success and queue removal would cause the
+         * next cycle to false-rotate, fanning out a flag-clock bump and
+         * forcing every peer to re-download identical content.
+         */
+        fun bumpLocalContentVersionForRotation(context: Context, receiptId: String) {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val current = prefs.getLong(KEY_CONTENT_VERSION_PREFIX + receiptId, 0L)
+            prefs.edit().putLong(KEY_CONTENT_VERSION_PREFIX + receiptId, current + 1).apply()
+        }
     }
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -168,35 +186,51 @@ class ReceiptSyncManager(
                                         .apply()
                                 }
 
-                                // Rotation-aware ledger write: if the entry
-                                // already exists with uploadedAt > 0, this is
-                                // a rotation/edit re-upload — increment the
-                                // contentVersion (bumps flag clock so peers
-                                // invalidate stale local copies). Otherwise,
-                                // it's a fresh upload: createLedgerEntry
-                                // (no flag clock bump; peers discover via
-                                // transaction sync).
+                                // Rotation-aware ledger write. Three cases:
+                                //   1. No entry yet → fresh upload (createLedgerEntry).
+                                //   2. Entry exists, uploadedAt > 0, and our last
+                                //      committed local version equals the cloud
+                                //      version with us as `lastEditBy` → resume of
+                                //      a previous cycle that was cancelled between
+                                //      the ledger write and queue removal. Storage
+                                //      upload is idempotent; ledger already at the
+                                //      desired state; just clean up the queue.
+                                //      Skipping the bump here avoids a false rotation
+                                //      that would force every peer to re-download.
+                                //   3. Entry exists, uploadedAt > 0, but versions
+                                //      diverge or a peer wrote last → rotation /
+                                //      conflict resolution: incrementContentVersion
+                                //      to bump cloud past our current local view.
                                 val existing = ImageLedgerService.getLedgerEntry(groupId, receiptId)
-                                val ledgerWritten = if (existing != null && existing.uploadedAt > 0L) {
-                                    val ok = ImageLedgerService.incrementContentVersion(
-                                        groupId, receiptId, deviceId
-                                    )
-                                    if (ok) {
-                                        // Mirror the new version locally — we just re-uploaded,
-                                        // so our lastSeen matches what's now in the ledger.
-                                        setLocalContentVersion(receiptId, existing.contentVersion + 1)
-                                        syncLog("Receipt $receiptId: re-uploaded (content v${existing.contentVersion + 1})")
+                                val ledgerWritten = when {
+                                    existing == null || existing.uploadedAt == 0L -> {
+                                        val ok = ImageLedgerService.createLedgerEntry(
+                                            groupId, receiptId, deviceId
+                                        )
+                                        if (ok) {
+                                            setLocalContentVersion(receiptId, 0L)
+                                            syncLog("Receipt $receiptId: uploaded + ledger created")
+                                        }
+                                        ok
                                     }
-                                    ok
-                                } else {
-                                    val ok = ImageLedgerService.createLedgerEntry(
-                                        groupId, receiptId, deviceId
-                                    )
-                                    if (ok) {
-                                        setLocalContentVersion(receiptId, 0L)
-                                        syncLog("Receipt $receiptId: uploaded + ledger created")
+                                    existing.lastEditBy == deviceId &&
+                                            existing.contentVersion == getLocalContentVersion(receiptId) -> {
+                                        // Resume of our own commit — Storage was
+                                        // re-uploaded (idempotent), ledger already
+                                        // matches local, no rotation pending.
+                                        syncLog("Receipt $receiptId: cloud already at v${existing.contentVersion} by us (resume), skipping bump")
+                                        true
                                     }
-                                    ok
+                                    else -> {
+                                        val ok = ImageLedgerService.incrementContentVersion(
+                                            groupId, receiptId, deviceId
+                                        )
+                                        if (ok) {
+                                            setLocalContentVersion(receiptId, existing.contentVersion + 1)
+                                            syncLog("Receipt $receiptId: re-uploaded (content v${existing.contentVersion + 1})")
+                                        }
+                                        ok
+                                    }
                                 }
                                 if (ledgerWritten) {
                                     ReceiptManager.removeFromPendingQueue(context, receiptId)
@@ -678,6 +712,18 @@ class ReceiptSyncManager(
                     groupId, "error", errorMessage = "Upload failed"
                 )
             }
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            // Worker was cancelled (Doze, App Standby, FCM time budget). Clean
+            // up partial files but DO NOT mark the snapshot as "error" — that
+            // would lock the lifecycle into the 2h staleness gate before any
+            // device retries. Leave status as "building" so a later cycle (or
+            // another device) sees it stale by `lastProgressUpdate` and can
+            // claim. Rethrow so the parent (runFullSyncInline) sees the cancel
+            // and returns `false`, triggering the WorkManager fallback.
+            tempEntries.delete()
+            archiveFile.delete()
+            syncLog("Snapshot: build CANCELLED (${ce.message}) — partial files cleaned, status left as building")
+            throw ce
         } catch (e: Exception) {
             tempEntries.delete()
             archiveFile.delete()
@@ -777,6 +823,9 @@ class ReceiptSyncManager(
             }
 
             ImageLedgerService.markSnapshotConsumed(groupId, deviceId)
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            syncLog("Snapshot: download CANCELLED (${ce.message})")
+            throw ce
         } catch (e: Exception) {
             syncLog("Snapshot: extraction failed: ${e.message}")
         } finally {

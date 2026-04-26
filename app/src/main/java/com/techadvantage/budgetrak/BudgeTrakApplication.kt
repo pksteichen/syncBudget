@@ -78,6 +78,26 @@ class BudgeTrakApplication : Application() {
             val c = crashlytics ?: return
             for ((k, v) in keys) c.setCustomKey(k, v)
         }
+
+        /**
+         * Process-scoped CoroutineScope for fire-and-forget background work
+         * that must outlive the calling thread but stay tied to process
+         * lifetime. Used by `FcmService` to launch Tier 2 work
+         * asynchronously: the FCM-service thread returns immediately so
+         * the OS doesn't 10s-kill the service, and the ViewModel's
+         * existence keeps the process alive long enough for the work
+         * (potentially long — receipt uploads, snapshot building) to
+         * complete naturally with no artificial budget.
+         *
+         * `SupervisorJob` so one failed launch doesn't take down siblings;
+         * `Dispatchers.Default` because the body internally switches to
+         * `Dispatchers.IO` / `Dispatchers.Main` as needed. Cancelled
+         * implicitly when Android kills the process; no explicit teardown.
+         */
+        val processScope: kotlinx.coroutines.CoroutineScope =
+            kotlinx.coroutines.CoroutineScope(
+                kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default
+            )
     }
 
     override fun onCreate() {

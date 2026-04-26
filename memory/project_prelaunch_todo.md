@@ -2,15 +2,15 @@
 name: Pre-launch TODO
 description: Outstanding items before Play Store publication. Completed items are removed — their design + rationale live in the code and the relevant memory files.
 type: project
+originSessionId: ea9e173a-ca3d-4f87-b67a-ceac73953250
 ---
-
 ## Pre-launch
 
-*(No pre-launch items remaining as of 2026-04-13 — thumbnail-IO-thread item retired; it was already implemented at `TransactionsScreen.kt:1123-1127` with `LaunchedEffect` + `withContext(Dispatchers.IO)`. The todo's `:1113` line pointer was stale.)*
+11. **Period-boundary scheduling for BackgroundSyncWorker (Phase 3 + 4)** — replace the 15-min periodic with one-shots scheduled at the next period boundary. Solo users go from ~96 worker runs/day to ~4 (one per period), big battery + CPU win. Sync users follow once Phase 1 (`runFullSyncInline`, shipped 2026-04-25) is verified reliable overnight (≥ 95% of FCM wakes complete inline on Samsung + Pixel). If FCM-inline doesn't hit that bar, do Phase 4-alternative (keep periodic but no-op when fresh FCM-inline ran in last 30 min). Full plan in [`project_period_boundary_scheduling.md`](project_period_boundary_scheduling.md).
 
 ## Post-launch (data-driven)
 
-2. **App Check → MEETS_DEVICE_INTEGRITY** — Currently `MEETS_BASIC_INTEGRITY`. Firebase Console one-click change. **BASIC already protects against modified-APK piracy** via the Play Integrity app-integrity verdict — Firebase rejects App Check tokens for APKs whose signing cert doesn't match the registered one. Upgrading to DEVICE_INTEGRITY only tightens the *device* side (rejects rooted / custom-ROM / non-GMS devices). Decide after 2-4 weeks of live PERMISSION_DENIED Crashlytics data: if we see no abuse patterns and a meaningful tail of legitimate users on non-GMS devices (Huawei, custom ROMs), stay at BASIC.
+2. **App Check device integrity tightening** — Currently set to "Don't explicitly check device integrity level" (most permissive). The `PLAY_RECOGNIZED` app-integrity verdict (enabled) is what actually blocks pirated/re-signed APKs — that's intact. Device integrity is a separate axis. Tightening order if abuse appears post-launch: MEETS_BASIC_INTEGRITY (rejects obvious tampering / emulator+root), then MEETS_DEVICE_INTEGRITY (also rejects rooted real devices + custom ROMs). Don't go to MEETS_STRONG_INTEGRITY (rejects older real devices). Decide after 2-4 weeks of live PERMISSION_DENIED Crashlytics data; per-field encryption means a leaked App Check token can't decrypt data anyway, so device integrity strictness is anti-abuse only, not data protection.
 
 3. **Google Play Billing + server-side purchase verification** — Local paid-feature flags (`isPaidUser` in SharedPreferences) are bypassable by anyone who can decompile + re-sign the APK. App Check already stops pirated APKs from using SYNC / cloud receipts / admin features (unrecognized app signature), but local features (CSV/PDF export, receipt capture, unlimited widget transactions, cash-flow simulation) don't require server calls and aren't protected. Fix:
    - Integrate Google Play Billing Library in the app.

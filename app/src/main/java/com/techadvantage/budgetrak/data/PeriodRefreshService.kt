@@ -37,6 +37,39 @@ object PeriodRefreshService {
         val archiveCutoffDate: LocalDate? = null
     )
 
+    /**
+     * Wall-clock instant of the next period boundary. Used by
+     * `BackgroundSyncWorker.scheduleNextBoundary` to enqueue a one-shot worker
+     * precisely at the next period change instead of polling every 15 min.
+     *
+     * For DAILY budgets, the boundary is `resetHour:00:00` of the next day.
+     * For WEEKLY and MONTHLY, it's midnight of the next aligned period start
+     * (no UI for sub-day reset on those modes).
+     */
+    fun nextBoundaryAt(
+        budgetPeriod: BudgetPeriod,
+        resetHour: Int,
+        resetDayOfWeek: Int,
+        resetDayOfMonth: Int,
+        familyTimezone: String
+    ): java.time.Instant {
+        val zone = if (familyTimezone.isNotEmpty()) ZoneId.of(familyTimezone) else ZoneId.systemDefault()
+        val currentStart = BudgetCalculator.currentPeriodStart(
+            budgetPeriod, resetDayOfWeek, resetDayOfMonth, zone, resetHour
+        )
+        val nextStartDate = when (budgetPeriod) {
+            BudgetPeriod.DAILY -> currentStart.plusDays(1)
+            BudgetPeriod.WEEKLY -> currentStart.plusWeeks(1)
+            BudgetPeriod.MONTHLY -> {
+                val nextMonth = currentStart.plusMonths(1)
+                val day = resetDayOfMonth.coerceAtMost(nextMonth.lengthOfMonth())
+                nextMonth.withDayOfMonth(day)
+            }
+        }
+        val hour = if (budgetPeriod == BudgetPeriod.DAILY) resetHour else 0
+        return nextStartDate.atTime(hour, 0).atZone(zone).toInstant()
+    }
+
     data class RefreshResult(
         val newLedgerEntries: List<PeriodLedgerEntry>,
         val updatedSavingsGoals: List<SavingsGoal>,

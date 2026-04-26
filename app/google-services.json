@@ -8,25 +8,6 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:620762828182:android:b4d31d83a40e742ccca1b7",
-        "android_client_info": {
-          "package_name": "com.securesync.app"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "AIzaSyCtqxugvlVWlOSVRnDS86Wba9VVey6SDTE"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    },
-    {
-      "client_info": {
         "mobilesdk_app_id": "1:620762828182:android:2f4fcc7ca522516ccca1b7",
         "android_client_info": {
           "package_name": "com.techadvantage.budgetrak"

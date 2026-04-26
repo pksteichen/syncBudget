@@ -263,6 +263,14 @@ object ReceiptManager {
             if (thumb !== bounded) thumb.recycle()
             if (bounded !== bitmap) bounded.recycle()
 
+            // Bump local content version BEFORE queueing so the upload pipeline
+            // can distinguish "rotation pending" (local > cloud) from "resume
+            // of a partial commit" (local == cloud, our lastEditBy). Without
+            // this, a worker cancellation between ledger write and queue
+            // removal would cause the next cycle to false-rotate and fan out
+            // a flag-clock bump for unchanged content.
+            ReceiptSyncManager.bumpLocalContentVersionForRotation(context, receiptId)
+
             // Requeue for re-upload so peers get the rotated version. No-op
             // for solo users — their drainer is never kicked (see guards in
             // MainViewModel.kickUploadDrainer).

@@ -26,7 +26,13 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * Runs every 15 minutes via WorkManager. Handles full data sync, period
  * refresh, cash recomputation, and widget updates.
- * Skips if the app is active in the foreground (MainViewModel handles everything).
+ *
+ * The actual work body lives in companion `runFullSyncInline`, which can
+ * also be invoked directly by FcmService — this lets sync_push wake events
+ * complete inside the 10s FCM runtime budget instead of relying on
+ * WorkManager to dispatch the worker before Doze / App Standby kills the
+ * process. WorkManager remains as a fallback (15-min periodic + FCM
+ * `runOnce` if inline returns false).
  */
 class BackgroundSyncWorker(
     appContext: Context,
@@ -37,44 +43,99 @@ class BackgroundSyncWorker(
         private const val TAG = "BackgroundSyncWorker"
         private const val WORK_NAME = "period_refresh"
         private const val ONESHOT_WORK_NAME = "period_refresh_oneshot"
+        private const val BOUNDARY_WORK_NAME = "period_boundary_oneshot"
 
-        // Guard against double-fire: the periodic worker and the FCM-triggered
-        // one-shot use different unique work names (WORK_NAME vs ONESHOT_WORK_NAME),
-        // so WorkManager's KEEP policy doesn't dedupe between them. If a periodic
-        // run is already executing when an FCM arrives, WorkManager happily starts
-        // the one-shot in parallel — duplicating listeners, RTDB pings, and reads.
-        // This in-process flag catches that case.
-        //
-        // Also read by FcmService.handleWakeForSync() to keep the FCM thread alive
-        // while the worker runs in the same process (without this, onMessageReceived
-        // returns, Android kills the process, and the enqueued worker gets deferred
-        // indefinitely under Doze/App Standby).
+        // Phase 4-alt: how recent must a successful FCM-inline run be for the
+        // periodic worker to skip the heavy Firestore listener bring-up?
+        // 30 min covers the 15-min periodic cadence with one cycle of slack
+        // for a missed FCM. Set to 0 to disable (always run full Tier 3).
+        private const val INLINE_FRESHNESS_MS = 30 * 60 * 1000L
+        internal const val KEY_LAST_INLINE_AT = "lastInlineSyncCompletedAt"
+
+        // Guards against double-fire across (a) periodic vs FCM-one-shot
+        // worker enqueues (different unique names → KEEP doesn't dedup) and
+        // (b) inline FCM call vs WorkManager dispatch racing in the same
+        // process. Both paths route through runFullSyncInline below, which
+        // is the sole owner of this flag.
         internal val isRunning = AtomicBoolean(false)
 
+        /**
+         * Arm the right kind of background work for the current sync state.
+         * Sync users get the 15-min periodic (slim-path-eligible per Phase 4-alt
+         * when fresh FCM-inline ran). Solo users get a single one-shot at the
+         * next period boundary; the boundary worker self-rearms at the end of
+         * its slim run, so the chain perpetuates with zero polling between
+         * boundaries (battery + CPU win).
+         *
+         * Idempotent — call freely on app start, group join, group leave,
+         * settings change.
+         */
         fun schedule(context: Context) {
-            val request = PeriodicWorkRequestBuilder<BackgroundSyncWorker>(
-                15, TimeUnit.MINUTES
-            ).build()
-            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, request
+            val syncPrefs = context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
+            val isSyncConfigured = syncPrefs.getString("groupId", null) != null
+            if (isSyncConfigured) {
+                // Cancel any solo boundary one-shot left over from a previous
+                // configuration (user just joined a group).
+                WorkManager.getInstance(context).cancelUniqueWork(BOUNDARY_WORK_NAME)
+                val request = PeriodicWorkRequestBuilder<BackgroundSyncWorker>(
+                    15, TimeUnit.MINUTES
+                ).build()
+                WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                    WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, request
+                )
+            } else {
+                // Solo path — drop the periodic, arm a one-shot at next boundary.
+                WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
+                scheduleNextBoundary(context)
+            }
+        }
+
+        /**
+         * Enqueue (or replace) a one-shot worker scheduled at the next period
+         * boundary. Called from `schedule()` for solo users and from the slim
+         * Tier-3 path at end of every solo run to perpetuate the chain.
+         *
+         * REPLACE policy + a unique work name means settings changes (e.g.,
+         * resetHour adjustment via `MainViewModel`) re-arm cleanly without
+         * piling up stale wakes.
+         */
+        fun scheduleNextBoundary(context: Context) {
+            val appPrefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+            val budgetPeriod = try {
+                com.techadvantage.budgetrak.data.BudgetPeriod.valueOf(
+                    appPrefs.getString("budgetPeriod", null) ?: "DAILY"
+                )
+            } catch (_: Exception) { com.techadvantage.budgetrak.data.BudgetPeriod.DAILY }
+            val resetHour = appPrefs.getInt("resetHour", 0)
+            val resetDayOfWeek = appPrefs.getInt("resetDayOfWeek", 1)
+            val resetDayOfMonth = appPrefs.getInt("resetDayOfMonth", 1)
+            val sharedSettings = SharedSettingsRepository.load(context)
+            val nextBoundary = com.techadvantage.budgetrak.data.PeriodRefreshService.nextBoundaryAt(
+                budgetPeriod, resetHour, resetDayOfWeek, resetDayOfMonth, sharedSettings.familyTimezone
+            )
+            // Clamp to [60s, 24h] — guards against clock-skew producing a 0/-ve
+            // delay (would fire immediately + tight loop) or a multi-day delay
+            // for misconfigured periods.
+            val deltaMs = (nextBoundary.toEpochMilli() - System.currentTimeMillis())
+                .coerceIn(60_000L, 24L * 60 * 60 * 1000L)
+            val builder = OneTimeWorkRequestBuilder<BackgroundSyncWorker>()
+                .setInitialDelay(deltaMs, TimeUnit.MILLISECONDS)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                builder.setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+            }
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                BOUNDARY_WORK_NAME, ExistingWorkPolicy.REPLACE, builder.build()
+            )
+            com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent(
+                "Boundary scheduled: +${deltaMs/1000}s (budget=$budgetPeriod resetHour=$resetHour)"
             )
         }
 
         /**
-         * Fire a one-shot run immediately. On Android 12+ (API 31+) this uses
-         * an expedited request so it bypasses Doze / App-Standby buckets for
-         * the run's ~10 min window, which is essential on OEMs (Samsung,
-         * Xiaomi, etc.) that aggressively defer regular WorkManager jobs. The
-         * OutOfQuotaPolicy fallback lets it run as a normal OneTimeWorkRequest
-         * if the expedited quota is exhausted.
-         *
-         * Pre-S skips expedited since that would require a foreground-service
-         * notification. Older OS versions get the regular one-shot.
-         *
-         * Uses `enqueueUniqueWork(ONESHOT_WORK_NAME, KEEP, …)` so FCM bursts
-         * (e.g. 500 txns imported on another device triggering 500 sync_push
-         * messages) collapse into a single actual sync run. If a one-shot is
-         * already pending or running, subsequent enqueues are dropped.
+         * Fire a one-shot worker run. Used as a fallback when inline FCM
+         * execution times out or is preempted; FcmService prefers
+         * `runFullSyncInline` so the work happens in the FCM service
+         * process directly.
          */
         fun runOnce(context: Context) {
             val builder = OneTimeWorkRequestBuilder<BackgroundSyncWorker>()
@@ -87,278 +148,118 @@ class BackgroundSyncWorker(
         }
 
         fun cancel(context: Context) {
+            // Cancel both the periodic and the boundary one-shot — callers
+            // (e.g., GroupManager.leaveGroup) expect "stop all background sync
+            // work for this configuration." `schedule()` will rearm the
+            // appropriate kind for the new state.
             WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
+            WorkManager.getInstance(context).cancelUniqueWork(BOUNDARY_WORK_NAME)
+        }
+
+        /**
+         * Run the full Tier 1/2/3 sync pipeline inline in the calling
+         * coroutine. Used by FcmService so wake events can complete sync
+         * work within the FCM 10-second runtime budget instead of relying
+         * on WorkManager to dispatch a worker before the process is killed
+         * under Doze / App Standby. Also called by `doWork()` itself, so
+         * worker + FCM share the exact same code path.
+         *
+         * Tier routing (same as the legacy worker):
+         *  - Tier 1 (app foregrounded): no-op — main app handles everything
+         *  - Tier 2 (ViewModel alive): listener health, App Check refresh,
+         *    receipt sync, RTDB ping
+         *  - Tier 3 (ViewModel dead): full sync from Firestore + period
+         *    refresh + receipt sync + push results + widget update
+         *
+         * @param timeBudgetMs maximum wall-clock time before the body is
+         *     cancelled. Null = no budget (worker / cold-start use this).
+         *     FCM passes 7_000ms to leave 3s headroom in the 10s window.
+         * @return true if the body ran to completion, false if dedup
+         *     skipped or the budget expired before completion.
+         */
+        suspend fun runFullSyncInline(
+            context: Context,
+            sourceLabel: String,
+            timeBudgetMs: Long? = null
+        ): Boolean {
+            if (!isRunning.compareAndSet(false, true)) {
+                com.techadvantage.budgetrak.BudgeTrakApplication
+                    .syncEvent("$sourceLabel: skipped (another run already in progress)")
+                return false
+            }
+            val startMs = System.currentTimeMillis()
+            try {
+                val ok: Boolean = if (timeBudgetMs != null) {
+                    kotlinx.coroutines.withTimeoutOrNull(timeBudgetMs) {
+                        runFullSyncBody(context, sourceLabel)
+                        true
+                    } ?: false
+                } else {
+                    runFullSyncBody(context, sourceLabel)
+                    true
+                }
+                if (!ok && timeBudgetMs != null) {
+                    val elapsed = System.currentTimeMillis() - startMs
+                    com.techadvantage.budgetrak.BudgeTrakApplication
+                        .syncEvent("$sourceLabel: TIME-BUDGET-EXPIRED at ${elapsed}ms (budget=${timeBudgetMs}ms)")
+                }
+                if (ok && sourceLabel.startsWith("FCM-")) {
+                    // Phase 4-alt: stamp last-successful-FCM-inline so the
+                    // periodic worker can take the slim path until it's stale.
+                    context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
+                        .edit().putLong(KEY_LAST_INLINE_AT, System.currentTimeMillis()).apply()
+                }
+                return ok
+            } finally {
+                isRunning.set(false)
+            }
+        }
+
+        /**
+         * Run the diagnostic dump pipeline inline. Used by FcmService for
+         * `debug_request` FCM messages and by DebugDumpWorker as a fallback.
+         * Sets the `fcm_debug_requested` pref so concurrent dispatches see
+         * the work as pending; the body clears the pref after a successful
+         * upload to dedup.
+         */
+        suspend fun runDebugDumpInline(
+            context: Context,
+            timeBudgetMs: Long? = null
+        ): Boolean {
+            context.getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
+                .edit().putBoolean("fcm_debug_requested", true).apply()
+            val startMs = System.currentTimeMillis()
+            try {
+                if (timeBudgetMs != null) {
+                    val ok = kotlinx.coroutines.withTimeoutOrNull(timeBudgetMs) {
+                        runDebugDumpBody(context)
+                        true
+                    }
+                    if (ok != true) {
+                        val elapsed = System.currentTimeMillis() - startMs
+                        com.techadvantage.budgetrak.BudgeTrakApplication
+                            .syncEvent("DebugDump-inline: TIME-BUDGET-EXPIRED at ${elapsed}ms (budget=${timeBudgetMs}ms)")
+                        return false
+                    }
+                    return true
+                } else {
+                    runDebugDumpBody(context)
+                    return true
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "DebugDump-inline failed: ${e.message}", e)
+                return false
+            }
         }
     }
 
     override suspend fun doWork(): Result {
-        if (!isRunning.compareAndSet(false, true)) {
-            com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent("Worker skipped: another run already in progress")
-            return Result.success()
-        }
         try {
-            // Skip if the app is visible — foreground handles everything
-            if (com.techadvantage.budgetrak.MainActivity.isAppActive) {
-                return Result.success()
-            }
-
-            // If foreground ViewModel is alive (stopped but in memory), only check listener health
-            val vm = com.techadvantage.budgetrak.MainViewModel.instance?.get()
-            if (vm != null) {
-                com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent("Worker Tier 2: ViewModel alive, sync=${vm.isSyncConfigured}")
-                if (vm.isSyncConfigured) {
-                    // Proactively refresh App Check token before it expires.
-                    // getAppCheckToken(false) returns cached token even if about to expire.
-                    // Check expiry and force-refresh if within 5 min of expiration.
-                    try {
-                        val token = kotlinx.coroutines.withTimeoutOrNull(10_000) {
-                            com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
-                                .getAppCheckToken(false).await()
-                        }
-                        if (token != null) {
-                            val remainingMs = token.expireTimeMillis - System.currentTimeMillis()
-                            if (remainingMs < 35 * 60 * 1000L) {
-                                val refreshed = kotlinx.coroutines.withTimeoutOrNull(10_000) {
-                                    com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
-                                        .getAppCheckToken(true).await()
-                                }
-                                if (refreshed != null) {
-                                    com.techadvantage.budgetrak.BudgeTrakApplication.tokenLog(
-                                        "Proactive token refresh (Worker Tier 2): was ${remainingMs/1000}s from expiry"
-                                    )
-                                }
-                            }
-                        }
-                    } catch (_: Exception) {}
-
-                    val ds = vm.docSync
-                    if (ds != null && !ds.isListening) {
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                            ds.startListeners()
-                        }
-                        Log.i(TAG, "Restarted dead foreground listeners")
-                        com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent("Worker Tier 2: restarted dead foreground listeners")
-                    }
-
-                    // Ping RTDB lastSeen so device roster stays fresh
-                    pingRtdbLastSeen(applicationContext)
-
-                    // Receipt sync (paid / subscriber). Cheap no-op if there's
-                    // nothing to do: pending queue empty, flag clock unchanged,
-                    // no missing referenced receipts. The foreground drainers
-                    // on viewModelScope may not be firing reliably while
-                    // backgrounded (Doze / CPU scheduling), so this is a
-                    // periodic catch-up.
-                    if (vm.isPaidUser || vm.isSubscriber) {
-                        // Skip if foreground receipt-sync coroutines are
-                        // already doing this work — they hold the same
-                        // semantics (per-receipt queue atomicity, same
-                        // retry-counter prefs). Tier 2 is a backstop for when
-                        // Doze / CPU scheduling stalls the fg coroutines,
-                        // not a parallel worker.
-                        if (vm.isReceiptSyncActive()) {
-                            Log.i(TAG, "Tier 2 receipt sync skipped: foreground drainer/retry active")
-                        } else try {
-                            // Snapshot all VM state at entry so a concurrent
-                            // subscription / group change can't produce torn
-                            // reads mid-sync.
-                            val gid = vm.syncGroupId
-                            val deviceId = vm.localDeviceId
-                            val txns = vm.transactions.toList()
-                            val key = GroupManager.getEncryptionKey(applicationContext)
-                            if (gid != null && key != null && deviceId.isNotBlank()) {
-                                val devices = resolveDevicesForReceiptSync(gid, vm)
-                                val receiptSync = ReceiptSyncManager(
-                                    applicationContext, gid, deviceId, key
-                                ) { msg ->
-                                    com.techadvantage.budgetrak.BudgeTrakApplication
-                                        .syncEvent("ReceiptSync(Tier2): $msg")
-                                }
-                                receiptSync.syncReceipts(txns, devices)
-                            } else {
-                                Log.i(TAG, "Tier 2 receipt sync skipped: gid=${gid != null} key=${key != null} device=${deviceId.isNotBlank()}")
-                            }
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Tier 2 receipt sync failed: ${e.message}")
-                        }
-                    }
-                }
-
-                return Result.success()
-            }
-
-            // ViewModel is dead (process restarted) — run full background sync
-            val tier3StartMs = System.currentTimeMillis()
-            val standbyBucket = try {
-                val usm = applicationContext.getSystemService(Context.USAGE_STATS_SERVICE)
-                    as? android.app.usage.UsageStatsManager
-                usm?.appStandbyBucket ?: -1
-            } catch (_: Exception) { -1 }
-            com.techadvantage.budgetrak.BudgeTrakApplication
-                .syncEvent("Worker Tier 3: ViewModel dead, full sync (standbyBucket=$standbyBucket)")
-
-            val syncPrefs = applicationContext.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
-            val groupId = syncPrefs.getString("groupId", null)
-
-            // Only sign in to Firebase when sync is configured — solo users
-            // don't need auth and this saves a network round-trip every 15 min.
-            if (groupId != null && com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
-                try {
-                    com.google.firebase.auth.FirebaseAuth.getInstance()
-                        .signInAnonymously()
-                        .await()
-                } catch (e: Exception) {
-                    Log.w(TAG, "Anonymous auth failed: ${e.message}")
-                    // Continue without sync — period refresh can still run from local data
-                }
-            }
-
-            // Proactive App Check token refresh — same logic as Tier 2 but essential
-            // here because the ViewModel (and its keep-alive loop) is dead. Without this,
-            // all Firestore network reads and RTDB writes fail with PERMISSION_DENIED.
-            if (groupId != null) {
-                try {
-                    val token = kotlinx.coroutines.withTimeoutOrNull(10_000) {
-                        com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
-                            .getAppCheckToken(false).await()
-                    }
-                    if (token != null) {
-                        val remainingMs = token.expireTimeMillis - System.currentTimeMillis()
-                        if (remainingMs < 35 * 60 * 1000L) {
-                            val refreshed = kotlinx.coroutines.withTimeoutOrNull(10_000) {
-                                com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
-                                    .getAppCheckToken(true).await()
-                            }
-                            if (refreshed != null) {
-                                com.techadvantage.budgetrak.BudgeTrakApplication.tokenLog(
-                                    "Proactive token refresh (Worker Tier 3): was ${remainingMs/1000}s from expiry"
-                                )
-                            }
-                        }
-                    }
-                } catch (_: Exception) {}
-            }
-
-            var mergeResult: SyncMergeProcessor.MergeResult? = null
-            var encryptionKey: ByteArray? = null
-            var deviceId: String? = null
-
-            // ── Step 1: Sync from Firestore if configured ──
-            if (groupId != null) {
-                encryptionKey = GroupManager.getEncryptionKey(applicationContext)
-                deviceId = SyncIdGenerator.getOrCreateDeviceId(applicationContext)
-
-                if (encryptionKey != null) {
-                    mergeResult = syncFromFirestore(groupId, encryptionKey, deviceId, syncPrefs)
-                }
-            }
-
-            // ── Step 2: Apply synced settings to SharedPrefs (before period refresh reads them) ──
-            if (mergeResult != null) {
-                saveMergeResult(mergeResult, syncPrefs)
-            }
-
-            // ── Step 2b: Background receipt photo sync — moved earlier (v2.7) ──
-            // Samsung power-management frequently cancels Tier 3 workers before
-            // the 10-min WorkManager timeout; see token_log cancellations in
-            // the 2026-04-24 dump. By running receipt sync right after the
-            // initial Firestore merge — while the worker is still young and
-            // the process is fresh — we give the receipt-sync pipeline its
-            // best chance to complete before any cancellation hits. The later
-            // Tier-3 phases (period refresh, pushes, consistency recheck,
-            // RTDB ping, widget update) are more tolerant of cancellation:
-            // period refresh retries on the next run, pushes idempotent,
-            // consistency is gated by its own 1h cooldown.
-            if (groupId != null && encryptionKey != null && deviceId != null) {
-                try {
-                    val appPrefsReceipt = applicationContext.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-                    val photoCapable = appPrefsReceipt.getBoolean("isPaidUser", false) ||
-                            appPrefsReceipt.getBoolean("isSubscriber", false)
-                    if (photoCapable) {
-                        val txns = TransactionRepository.load(applicationContext)
-                        // Tier 3 cold-start: RTDB hasn't completed auth handshake
-                        // yet, so getDevices often returns empty / no-photo-capable
-                        // (observed: 6/6 Tier 3 calls overnight had photoCapable=0
-                        // while Tier 2 had photoCapable=2). Use the fallback chain.
-                        val devices = resolveDevicesForReceiptSync(groupId, vm = null)
-                        val receiptSync = ReceiptSyncManager(
-                            applicationContext, groupId, deviceId, encryptionKey
-                        ) { msg ->
-                            com.techadvantage.budgetrak.BudgeTrakApplication
-                                .syncEvent("ReceiptSync(Tier3): $msg")
-                        }
-                        receiptSync.syncReceipts(txns, devices)
-                    }
-                } catch (ce: kotlinx.coroutines.CancellationException) {
-                    com.techadvantage.budgetrak.BudgeTrakApplication
-                        .syncEvent("Tier 3: receipt sync CANCELLED (worker being stopped)")
-                    throw ce
-                } catch (e: Exception) {
-                    Log.w(TAG, "Background receipt sync failed: ${e.message}")
-                }
-            }
-
-            // ── Step 3: Run period refresh from (possibly updated) local data ──
-            val appPrefs = applicationContext.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-            val refreshResult = runPeriodRefresh(appPrefs)
-
-            // ── Step 3b: Always recompute cash from local data ──
-            // PeriodRefreshService recomputes cash when periods are missed, but
-            // when sync delivered new data without a period boundary (e.g., a
-            // transaction from another device), we must still recompute so the
-            // widget reflects the updated cash.
-            if (refreshResult == null) {
-                recomputeCashFromDisk(appPrefs)
-            }
-
-            // ── Step 4: Push changes to Firestore if sync configured ──
-            if (groupId != null && encryptionKey != null && deviceId != null) {
-                // Push period refresh results
-                if (refreshResult != null) {
-                    pushRefreshResults(refreshResult, groupId, encryptionKey, deviceId)
-                    // Persist pushed doc keys so the next worker's FirestoreDocSync
-                    // can filter echoes of our own writes via recentPushes + lastEditBy.
-                    persistBackgroundPushKeys(refreshResult)
-                }
-
-                // Push sync side effects (conflicted transactions, category deletes)
-                if (mergeResult != null) {
-                    pushSyncSideEffects(mergeResult, groupId, encryptionKey, deviceId)
-                }
-
-            }
-
-            // ── Step 4b: Recheck consistency mismatch if flagged ──
-            if (groupId != null) {
-                val mismatchAt = applicationContext.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-                    .getLong("checksumMismatchAt", 0L)
-                if (mismatchAt > 0 && System.currentTimeMillis() - mismatchAt > 60 * 60 * 1000L) {
-                    val vm = com.techadvantage.budgetrak.MainViewModel.instance?.get()
-                    if (vm != null) {
-                        vm.recheckConsistency()
-                    }
-                }
-            }
-
-            // ── Step 5: RTDB lastSeen ping (device roster freshness) ──
-            // Receipt sync moved to Step 2b so it runs before any potential
-            // cancellation from Samsung power management.
-            pingRtdbLastSeen(applicationContext)
-
-            // ── Step 7: Update widget ──
-            BudgetWidgetProvider.updateAllWidgets(applicationContext)
-
-            val elapsedMs = System.currentTimeMillis() - tier3StartMs
-            com.techadvantage.budgetrak.BudgeTrakApplication
-                .syncEvent("Worker Tier 3: complete in ${elapsedMs}ms")
-            return Result.success()
+            runFullSyncInline(applicationContext, "Worker", timeBudgetMs = null)
         } catch (ce: kotlinx.coroutines.CancellationException) {
             // Worker was cancelled by the system (Samsung power management,
             // App Standby bucket transition, quota exhaustion, process
-            // death). Log stopReason where available (API 31+) so tomorrow's
-            // dump can distinguish root causes. Do NOT catch-and-return-success
-            // here — let CancellationException propagate so WorkManager sees
-            // the worker as stopped.
+            // death). Log stopReason where available (API 31+).
             val reason = try {
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) stopReason else -1
             } catch (_: Throwable) { -1 }
@@ -367,504 +268,827 @@ class BackgroundSyncWorker(
             throw ce
         } catch (e: Exception) {
             Log.e(TAG, "BackgroundSyncWorker failed: ${e.message}", e)
-            return Result.success() // don't retry, wait for next scheduled run
-        } finally {
-            isRunning.set(false)
         }
+        return Result.success()
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Inline sync pipeline body (file-private, callable from worker doWork()
+// via runFullSyncInline OR from FcmService directly)
+// ──────────────────────────────────────────────────────────────────────────
+
+private const val SYNC_TAG = "BackgroundSync"
+
+private suspend fun runFullSyncBody(context: Context, sourceLabel: String) {
+    // Tier 1: app foregrounded — main app handles everything
+    if (com.techadvantage.budgetrak.MainActivity.isAppActive) {
+        com.techadvantage.budgetrak.BudgeTrakApplication
+            .syncEvent("$sourceLabel: app active, skipped")
+        return
     }
 
-    // ── Resolve photo-capable device list with fallback chain ──────────
-    //
-    // Cold-start Tier 3 calls `RealtimePresenceService.getDevices()` which
-    // reads RTDB presence. RTDB hasn't completed its auth handshake yet
-    // (Firebase Auth signs in synchronously but the RTDB SDK propagates
-    // the auth state asynchronously), so the read returns empty / no
-    // photo-capable devices. Receipt sync then runs as a no-op for photo
-    // work because `photoCapableDeviceIds` is the empty set.
-    //
-    // Fallback chain (each tier writes to a SharedPref cache on success
-    // so subsequent fallback attempts can hit the cache instead of network):
-    //   1. VM's `syncDevices` (Tier 2 only — VM has fresh data already)
-    //   2. RTDB presence read (the original path)
-    //   3. Firestore `groups/{gid}/devices/*` device docs (auth via Firestore
-    //      is established by Tier 3 step 3 syncFromFirestore, so this works
-    //      even when RTDB hasn't connected yet)
-    //   4. SharedPref cache from prior successful sync
-    //
-    // Returns an empty list if all four tiers fail. syncReceipts will then
-    // run with an empty `photoCapableDeviceIds` set — same as old broken
-    // behavior, but at least our diagnostic logs will show the source.
-    private suspend fun resolveDevicesForReceiptSync(
-        groupId: String,
-        vm: com.techadvantage.budgetrak.MainViewModel?
-    ): List<DeviceInfo> {
-        // Layer 1: VM's syncDevices (foreground / Tier 2)
-        if (vm != null) {
-            val vmDevices = vm.syncDevices
-            if (vmDevices.any { it.photoCapable }) {
-                cachePhotoCapableDevices(groupId, vmDevices)
-                return vmDevices
+    val vm = com.techadvantage.budgetrak.MainViewModel.instance?.get()
+    if (vm != null) {
+        runTier2(context, vm, sourceLabel)
+        return
+    }
+    runTier3(context, sourceLabel)
+}
+
+private suspend fun runTier2(
+    context: Context,
+    vm: com.techadvantage.budgetrak.MainViewModel,
+    sourceLabel: String
+) {
+    com.techadvantage.budgetrak.BudgeTrakApplication
+        .syncEvent("$sourceLabel Tier 2: ViewModel alive, sync=${vm.isSyncConfigured}")
+    if (!vm.isSyncConfigured) return
+
+    // Proactively refresh App Check token before it expires.
+    try {
+        val token = kotlinx.coroutines.withTimeoutOrNull(10_000) {
+            com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
+                .getAppCheckToken(false).await()
+        }
+        if (token != null) {
+            val remainingMs = token.expireTimeMillis - System.currentTimeMillis()
+            // Threshold dropped 35→16 min on 2026-04-25 to keep inline-FCM
+            // runs out of the proactive-refresh path. 4 h token TTL × 15-min
+            // server heartbeats means at most one heartbeat per cycle sees
+            // the token below 16 min remaining; that one refreshes, the
+            // other ~15 skip. If a heartbeat is missed and the token
+            // briefly expires, `triggerFullRestart` handles `PERMISSION_DENIED`
+            // recovery on the next cycle.
+            if (remainingMs < 16 * 60 * 1000L) {
+                val refreshed = kotlinx.coroutines.withTimeoutOrNull(10_000) {
+                    com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
+                        .getAppCheckToken(true).await()
+                }
+                if (refreshed != null) {
+                    com.techadvantage.budgetrak.BudgeTrakApplication.tokenLog(
+                        "Proactive token refresh ($sourceLabel Tier 2): was ${remainingMs/1000}s from expiry"
+                    )
+                }
             }
         }
+    } catch (_: Exception) {}
 
-        // Layer 2: RTDB presence
-        val rtdbDevices = try {
-            RealtimePresenceService.getDevices(groupId)
+    val ds = vm.docSync
+    if (ds != null && !ds.isListening) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+            ds.startListeners()
+        }
+        Log.i(SYNC_TAG, "Restarted dead foreground listeners")
+        com.techadvantage.budgetrak.BudgeTrakApplication
+            .syncEvent("$sourceLabel Tier 2: restarted dead foreground listeners")
+    }
+
+    pingRtdbLastSeen(context)
+
+    if (vm.isPaidUser || vm.isSubscriber) {
+        if (vm.isReceiptSyncActive()) {
+            Log.i(SYNC_TAG, "Tier 2 receipt sync skipped: foreground drainer/retry active")
+        } else try {
+            val gid = vm.syncGroupId
+            val deviceId = vm.localDeviceId
+            val txns = vm.transactions.toList()
+            val key = GroupManager.getEncryptionKey(context)
+            if (gid != null && key != null && deviceId.isNotBlank()) {
+                val devices = resolveDevicesForReceiptSync(context, gid, vm)
+                val receiptSync = ReceiptSyncManager(
+                    context, gid, deviceId, key
+                ) { msg ->
+                    com.techadvantage.budgetrak.BudgeTrakApplication
+                        .syncEvent("ReceiptSync(Tier2): $msg")
+                }
+                receiptSync.syncReceipts(txns, devices)
+            } else {
+                Log.i(SYNC_TAG, "Tier 2 receipt sync skipped: gid=${gid != null} key=${key != null} device=${deviceId.isNotBlank()}")
+            }
         } catch (e: Exception) {
-            Log.w(TAG, "RTDB getDevices failed: ${e.message}")
-            emptyList()
+            Log.w(SYNC_TAG, "Tier 2 receipt sync failed: ${e.message}")
         }
-        if (rtdbDevices.any { it.photoCapable }) {
-            cachePhotoCapableDevices(groupId, rtdbDevices)
-            return rtdbDevices
-        }
+    }
+}
 
-        // Layer 3: Firestore device docs (works once syncFromFirestore established auth)
-        val fsDevices = try {
-            FirestoreService.getDevices(groupId).map { rec ->
-                // Merge any RTDB data we DID get for this device (online,
-                // uploadSpeed are only in RTDB).
-                val rt = rtdbDevices.find { it.deviceId == rec.deviceId }
-                DeviceInfo(
-                    deviceId = rec.deviceId,
-                    deviceName = rec.deviceName.ifEmpty { rt?.deviceName ?: "" },
-                    isAdmin = rec.isAdmin,
-                    lastSeen = maxOf(rec.lastSeen, rt?.lastSeen ?: 0L),
-                    online = rt?.online ?: false,
-                    photoCapable = rec.photoCapable,
-                    uploadSpeedBps = if ((rt?.uploadSpeedBps ?: 0L) > 0) rt!!.uploadSpeedBps else rec.uploadSpeedBps,
-                    uploadSpeedMeasuredAt = if ((rt?.uploadSpeedMeasuredAt ?: 0L) > 0) rt!!.uploadSpeedMeasuredAt else rec.uploadSpeedMeasuredAt
-                )
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Firestore getDevices fallback failed: ${e.message}")
-            emptyList()
-        }
-        if (fsDevices.any { it.photoCapable }) {
-            cachePhotoCapableDevices(groupId, fsDevices)
-            com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent(
-                "resolveDevices: RTDB empty, used Firestore fallback (n=${fsDevices.count { it.photoCapable }})"
-            )
-            return fsDevices
-        }
+private suspend fun runTier3(context: Context, sourceLabel: String) {
+    val tier3StartMs = System.currentTimeMillis()
+    val syncPrefs = context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
+    val groupId = syncPrefs.getString("groupId", null)
+    val isSyncConfigured = groupId != null
 
-        // Layer 4: SharedPref cache
-        val cachedIds = readCachedPhotoCapableDevices(groupId)
-        if (cachedIds.isNotEmpty()) {
-            com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent(
-                "resolveDevices: RTDB+Firestore empty, used SharedPref cache (n=${cachedIds.size})"
-            )
-            // Synthesize minimal DeviceInfo entries — only photoCapable matters
-            // for the call sites that consume this list (processLedgerOperations
-            // possession/non-possession marking, processRecovery). uploadSpeed
-            // info is missing but degrades gracefully (re-uploader picks
-            // anyone, hash-tiebreak).
-            return cachedIds.map { id ->
-                DeviceInfo(
-                    deviceId = id,
-                    deviceName = "",
-                    isAdmin = false,
-                    lastSeen = 0L,
-                    online = false,
-                    photoCapable = true
-                )
-            }
-        }
-
-        // All four failed — return whatever RTDB gave us (likely empty)
-        com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent(
-            "resolveDevices: ALL fallbacks failed for group $groupId — receipt sync will no-op"
+    // Phase 3 + Phase 4-alt routing: skip Firestore listener bring-up when
+    //  - Solo user (no group → nothing to sync).
+    //  - Sync user, periodic worker, fresh FCM-inline ran in last 30 min,
+    //    no consistency mismatch pending (FCM has been doing the work).
+    // Slim path = period refresh + cash recompute + widget update (~25 ms).
+    val appPrefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+    val mismatchAt = appPrefs.getLong("checksumMismatchAt", 0L)
+    val mismatchPending = mismatchAt > 0L &&
+            (System.currentTimeMillis() - mismatchAt) > 60 * 60 * 1000L
+    val freshFcmInline = if (isSyncConfigured && sourceLabel == "Worker") {
+        val lastInline = syncPrefs.getLong(
+            com.techadvantage.budgetrak.data.sync.BackgroundSyncWorker.KEY_LAST_INLINE_AT, 0L
         )
-        return rtdbDevices
+        lastInline > 0L && (System.currentTimeMillis() - lastInline) < 30 * 60 * 1000L
+    } else false
+    val takeSlimPath = !isSyncConfigured || (freshFcmInline && !mismatchPending)
+
+    if (takeSlimPath) {
+        val refreshResult = runPeriodRefresh(context, appPrefs)
+        if (refreshResult == null) recomputeCashFromDisk(context, appPrefs)
+        BudgetWidgetProvider.updateAllWidgets(context)
+        // Solo users self-rearm at the next period boundary (Phase 3).
+        if (!isSyncConfigured) {
+            com.techadvantage.budgetrak.data.sync.BackgroundSyncWorker.scheduleNextBoundary(context)
+        }
+        val elapsedMs = System.currentTimeMillis() - tier3StartMs
+        com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent(
+            "$sourceLabel Tier 3 SLIM: complete in ${elapsedMs}ms " +
+                    "(solo=${!isSyncConfigured} freshFcm=$freshFcmInline)"
+        )
+        return
     }
 
-    private fun cachePhotoCapableDevices(groupId: String, devices: List<DeviceInfo>) {
-        val ids = devices.filter { it.photoCapable }.map { it.deviceId }
-        if (ids.isEmpty()) return  // don't overwrite a good cache with empty
+    val standbyBucket = try {
+        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE)
+            as? android.app.usage.UsageStatsManager
+        usm?.appStandbyBucket ?: -1
+    } catch (_: Exception) { -1 }
+    com.techadvantage.budgetrak.BudgeTrakApplication
+        .syncEvent("$sourceLabel Tier 3: ViewModel dead, full sync (standbyBucket=$standbyBucket)")
+
+    // Anonymous auth (only when sync is configured — solo users skip)
+    if (groupId != null && com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
         try {
-            applicationContext.getSharedPreferences("receipt_sync_prefs", Context.MODE_PRIVATE)
-                .edit()
-                .putString("photo_capable_devices_$groupId", ids.joinToString(","))
-                .apply()
+            com.google.firebase.auth.FirebaseAuth.getInstance()
+                .signInAnonymously()
+                .await()
+        } catch (e: Exception) {
+            Log.w(SYNC_TAG, "Anonymous auth failed: ${e.message}")
+        }
+    }
+
+    // Proactive App Check refresh — essential here because the ViewModel's
+    // keep-alive loop is dead. Without this, all Firestore network reads
+    // and RTDB writes fail with PERMISSION_DENIED.
+    if (groupId != null) {
+        try {
+            val token = kotlinx.coroutines.withTimeoutOrNull(10_000) {
+                com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
+                    .getAppCheckToken(false).await()
+            }
+            if (token != null) {
+                val remainingMs = token.expireTimeMillis - System.currentTimeMillis()
+                // Threshold dropped 35→16 min on 2026-04-25 to keep inline-FCM
+            // runs out of the proactive-refresh path. 4 h token TTL × 15-min
+            // server heartbeats means at most one heartbeat per cycle sees
+            // the token below 16 min remaining; that one refreshes, the
+            // other ~15 skip. If a heartbeat is missed and the token
+            // briefly expires, `triggerFullRestart` handles `PERMISSION_DENIED`
+            // recovery on the next cycle.
+            if (remainingMs < 16 * 60 * 1000L) {
+                    val refreshed = kotlinx.coroutines.withTimeoutOrNull(10_000) {
+                        com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
+                            .getAppCheckToken(true).await()
+                    }
+                    if (refreshed != null) {
+                        com.techadvantage.budgetrak.BudgeTrakApplication.tokenLog(
+                            "Proactive token refresh ($sourceLabel Tier 3): was ${remainingMs/1000}s from expiry"
+                        )
+                    }
+                }
+            }
         } catch (_: Exception) {}
     }
 
-    private fun readCachedPhotoCapableDevices(groupId: String): List<String> {
-        return try {
-            applicationContext.getSharedPreferences("receipt_sync_prefs", Context.MODE_PRIVATE)
-                .getString("photo_capable_devices_$groupId", null)
-                ?.split(",")
-                ?.filter { it.isNotEmpty() }
-                ?: emptyList()
-        } catch (_: Exception) {
-            emptyList()
+    var mergeResult: SyncMergeProcessor.MergeResult? = null
+    var encryptionKey: ByteArray? = null
+    var deviceId: String? = null
+
+    // ── Step 1: Sync from Firestore if configured ──
+    if (groupId != null) {
+        encryptionKey = GroupManager.getEncryptionKey(context)
+        deviceId = SyncIdGenerator.getOrCreateDeviceId(context)
+        if (encryptionKey != null) {
+            mergeResult = syncFromFirestore(context, groupId, encryptionKey, deviceId, syncPrefs)
         }
     }
 
-    // ── Sync from Firestore via short-lived listeners ──────────────────
+    // ── Step 2: Apply synced settings to SharedPrefs ──
+    if (mergeResult != null) {
+        saveMergeResult(context, mergeResult, syncPrefs)
+    }
 
-    private suspend fun syncFromFirestore(
-        groupId: String,
-        encryptionKey: ByteArray,
-        deviceId: String,
-        syncPrefs: android.content.SharedPreferences
-    ): SyncMergeProcessor.MergeResult? {
-        val docSync = FirestoreDocSync(applicationContext, groupId, deviceId, encryptionKey)
-
-        val accumulatedEvents = java.util.Collections.synchronizedList(mutableListOf<DataChangeEvent>())
-
-        docSync.onBatchChanged = { events ->
-            accumulatedEvents.addAll(events)
-        }
-
+    // ── Step 2b: Background receipt photo sync — runs early so Samsung
+    // power-management cancellation later in the worker doesn't kill it. ──
+    if (groupId != null && encryptionKey != null && deviceId != null) {
         try {
-            docSync.startListeners()
-
-            // Wait for all 8 collections to deliver their initial snapshot.
-            // awaitInitialSync tracks via markCollectionDelivered() which fires
-            // even for empty filtered results — no more 60s timeout waste.
-            docSync.awaitInitialSync(60_000)
-
-            // Wait for in-flight deserialization to complete before stopping.
-            docSync.awaitDeserializationComplete()
-
-            // Graceful stop: detach Firestore listeners but do NOT cancel
-            // deserializeScope children. Firestore can fire in-flight callbacks
-            // ~10-20ms after remove(), and we want those (e.g. sharedSettings)
-            // to complete so their events land in accumulatedEvents.
-            docSync.stopListeners(graceful = true)
-
-            // Drain any late callbacks that fired after remove() (up to 1s).
-            docSync.awaitDeserializationComplete(1_000)
+            val photoCapable = appPrefs.getBoolean("isPaidUser", false) ||
+                    appPrefs.getBoolean("isSubscriber", false)
+            if (photoCapable) {
+                val txns = TransactionRepository.load(context)
+                // Tier 3 cold-start: RTDB hasn't completed auth handshake
+                // yet. Use the fallback chain so receipt sync sees the
+                // peer's photo-capable bit even on first-call boot.
+                val devices = resolveDevicesForReceiptSync(context, groupId, vm = null)
+                val receiptSync = ReceiptSyncManager(
+                    context, groupId, deviceId, encryptionKey
+                ) { msg ->
+                    com.techadvantage.budgetrak.BudgeTrakApplication
+                        .syncEvent("ReceiptSync(Tier3): $msg")
+                }
+                receiptSync.syncReceipts(txns, devices)
+            }
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            com.techadvantage.budgetrak.BudgeTrakApplication
+                .syncEvent("Tier 3: receipt sync CANCELLED (worker being stopped)")
+            throw ce
         } catch (e: Exception) {
-            Log.w(TAG, "Firestore sync failed: ${e.message}")
-            try { docSync.stopListeners() } catch (_: Exception) {}
-            return null
+            Log.w(SYNC_TAG, "Background receipt sync failed: ${e.message}")
         }
+    }
 
-        if (accumulatedEvents.isEmpty()) return null
+    // ── Step 3: Run period refresh from (possibly updated) local data ──
+    val refreshResult = runPeriodRefresh(context, appPrefs)
 
-        // Load current data from disk
-        val transactions = TransactionRepository.load(applicationContext)
-        val recurringExpenses = RecurringExpenseRepository.load(applicationContext)
-        val incomeSources = IncomeSourceRepository.load(applicationContext)
-        val savingsGoals = SavingsGoalRepository.load(applicationContext)
-        val amortizationEntries = AmortizationRepository.load(applicationContext)
-        val categories = CategoryRepository.load(applicationContext)
-        val periodLedger = PeriodLedgerRepository.load(applicationContext)
-        val sharedSettings = SharedSettingsRepository.load(applicationContext)
+    // ── Step 3b: Always recompute cash from local data ──
+    if (refreshResult == null) {
+        recomputeCashFromDisk(context, appPrefs)
+    }
 
-        // Build catIdRemap from sync_engine prefs
-        val catIdRemap: MutableMap<Int, Int> = try {
-            val remapJson = syncPrefs.getString("catIdRemap", null)
-            if (remapJson != null) {
-                val json = JSONObject(remapJson)
-                json.keys().asSequence().associate {
-                    it.toInt() to json.getInt(it)
-                }.toMutableMap()
-            } else mutableMapOf()
-        } catch (_: Exception) { mutableMapOf() }
-
-        // Get current budget start date and archive cutoff
-        val appPrefs = applicationContext.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-        val currentBudgetStartDate = appPrefs.getString("budgetStartDate", null)?.let {
-            try { LocalDate.parse(it) } catch (_: Exception) { null }
+    // ── Step 4: Push changes to Firestore if sync configured ──
+    if (groupId != null && encryptionKey != null && deviceId != null) {
+        if (refreshResult != null) {
+            pushRefreshResults(refreshResult, groupId, encryptionKey, deviceId)
+            persistBackgroundPushKeys(context, refreshResult)
         }
-        val archiveCutoff = sharedSettings.archiveCutoffDate?.let {
-            try { LocalDate.parse(it) } catch (_: Exception) { null }
+        if (mergeResult != null) {
+            pushSyncSideEffects(mergeResult, groupId, encryptionKey, deviceId)
         }
+    }
 
-        // Process the accumulated events
-        val result = withContext(Dispatchers.Default) {
-            SyncMergeProcessor.processBatch(
-                events = accumulatedEvents.toList(),
-                currentTransactions = transactions,
-                currentRecurringExpenses = recurringExpenses,
-                currentIncomeSources = incomeSources,
-                currentSavingsGoals = savingsGoals,
-                currentAmortizationEntries = amortizationEntries,
-                currentCategories = categories,
-                currentPeriodLedger = periodLedger,
-                currentSharedSettings = sharedSettings,
-                catIdRemap = catIdRemap,
-                currentBudgetStartDate = currentBudgetStartDate,
-                archiveCutoffDate = archiveCutoff
+    // ── Step 4b: Recheck consistency mismatch if flagged ──
+    // Re-read mismatchAt: a Tier-3 push or merge can flip the flag mid-run.
+    if (groupId != null) {
+        val mismatchAtNow = appPrefs.getLong("checksumMismatchAt", 0L)
+        if (mismatchAtNow > 0 && System.currentTimeMillis() - mismatchAtNow > 60 * 60 * 1000L) {
+            val vm = com.techadvantage.budgetrak.MainViewModel.instance?.get()
+            if (vm != null) {
+                vm.recheckConsistency()
+            }
+        }
+    }
+
+    // ── Step 5: RTDB lastSeen ping ──
+    pingRtdbLastSeen(context)
+
+    // ── Step 6: Update widget ──
+    BudgetWidgetProvider.updateAllWidgets(context)
+
+    val elapsedMs = System.currentTimeMillis() - tier3StartMs
+    com.techadvantage.budgetrak.BudgeTrakApplication
+        .syncEvent("$sourceLabel Tier 3: complete in ${elapsedMs}ms")
+}
+
+// ── Resolve photo-capable device list with fallback chain ──────────────
+//
+// Cold-start Tier 3 calls `RealtimePresenceService.getDevices()` which
+// reads RTDB presence. RTDB hasn't completed its auth handshake yet, so
+// the read returns empty / no photo-capable devices. Receipt sync then
+// runs as a no-op for photo work because `photoCapableDeviceIds` is the
+// empty set. Fallback chain (each tier writes to a SharedPref cache on
+// success so subsequent fallback attempts can hit the cache instead of
+// network):
+//   1. VM's `syncDevices` (Tier 2 only — VM has fresh data already)
+//   2. RTDB presence read (the original path)
+//   3. Firestore `groups/{gid}/devices/*` device docs (auth via Firestore
+//      is established by Tier 3's syncFromFirestore step)
+//   4. SharedPref cache from prior successful sync
+private suspend fun resolveDevicesForReceiptSync(
+    context: Context,
+    groupId: String,
+    vm: com.techadvantage.budgetrak.MainViewModel?
+): List<DeviceInfo> {
+    if (vm != null) {
+        val vmDevices = vm.syncDevices
+        if (vmDevices.any { it.photoCapable }) {
+            cachePhotoCapableDevices(context, groupId, vmDevices)
+            return vmDevices
+        }
+    }
+
+    val rtdbDevices = try {
+        RealtimePresenceService.getDevices(groupId)
+    } catch (e: Exception) {
+        Log.w(SYNC_TAG, "RTDB getDevices failed: ${e.message}")
+        emptyList()
+    }
+    if (rtdbDevices.any { it.photoCapable }) {
+        cachePhotoCapableDevices(context, groupId, rtdbDevices)
+        return rtdbDevices
+    }
+
+    val fsDevices = try {
+        FirestoreService.getDevices(groupId).map { rec ->
+            val rt = rtdbDevices.find { it.deviceId == rec.deviceId }
+            DeviceInfo(
+                deviceId = rec.deviceId,
+                deviceName = rec.deviceName.ifEmpty { rt?.deviceName ?: "" },
+                isAdmin = rec.isAdmin,
+                lastSeen = maxOf(rec.lastSeen, rt?.lastSeen ?: 0L),
+                online = rt?.online ?: false,
+                photoCapable = rec.photoCapable,
+                uploadSpeedBps = if ((rt?.uploadSpeedBps ?: 0L) > 0) rt!!.uploadSpeedBps else rec.uploadSpeedBps,
+                uploadSpeedMeasuredAt = if ((rt?.uploadSpeedMeasuredAt ?: 0L) > 0) rt!!.uploadSpeedMeasuredAt else rec.uploadSpeedMeasuredAt
             )
         }
-
-        // Persist catIdRemap back if it was modified
-        if (catIdRemap.isNotEmpty()) {
-            syncPrefs.edit().putString(
-                "catIdRemap",
-                JSONObject(catIdRemap.mapKeys { it.key.toString() }).toString()
-            ).apply()
-        }
-
-        return result
+    } catch (e: Exception) {
+        Log.w(SYNC_TAG, "Firestore getDevices fallback failed: ${e.message}")
+        emptyList()
     }
-
-    // ── Save merge result to disk ──────────────────────────────────────
-
-    private fun saveMergeResult(
-        result: SyncMergeProcessor.MergeResult,
-        syncPrefs: android.content.SharedPreferences
-    ) {
-        result.transactions?.let { TransactionRepository.save(applicationContext, it) }
-        if (result.archivedIncoming.isNotEmpty()) {
-            val existing = TransactionRepository.loadArchive(applicationContext)
-            val existingIds = existing.map { it.id }.toSet()
-            val newEntries = result.archivedIncoming.filter { it.id !in existingIds }
-            if (newEntries.isNotEmpty()) {
-                TransactionRepository.saveArchive(applicationContext, existing + newEntries)
-            }
-        }
-        result.recurringExpenses?.let { RecurringExpenseRepository.save(applicationContext, it) }
-        result.incomeSources?.let { IncomeSourceRepository.save(applicationContext, it) }
-        result.savingsGoals?.let { SavingsGoalRepository.save(applicationContext, it) }
-        result.amortizationEntries?.let { AmortizationRepository.save(applicationContext, it) }
-        result.categories?.let { CategoryRepository.save(applicationContext, it) }
-        result.periodLedger?.let { PeriodLedgerRepository.save(applicationContext, it) }
-        result.sharedSettings?.let { SharedSettingsRepository.save(applicationContext, it) }
-
-        // Apply synced settings to SharedPreferences
-        result.settingsPrefsToApply?.let { prefs ->
-            val appPrefs = applicationContext.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-            val editor = appPrefs.edit()
-            for ((key, value) in prefs) {
-                when (value) {
-                    is String -> editor.putString(key, value)
-                    is Boolean -> editor.putBoolean(key, value)
-                    is Int -> editor.putInt(key, value)
-                    is Long -> editor.putLong(key, value)
-                    is Float -> editor.putFloat(key, value)
-                    else -> editor.putString(key, value.toString())
-                }
-            }
-            editor.apply()
-        }
-    }
-
-    // ── Run period refresh ─────────────────────────────────────────────
-
-    private fun runPeriodRefresh(
-        appPrefs: android.content.SharedPreferences
-    ): PeriodRefreshService.RefreshResult? {
-        val budgetStartDate = appPrefs.getString("budgetStartDate", null)?.let {
-            try { LocalDate.parse(it) } catch (_: Exception) { null }
-        } ?: return null
-
-        val lastRefreshDate = appPrefs.getString("lastRefreshDate", null)?.let {
-            try { LocalDate.parse(it) } catch (_: Exception) { null }
-        } ?: budgetStartDate
-
-        val budgetPeriod = try {
-            BudgetPeriod.valueOf(appPrefs.getString("budgetPeriod", null) ?: "DAILY")
-        } catch (_: Exception) { BudgetPeriod.DAILY }
-
-        val incomeMode = try {
-            IncomeMode.valueOf(appPrefs.getString("incomeMode", null) ?: "FIXED")
-        } catch (_: Exception) { IncomeMode.FIXED }
-
-        val sharedSettings = SharedSettingsRepository.load(applicationContext)
-
-        val config = PeriodRefreshService.RefreshConfig(
-            budgetStartDate = budgetStartDate,
-            lastRefreshDate = lastRefreshDate,
-            budgetPeriod = budgetPeriod,
-            resetHour = appPrefs.getInt("resetHour", 0),
-            resetDayOfWeek = appPrefs.getInt("resetDayOfWeek", 1),
-            resetDayOfMonth = appPrefs.getInt("resetDayOfMonth", 1),
-            familyTimezone = sharedSettings.familyTimezone,
-            localDeviceId = SyncIdGenerator.getOrCreateDeviceId(applicationContext),
-            incomeMode = incomeMode,
-            isManualBudgetEnabled = appPrefs.getBoolean("isManualBudgetEnabled", false),
-            manualBudgetAmount = appPrefs.getString("manualBudgetAmount", "0.0")
-                ?.toDoubleOrNull() ?: 0.0,
-            carryForwardBalance = sharedSettings.carryForwardBalance,
-            archiveCutoffDate = sharedSettings.archiveCutoffDate?.let {
-                try { java.time.LocalDate.parse(it) } catch (_: Exception) { null }
-            }
+    if (fsDevices.any { it.photoCapable }) {
+        cachePhotoCapableDevices(context, groupId, fsDevices)
+        com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent(
+            "resolveDevices: RTDB empty, used Firestore fallback (n=${fsDevices.count { it.photoCapable }})"
         )
-
-        return PeriodRefreshService.refreshIfNeeded(applicationContext, config)
+        return fsDevices
     }
 
-    // ── Recompute cash from disk (when period refresh was not needed) ──
-
-    private fun recomputeCashFromDisk(appPrefs: android.content.SharedPreferences) {
-        val budgetStartDate = appPrefs.getString("budgetStartDate", null)?.let {
-            try { LocalDate.parse(it) } catch (_: Exception) { null }
-        } ?: return
-
-        val incomeMode = try {
-            IncomeMode.valueOf(appPrefs.getString("incomeMode", null) ?: "FIXED")
-        } catch (_: Exception) { IncomeMode.FIXED }
-
-        val periodLedger = PeriodLedgerRepository.load(applicationContext)
-        val transactions = TransactionRepository.load(applicationContext)
-        val recurringExpenses = RecurringExpenseRepository.load(applicationContext)
-        val incomeSources = IncomeSourceRepository.load(applicationContext)
-
-        val settings = SharedSettingsRepository.load(applicationContext)
-        val archiveCutoff = settings.archiveCutoffDate?.let {
-            try { LocalDate.parse(it) } catch (_: Exception) { null }
-        }
-
-        val cash = BudgetCalculator.recomputeAvailableCash(
-            budgetStartDate, periodLedger,
-            transactions.active, recurringExpenses.active,
-            incomeMode, incomeSources.active,
-            settings.carryForwardBalance, archiveCutoff
+    val cachedIds = readCachedPhotoCapableDevices(context, groupId)
+    if (cachedIds.isNotEmpty()) {
+        com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent(
+            "resolveDevices: RTDB+Firestore empty, used SharedPref cache (n=${cachedIds.size})"
         )
-
-        val currentCash = appPrefs.getDoubleCompat("availableCash")
-        if (cash != currentCash) {
-            appPrefs.edit().putString("availableCash", cash.toString()).apply()
+        return cachedIds.map { id ->
+            DeviceInfo(
+                deviceId = id,
+                deviceName = "",
+                isAdmin = false,
+                lastSeen = 0L,
+                online = false,
+                photoCapable = true
+            )
         }
     }
 
-    // ── Push period refresh results to Firestore ───────────────────────
+    com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent(
+        "resolveDevices: ALL fallbacks failed for group $groupId — receipt sync will no-op"
+    )
+    return rtdbDevices
+}
 
-    private suspend fun pushRefreshResults(
-        result: PeriodRefreshService.RefreshResult,
-        groupId: String,
-        encryptionKey: ByteArray,
-        deviceId: String
-    ) {
-        withContext(Dispatchers.IO) {
-            // Push new ledger entries (create-if-absent: first writer wins)
-            for (entry in result.newLedgerEntries) {
-                try {
-                    FirestoreDocService.createDocIfAbsent(
-                        groupId,
-                        EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER,
-                        entry.id.toString(),
-                        EncryptedDocSerializer.toFieldMap(entry, encryptionKey, deviceId)
-                    )
-                } catch (e: Exception) {
-                    Log.w(TAG, "Push ledger entry failed: ${e.message}")
-                }
-            }
+private fun cachePhotoCapableDevices(context: Context, groupId: String, devices: List<DeviceInfo>) {
+    val ids = devices.filter { it.photoCapable }.map { it.deviceId }
+    if (ids.isEmpty()) return
+    try {
+        context.getSharedPreferences("receipt_sync_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .putString("photo_capable_devices_$groupId", ids.joinToString(","))
+            .apply()
+    } catch (_: Exception) {}
+}
 
-            // Push updated savings goals
-            for (sg in result.updatedSavingsGoals) {
-                try {
-                    FirestoreDocService.updateFields(
-                        groupId,
-                        EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS,
-                        sg.id.toString(),
-                        EncryptedDocSerializer.fieldUpdate(
-                            sg, setOf("totalSavedSoFar"), encryptionKey, deviceId
-                        )
-                    )
-                } catch (e: Exception) {
-                    Log.w(TAG, "Push savings goal failed: ${e.message}")
-                }
-            }
+private fun readCachedPhotoCapableDevices(context: Context, groupId: String): List<String> {
+    return try {
+        context.getSharedPreferences("receipt_sync_prefs", Context.MODE_PRIVATE)
+            .getString("photo_capable_devices_$groupId", null)
+            ?.split(",")
+            ?.filter { it.isNotEmpty() }
+            ?: emptyList()
+    } catch (_: Exception) {
+        emptyList()
+    }
+}
 
-            // Push updated recurring expenses
-            for (re in result.updatedRecurringExpenses) {
-                try {
-                    FirestoreDocService.updateFields(
-                        groupId,
-                        EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES,
-                        re.id.toString(),
-                        EncryptedDocSerializer.fieldUpdate(
-                            re, setOf("setAsideSoFar", "isAccelerated"), encryptionKey, deviceId
-                        )
-                    )
-                } catch (e: Exception) {
-                    Log.w(TAG, "Push recurring expense failed: ${e.message}")
-                }
-            }
-        }
+// ── Sync from Firestore via short-lived listeners ──────────────────────
+
+private suspend fun syncFromFirestore(
+    context: Context,
+    groupId: String,
+    encryptionKey: ByteArray,
+    deviceId: String,
+    syncPrefs: android.content.SharedPreferences
+): SyncMergeProcessor.MergeResult? {
+    val docSync = FirestoreDocSync(context, groupId, deviceId, encryptionKey)
+    val accumulatedEvents = java.util.Collections.synchronizedList(mutableListOf<DataChangeEvent>())
+
+    docSync.onBatchChanged = { events ->
+        accumulatedEvents.addAll(events)
     }
 
-    // ── Push sync side effects (conflicts, category deletes) ───────────
-
-    private suspend fun pushSyncSideEffects(
-        result: SyncMergeProcessor.MergeResult,
-        groupId: String,
-        encryptionKey: ByteArray,
-        deviceId: String
-    ) {
-        withContext(Dispatchers.IO) {
-            // Delete remapped duplicate categories from Firestore
-            for (catId in result.categoriesToDeleteFromFirestore) {
-                try {
-                    FirestoreDocService.deleteDoc(
-                        groupId,
-                        EncryptedDocSerializer.COLLECTION_CATEGORIES,
-                        catId.toString()
-                    )
-                } catch (e: Exception) {
-                    Log.w(TAG, "Delete remapped category failed: ${e.message}")
-                }
-            }
-
-            // Push back conflicted transactions with isUserCategorized=false
-            for (txn in result.conflictedTransactionsToPushBack) {
-                try {
-                    FirestoreDocService.updateFields(
-                        groupId,
-                        EncryptedDocSerializer.COLLECTION_TRANSACTIONS,
-                        txn.id.toString(),
-                        EncryptedDocSerializer.fieldUpdate(
-                            txn, setOf("isUserCategorized"), encryptionKey, deviceId
-                        )
-                    )
-                } catch (e: Exception) {
-                    Log.w(TAG, "Push conflicted transaction failed: ${e.message}")
-                }
-            }
-        }
+    try {
+        docSync.startListeners()
+        docSync.awaitInitialSync(60_000)
+        docSync.awaitDeserializationComplete()
+        docSync.stopListeners(graceful = true)
+        docSync.awaitDeserializationComplete(1_000)
+    } catch (e: Exception) {
+        Log.w(SYNC_TAG, "Firestore sync failed: ${e.message}")
+        try { docSync.stopListeners() } catch (_: Exception) {}
+        return null
     }
 
-    // ── Persist background push keys for echo suppression ───────────────
+    if (accumulatedEvents.isEmpty()) return null
 
-    private fun persistBackgroundPushKeys(result: PeriodRefreshService.RefreshResult) {
-        val now = System.currentTimeMillis()
-        val keys = mutableMapOf<String, Long>()
-        for (re in result.updatedRecurringExpenses) {
-            keys["${EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES}:${re.id}"] = now
+    val transactions = TransactionRepository.load(context)
+    val recurringExpenses = RecurringExpenseRepository.load(context)
+    val incomeSources = IncomeSourceRepository.load(context)
+    val savingsGoals = SavingsGoalRepository.load(context)
+    val amortizationEntries = AmortizationRepository.load(context)
+    val categories = CategoryRepository.load(context)
+    val periodLedger = PeriodLedgerRepository.load(context)
+    val sharedSettings = SharedSettingsRepository.load(context)
+
+    val catIdRemap: MutableMap<Int, Int> = try {
+        val remapJson = syncPrefs.getString("catIdRemap", null)
+        if (remapJson != null) {
+            val json = JSONObject(remapJson)
+            json.keys().asSequence().associate {
+                it.toInt() to json.getInt(it)
+            }.toMutableMap()
+        } else mutableMapOf()
+    } catch (_: Exception) { mutableMapOf() }
+
+    val appPrefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+    val currentBudgetStartDate = appPrefs.getString("budgetStartDate", null)?.let {
+        try { LocalDate.parse(it) } catch (_: Exception) { null }
+    }
+    val archiveCutoff = sharedSettings.archiveCutoffDate?.let {
+        try { LocalDate.parse(it) } catch (_: Exception) { null }
+    }
+
+    val result = withContext(Dispatchers.Default) {
+        SyncMergeProcessor.processBatch(
+            events = accumulatedEvents.toList(),
+            currentTransactions = transactions,
+            currentRecurringExpenses = recurringExpenses,
+            currentIncomeSources = incomeSources,
+            currentSavingsGoals = savingsGoals,
+            currentAmortizationEntries = amortizationEntries,
+            currentCategories = categories,
+            currentPeriodLedger = periodLedger,
+            currentSharedSettings = sharedSettings,
+            catIdRemap = catIdRemap,
+            currentBudgetStartDate = currentBudgetStartDate,
+            archiveCutoffDate = archiveCutoff
+        )
+    }
+
+    if (catIdRemap.isNotEmpty()) {
+        syncPrefs.edit().putString(
+            "catIdRemap",
+            JSONObject(catIdRemap.mapKeys { it.key.toString() }).toString()
+        ).apply()
+    }
+
+    return result
+}
+
+// ── Save merge result to disk ──────────────────────────────────────────
+
+private fun saveMergeResult(
+    context: Context,
+    result: SyncMergeProcessor.MergeResult,
+    syncPrefs: android.content.SharedPreferences
+) {
+    result.transactions?.let { TransactionRepository.save(context, it) }
+    if (result.archivedIncoming.isNotEmpty()) {
+        val existing = TransactionRepository.loadArchive(context)
+        val existingIds = existing.map { it.id }.toSet()
+        val newEntries = result.archivedIncoming.filter { it.id !in existingIds }
+        if (newEntries.isNotEmpty()) {
+            TransactionRepository.saveArchive(context, existing + newEntries)
         }
+    }
+    result.recurringExpenses?.let { RecurringExpenseRepository.save(context, it) }
+    result.incomeSources?.let { IncomeSourceRepository.save(context, it) }
+    result.savingsGoals?.let { SavingsGoalRepository.save(context, it) }
+    result.amortizationEntries?.let { AmortizationRepository.save(context, it) }
+    result.categories?.let { CategoryRepository.save(context, it) }
+    result.periodLedger?.let { PeriodLedgerRepository.save(context, it) }
+    result.sharedSettings?.let { SharedSettingsRepository.save(context, it) }
+
+    result.settingsPrefsToApply?.let { prefs ->
+        val appPrefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        val editor = appPrefs.edit()
+        for ((key, value) in prefs) {
+            when (value) {
+                is String -> editor.putString(key, value)
+                is Boolean -> editor.putBoolean(key, value)
+                is Int -> editor.putInt(key, value)
+                is Long -> editor.putLong(key, value)
+                is Float -> editor.putFloat(key, value)
+                else -> editor.putString(key, value.toString())
+            }
+        }
+        editor.apply()
+    }
+}
+
+// ── Run period refresh ─────────────────────────────────────────────────
+
+private fun runPeriodRefresh(
+    context: Context,
+    appPrefs: android.content.SharedPreferences
+): PeriodRefreshService.RefreshResult? {
+    val budgetStartDate = appPrefs.getString("budgetStartDate", null)?.let {
+        try { LocalDate.parse(it) } catch (_: Exception) { null }
+    } ?: return null
+
+    val lastRefreshDate = appPrefs.getString("lastRefreshDate", null)?.let {
+        try { LocalDate.parse(it) } catch (_: Exception) { null }
+    } ?: budgetStartDate
+
+    val budgetPeriod = try {
+        BudgetPeriod.valueOf(appPrefs.getString("budgetPeriod", null) ?: "DAILY")
+    } catch (_: Exception) { BudgetPeriod.DAILY }
+
+    val incomeMode = try {
+        IncomeMode.valueOf(appPrefs.getString("incomeMode", null) ?: "FIXED")
+    } catch (_: Exception) { IncomeMode.FIXED }
+
+    val sharedSettings = SharedSettingsRepository.load(context)
+
+    val config = PeriodRefreshService.RefreshConfig(
+        budgetStartDate = budgetStartDate,
+        lastRefreshDate = lastRefreshDate,
+        budgetPeriod = budgetPeriod,
+        resetHour = appPrefs.getInt("resetHour", 0),
+        resetDayOfWeek = appPrefs.getInt("resetDayOfWeek", 1),
+        resetDayOfMonth = appPrefs.getInt("resetDayOfMonth", 1),
+        familyTimezone = sharedSettings.familyTimezone,
+        localDeviceId = SyncIdGenerator.getOrCreateDeviceId(context),
+        incomeMode = incomeMode,
+        isManualBudgetEnabled = appPrefs.getBoolean("isManualBudgetEnabled", false),
+        manualBudgetAmount = appPrefs.getString("manualBudgetAmount", "0.0")
+            ?.toDoubleOrNull() ?: 0.0,
+        carryForwardBalance = sharedSettings.carryForwardBalance,
+        archiveCutoffDate = sharedSettings.archiveCutoffDate?.let {
+            try { java.time.LocalDate.parse(it) } catch (_: Exception) { null }
+        }
+    )
+
+    return PeriodRefreshService.refreshIfNeeded(context, config)
+}
+
+// ── Recompute cash from disk ──────────────────────────────────────────
+
+private fun recomputeCashFromDisk(context: Context, appPrefs: android.content.SharedPreferences) {
+    val budgetStartDate = appPrefs.getString("budgetStartDate", null)?.let {
+        try { LocalDate.parse(it) } catch (_: Exception) { null }
+    } ?: return
+
+    val incomeMode = try {
+        IncomeMode.valueOf(appPrefs.getString("incomeMode", null) ?: "FIXED")
+    } catch (_: Exception) { IncomeMode.FIXED }
+
+    val periodLedger = PeriodLedgerRepository.load(context)
+    val transactions = TransactionRepository.load(context)
+    val recurringExpenses = RecurringExpenseRepository.load(context)
+    val incomeSources = IncomeSourceRepository.load(context)
+
+    val settings = SharedSettingsRepository.load(context)
+    val archiveCutoff = settings.archiveCutoffDate?.let {
+        try { LocalDate.parse(it) } catch (_: Exception) { null }
+    }
+
+    val cash = BudgetCalculator.recomputeAvailableCash(
+        budgetStartDate, periodLedger,
+        transactions.active, recurringExpenses.active,
+        incomeMode, incomeSources.active,
+        settings.carryForwardBalance, archiveCutoff
+    )
+
+    val currentCash = appPrefs.getDoubleCompat("availableCash")
+    if (cash != currentCash) {
+        appPrefs.edit().putString("availableCash", cash.toString()).apply()
+    }
+}
+
+// ── Push period refresh results ────────────────────────────────────────
+
+private suspend fun pushRefreshResults(
+    result: PeriodRefreshService.RefreshResult,
+    groupId: String,
+    encryptionKey: ByteArray,
+    deviceId: String
+) {
+    withContext(Dispatchers.IO) {
+        for (entry in result.newLedgerEntries) {
+            try {
+                FirestoreDocService.createDocIfAbsent(
+                    groupId,
+                    EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER,
+                    entry.id.toString(),
+                    EncryptedDocSerializer.toFieldMap(entry, encryptionKey, deviceId)
+                )
+            } catch (e: Exception) {
+                Log.w(SYNC_TAG, "Push ledger entry failed: ${e.message}")
+            }
+        }
+
         for (sg in result.updatedSavingsGoals) {
-            keys["${EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS}:${sg.id}"] = now
+            try {
+                FirestoreDocService.updateFields(
+                    groupId,
+                    EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS,
+                    sg.id.toString(),
+                    EncryptedDocSerializer.fieldUpdate(
+                        sg, setOf("totalSavedSoFar"), encryptionKey, deviceId
+                    )
+                )
+            } catch (e: Exception) {
+                Log.w(SYNC_TAG, "Push savings goal failed: ${e.message}")
+            }
         }
-        for (ple in result.newLedgerEntries) {
-            keys["${EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER}:${ple.id}"] = now
+
+        for (re in result.updatedRecurringExpenses) {
+            try {
+                FirestoreDocService.updateFields(
+                    groupId,
+                    EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES,
+                    re.id.toString(),
+                    EncryptedDocSerializer.fieldUpdate(
+                        re, setOf("setAsideSoFar", "isAccelerated"), encryptionKey, deviceId
+                    )
+                )
+            } catch (e: Exception) {
+                Log.w(SYNC_TAG, "Push recurring expense failed: ${e.message}")
+            }
         }
-        if (keys.isEmpty()) return
-
-        // Merge with existing (prune entries older than 20 min)
-        val prefs = applicationContext.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
-        val cutoff = now - 20 * 60 * 1000L
-        val existing = try {
-            val json = JSONObject(prefs.getString("bgPushKeys", "{}") ?: "{}")
-            json.keys().asSequence().associate { it to json.getLong(it) }.filterValues { it > cutoff }
-        } catch (_: Exception) { emptyMap() }
-
-        val merged = existing.toMutableMap()
-        merged.putAll(keys)
-        prefs.edit().putString("bgPushKeys", JSONObject(merged.mapKeys { it.key }).toString()).apply()
-        Log.i(TAG, "Persisted ${keys.size} background push keys for echo suppression")
     }
+}
 
-    // ── RTDB lastSeen ping ────────────────────────────────────────────
+// ── Push sync side effects ────────────────────────────────────────────
 
-    private suspend fun pingRtdbLastSeen(context: Context) {
-        val syncPrefs = context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
-        val groupId = syncPrefs.getString("groupId", null) ?: return
-        val deviceId = SyncIdGenerator.getOrCreateDeviceId(context)
-        try {
+private suspend fun pushSyncSideEffects(
+    result: SyncMergeProcessor.MergeResult,
+    groupId: String,
+    encryptionKey: ByteArray,
+    deviceId: String
+) {
+    withContext(Dispatchers.IO) {
+        for (catId in result.categoriesToDeleteFromFirestore) {
+            try {
+                FirestoreDocService.deleteDoc(
+                    groupId,
+                    EncryptedDocSerializer.COLLECTION_CATEGORIES,
+                    catId.toString()
+                )
+            } catch (e: Exception) {
+                Log.w(SYNC_TAG, "Delete remapped category failed: ${e.message}")
+            }
+        }
+
+        for (txn in result.conflictedTransactionsToPushBack) {
+            try {
+                FirestoreDocService.updateFields(
+                    groupId,
+                    EncryptedDocSerializer.COLLECTION_TRANSACTIONS,
+                    txn.id.toString(),
+                    EncryptedDocSerializer.fieldUpdate(
+                        txn, setOf("isUserCategorized"), encryptionKey, deviceId
+                    )
+                )
+            } catch (e: Exception) {
+                Log.w(SYNC_TAG, "Push conflicted transaction failed: ${e.message}")
+            }
+        }
+    }
+}
+
+// ── Persist background push keys for echo suppression ──────────────────
+
+private fun persistBackgroundPushKeys(context: Context, result: PeriodRefreshService.RefreshResult) {
+    val now = System.currentTimeMillis()
+    val keys = mutableMapOf<String, Long>()
+    for (re in result.updatedRecurringExpenses) {
+        keys["${EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES}:${re.id}"] = now
+    }
+    for (sg in result.updatedSavingsGoals) {
+        keys["${EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS}:${sg.id}"] = now
+    }
+    for (ple in result.newLedgerEntries) {
+        keys["${EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER}:${ple.id}"] = now
+    }
+    if (keys.isEmpty()) return
+
+    val prefs = context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
+    val cutoff = now - 20 * 60 * 1000L
+    val existing = try {
+        val json = JSONObject(prefs.getString("bgPushKeys", "{}") ?: "{}")
+        json.keys().asSequence().associate { it to json.getLong(it) }.filterValues { it > cutoff }
+    } catch (_: Exception) { emptyMap() }
+
+    val merged = existing.toMutableMap()
+    merged.putAll(keys)
+    prefs.edit().putString("bgPushKeys", JSONObject(merged.mapKeys { it.key }).toString()).apply()
+    Log.i(SYNC_TAG, "Persisted ${keys.size} background push keys for echo suppression")
+}
+
+// ── RTDB lastSeen ping ────────────────────────────────────────────────
+
+private suspend fun pingRtdbLastSeen(context: Context) {
+    val syncPrefs = context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
+    val groupId = syncPrefs.getString("groupId", null) ?: return
+    val deviceId = SyncIdGenerator.getOrCreateDeviceId(context)
+    try {
+        // 10s timeout: without this, a stuck RTDB connection can hang the
+        // calling Tier 2 / Tier 3 indefinitely. WorkManager's 10-min ceiling
+        // eventually cancels the worker, but the cancellation cascades into
+        // the receipt-sync that runs after the ping (observed twice in the
+        // 2026-04-26 dump: 08:19 + 10:11 — both started ~12 min into a
+        // Worker run, both ended in ReceiptSync `Job was cancelled`).
+        val ok = kotlinx.coroutines.withTimeoutOrNull(10_000) {
             val db = com.google.firebase.database.FirebaseDatabase.getInstance()
             db.reference.child("groups/$groupId/presence/$deviceId/lastSeen")
                 .setValue(com.google.firebase.database.ServerValue.TIMESTAMP)
                 .await()
+            true
+        }
+        if (ok == true) {
             com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent("RTDB lastSeen pinged")
+        } else {
+            com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent("RTDB lastSeen ping TIMED OUT (10s)")
+        }
+    } catch (e: Exception) {
+        Log.w(SYNC_TAG, "RTDB lastSeen ping failed: ${e.message}")
+        com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent("RTDB lastSeen ping failed: ${e.message}")
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Debug-dump body (callable inline from FCM, or via DebugDumpWorker)
+// ──────────────────────────────────────────────────────────────────────
+
+private suspend fun runDebugDumpBody(context: Context) {
+    if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
+        try {
+            com.google.firebase.auth.FirebaseAuth.getInstance()
+                .signInAnonymously()
+                .await()
         } catch (e: Exception) {
-            Log.w(TAG, "RTDB lastSeen ping failed: ${e.message}")
-            com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent("RTDB lastSeen ping failed: ${e.message}")
+            Log.w("DebugDump", "Anonymous auth failed: ${e.message}")
+            return
         }
     }
+
+    val syncPrefs = context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
+    val fcmPrefs = context.getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
+
+    if (!fcmPrefs.getBoolean("fcm_debug_requested", false)) {
+        return
+    }
+
+    try {
+        val groupId = syncPrefs.getString("groupId", null)
+        val deviceId = SyncIdGenerator.getOrCreateDeviceId(context)
+        val devName = GroupManager.getDeviceName(context)
+        val keyBase64 = SecurePrefs.get(context).getString("encryptionKey", null)
+            ?: syncPrefs.getString("encryptionKey", null)
+        if (groupId != null && keyBase64 != null) {
+            val key = android.util.Base64.decode(keyBase64, android.util.Base64.NO_WRAP)
+            val supportDir = com.techadvantage.budgetrak.data.BackupManager.getSupportDir()
+            val diagText = try {
+                val fresh = com.techadvantage.budgetrak.data.DiagDumpBuilder.build(context)
+                java.io.File(supportDir, "sync_diag.txt").writeText(fresh)
+                val diagDevName = devName.replace(Regex("[^a-zA-Z0-9]"), "_").take(20)
+                if (diagDevName.isNotEmpty()) {
+                    java.io.File(supportDir, "sync_diag_${diagDevName}.txt").writeText(fresh)
+                }
+                fresh
+            } catch (e: Exception) {
+                Log.w("DebugDump", "Fresh dump failed: ${e.message}")
+                try {
+                    java.io.File(supportDir, "sync_diag.txt").readText()
+                } catch (_: Exception) { "(no diag file)" }
+            }
+            val syncLogText = try {
+                java.io.File(supportDir, "native_sync_log.txt").readText()
+            } catch (_: Exception) { "" }
+            val tokenLogText = try {
+                java.io.File(supportDir, "token_log.txt").readText()
+            } catch (_: Exception) { "" }
+            val combinedLog = if (tokenLogText.isNotEmpty())
+                "$syncLogText\n\n── Token Log ──\n$tokenLogText"
+            else syncLogText
+            val logcatText = if (com.techadvantage.budgetrak.BuildConfig.DEBUG) {
+                try {
+                    val p = Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-t", "1000"))
+                    val t = p.inputStream.bufferedReader().readText()
+                    p.waitFor()
+                    t
+                } catch (e: Exception) {
+                    Log.w("DebugDump", "Logcat capture failed: ${e.message}")
+                    null
+                }
+            } else null
+            FirestoreService.uploadDebugFiles(groupId, deviceId, devName, combinedLog, diagText, key, logcatText)
+        }
+    } catch (e: Exception) {
+        Log.e("DebugDump", "Debug upload failed: ${e.message}")
+    }
+    fcmPrefs.edit().putBoolean("fcm_debug_requested", false).apply()
 }

@@ -126,7 +126,7 @@ Cloud Storage:
 
 ### 2.1 BudgeTrakApplication
 
-**File:** `BudgeTrakApplication.kt` (107 lines) | **Extends:** `Application`
+**File:** `BudgeTrakApplication.kt` (~135 lines) | **Extends:** `Application`
 
 `onCreate` runs before any Activity, even when WorkManager starts the process. Order:
 
@@ -143,6 +143,7 @@ Cloud Storage:
 | `recordNonFatal(tag, message, exception?)` | Records a non-fatal `RuntimeException` in Crashlytics with custom tag/message. |
 | `syncEvent(msg)` | Crashlytics `log()` + logcat for key sync lifecycle breadcrumbs. **Debug builds also append to `token_log.txt`** (same rotation as `tokenLog`) so sync events (FCM arrivals, RTDB pings, WakeReceiver fires, worker-tier transitions) are visible in dumps. Added 2026-04-13; without this, all the v2.6 FCM instrumentation was invisible to dump-based diagnostics. |
 | `updateDiagKeys(keys)` | Batch-sets Crashlytics custom keys (attached to every future crash/non-fatal). |
+| `processScope: CoroutineScope` (v2.7) | Process-lifetime `SupervisorJob() + Dispatchers.Default`. Used by `FcmService` to launch Tier 2 work asynchronously when VM is alive — FCM thread returns immediately, ViewModel keeps the process alive until the work completes naturally (no time budget). Cancelled implicitly when Android kills the process. |
 
 ### 2.2 MainActivity
 
@@ -276,7 +277,7 @@ Two additional `SharedPreferences` are exposed: `sync_engine` (`syncPrefs`) and 
 | simAvailableCash | Double (derived) | Projected cash using current-period applied amount |
 | availableCash | Double | Spendable cash; `recomputeCash()` writes it |
 | lastSyncActivity / lastSyncTimeDisplay | Long / String? | Elapsed since last push/receive |
-| syncDevices | List\<DeviceInfo\> | Merged Firestore + RTDB presence |
+| syncDevices | List\<DeviceInfo\> | Merged Firestore + RTDB presence. Initialised at process start from `loadCachedDevices()` (`sync_engine/cachedDeviceRoster` JSON). **v2.7: cache now persists `lastSeen` and `online`** in addition to `id/name/admin` so the roster doesn't show stale "13 days ago" (Firestore `registerDevice` value) during the seconds–minutes window between process start and the RTDB presence listener delivering its initial snapshot. Default 0L/false for backward-compat with pre-v2.7 cache JSON. |
 | syncStatus | String | "off" / "synced" / "offline" / "error" |
 | isSyncConfigured / syncGroupId / isSyncAdmin | Boolean / String? / Boolean | GroupManager-derived |
 | initialSyncReceived | Boolean | true for solo; flipped after first batch for sync users |
@@ -1275,16 +1276,23 @@ Encrypted SharedPreferences wrapper over `androidx.security:security-crypto`.
 
 ---
 
-### 7.11 FcmService (`FirebaseMessagingService`, ~60 lines)
+### 7.11 FcmService (`FirebaseMessagingService`, ~120 lines)
 
 - `onNewToken(token)` — stores token in `fcm_prefs` (`fcm_token`) and sets `token_needs_upload = true` for next Firestore push.
 - `onMessageReceived(msg)` — dispatch by `msg.data["type"]`. Every arrival logs via `syncEvent("FCM received: type=$type")` (visible in `token_log.txt` in debug).
 
-| Type | Handler | Notes |
-|---|---|---|
-| `sync_push` | `BackgroundSyncWorker.runOnce(applicationContext)` | Fired by server-side Cloud Functions on meaningful Firestore writes: `onSyncDataWrite` for every write to a sync data collection (transactions, recurringExpenses, …), and `onImageLedgerWrite` for filtered `imageLedger` writes (rotation contentVersion bump, recovery complete, recovery request). Targeted at every group device except the writer (filtered via `lastEditBy`). High-priority FCM → wakes process through Doze. `enqueueUniqueWork(KEEP)` client-side dedup collapses bursts into one sync run. |
-| `heartbeat` | `BackgroundSyncWorker.runOnce(applicationContext)` | Fired by server-side `presenceHeartbeat` Cloud Function every 15 min to devices whose RTDB `lastSeen` is >15 min stale. Backstop when Android stops scheduling the periodic worker (App-Standby `rare`/`restricted` buckets). |
-| `debug_request` | One-shot `DebugDumpWorker` | **Silently ignored in release** (`BuildConfig.DEBUG` gate). Sets `fcm_debug_requested=true` and enqueues the worker. |
+**v2.7 — inline-execution architecture (2026-04-25/26):** replaced the prior 9-second `runBlocking` busy-wait + WorkManager-enqueue pattern with direct in-process invocation of `BackgroundSyncWorker.runFullSyncInline` (sync) / `runDebugDumpInline` (dump). The handler **branches by VM lifecycle**:
+
+- **VM alive** (`MainViewModel.instance?.get() != null`) → launch on `BudgeTrakApplication.processScope` (file-static `SupervisorJob() + Dispatchers.Default`) and return from the FCM thread immediately. The ViewModel's existence keeps the process alive past `onMessageReceived` returning, so long Tier-2 work (snapshot building, multi-photo upload bursts, App Check refresh on cold cellular) all complete naturally with **no time budget**. No WM fallback needed.
+- **VM dead** → `runBlocking` with `INLINE_BUDGET_MS = 8_500L` (1.5 s headroom in the FCM 10 s window). On budget expiry, the inline call returns `false` and `BackgroundSyncWorker.runOnce(ctx)` is enqueued as a fallback so unfinished work picks up later.
+
+This split closes a regression introduced by the unconditional 7 s budget shipped earlier on 2026-04-25 (and immediately revised same day): under the old design, long Tier-2 work used to complete via WorkManager's service binding pinning the process for ~10 min; the inline refactor removed WM from the FCM path entirely, so Tier 2 lost its runtime ceiling. The async-on-`processScope` branch restores it.
+
+| Type | Handler (VM alive) | Handler (VM dead) | Notes |
+|---|---|---|---|
+| `sync_push` | `processScope.launch { runFullSyncInline(ctx, "FCM-sync_push", null) }` | `runBlocking { runFullSyncInline(ctx, …, 8_500) ; if(!ok) runOnce(ctx) }` | Fired by server-side Cloud Functions on meaningful Firestore writes: `onSyncDataWrite` for every write to a sync data collection, and `onImageLedgerWrite` for filtered `imageLedger` writes (rotation contentVersion bump, recovery complete, recovery request). Targeted at every group device except the writer (filtered via `lastEditBy`). High-priority FCM → wakes process through Doze. In-process `AtomicBoolean isRunning` dedup collapses bursts to one run (observed 2026-04-26: 16 sync_push FCMs in 350 ms during a CSV import — 1 ran, 15 cleanly skipped). |
+| `heartbeat` | same as sync_push | same as sync_push | Fired by server-side `presenceHeartbeat` every 15 min to devices whose RTDB `lastSeen` is >15 min stale. Backstop when Android stops scheduling the periodic worker. |
+| `debug_request` | `processScope.launch { runDebugDumpInline(ctx, null) }` | `runBlocking { runDebugDumpInline(ctx, 8_500) ; if(!ok) enqueue DebugDumpWorker }` | **Silently ignored in release** (`BuildConfig.DEBUG` gate). `runDebugDumpInline` sets `fcm_debug_requested = true` at entry; body clears on successful upload to dedup with the WM fallback. |
 
 ---
 
@@ -1298,52 +1306,73 @@ Debug-builds-only helper for sending FCM v1 data-only messages.
 
 ---
 
-### 7.13 DebugDumpWorker (`CoroutineWorker`, 86 lines)
+### 7.13 DebugDumpWorker (`CoroutineWorker`, ~25 lines after v2.7 refactor)
 
-One-shot worker triggered by FCM `debug_request` (debug builds only). Replaced the old periodic SyncWorker.
+Fallback worker triggered by FCM `debug_request` (debug builds only). **Primary path is `BackgroundSyncWorker.runDebugDumpInline` called directly from FcmService**; this worker is enqueued only when that inline path returns `false` (8.5 s budget expired before upload completed).
 
-`doWork()`:
-1. Ensure anonymous Firebase auth; on failure, `Result.retry()`.
-2. If `fcm_prefs.fcm_debug_requested` is false → `Result.success()`.
-3. Fetch groupId/deviceId/deviceName/key. Build fresh dump via `DiagDumpBuilder.build(ctx)` and write to support-dir (`sync_diag.txt`, plus `sync_diag_<devName>.txt`). Fall back to existing file on error.
-4. Concatenate `native_sync_log.txt` + `token_log.txt` as combined log.
-5. `FirestoreService.uploadDebugFiles(...)` with encryption key.
-6. Clear the flag.
+`doWork()` is a thin delegate: `BackgroundSyncWorker.runDebugDumpInline(applicationContext, timeBudgetMs = null)`. The actual diag-build + logcat capture + upload logic lives in the file-private `runDebugDumpBody(ctx)` in `BackgroundSyncWorker.kt` so both paths share one implementation. Body steps: (1) ensure anonymous auth, (2) skip if `fcm_prefs.fcm_debug_requested` is false, (3) build fresh dump via `DiagDumpBuilder.build(ctx)`, write to support-dir, (4) concatenate `native_sync_log.txt` + `token_log.txt`, (5) capture 1000 lines of `logcat -d` (debug only), (6) `FirestoreService.uploadDebugFiles(...)`, (7) clear the flag on success.
 
 ---
 
-### 7.14 BackgroundSyncWorker (`CoroutineWorker`, 610 lines)
+### 7.14 BackgroundSyncWorker (`CoroutineWorker`, ~870 lines after v2.7 refactor)
 
-15-minute periodic worker. `WORK_NAME = "period_refresh"`, `ONESHOT_WORK_NAME = "period_refresh_oneshot"`. Companion: `schedule(ctx)` (KEEP policy), `runOnce(ctx)`, `cancel(ctx)`.
+Sync entry point shared by WorkManager (`doWork`) and FcmService (`runFullSyncInline` companion). `WORK_NAME = "period_refresh"` (15-min periodic), `ONESHOT_WORK_NAME = "period_refresh_oneshot"` (FCM/wake fallback), `BOUNDARY_WORK_NAME = "period_boundary_oneshot"` (Phase 3 solo path).
 
-**`runOnce(ctx)` (v2.6):** uses `enqueueUniqueWork(ONESHOT_WORK_NAME, ExistingWorkPolicy.KEEP, …)` so FCM bursts (a peer's 500-row CSV import triggers 500 `sync_push` FCMs) collapse to a single worker run per device. On API 31+, the `OneTimeWorkRequest` also sets `setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)` to bypass Doze / App-Standby buckets for the ~10 min expedited window. Pre-S skips `setExpedited` because the foreground-service-notification requirement would be user-hostile; on those devices the worker runs as a normal one-shot.
+**Companion entry points (v2.7):**
 
-**`doWork()` — three-tier logic:**
+| Function | Purpose |
+|---|---|
+| `schedule(ctx)` | **Branches on `isSyncConfigured`**: sync users get the 15-min `PeriodicWorkRequest` (KEEP policy); solo users get `scheduleNextBoundary(ctx)` instead (Phase 3 — see below). Cancels the opposite path's unique work to switch cleanly. |
+| `runOnce(ctx)` | One-shot via `ONESHOT_WORK_NAME`, KEEP policy, expedited on API 31+. Used as fallback when `runFullSyncInline` returns false (budget expired) and by `WakeReceiver`. |
+| `cancel(ctx)` | Cancels both `WORK_NAME` and `BOUNDARY_WORK_NAME`. |
+| `scheduleNextBoundary(ctx)` (v2.7) | Phase 3 solo path. Computes next period boundary via `PeriodRefreshService.nextBoundaryAt(...)`, enqueues a one-shot via `BOUNDARY_WORK_NAME` (REPLACE policy, expedited, delta clamped 60 s–24 h). Self-rearms at the end of every solo run via the slim Tier 3 path. |
+| `runFullSyncInline(ctx, sourceLabel, timeBudgetMs?)` (v2.7) | Sole owner of the full Tier 1/2/3 routing. Used by both `doWork` (no budget, label `"Worker"`) and FcmService (`label="FCM-sync_push"` etc.). Wraps body in `withTimeoutOrNull(timeBudgetMs)` if a budget is given. Sets `lastInlineSyncCompletedAt` SharedPref on successful FCM-labelled runs (consumed by Phase 4-alt slim-path). Guarded by file-static `isRunning: AtomicBoolean` for in-process dedup across periodic + FCM + wake. |
+| `runDebugDumpInline(ctx, timeBudgetMs?)` (v2.7) | Same shape as above but for FCM `debug_request`. |
+
+**`doWork()` is now a thin wrapper:** `try { runFullSyncInline(applicationContext, "Worker", null) } catch (ce: CancellationException) { syncEvent(stopReason); throw ce }`. All routing logic lives in the file-private `runFullSyncBody` so the implementation is shared with FCM-inline.
+
+**`runFullSyncBody` — three-tier routing:**
 
 | Tier | Condition | Action |
 |---|---|---|
-| 1 | `MainActivity.isAppActive == true` | `Result.success()` — foreground owns sync |
-| 2 | `MainViewModel.instance?.get() != null` | If `isSyncConfigured`: proactive AppCheck refresh (35-min threshold, 10 s timeout), restart dead listeners via `docSync.startListeners()` on Main, `pingRtdbLastSeen()`, **v2.7: receipt sync** for paid/sub (gated on `!vm.isReceiptSyncActive()`). Return success |
-| 3 | ViewModel dead | Full sync (see below) |
+| 1 | `MainActivity.isAppActive == true` | Skip — foreground owns sync |
+| 2 | `MainViewModel.instance?.get() != null` | If `isSyncConfigured`: proactive AppCheck refresh (16-min threshold v2.7, was 35; 10 s timeout), restart dead listeners via `docSync.startListeners()` on Main, `pingRtdbLastSeen()`, receipt sync for paid/sub (gated on `!vm.isReceiptSyncActive()`) |
+| 3 | ViewModel dead | Slim path OR full sync (see below) |
 
-**Tier-3 flow** (all Firestore/RTDB blocks gated by `groupId != null`; solo users skip auth/AppCheck/RTDB/Firestore). v2.7 order — receipt sync moved from step 11 to step 2b, and outer `doWork` catches/rethrows `CancellationException` so WorkManager sees stops cleanly:
+**Tier 3 routing — slim vs full (v2.7 Phase 3 + Phase 4-alt):**
+
+The first decision in Tier 3 is whether to take a slim ~25 ms path (period refresh + cash recompute + widget update) instead of the full Firestore-listener bring-up:
+
+```
+takeSlimPath = !isSyncConfigured ||
+               (sourceLabel == "Worker" &&
+                lastInlineSyncCompletedAt < 30 min ago &&
+                no consistency mismatch pending)
+```
+
+- **Solo users (`!isSyncConfigured`)** always take the slim path — there's no group to sync. The slim body re-arms `scheduleNextBoundary(ctx)` at the end so the boundary chain perpetuates. Cuts solo workload from ~96 worker runs/day to ~4 (one per period boundary, depending on `budgetPeriod`).
+- **Sync users on the periodic Worker** take the slim path when a successful FCM-inline ran in the last 30 min and no consistency mismatch is pending. FCM has been doing the heavy work; periodic Worker just advances the period clock + refreshes the widget. Phase 4-alt — keeps the periodic as a safety net but avoids redundant Firestore listener cycles.
+- **FCM-triggered runs** (sourceLabel starts with `"FCM-"`) never take the slim path — FCM events signal real data to fetch.
+- **Tier 2 path** is unaffected; Tier 2 always does its own (now-async-on-`processScope`) work.
+
+**Tier-3 full flow** (sync users only when slim conditions don't hold). All Firestore/RTDB blocks gated by `groupId != null`. v2.7 order — receipt sync at step 2b for cancellation resilience, outer `doWork` catches/rethrows `CancellationException`:
 
 1. Anonymous Firebase Auth (gated — only when `groupId != null`).
-2. Proactive AppCheck refresh (same 35-min threshold).
+2. Proactive AppCheck refresh (16-min threshold v2.7, was 35).
 3. `syncFromFirestore`: spin up temporary `FirestoreDocSync`, `startListeners()`, `awaitInitialSync(60_000)`, `awaitDeserializationComplete()`, `stopListeners(graceful=true)`, drain another 1 s, then `SyncMergeProcessor.processBatch(...)` on `Dispatchers.Default`.
 4. `saveMergeResult` → repositories; apply `settingsPrefsToApply`; archive incoming pre-cutoff transactions.
-5. **Step 2b (v2.7): Paid-user receipt sync** — `TransactionRepository.load` → `RealtimePresenceService.getDevices(gid)` → `ReceiptSyncManager(...).syncReceipts(txns, devices)`. Moved from step 11 because Samsung power management was observed cancelling Tier 3 cycles ~1m48s in, consistently hitting receipt sync when it was last. Now runs while the worker is young; later steps tolerate cancellation better.
+5. **Step 2b: Paid-user receipt sync** — `TransactionRepository.load` → `resolveDevicesForReceiptSync(ctx, gid, vm=null)` → `ReceiptSyncManager(...).syncReceipts(txns, devices)`. Positioned early because Samsung power management was observed cancelling Tier 3 cycles ~1m48s in.
 6. `runPeriodRefresh` → builds `RefreshConfig`, calls `PeriodRefreshService.refreshIfNeeded`.
 7. If no period boundary crossed, `recomputeCashFromDisk()` keeps widget accurate.
 8. Push refresh results: new PLE via `createDocIfAbsent`; SG via `fieldUpdate(sg, setOf("totalSavedSoFar"))`; RE via `fieldUpdate(re, setOf("setAsideSoFar","isAccelerated"))`. Then `persistBackgroundPushKeys` writes to `sync_engine/bgPushKeys` for next listener's echo suppression.
 9. Push sync side effects: delete remapped category docs, push conflicted transactions with `fieldUpdate(txn, setOf("isUserCategorized"))`.
 10. Consistency re-check: if `app_prefs.checksumMismatchAt` is >1 h old and a live ViewModel exists, `vm.recheckConsistency()`.
-11. `pingRtdbLastSeen(ctx)` — RTDB `groups/{gid}/presence/{did}/lastSeen = ServerValue.TIMESTAMP` via `.await()`. Emits `syncEvent("RTDB lastSeen pinged")` on success, `syncEvent("RTDB lastSeen ping failed: …")` on exception. Same behavior in Tier 2.
+11. `pingRtdbLastSeen(ctx)` — RTDB `groups/{gid}/presence/{did}/lastSeen = ServerValue.TIMESTAMP`. **v2.7: wrapped in `withTimeoutOrNull(10_000)`** to prevent indefinite hangs that previously cascaded into WorkManager's 10-min cancel + receipt-sync `Job was cancelled` (observed 2026-04-26 at 08:19 + 10:11). Same behavior in Tier 2.
 12. `BudgetWidgetProvider.updateAllWidgets(ctx)`.
 
-**Diagnostic logs (v2.7):** Tier 3 entry emits `Worker Tier 3: ViewModel dead, full sync (standbyBucket=N)` via `UsageStatsManager.appStandbyBucket`; exit emits `Worker Tier 3: complete in Xms`. On cancellation the outer catch logs `BackgroundSyncWorker: CANCELLED (stopReason=N msg=…)` before rethrowing (API 31+ `stopReason` distinguishes power / quota / standby-bucket causes).
+**Diagnostic logs (v2.7):** Tier 3 full entry emits `$sourceLabel Tier 3: ViewModel dead, full sync (standbyBucket=N)`; exit emits `$sourceLabel Tier 3: complete in Xms`. Slim path emits `$sourceLabel Tier 3 SLIM: complete in Xms (solo=… freshFcm=…)`. Boundary scheduling emits `Boundary scheduled: +Xs (budget=$budgetPeriod resetHour=$resetHour)`. On cancellation the outer catch logs `BackgroundSyncWorker: CANCELLED (stopReason=N msg=…)` before rethrowing (API 31+ `stopReason` distinguishes power / quota / standby-bucket causes).
 
-**`resolveDevicesForReceiptSync(groupId, vm)` (v2.7):** four-tier fallback resolver replacing direct `RealtimePresenceService.getDevices()` calls in both Tier 2 and Tier 3 receipt-sync paths. Cold-start Tier 3's RTDB read returns empty before RTDB auth handshake completes (observed: 6/6 Tier 3 calls had `photoCapable=0` while Tier 2 had `photoCapable=2` overnight 2026-04-25). Layers, in order: (1) VM's `syncDevices` if VM alive, (2) RTDB presence read, (3) Firestore `groups/{gid}/devices/*` (which mirrors `photoCapable` via `FirestoreService.updateDeviceMetadata`), (4) SharedPref cache `receipt_sync_prefs/photo_capable_devices_<gid>` populated by every successful resolution. Each successful tier writes to the cache so subsequent tiers can use it. `syncEvent` logs which tier was used.
+**`resolveDevicesForReceiptSync(ctx, groupId, vm)` (v2.7):** four-tier fallback resolver replacing direct `RealtimePresenceService.getDevices()` calls in both Tier 2 and Tier 3 receipt-sync paths. Cold-start Tier 3's RTDB read returns empty before RTDB auth handshake completes (observed: 6/6 Tier 3 calls had `photoCapable=0` while Tier 2 had `photoCapable=2` overnight 2026-04-25). Layers, in order: (1) VM's `syncDevices` if VM alive, (2) RTDB presence read, (3) Firestore `groups/{gid}/devices/*` (which mirrors `photoCapable` via `FirestoreService.updateDeviceMetadata`), (4) SharedPref cache `receipt_sync_prefs/photo_capable_devices_<gid>` populated by every successful resolution. Each successful tier writes to the cache so subsequent tiers can use it. `syncEvent` logs which tier was used.
 
 Exceptions are caught and converted to `Result.success()` so the next scheduled run isn't penalized. `CancellationException` is rethrown explicitly so WorkManager records the stop.
 
@@ -1395,19 +1424,21 @@ Constants: `MAX_IMAGE_DIMENSION = 1000`, `THUMBNAIL_SIZE = 200`, `TARGET_BYTES_P
 
 ---
 
-### 7.18 ImageLedgerEntry (25 lines)
+### 7.18 ImageLedgerEntry (27 lines)
 
 ```
 ImageLedgerEntry(receiptId, originatorDeviceId, createdAt,
     possessions: Map<String, Boolean>,  // deviceId → true/false (key absent = unknown)
-    uploadAssignee: String?, assignedAt: Long, uploadedAt: Long)
+    uploadAssignee: String?, assignedAt: Long, uploadedAt: Long,
+    contentVersion: Long = 0L,
+    lastEditBy: String? = null)         // v2.7 — used by upload race-detection logic
 
 SnapshotLedgerEntry(requestedBy, requestedAt, builderId, builderAssignedAt,
     status, progressPercent, errorMessage, lastProgressUpdate,
     snapshotReceiptCount, readyAt, consumedBy: Map<String, Boolean>)
 ```
 
-`possessions` is three-state: `true` / `false` / key-absent.
+`possessions` is three-state: `true` / `false` / key-absent. `lastEditBy` (v2.7) is set by `createLedgerEntry`, `incrementContentVersion`, `createRecoveryRequest`, `resetEntryToRecoveryRequest`, `markReuploadComplete` — used by `processPendingUploads` resume-detection (see §7.20) and by `onImageLedgerWrite` writer-skip filter (see §7.26.2a).
 
 ---
 
@@ -1422,7 +1453,7 @@ Firestore CRUD for `groups/{gid}/imageLedger/*` and Cloud Storage for `groups/{g
 | `getFlagClock(gid): Long` + `getLedgerEntry(gid, rid)` (v2.7 update) | Same 30 s timeout pattern; also rethrow `CancellationException` instead of swallowing as generic Exception |
 | `existsInCloud(gid, rid)` / `deleteFromCloud(gid, rid)` | Metadata read / hard delete |
 | `purgeOrphanedCloudFiles(gid): Int` | Lists cloud + reads full ledger; deletes files with no ledger entry and >10 min old |
-| `createLedgerEntry(gid, rid, originatorDeviceId)` | After successful upload of a fresh receipt; writes `contentVersion = 0`. **Does NOT bump flag clock** — peers discover via transaction-sync `onBatchChanged`, and pruning is triggered inline at every download site |
+| `createLedgerEntry(gid, rid, originatorDeviceId)` | After successful upload of a fresh receipt; writes `contentVersion = 0`. **v2.7: also stamps `lastEditBy = originatorDeviceId`** so `processPendingUploads` can recognize a partial-commit resume (see §7.20). **Does NOT bump flag clock** — peers discover via transaction-sync `onBatchChanged`, and pruning is triggered inline at every download site |
 | `incrementContentVersion(gid, rid, editingDeviceId)` | After rotation / edit re-upload: batch-writes `possessions = {editor: true}`, `uploadedAt = now`, `contentVersion += 1`, `lastEditBy = editingDeviceId`, bumps flag clock. Cloud Function `onImageLedgerWrite` fires `sync_push` to all non-writer peers; their BG worker kicks `syncReceipts()` which invalidates stale local copies via `lastSeenContentVersion` mismatch |
 | `createRecoveryRequest(gid, rid, originatorDeviceId, preserveContentVersion = 0L)` | File lost; empty `possessions`; bumps flag clock. Stamps `lastEditBy = originatorDeviceId`. `preserveContentVersion` keeps the monotonic counter across a `deleteLedgerEntry → createRecoveryRequest` recovery cycle so stale peers still invalidate through future rotations. Cloud Function pushes peers to consider re-uploading |
 | `resetEntryToRecoveryRequest(gid, rid, requestingDeviceId, fallbackContentVersion)` (v2.7) | Atomic Firestore transaction: reads existing entry (if any), rewrites to recovery-request state (`uploadedAt=0, possessions={}`, `uploadAssignee=null`, `assignedAt=0`, `lastEditBy=requester`), preserves existing `contentVersion` + `createdAt`, bumps flag clock in the same transaction. Used by `downloadReceiptWithRetry` on the 3rd real failure instead of `delete + create`, which opened a window for concurrent re-uploaders to race and reset the version counter. |
@@ -1447,14 +1478,15 @@ Constants: `STALE_ASSIGNMENT_MS = 5 min`, `FOURTEEN_DAYS_MS`, `MAX_DOWNLOAD_RETR
 
 **Public entry points** (called from `MainViewModel` foreground drainers and `BackgroundSyncWorker` Tier 2/3):
 - `syncReceipts(transactions, allDevices)` — full 5-step pipeline below. v2.7 emits phase-boundary `syncEvent` logs (`syncReceipts START/step1/step2/step3/step3b/step4/END`, with elapsed-ms on END) and a `CANCELLED after Nms` log on `CancellationException`, rethrown to the caller. Runs through all 5 `ReceiptSyncManager` construction sites' persistent log channel (Tier2/Tier3/SyncNow/onBatch/UploadDrainer/FgRetry).
-- `processPendingUploads(): Int` — drains upload queue in chunks of 5; returns # completed. Used by `MainViewModel.kickUploadDrainer` in a backoff loop so photos reach Cloud Storage without waiting for Sync-Now.
+- `processPendingUploads(): Int` — drains upload queue in chunks of 5; returns # completed. Used by `MainViewModel.kickUploadDrainer` in a backoff loop so photos reach Cloud Storage without waiting for Sync-Now. **v2.7 false-rotation guard:** after a successful Cloud Storage upload, the ledger-write decision is now three-way. If the entry doesn't exist OR exists with `uploadedAt == 0` (recovery state), `createLedgerEntry` writes a fresh entry. If the entry exists with `uploadedAt > 0` AND `lastEditBy == ourDeviceId` AND `contentVersion == getLocalContentVersion(receiptId)` → recognised as a partial-commit resume (cancelled between ledger write and queue removal in a previous cycle); skip the bump and just remove from queue. Otherwise → real rotation or peer conflict, call `incrementContentVersion`. Without this, a worker cancellation between ledger write and queue removal would cause the next cycle to false-rotate, fanning out a flag-clock bump and forcing every peer to re-download identical content. Pairs with `ReceiptManager.replaceReceipt` calling `ReceiptSyncManager.bumpLocalContentVersionForRotation(ctx, receiptId)` BEFORE `addToPendingQueue` so legitimate rotations are detected via `localContentVersion > cloudContentVersion`.
 - `downloadReceiptWithRetry(receiptId, photoCapableDeviceIds): Boolean` — single-receipt download + save + `markPossession` + `pruneCheckTransaction` + retry counter. On 3rd real failure with `uploadedAt > 0`, deletes ledger entry and creates recovery request. Used by `onBatchChanged` fast path, `kickFgDownloadRetry` coroutine, and `processRecovery`.
+- `bumpLocalContentVersionForRotation(ctx, receiptId)` (companion, v2.7) — increments `receipt_sync_prefs/content_version_<receiptId>` by 1. Called from `ReceiptManager.replaceReceipt` to mark a rotation as pending before queueing.
 
 **`syncReceipts` — 5 steps:**
-1. `processPendingUploads` — upload-first: encrypt → upload → create ledger entry.
+1. `processPendingUploads` — upload-first: encrypt → upload → create-or-bump ledger entry per the three-way logic above.
 2. `processLedgerOperations` — flag-clock check + ledger cache. Handles (a) re-upload requests when we have the file, (b) non-possession marking + `checkPhotoLost` for recovery requests, (c) `markPossession` + `pruneCheckTransaction` for entries we already have locally. **Does not download** — the old `handleDownload` branch was removed.
 3. `processRecovery` — missing local files referenced in transactions. Delegates per-receipt to `downloadReceiptWithRetry`; if no ledger entry exists at all, creates one (recovery request). Re-uploader selected by online filter + fastest `uploadSpeedBps` in last 24 h + `abs(hash(receiptId+deviceId)) % 1000` tiebreak.
-4. `processSnapshotLifecycle` — build/download snapshot archives when ≥ 50 missing (also used by join).
+4. `processSnapshotLifecycle` — build/download snapshot archives when ≥ 50 missing (also used by join). **v2.7 cancellation handling:** `buildSnapshot` and `processSnapshotDownload` catch `CancellationException` separately from generic `Exception` and rethrow it after deleting partial files. Build path leaves status as `"building"` (NOT `"error"`) on cancel so the lifecycle's 2 h staleness gate handles re-claim by the same or another device. Without this, the cancellation was silently swallowed by the generic catch and `runFullSyncInline` returned `true` (success), suppressing the WM `runOnce` fallback.
 5. `processStalePruning` — 14-day cleanup, noon trigger, local 24 h skip gate (`lastStalePruneRun`) + group `imageLastCleanupDate` check, plain `markCleanupDone` write (no CAS; idempotent).
 
 Foreground polls `imageLedgerFlagClock` (single field on the group doc) — **not** a dedicated listener. Transaction-arrival downloads are driven by the business collection listener. See SSD §17.5 for the full four-layer architecture.
@@ -1525,10 +1557,19 @@ Package `com.techadvantage.budgetrak.data`. Generates diagnostic text dumps from
 ## 7.25 App Check
 
 - **Provider:** `DebugAppCheckProviderFactory` (debug) / `PlayIntegrityAppCheckProviderFactory` (release), switched by `BuildConfig.DEBUG` in `BudgeTrakApplication.onCreate`.
-- **Token TTL:** 4 h (Firebase Console; no code override).
+- **Token TTL is provider-dependent** (verified empirically 2026-04-26):
+  - Play Integrity (release): 40 h, set via Firebase Console → Project Settings → Your apps → BudgeTrak Android → App Check section dropdown.
+  - Debug provider: **always 1 h, ignores Console setting** by design (Google-imposed for short-lived dev tokens). Means debug-build refresh cadence is 40× higher than release.
 - **Debug token:** extracted from logcat on startup, written to `token_log.txt`, included in FCM dump uploads.
+- **Play Integrity advanced settings (verified 2026-04-26):** `PLAY_RECOGNIZED` required (anti-piracy — blocks modified/re-signed APKs), `LICENSED` not required (don't gatekeep free users on Huawei / degooglified devices), device integrity = "Don't explicitly check" (relies on `PLAY_RECOGNIZED` + per-field encryption for actual data protection; tighten post-launch only if Crashlytics shows abuse patterns — see `project_prelaunch_todo.md` item 2).
+- **Authentication enforcement:** Monitor (not Enforce). Anonymous Auth must always succeed for sync setup; downstream Firestore/RTDB/Storage rules enforce App Check, so a bot-acquired anonymous UID can't actually do anything.
 - **All `getAppCheckToken()` calls wrapped with `withTimeoutOrNull(10–15 s)`.**
-- **Refresh triggers:** `onResume`, `onAvailable` network callback, `BackgroundSyncWorker` Tier 2/3 proactive (35-min threshold), `FirestoreDocSync.triggerFullRestart()` on PERMISSION_DENIED, `MainViewModel` keep-alive loop (45-min check / 35-min refresh), SDK auto-refresh. All gated by `isSyncConfigured`.
+- **Refresh triggers** (all gated by `isSyncConfigured`):
+  - `onResume`, `onAvailable` network callback
+  - `BackgroundSyncWorker` Tier 2/3 proactive (**v2.7: 16-min threshold**, dropped from 35 on 2026-04-25 — heartbeats are reliable enough that one heartbeat per 4 h Play Integrity cycle catches the refresh, the rest skip)
+  - `FirestoreDocSync.triggerFullRestart()` on PERMISSION_DENIED
+  - `MainViewModel` keep-alive loop (45-min check / **v2.7: 16-min refresh**, dropped from 35 on 2026-04-26 to dedupe with Worker — VM still serves as backup if Worker silenced for >45 min by Doze)
+  - SDK auto-refresh (~5 min before expiry, in-process only).
 
 ---
 
@@ -1597,6 +1638,27 @@ Purpose: backstop when Android stops scheduling the periodic `BackgroundSyncWork
 - `collectRecipientTokens(gid, writerDeviceId)` — reads `groups/{gid}/devices` subcollection.
 - `tokensForDevices(gid, deviceIds[])` — per-device lookup.
 - `sendFcm(tokens, data, label)` — chunked multicast with per-batch failure logging.
+
+---
+
+## 7.26a Telemetry — Crashlytics + Firebase Analytics + BigQuery
+
+**SDK initialization** (`BudgeTrakApplication.onCreate`): both Crashlytics and Analytics share the `crashlyticsEnabled` SharedPref toggle (default true). Setting renamed in UI to "Send crash reports and anonymous usage data". `setAnalyticsCollectionEnabled(crashlyticsEnabled)` runs at app start; toggle changes in `MainActivity` UI propagate immediately.
+
+**Crashlytics events:** non-fatals via `BudgeTrakApplication.recordNonFatal(tag, message, e?)`. Sites: `PERMISSION_DENIED` recovery, consistency mismatch, `TOKEN_REFRESH_TIMEOUT` (worker + ViewModel keep-alive 15 s timeouts). Custom keys via `updateDiagKeys(map)` attached to every future event: `cashDigest, listenerStatus, lastRefreshDate, activeDevices, txnCount, reCount, plCount, lastTokenExpiry, authAnonymous`.
+
+**Analytics events** (`data/telemetry/AnalyticsEvents.kt`, ~115 lines):
+- `logHealthBeacon(ctx, listenerUp, activeDevices, txnCount, reCount, plCount)` — daily sync-user heartbeat. Fired from `MainViewModel.runPeriodicMaintenance` once per 24 h on `onResume`. Migrated 2026-04-22 from Crashlytics non-fatal (which has a 10/session cap and pollutes the crash dashboard).
+- `logOcrFeedback(ctx, merchantChanged, dateChanged, amountDeltaCents, catsAdded, catsRemoved, hadMultiCat)` — fires on save of an OCR-populated transaction. Anonymous deltas/booleans only — no merchant text or amounts. Used to measure per-field user-correction rate.
+
+Both gated by `isEnabled(ctx)` reading the same `crashlyticsEnabled` pref.
+
+**BigQuery export** (configured via Firebase Console → Project Settings → Integrations → BigQuery):
+- **Crashlytics** (legacy table set, `com_securesync_app_ANDROID*`): receiving until 2026-04-12 rebrand. New table set `com_techadvantage_budgetrak_ANDROID*` enabled 2026-04-26 (~24 h propagation).
+- **Performance Monitoring** + **Sessions** (`firebase_performance.*`, `firebase_sessions.*`): same pattern — legacy + new exports both enabled 2026-04-26.
+- **Firebase Analytics** (`analytics_<propertyId>`): not exported until 2026-04-26 — Firebase project wasn't linked to a GA4 property, so events were silently dropped despite the SDK calls. Linkage completed 2026-04-26 (property ID 534603748, stream "BudgeTrak Android" id 14591145419, BigQuery export enabled with Daily + Streaming, no advertising IDs). Modern Firebase Analytics SDK (BoM 32.x) auto-discovers measurement ID at runtime via `mobilesdk_app_id`; `google-services.json` doesn't need an explicit `analytics_service` block. Configuration drift cause: the linkage UI is in Project Settings → Integrations → Google Analytics, separate from the GA4 data-stream view that confusingly looks "linked" on its own.
+
+**Query helper** `tools/query-crashlytics.js`: hardcoded to legacy `com_securesync_app_ANDROID*` table names; needs update to UNION across both legacy + new tables for cross-rebrand history. Fixed table-name bugs in v2.7 (script previously referenced `os_version` and `app_version` fields that don't exist in the actual BigQuery schema). Auth via `~/.config/configstore/firebase-tools.json` refresh token — periodically expires with `rapt_required` error, requires `firebase login --reauth` (interactive only — fails in non-TTY environments like Claude Code's bash).
 
 ---
 

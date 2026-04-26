@@ -8,7 +8,8 @@ data class ImageLedgerEntry(
     val uploadAssignee: String? = null,     // device responsible for re-upload
     val assignedAt: Long = 0L,             // when re-upload assignment was made
     val uploadedAt: Long = 0L,             // 0 = not yet in cloud
-    val contentVersion: Long = 0L          // incremented when photo content changes (e.g., rotation)
+    val contentVersion: Long = 0L,         // incremented when photo content changes (e.g., rotation)
+    val lastEditBy: String? = null         // device that last bumped contentVersion / completed re-upload / created entry
 )
 
 data class SnapshotLedgerEntry(

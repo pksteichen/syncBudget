@@ -4,10 +4,16 @@ import android.content.Context
 import android.util.Log
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import kotlinx.coroutines.launch
 
 class FcmService : FirebaseMessagingService() {
     companion object {
         private const val TAG = "FcmService"
+        // Reserve 1.5s out of the FCM 10s window for service startup +
+        // teardown when we MUST block the FCM thread (Tier 3 / VM dead).
+        // Tier 2 / VM alive runs async on `BudgeTrakApplication.processScope`
+        // so this budget doesn't apply there.
+        private const val INLINE_BUDGET_MS = 8_500L
     }
 
     override fun onNewToken(token: String) {
@@ -23,60 +29,107 @@ class FcmService : FirebaseMessagingService() {
         com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent("FCM received: type=$type")
         when (type) {
             "debug_request" -> handleDebugRequest()
-            "sync_push", "heartbeat" -> handleWakeForSync()
-        }
-    }
-
-    /** Debug-build-only: trigger an immediate dump upload for remote diagnostics. */
-    private fun handleDebugRequest() {
-        if (!com.techadvantage.budgetrak.BuildConfig.DEBUG) return
-        try {
-            getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
-                .edit().putBoolean("fcm_debug_requested", true).apply()
-            val request = androidx.work.OneTimeWorkRequestBuilder<DebugDumpWorker>().build()
-            androidx.work.WorkManager.getInstance(applicationContext).enqueue(request)
-            Log.d(TAG, "Triggered one-shot DebugDumpWorker")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to trigger debug sync: ${e.message}")
+            "sync_push", "heartbeat" -> handleWakeForSync(type)
         }
     }
 
     /**
-     * On `sync_push` (another device wrote data) or `heartbeat` (scheduler saw
-     * this device's RTDB lastSeen go stale), enqueue a one-shot sync and then
-     * block this FCM thread until the worker finishes (or our 9-second FCM
-     * execution budget expires).
+     * Run the sync pipeline in response to an FCM wake. Branch by VM
+     * lifecycle:
      *
-     * The busy-wait is load-bearing. Without it, `onMessageReceived` returns
-     * immediately after enqueue; Android then kills the process and
-     * WorkManager defers the enqueued worker under Doze / App Standby on
-     * OEM-aggressive devices (Samsung, Xiaomi, etc.), leaving `lastSeen`
-     * stale and the widget un-refreshed for hours. Keeping this thread alive
-     * extends the process lifetime so WorkManager can actually dispatch the
-     * worker in-process right after enqueue.
+     *  - **VM alive** (Tier 2 path) — launch on
+     *    `BudgeTrakApplication.processScope` and return from the FCM
+     *    thread immediately. The ViewModel's existence keeps the process
+     *    alive past `onMessageReceived` returning, so the work completes
+     *    naturally with no artificial budget. Long operations (snapshot
+     *    builds, multi-photo upload bursts, App Check refresh on a cold
+     *    cellular connection) all get to run to completion. No WM
+     *    fallback needed because we trust the process to stay alive.
      *
-     * BackgroundSyncWorker.runOnce is expedited on Android 12+ and deduped
-     * so FCM bursts collapse into a single run.
+     *  - **VM dead** (Tier 3 path) — block the FCM thread with
+     *    `runBlocking { runFullSyncInline(..., INLINE_BUDGET_MS) }`. The
+     *    blocking is load-bearing: it's the only thing keeping the
+     *    process alive while WorkManager and the inline body do their
+     *    work in-process. Cap at 8.5s so `onMessageReceived` returns
+     *    before the OS 10s kill. WM `runOnce` fallback fires on timeout
+     *    so unfinished work picks up later.
+     *
+     * The split avoids the Phase 1 regression where Tier 2 was
+     * inadvertently capped (long Tier 2 work used to finish via
+     * WorkManager's service binding pinning the process; the inline
+     * refactor removed WM from the FCM path entirely).
      */
-    private fun handleWakeForSync() {
-        try {
-            BackgroundSyncWorker.runOnce(applicationContext)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to enqueue sync runOnce: ${e.message}")
+    private fun handleWakeForSync(type: String) {
+        val vm = com.techadvantage.budgetrak.MainViewModel.instance?.get()
+        if (vm != null) {
+            com.techadvantage.budgetrak.BudgeTrakApplication.processScope.launch {
+                try {
+                    BackgroundSyncWorker.runFullSyncInline(
+                        applicationContext, "FCM-$type", timeBudgetMs = null
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "Async Tier 2 inline failed: ${e.message}")
+                }
+            }
             return
         }
         kotlinx.coroutines.runBlocking {
-            val deadline = System.currentTimeMillis() + 9_000L
-            // Wait for WorkManager to dispatch the worker (usually within a few
-            // hundred ms once the process is alive).
-            while (!BackgroundSyncWorker.isRunning.get() && System.currentTimeMillis() < deadline) {
-                kotlinx.coroutines.delay(100)
+            val ok = try {
+                BackgroundSyncWorker.runFullSyncInline(
+                    applicationContext, "FCM-$type", INLINE_BUDGET_MS
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Inline sync failed: ${e.message}")
+                false
             }
-            // Then wait for it to finish. We don't cancel on timeout — the
-            // worker will keep running and complete on its own; we just release
-            // this FCM thread so the service can return cleanly.
-            while (BackgroundSyncWorker.isRunning.get() && System.currentTimeMillis() < deadline) {
-                kotlinx.coroutines.delay(200)
+            if (!ok) {
+                try {
+                    BackgroundSyncWorker.runOnce(applicationContext)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to enqueue fallback worker: ${e.message}")
+                }
+            }
+        }
+    }
+
+    /**
+     * Debug-build-only: trigger an immediate dump upload for remote
+     * diagnostics. Same VM-alive vs VM-dead branch as `handleWakeForSync`:
+     * async on `processScope` when VM keeps the process alive (no budget
+     * needed for the dump's diag build + logcat capture + Storage upload),
+     * blocking + budget-capped + WM fallback when VM is dead.
+     */
+    private fun handleDebugRequest() {
+        if (!com.techadvantage.budgetrak.BuildConfig.DEBUG) return
+        val vm = com.techadvantage.budgetrak.MainViewModel.instance?.get()
+        if (vm != null) {
+            com.techadvantage.budgetrak.BudgeTrakApplication.processScope.launch {
+                try {
+                    BackgroundSyncWorker.runDebugDumpInline(
+                        applicationContext, timeBudgetMs = null
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "Async dump failed: ${e.message}")
+                }
+            }
+            return
+        }
+        kotlinx.coroutines.runBlocking {
+            val ok = try {
+                BackgroundSyncWorker.runDebugDumpInline(
+                    applicationContext, INLINE_BUDGET_MS
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Inline dump failed: ${e.message}")
+                false
+            }
+            if (!ok) {
+                try {
+                    val request = androidx.work.OneTimeWorkRequestBuilder<DebugDumpWorker>().build()
+                    androidx.work.WorkManager.getInstance(applicationContext).enqueue(request)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to enqueue fallback dump: ${e.message}")
+                }
             }
         }
     }

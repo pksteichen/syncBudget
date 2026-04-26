@@ -175,7 +175,12 @@ object ImageLedgerService {
                     "uploadAssignee" to null,
                     "assignedAt" to 0L,
                     "uploadedAt" to System.currentTimeMillis(),
-                    "contentVersion" to 0L
+                    "contentVersion" to 0L,
+                    // Stamp lastEditBy on creation so the resume-detection logic
+                    // in ReceiptSyncManager.processPendingUploads can recognise
+                    // a partial-commit resume (us, version unchanged) and skip
+                    // a false rotation bump on retry.
+                    "lastEditBy" to originatorDeviceId
                 )
                 ledgerRef(groupId).document(receiptId).set(data).await()
             }
@@ -617,7 +622,8 @@ object ImageLedgerService {
                 uploadAssignee = snap.getString("uploadAssignee"),
                 assignedAt = snap.getLong("assignedAt") ?: 0L,
                 uploadedAt = snap.getLong("uploadedAt") ?: 0L,
-                contentVersion = snap.getLong("contentVersion") ?: 0L
+                contentVersion = snap.getLong("contentVersion") ?: 0L,
+                lastEditBy = snap.getString("lastEditBy")
             )
         } catch (e: Exception) {
             Log.w(TAG, "Parse ledger entry failed: ${e.message}")

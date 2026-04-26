@@ -327,7 +327,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     deviceId = obj.getString("id"),
                     deviceName = obj.optString("name", ""),
                     isAdmin = obj.optBoolean("admin", false),
-                    lastSeen = 0L
+                    // Restore last-known lastSeen + online so the roster doesn't
+                    // show stale "13 days ago" (Firestore registerDevice value)
+                    // during the seconds–minutes window between process start
+                    // and the RTDB presence listener delivering its initial
+                    // snapshot. Default 0L/false for backward-compat with
+                    // pre-2026-04-25 cache JSON.
+                    lastSeen = obj.optLong("lastSeen", 0L),
+                    online = obj.optBoolean("online", false)
                 )
             }
         } catch (_: Exception) { emptyList() }
@@ -341,6 +348,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 put("id", d.deviceId)
                 put("name", d.deviceName)
                 put("admin", d.isAdmin)
+                put("lastSeen", d.lastSeen)
+                put("online", d.online)
             })
         }
         syncPrefs.edit().putString("cachedDeviceRoster", arr.toString()).apply()
@@ -3045,7 +3054,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                         if (token != null) {
                             val remainingMs = token.expireTimeMillis - System.currentTimeMillis()
-                            if (remainingMs < 35 * 60 * 1000L) {
+                            // Threshold matches Worker Tier 2/3 (16 min) so the VM
+                            // keep-alive doesn't fire redundantly alongside the
+                            // periodic Worker (which runs every 15 min and catches
+                            // the boundary first). VM remains as the safety net
+                            // for cases where Worker is silenced for >45 min by
+                            // deep Doze and FCM heartbeats are also dropped.
+                            if (remainingMs < 16 * 60 * 1000L) {
                                 val newToken = kotlinx.coroutines.withTimeoutOrNull(15_000) {
                                     com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
                                         .getAppCheckToken(true).await()

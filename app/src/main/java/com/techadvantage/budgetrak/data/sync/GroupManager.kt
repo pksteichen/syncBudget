@@ -175,7 +175,11 @@ object GroupManager {
             .apply()
         // Also clear from encrypted prefs
         try { SecurePrefs.get(context).edit().remove("encryptionKey").commit() } catch (_: Exception) {}
-        BackgroundSyncWorker.cancel(context)
+        // Re-arm the worker for the new (solo) configuration: schedule()
+        // cancels the periodic and arms a one-shot at the next period
+        // boundary (Phase 3). Without this, solo users would have no
+        // background worker until the next foreground launch.
+        BackgroundSyncWorker.schedule(context)
     }
 
     suspend fun dissolveGroup(context: Context, groupId: String, onProgress: ((String) -> Unit)? = null) {
