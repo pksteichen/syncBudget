@@ -362,7 +362,41 @@ private suspend fun runTier2(
                     com.techadvantage.budgetrak.BudgeTrakApplication
                         .syncEvent("ReceiptSync(Tier2): $msg")
                 }
-                receiptSync.syncReceipts(txns, devices)
+                val updatedTxns = receiptSync.syncReceipts(txns, devices)
+                // Propagate receipt-slot changes (most commonly clearLostReceiptSlot
+                // nulling a receiptId on a transaction) back to the live VM list so
+                // open dialogs / the transactions screen don't keep displaying a
+                // photo frame for a slot that was just cleared on disk + Firestore.
+                // The Firestore listener can't repair this because pushTransaction
+                // sets lastEditBy = our deviceId and the listener's echo filter
+                // skips own-device updates.
+                val changed = updatedTxns.filter { after ->
+                    val before = txns.find { it.id == after.id }
+                    before != null && (
+                        before.receiptId1 != after.receiptId1 ||
+                        before.receiptId2 != after.receiptId2 ||
+                        before.receiptId3 != after.receiptId3 ||
+                        before.receiptId4 != after.receiptId4 ||
+                        before.receiptId5 != after.receiptId5
+                    )
+                }
+                if (changed.isNotEmpty()) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        for (after in changed) {
+                            val idx = vm.transactions.indexOfFirst { it.id == after.id }
+                            if (idx >= 0) {
+                                val current = vm.transactions[idx]
+                                vm.transactions[idx] = current.copy(
+                                    receiptId1 = after.receiptId1,
+                                    receiptId2 = after.receiptId2,
+                                    receiptId3 = after.receiptId3,
+                                    receiptId4 = after.receiptId4,
+                                    receiptId5 = after.receiptId5
+                                )
+                            }
+                        }
+                    }
+                }
             } else {
                 Log.i(SYNC_TAG, "Tier 2 receipt sync skipped: gid=${gid != null} key=${key != null} device=${deviceId.isNotBlank()}")
             }
