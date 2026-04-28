@@ -147,6 +147,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [Ambiguous categories aren't OCR errors](feedback_ocr_ambiguous_categories_not_errors.md) — rotisserie chicken, steel-toed boots, soap: multiple valid buckets; don't penalize.
 - [Memory routing — project vs private](feedback_memory_routing.md) — tracked `memory/` for project content; un-tracked `~/.claude/projects/.../private-notes/` for personal.
 - [Surface save failures, never silently no-op](feedback_silent_save_failures.md) — six silent-loss vectors found in transaction add/edit (2026-04-27); rules for guards, dismiss handlers, validation toasts.
+- [Compose Dialog windows stack above main window](feedback_compose_dialog_window_stacking.md) — overlays meant to cover an open Dialog must themselves be a Dialog; a plain Surface renders behind.
 
 ## Firebase Backend
 - Plan: Blaze. App Check enforced on Firestore/RTDB/Storage (not Auth). Debug → `DebugAppCheckProviderFactory`, release → `PlayIntegrityAppCheckProviderFactory`. **TTL is provider-dependent**: Play Integrity (release) = 40 h as of 2026-04-26 (set in Firebase Console → Project Settings → Your apps → BudgeTrak Android → App Check section, dropdown selector); Debug provider = 1 h (Google-imposed, ignores Console setting — by design for short-lived dev tokens). So debug-build observed refresh cadence is 40× higher than release will be. **Play Integrity advanced settings**: `PLAY_RECOGNIZED` required (anti-piracy), `LICENSED` not required (don't gate free users on Huawei/degooglified devices), device integrity = "Don't explicitly check" (relies on PLAY_RECOGNIZED + per-field encryption for actual security; tighten post-launch if Crashlytics shows abuse).
@@ -185,7 +186,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [OCR Spanish / Country setting](project_ocr_spanish_country_setting.md) — when adding Spanish or LatAm launch, add a Country dropdown driving locale/currency/date/tax-vocab hints into the OCR prompt; integer-only currencies (CLP/COP/PYG) block launch without this.
 
 ## Documentation
-- SSD/LLD v2.7 at `docs/BudgeTrak_SSD_v2.7.md` + `docs/BudgeTrak_LLD_v2.7.md`. Bump on any structural change.
+- SSD/LLD v2.8 (dev) at `docs/BudgeTrak_SSD_v2.8.md` + `docs/BudgeTrak_LLD_v2.8.md`. Bump on any structural change. v2.7 was the last production-shipped version (renamed to v2.8 on 2026-04-28 when dialog consolidation + refund OCR landed).
 - [Pages repo location](reference_pages_repo.md) — privacy.md + homepage + branding live in `techadvantagesupport.github.io` repo at `/storage/emulated/0/Download/Tech Advantage Pages`.
 
 ## Audit Follow-ups

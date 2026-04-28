@@ -12,3 +12,4 @@ When changing Android dependencies on BudgeTrak (adding, removing, or swapping a
 - Any time `app/build.gradle.kts` dependencies change (add/remove/version bump), run `./gradlew clean assembleDebug`.
 - If an APK crashes on startup after a dep experiment, suspect stale DEX before spending time on code bisection.
 - Compare APK sizes — a suspiciously large APK vs expected is a sign of stale artifacts.
+- **`./gradlew bundleRelease` also resets the dex cache as a side effect** (R8 builds a fresh dependency graph from scratch). Observed 2026-04-28: a debug APK had grown to 123 MB from accumulated stale DEX; running a release bundle invalidated the cache, and subsequent `assembleDebug` builds dropped to ~85 MB (the actual size). If the user reports an unexpected size *drop*, this is usually why — not a regression.

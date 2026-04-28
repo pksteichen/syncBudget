@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Document / App Version | 2.7 |
+| Document / App Version | 2.8 (in development) |
 | Date | April 2026 |
 | Publisher | Tech Advantage LLC |
 | Application ID / Package / Namespace | `com.techadvantage.budgetrak` |
@@ -10,9 +10,11 @@
 | Language / UI | Kotlin 2.0.21, Jetpack Compose + Material 3 |
 | Build | Gradle 8.9 (Kotlin DSL), JVM 17 |
 | Code Size | ~98 Kotlin files, ~49,000 lines |
-| Status | Release — Internal / Technical Reference |
+| Status | Dev — Internal / Technical Reference |
 
-> Rebranded 2026-04-11 from `com.securesync.app` / `com.syncbudget.app`.
+> Rebranded 2026-04-11 from `com.securesync.app` / `com.syncbudget.app`. v2.7 (versionCode=4) is the production release on Google Play; dev branch is v2.8 (versionCode=5).
+>
+> **What's new in 2.8 (vs 2.7, in dev):** Unified TransactionDialog with header EXPENSE/INCOME pill toggle (replaces three separate Add Income / Add Expense / Edit dialog entry points — same Composable was shared, but title and `sourceLabel` are now derived inside the dialog rather than passed in); refund-receipt auto-flip in OCR prefill (negative `amountCents` → `typeIsExpense=false` + `abs()` for amount fields); preselect-help banner now opens the Transactions Help screen as a fullscreen Compose `Dialog` overlay above the AdAwareDialog window (preserves in-progress entries + photos via the dialog staying mounted underneath); OCR parser fix for negative amounts (was silently aborting refund-receipt pipelines because `optInt(..., -1).takeIf { it >= 0 }` rejected legitimate negatives — now uses `Int.MIN_VALUE` sentinel).
 >
 > **What's new in 2.7 (vs 2.6):** AI Receipt OCR (3-call Lite pipeline, Subscriber-only); AI CSV Categorization (Paid+Subscriber); photo-bar long-press + drag-to-reorder gestures; PDF receipt import; pending-download placeholder handling with explanatory toasts; Cash Flow Simulation promoted from Subscriber-only to Paid+Subscriber; background worker double-fire guard + FCM busy-wait; photo-pipeline hardening (dedupe, orphan cleanup, queue-on-save).
 
@@ -646,6 +648,49 @@ Archived view: read via `loadArchivedTransactionsAsync()` on `Dispatchers.IO`; e
 ### 8.6 Dashboard Quick-Add
 
 MainScreen quick-add runs the full auto-match chain (duplicate, RE, AE, budget income) then returns to dashboard.
+
+### 8.7 TransactionDialog (Unified Add / Edit, 2.8)
+
+Single Composable used for **all three** transaction-dialog entry points — Add Income, Add Expense, and Edit — across the dashboard quick-add and the Transactions screen. The 2.8 consolidation:
+
+- **Removed parameters:** `title: String` and `sourceLabel: String`. Both are now derived inside the dialog. Title comes from `if (isEdit) S.transactions.editTransaction else S.common.addTransaction` ("Edit Transaction" / "Add Transaction"). `sourceLabel` comes from `if (typeIsExpense) S.common.merchantLabel else S.common.sourceLabel` ("Merchant" / "Source"). Five caller sites updated (3 in TransactionsScreen.kt, 2 in MainActivity dashboard).
+- **Internal `typeIsExpense` state:** `var typeIsExpense by remember(isExpense) { mutableStateOf(isExpense) }`. The `isExpense` parameter is still accepted (seeds the initial value), but the *current* type is now mutable. All in-dialog references (validation, save, linked-RE-only sections, source-field label, autocategorize temp Transaction) use `typeIsExpense`, not `isExpense`.
+- **Header type pill:** compact two-segment toggle in the dialog header next to the title. EXPENSE side is red (`#F44336`); INCOME side is green (`#4CAF50`). Tapping flips `typeIsExpense`. The label of the source/merchant field flips with the toggle. The dialog header sits in the upper-left half of the title bar; the right half holds the existing AI OCR icon + camera/photo bar entry.
+- **Refund auto-flip in OCR prefill:** `LaunchedEffect(ocrState)` `OcrState.Success` handler at `TransactionsScreen.kt:~3493`. When `r.amount < 0` (Call 1's `amountCents` is negative — return / refund receipt), the prefill sets `typeIsExpense = false` and uses `kotlin.math.abs(...)` for `singleAmountText`, `totalAmountText`, and per-category `categoryAmountTexts[..]`. The user sees the type pill swap to INCOME and a positive amount populated. Save validation (`amount < 0`) stays unchanged because the model invariant is "amount always positive, type carries polarity." `CsvParser.kt:869` follows the same convention for bank-import polarity mapping.
+- **i18n:** removed `addNewIncomeTransaction` and `addNewExpenseTransaction` strings; added `addTransaction` ("Add Transaction" / "Agregar transacción"). Spanish and English variants + TranslationContext entry updated.
+- **Editing existing transactions:** the type pill is also live in Edit mode. A user who realizes a transaction was miscategorized (saved as EXPENSE but actually INCOME) can flip the type without opening a different dialog. There's no dedicated UI to manually clean up linked-recurring-expense state if the type is flipped post-save (linking UI hides itself when `typeIsExpense=false`); current linked state remains in the data model but isn't visible until type flips back.
+
+### 8.8 Help-from-Dialog Overlay (2.8)
+
+The AI preselect-help banner inside an open transaction dialog used to call `vm.currentScreen = "transactions_help"`, which produced two different broken behaviors depending on entry point:
+
+| Entry point | Dialog rendered at | Behavior on `currentScreen` change |
+|---|---|---|
+| Dashboard quick-add | `MainActivity.DashboardDialogs(...)` outside the screen `when` | Help screen rendered; dialog *stayed* on top because `dashboardShowAddIncome/Expense` flag never cleared. Help was visible only behind the dialog. |
+| Transactions page | Inside `TransactionsScreenBranch` | Whole branch stopped composing → dialog disposed → user lost in-progress entries + photos. |
+
+The 2.8 fix routes both paths through a new state, `vm.transactionsHelpOverlayShowing: Boolean`. Tapping the banner sets it `true`. At the top level of `setContent` (after `DashboardDialogs` and the `QuickStartOverlay`), if true, MainActivity renders:
+
+```kotlin
+androidx.compose.ui.window.Dialog(
+    onDismissRequest = { vm.transactionsHelpOverlayShowing = false },
+    properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+) {
+    Surface(modifier = Modifier.fillMaxSize(), ...) {
+        TransactionsHelpScreen(
+            onBack = { vm.transactionsHelpOverlayShowing = false },
+            scrollTarget = vm.transactionsHelpScrollTo,
+            onScrollTargetConsumed = { vm.transactionsHelpScrollTo = null }
+        )
+    }
+}
+```
+
+Why a `Dialog` and not just a `Surface` overlay: `AdAwareDialog` (used by `TransactionDialog`) creates its own platform Dialog window. A non-Dialog overlay rendered in the main composition window is *behind* that Dialog window in the Window Manager z-order. Putting the help overlay inside its own `Dialog` makes it stack as a sibling Dialog window, and Android Window Manager renders the most recently added Dialog window on top.
+
+The transaction dialog never disposes during the round-trip — its `remember { mutableStateOf(...) }` state survives, so source/amount/date/photos all come back on overlay dismissal. Back arrow on the help screen's TopAppBar and the system back button both call `onDismissRequest` on the overlay Dialog, closing only the overlay.
+
+The other use of `currentScreen = "transactions_help"` (the Transactions screen's top-bar help icon at `MainActivity.kt:2224`) is unchanged — that's a normal screen navigation, not an overlay.
 
 ## 9. Import / Export Pipeline
 
@@ -2129,7 +2174,7 @@ Only `INTERNET` is declared in the manifest. CAMERA and media access are handled
 | compileSdk | 34 |
 | minSdk | 28 |
 | targetSdk | 34 |
-| versionCode / versionName | 4 / 2.7 |
+| versionCode / versionName | 5 / 2.8 (dev); 4 / 2.7 in production |
 | source/target / jvmTarget | Java 17 |
 | compose / buildConfig | enabled |
 | minify / shrinkResources (release) | true |
