@@ -4,7 +4,7 @@
 - Android budgeting app **BudgeTrak** by **Tech Advantage LLC** (`techadvantagesupport@gmail.com`).
 - Package/namespace: `com.techadvantage.budgetrak` (renamed from `com.securesync.app` / `com.syncbudget.app` on 2026-04-11).
 - GitHub: `techadvantagesupport/BudgeTrak` (transferred from `pksteichen/syncBudget`; old URL redirects).
-- Privacy policy: `https://techadvantagesupport.github.io/budgetrak-legal/privacy`. Legal repo clone at `~/budgetrak-legal`.
+- Privacy policy: `https://techadvantagesupport.github.io/privacy`. Pages repo clone at `/storage/emulated/0/Download/Tech Advantage Pages` (legacy `budgetrak-legal` repo still serves v2.7 fallback URL).
 - Working dir: `/data/data/com.termux/files/home/dailyBudget`. ~47 k lines, ~94 Kotlin files.
 
 ## Build Environment (Termux)
@@ -186,7 +186,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 
 ## Documentation
 - SSD/LLD v2.7 at `docs/BudgeTrak_SSD_v2.7.md` + `docs/BudgeTrak_LLD_v2.7.md`. Bump on any structural change.
-- [Legal repo location](reference_legal_repo.md) — privacy.md + branding live in separate `budgetrak-legal` repo at `/storage/emulated/0/Download/BudgeTrak Legal Files`.
+- [Pages repo location](reference_pages_repo.md) — privacy.md + homepage + branding live in `techadvantagesupport.github.io` repo at `/storage/emulated/0/Download/Tech Advantage Pages`.
 
 ## Audit Follow-ups
 - **2026-04-12 memory audit** (this one): clarified the two sync hashes — `cashHash` (Layer 2 consistency) is hex via `.toString(16)`; the `enc_hash` per-doc cache in FirestoreDocSync is decimal. An earlier draft conflated them. Removed `WidgetRefreshWorker` refs, restored auto-categorize scope (CSV import only), updated screen count (10 navigable + 10 help, plus QuickStartGuide overlay), deleted obsolete CRDT-era files, added spec_simulation / spec_dashboard / spec_recurring_and_savings / spec_backup / spec_diagnostics.

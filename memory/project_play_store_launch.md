@@ -45,8 +45,8 @@ The LLC (Minnesota) has, or will have, three separate addresses — this is norm
 5. Once transfer completes, the personal account is empty and can be closed (optional — keeping it dormant is fine).
 
 ## Play Store listing prerequisites (checklist — track separately)
-- Privacy policy URL: `https://techadvantagesupport.github.io/budgetrak-legal/privacy` ✓
-- Release-signed AAB (not debug APK) — needs to be generated before production upload.
+- Privacy policy URL: `https://techadvantagesupport.github.io/privacy` ✓ (moved from `/budgetrak-legal/privacy` on 2026-04-27 to org root Pages site; legacy URL still serves for v2.7 fallback)
+- Release-signed AAB ✓ — `BudgeTrak.aab` (v2.7 / versionCode 4) at `/storage/emulated/0/Download/`. Upload key SHA-256: `E0:2B:5D:D6:5E:86:1B:3B:79:AC:F4:F3:F4:76:D4:3B:35:D1:FC:3A:D4:E1:6D:26:C0:CC:0D:22:E9:9D:04:0A`. Keystore at `~/keystore/upload-keystore.jks` (backed up to `/storage/emulated/0/Download/BudgeTrak Keystore Backup/`); password in `local.properties` and password manager.
 - Content rating questionnaire — fill in Play Console during listing setup.
 - Feature graphic, screenshots, icon — existing assets should work.
 - Trader status: yes (paid tier + ads = commercial).

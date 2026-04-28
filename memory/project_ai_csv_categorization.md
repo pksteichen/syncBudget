@@ -76,7 +76,7 @@ New keys in `ui/strings/AppStrings.kt` + `EnglishStrings.kt` + `SpanishStrings.k
 Total string count becomes ~1,399 vals across 22 data classes after this feature.
 
 ## Privacy policy
-Update `~/budgetrak-legal/privacy`. New subsection **"AI CSV Categorization"** under existing "AI Receipt Scanning":
+Update `/storage/emulated/0/Download/Tech Advantage Pages/privacy.md`. New subsection **"AI CSV Categorization"** under existing "AI Receipt Scanning":
 - Sent: merchant, amount, date of newly-imported bank txns.
 - Not sent: balances, other transactions, identifiers, receipt photos.
 - Provider: Google Gemini via Firebase AI Logic.

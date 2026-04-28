@@ -22,6 +22,8 @@ originSessionId: ea9e173a-ca3d-4f87-b67a-ceac73953250
 
 4. **Optional cheap anti-piracy: runtime signature pinning** — ~20 lines in `BudgeTrakApplication.onCreate`: read `packageManager.getPackageInfo(...).signingInfo.apkContentsSigners[0]`, SHA-256 it, compare to the expected hash. Refuse to run if mismatched. Catches naive repackaging, determined attackers patch it out. Low cost, low ceiling.
 
+12. **BIS annual self-classification report (US Encryption Export Compliance)** — On the Play Console "US export laws" question we declared use of License Exception ENC for standard encryption (TLS, AES, ChaCha20-Poly1305). Under EAR §740.17(e), products using ENC must file an annual self-classification report to the Bureau of Industry and Security listing each exporting product, by **February 1 each year**, covering the previous calendar year. Submit via email to `crypt-supp@bis.doc.gov` AND `enc@nsa.gov` as a CSV/spreadsheet using the BIS template at https://www.bis.doc.gov/index.php/policy-guidance/encryption (look for "Self-classification report"). Required fields: product name, model/version, manufacturer, ECCN (likely 5D992.c for software), encryption description (e.g. "TLS 1.2/1.3, AES-256, ChaCha20-Poly1305"), and authorization type (ENC). Realistically zero enforcement against indie apps, but technically required once BudgeTrak is distributed outside the US (which Play does automatically). First report due **2027-02-01** for any 2026 distribution. Set a calendar reminder for January 2027.
+
 ## FCM sync-push cost optimizations (from 2026-04-12 estimate)
 
 At 40K groups the current design is ~$150/mo. These drop it toward ~$10-15/mo. Not urgent until we approach that scale.
@@ -52,7 +54,7 @@ At 40K groups the current design is ~$150/mo. These drop it toward ~$10-15/mo. N
 - ViewModel-scoped coroutines (`vm.launchIO`) → architecture.md (MainViewModel line).
 - Health-check-after-PERMISSION_DENIED → implemented as `triggerFullRestart()` (App Check force-refresh + restart all listeners, 30 s debounce) → MEMORY.md SYNC section.
 - Batched Firestore writes (500-op chunks + retry fallback) → MEMORY.md "Save functions" section.
-- Privacy policy → `techadvantagesupport.github.io/budgetrak-legal/privacy`.
+- Privacy policy → `techadvantagesupport.github.io/privacy` (moved from `/budgetrak-legal/privacy` 2026-04-27 to org root Pages site).
 - Consolidated 7 save functions into generic `saveCollection<T>` → MEMORY.md "Save functions".
 - Parallel pending receipt uploads — already done: `ReceiptSyncManager.processPendingUploads` uses `chunked(5)` with `async` + `await` in a `coroutineScope` (`ReceiptSyncManager.kt:95-135`), mirroring the download path at line 340.
 - Consolidate matching chain — retired 2026-04-13 after analysis. The deterministic match-finders (`findDuplicates`, `findRecurringExpenseMatches`, etc. in `DuplicateDetector.kt`) are already shared. The April 3 commit `a394a3a` made all 5 entry points (dashboard, screen add, screen edit, screen CSV import, widget) agree on the same type-based order. Further consolidation of the **orchestration** was considered but rejected: each entry point has different post-match side effects (addAndScroll / importIndex / addTransactionWithBudgetEffect / separate-Activity repo loads / free-tier 1/day widget cap) that can't share a single call signature without VM becoming aware of screen-local state. Design note added above `runLinkingChain` in `MainViewModel.kt` so this doesn't get re-proposed.
