@@ -427,7 +427,10 @@ class MainActivity : ComponentActivity() {
                             vm.syncRepairAlert = false
                             vm.prefs.edit().putBoolean("syncRepairAlert", false).apply()
                         },
-                        onSyncNow = { vm.doSyncNow() },
+                        onSyncNow = {
+                            if (vm.isNetworkAvailable) vm.doSyncNow()
+                            else toastState.show(vm.strings.settings.syncNowOffline)
+                        },
                         onSupercharge = { allocations, modes ->
                             val deposits = mutableListOf<Pair<String, Double>>() // goalName to capped amount
                             val changedGoals = mutableListOf<SavingsGoal>()
@@ -2547,7 +2550,10 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             },
-            onSyncNow = { vm.doSyncNow() },
+            onSyncNow = {
+                if (vm.isNetworkAvailable) vm.doSyncNow()
+                else toastState.show(vm.strings.settings.syncNowOffline)
+            },
             onGeneratePairingCode = {
                 val gId = vm.syncGroupId
                 val key = GroupManager.getEncryptionKey(context)

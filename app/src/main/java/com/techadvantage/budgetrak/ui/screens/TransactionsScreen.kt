@@ -3542,7 +3542,8 @@ fun TransactionDialog(
                 onClearOcrState?.invoke()
             }
             is com.techadvantage.budgetrak.data.ocr.OcrState.Failed -> {
-                toastState.show(S.settings.aiOcrFailed, windowYPx = aiIconWindowY)
+                val msg = if (state.message == "OFFLINE") S.settings.aiOcrOffline else S.settings.aiOcrFailed
+                toastState.show(msg, windowYPx = aiIconWindowY)
                 onClearOcrState?.invoke()
             }
             else -> Unit
@@ -4064,6 +4065,35 @@ fun TransactionDialog(
                                 }
                             }
                         }
+                        // Preselect-help banner — sub-only (OCR eligibility), shown
+                        // only when photos are attached. Tap opens the Transactions
+                        // Help screen as a Dialog overlay over this dialog.
+                        if (isSubscriber && onShowPreselectHelp != null &&
+                            categories.isNotEmpty() && linkedIncomeId == null && !isSupercharge) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(customColors.headerBackground)
+                                    .clickable { onShowPreselectHelp.invoke() }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Help,
+                                    contentDescription = null,
+                                    tint = customColors.headerText,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    text = S.settings.aiOcrPreselectBanner,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = customColors.headerText
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -4329,35 +4359,6 @@ fun TransactionDialog(
                                 Spacer(Modifier.width(4.dp))
                                 Icon(Icons.Filled.AccountBalance, contentDescription = null, modifier = Modifier.size(18.dp))
                             }
-                        }
-                    }
-
-                    // AI OCR preselect banner — subscribers only (OCR-enabled dialogs).
-                    // Tappable → navigates to the Transactions Help page and scrolls
-                    // to the subsection describing how preselected cats guide the AI.
-                    if (isSubscriber && onShowPreselectHelp != null &&
-                        categories.isNotEmpty() && linkedIncomeId == null && !isSupercharge) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(customColors.headerBackground)
-                                .clickable { onShowPreselectHelp.invoke() }
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Help,
-                                contentDescription = null,
-                                tint = customColors.headerText,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Text(
-                                text = S.settings.aiOcrPreselectBanner,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = customColors.headerText
-                            )
                         }
                     }
 

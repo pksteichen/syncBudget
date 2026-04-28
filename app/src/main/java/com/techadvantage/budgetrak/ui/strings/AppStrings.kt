@@ -248,6 +248,8 @@ data class SettingsStrings(
     val aiOcrHighlightFirst: String,    // Toast when user taps the sparkle but hasn't long-pressed a thumbnail to pick the OCR target
     val aiOcrReading: String,
     val aiOcrFailed: String,
+    val aiOcrOffline: String,
+    val syncNowOffline: String,
     val aiOcrHelpTitle: String,
     val aiOcrHelpBody: String,
     val aiOcrPreselectBanner: String,   // One-line banner above the category box in OCR-enabled dialogs linking to the preselect help section

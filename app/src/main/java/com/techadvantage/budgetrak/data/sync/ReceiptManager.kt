@@ -77,6 +77,7 @@ object ReceiptManager {
             pending.add(receiptId)
             savePendingUploadsInternal(context, pending)
         }
+        debugLogReceiptOp("addToPendingQueue", receiptId)
     }
 
     fun removeFromPendingQueue(context: Context, receiptId: String) {
@@ -85,6 +86,25 @@ object ReceiptManager {
             pending.remove(receiptId)
             savePendingUploadsInternal(context, pending)
         }
+        debugLogReceiptOp("removeFromPendingQueue", receiptId)
+    }
+
+    /**
+     * Debug-only forensic trace for receipt-file lifecycle (delete + queue
+     * add/remove). Helps next-occurrence forensics for "phantom photo"
+     * style bugs by recording who deleted what and when. No-op in release;
+     * BuildConfig.DEBUG short-circuits the body and the JIT eliminates the
+     * call. Caller is captured via stack trace so individual log lines
+     * answer "who removed this from the queue?" without a separate tag arg.
+     */
+    private fun debugLogReceiptOp(op: String, receiptId: String) {
+        if (!com.techadvantage.budgetrak.BuildConfig.DEBUG) return
+        val caller = Throwable().stackTrace.getOrNull(2)?.let {
+            "${it.className.substringAfterLast('.')}.${it.methodName}:${it.lineNumber}"
+        } ?: "?"
+        com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent(
+            "Receipt $receiptId: $op (caller=$caller)"
+        )
     }
 
     private fun loadPendingUploadsInternal(context: Context): MutableSet<String> {
@@ -302,8 +322,18 @@ object ReceiptManager {
      * Delete local receipt file + thumbnail.
      */
     fun deleteLocalReceipt(context: Context, receiptId: String) {
+        val fileExisted = getReceiptFile(context, receiptId).exists()
+        val thumbExisted = getThumbFile(context, receiptId).exists()
         getReceiptFile(context, receiptId).delete()
         getThumbFile(context, receiptId).delete()
+        if (com.techadvantage.budgetrak.BuildConfig.DEBUG) {
+            val caller = Throwable().stackTrace.getOrNull(1)?.let {
+                "${it.className.substringAfterLast('.')}.${it.methodName}:${it.lineNumber}"
+            } ?: "?"
+            com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent(
+                "Receipt $receiptId: deleteLocalReceipt (file=$fileExisted thumb=$thumbExisted caller=$caller)"
+            )
+        }
     }
 
     /**

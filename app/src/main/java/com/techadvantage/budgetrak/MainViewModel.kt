@@ -2564,6 +2564,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun runOcrOnSlot1(receiptId: String, preSelectedCategoryIds: Set<Int> = emptySet()) {
         if (ocrState is OcrState.Loading) return
+        // Fail fast when offline. Gemini calls don't have a fast-fail path —
+        // they wait the full SDK timeout (~30-60 s) before erroring. The
+        // dialog's OcrState.Failed handler picks the offline-specific toast
+        // when message == "OFFLINE".
+        if (!isNetworkAvailable) {
+            ocrState = OcrState.Failed("OFFLINE")
+            return
+        }
         ocrState = OcrState.Loading
         // ReceiptOcrService routes internally by preSelectedCategoryIds.size:
         //   0-1 preselected → single-call Lite (1 API call, cheapest path)
@@ -2667,6 +2675,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     if (isSyncConfigured && syncStatus == "offline") {
                         syncStatus = if (docSync?.isListening == true) "synced" else "error"
+                    }
+                    // Resume queued receipt uploads. The drainer's exponential
+                    // backoff loop may currently be sleeping (up to 10 min)
+                    // after no-progress cycles during the outage; cancel +
+                    // restart so uploads resume immediately rather than
+                    // waiting out the backoff.
+                    val pending = com.techadvantage.budgetrak.data.sync.ReceiptManager
+                        .loadPendingUploads(context).size
+                    if (pending > 0 && (isPaidUser || isSubscriber) && isSyncConfigured) {
+                        uploadDrainerJob?.cancel()
+                        uploadDrainerJob = null
+                        kickUploadDrainer()
                     }
                 }
                 override fun onLost(network: android.net.Network) {
@@ -3069,6 +3089,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             viewModelScope.launch(Dispatchers.IO) {
                 while (true) {
                     delay(45 * 60 * 1000L) // check every 45 min
+                    // Skip when offline — App Check refresh requires network.
+                    // The networkCallback.onAvailable refreshes on recovery, so
+                    // we don't need to re-check until the next 45-min cycle.
+                    if (!isNetworkAvailable) continue
                     try {
                         val token = kotlinx.coroutines.withTimeoutOrNull(10_000) {
                             com.google.firebase.appcheck.FirebaseAppCheck.getInstance()

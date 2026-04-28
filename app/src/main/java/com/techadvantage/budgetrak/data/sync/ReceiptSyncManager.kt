@@ -158,6 +158,15 @@ class ReceiptSyncManager(
         val pending = ReceiptManager.loadPendingUploads(context)
         if (pending.isEmpty()) return 0
 
+        // Skip when offline — Firebase Storage has no fast-fail path, so each
+        // queued upload would burn the full 60s timeout. The queue persists,
+        // and MainViewModel.networkCallback.onAvailable kicks the drainer
+        // again when network returns.
+        if (!NetworkUtils.isOnline(context)) {
+            syncLog("Receipt sync: skipping ${pending.size} pending uploads, offline")
+            return 0
+        }
+
         syncLog("Receipt sync: ${pending.size} pending uploads")
 
         val completedCount = java.util.concurrent.atomic.AtomicInteger(0)
@@ -168,8 +177,22 @@ class ReceiptSyncManager(
                         try {
                             val encrypted = ReceiptManager.encryptForUpload(context, receiptId, encryptionKey)
                             if (encrypted == null) {
-                                syncLog("Receipt $receiptId: no local file, removing from queue")
-                                ReceiptManager.removeFromPendingQueue(context, receiptId)
+                                // Distinguish concurrent delete from genuine file
+                                // loss: the drainer iterates over a snapshot of
+                                // the persistent queue. If the user deleted the
+                                // photo between snapshot capture and our chunk
+                                // running, the queue + file are gone (clean) but
+                                // we still see the id in our local snapshot. If
+                                // the queue still has it, the file went missing
+                                // for some other reason — that's the suspicious
+                                // case worth investigating.
+                                val stillQueued = ReceiptManager.loadPendingUploads(context).contains(receiptId)
+                                if (stillQueued) {
+                                    syncLog("Receipt $receiptId: file missing while still queued — investigate (no concurrent delete)")
+                                    ReceiptManager.removeFromPendingQueue(context, receiptId)
+                                } else {
+                                    syncLog("Receipt $receiptId: skipped, removed from queue concurrently (likely user delete during drain)")
+                                }
                                 completedCount.incrementAndGet()
                                 return@async
                             }
@@ -489,6 +512,14 @@ class ReceiptSyncManager(
         }
 
         if (missingIds.isEmpty()) return transactions
+
+        // Skip recovery downloads when offline — same reasoning as
+        // processPendingUploads. The next syncReceipts cycle (after network
+        // recovery) will pick up the missing IDs again.
+        if (!NetworkUtils.isOnline(context)) {
+            syncLog("Receipt sync: skipping recovery for ${missingIds.size} missing receipts, offline")
+            return transactions
+        }
 
         // If many missing, try snapshot path first
         if (missingIds.size > SNAPSHOT_THRESHOLD) {

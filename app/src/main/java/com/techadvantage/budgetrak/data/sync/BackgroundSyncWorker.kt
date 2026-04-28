@@ -305,6 +305,17 @@ private suspend fun runTier2(
         .syncEvent("$sourceLabel Tier 2: ViewModel alive, sync=${vm.isSyncConfigured}")
     if (!vm.isSyncConfigured) return
 
+    // Skip the entire Tier 2 work cycle when offline — every operation here
+    // (App Check, listener restart, RTDB ping, receipt sync) hits the network
+    // and would burn full timeouts. Firestore + RTDB SDKs auto-reconnect when
+    // network returns, and MainViewModel.networkCallback.onAvailable kicks
+    // the upload drainer to resume queued receipts.
+    if (!NetworkUtils.isOnline(context)) {
+        com.techadvantage.budgetrak.BudgeTrakApplication
+            .syncEvent("$sourceLabel Tier 2: offline, skipping")
+        return
+    }
+
     // Proactively refresh App Check token before it expires.
     try {
         val token = kotlinx.coroutines.withTimeoutOrNull(10_000) {
@@ -452,6 +463,14 @@ private suspend fun runTier3(context: Context, sourceLabel: String) {
     } catch (_: Exception) { -1 }
     com.techadvantage.budgetrak.BudgeTrakApplication
         .syncEvent("$sourceLabel Tier 3: ViewModel dead, full sync (standbyBucket=$standbyBucket)")
+
+    // Skip the full-sync work cycle when offline. WorkManager will retry the
+    // worker on its normal cadence, by which time the network may be back.
+    if (!NetworkUtils.isOnline(context)) {
+        com.techadvantage.budgetrak.BudgeTrakApplication
+            .syncEvent("$sourceLabel Tier 3: offline, skipping")
+        return
+    }
 
     // Anonymous auth (only when sync is configured — solo users skip)
     if (groupId != null && com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {

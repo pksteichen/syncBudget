@@ -182,6 +182,64 @@ object DiagDumpBuilder {
         for (entry in periodLedger) {
             dump.appendLine("  ${entry.periodStartDate} applied=${entry.appliedAmount}")
         }
+
+        // Receipt files audit (debug only). Helps trace "phantom photo frame"
+        // and "no local file" scenarios by listing what's actually on disk
+        // versus what transactions reference and what's queued for upload.
+        if (com.techadvantage.budgetrak.BuildConfig.DEBUG) {
+            try {
+                val receiptDir = java.io.File(context.filesDir, "receipts")
+                val onDisk = receiptDir.takeIf { it.exists() && it.isDirectory }
+                    ?.listFiles()
+                    ?.filter { it.isFile && !it.name.endsWith(".tmp") }
+                    ?.map { it.nameWithoutExtension }
+                    ?.toSet()
+                    ?: emptySet()
+                val activeRefs = transactions.active
+                    .flatMap {
+                        listOfNotNull(it.receiptId1, it.receiptId2, it.receiptId3, it.receiptId4, it.receiptId5)
+                    }
+                    .toSet()
+                val tombstoneRefs = transactions
+                    .filter { it.deleted }
+                    .flatMap {
+                        listOfNotNull(it.receiptId1, it.receiptId2, it.receiptId3, it.receiptId4, it.receiptId5)
+                    }
+                    .toSet()
+                val pendingQueue = com.techadvantage.budgetrak.data.sync.ReceiptManager.loadPendingUploads(context)
+                val orphanedFiles = onDisk - activeRefs - tombstoneRefs
+                val missingFiles = activeRefs - onDisk
+                val queueWithoutFile = pendingQueue - onDisk
+                val queueWithoutRef = pendingQueue - activeRefs
+                dump.appendLine()
+                dump.appendLine("── Receipt Files Audit (debug) ──")
+                dump.appendLine("Files on disk: ${onDisk.size}")
+                dump.appendLine("Active txn references: ${activeRefs.size}")
+                dump.appendLine("Tombstoned refs (should be 0 post-Apr-24): ${tombstoneRefs.size}")
+                dump.appendLine("Pending upload queue: ${pendingQueue.size}")
+                if (orphanedFiles.isNotEmpty()) {
+                    dump.appendLine("Orphaned files (on disk, not referenced):")
+                    for (id in orphanedFiles.take(20)) dump.appendLine("  $id")
+                    if (orphanedFiles.size > 20) dump.appendLine("  …and ${orphanedFiles.size - 20} more")
+                }
+                if (missingFiles.isNotEmpty()) {
+                    dump.appendLine("Missing files (referenced by active txn, not on disk):")
+                    for (id in missingFiles.take(20)) dump.appendLine("  $id")
+                    if (missingFiles.size > 20) dump.appendLine("  …and ${missingFiles.size - 20} more")
+                }
+                if (queueWithoutFile.isNotEmpty()) {
+                    dump.appendLine("Queued without local file (will fail next drain):")
+                    for (id in queueWithoutFile.take(20)) dump.appendLine("  $id")
+                }
+                if (queueWithoutRef.isNotEmpty()) {
+                    dump.appendLine("Queued without active reference (orphan queue):")
+                    for (id in queueWithoutRef.take(20)) dump.appendLine("  $id")
+                }
+            } catch (e: Exception) {
+                dump.appendLine("Receipt audit failed: ${e.message}")
+            }
+        }
+
         dump.appendLine("=== End Dump ===")
         return dump.toString()
     }
