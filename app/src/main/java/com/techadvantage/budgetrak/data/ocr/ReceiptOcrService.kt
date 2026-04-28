@@ -306,7 +306,7 @@ object ReceiptOcrService {
         // visible on the receipt. TransactionDialog leaves selectedDate at
         // its current default (today) when date fails to parse.
         val date = json.optString("date")
-        val amountCents = json.optInt("amountCents", -1).takeIf { it >= 0 }
+        val amountCents = json.optInt("amountCents", Int.MIN_VALUE).takeIf { it != Int.MIN_VALUE }
             ?: throw IllegalStateException("Missing amountCents in Call 1")
         val itemNames = json.optJSONArray("itemNames")?.let { arr ->
             (0 until arr.length()).mapNotNull { i -> arr.optString(i).takeIf { it.isNotBlank() } }
@@ -343,7 +343,7 @@ object ReceiptOcrService {
             // so the UI can show today's default instead of C1's hallucinated
             // 2023-10-27 on dateless receipts.
             val date = if (json.has("date")) json.optString("date") else c1.date
-            val amountCents = json.optInt("amountCents", -1).takeIf { it >= 0 } ?: c1.amountCents
+            val amountCents = json.optInt("amountCents", Int.MIN_VALUE).takeIf { it != Int.MIN_VALUE } ?: c1.amountCents
             val notes = json.optString("notes").takeIf { it.isNotBlank() }
             Call1Reconciled(merchant, date, amountCents, notes)
         } catch (ce: CancellationException) {

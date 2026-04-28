@@ -37,7 +37,11 @@ custom category list (rename, delete, reorder, localize — all safe).
    date from training data or context (ship-tracker phrases like "Arriving
    tomorrow" are NOT dates). Parser accepts empty date; TransactionDialog's
    `runCatching { LocalDate.parse(...) }.getOrNull()?.let { selectedDate = it }`
-   silently leaves `selectedDate` at today when date is empty.
+   silently leaves `selectedDate` at today when date is empty. **Refunds (negative
+   `amountCents`) are valid** — the parser uses an `Int.MIN_VALUE` sentinel for
+   "missing" so any negative the model returns flows through unmodified. Earlier
+   `>= 0` filter at lines 309 + 346 silently aborted the pipeline on every refund
+   receipt with "Missing amountCents in Call 1"; fixed 2026-04-28.
 2. **Call 1.5 (text → reconcile)**: text-only. Takes C1's merchant + date +
    amountCents + fullTranscript, returns reconciled {merchant, date,
    amountCents, notes}. Runs in PARALLEL with Call 2 (`coroutineScope {
