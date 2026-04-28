@@ -105,6 +105,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // the user to a specific subsection instead of the top of the help.
     var transactionsHelpScrollTo by mutableStateOf<String?>(null)
 
+    // Help overlay shown ON TOP of an open transaction dialog (preselect-help
+    // banner tap). Renders the TransactionsHelpScreen as a fullscreen overlay
+    // so the dialog stays mounted underneath and the user's in-progress
+    // entries/photos survive the help round-trip.
+    var transactionsHelpOverlayShowing by mutableStateOf(false)
+
     // ── Dashboard quick-add dialog state ──
     var dashboardShowAddIncome by mutableStateOf(false)
     var dashboardShowAddExpense by mutableStateOf(false)

@@ -902,6 +902,29 @@ class MainActivity : ComponentActivity() {
                     }
                 )
             }
+            // Help overlay shown ON TOP of an open transaction dialog (preselect-help
+            // banner tap). Rendered at top level so it covers the dialog while the
+            // dialog stays mounted underneath, preserving in-progress entries/photos.
+            if (vm.transactionsHelpOverlayShowing) {
+                androidx.compose.ui.window.Dialog(
+                    onDismissRequest = { vm.transactionsHelpOverlayShowing = false },
+                    properties = androidx.compose.ui.window.DialogProperties(
+                        usePlatformDefaultWidth = false,
+                        decorFitsSystemWindows = false
+                    )
+                ) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        TransactionsHelpScreen(
+                            onBack = { vm.transactionsHelpOverlayShowing = false },
+                            scrollTarget = vm.transactionsHelpScrollTo,
+                            onScrollTargetConsumed = { vm.transactionsHelpScrollTo = null }
+                        )
+                    }
+                }
+            }
               } // CompositionLocalProvider(LocalShareBlockingDialogRegistrar)
             } // SyncBudgetTheme
         }
@@ -915,8 +938,6 @@ class MainActivity : ComponentActivity() {
     ) {
         if (vm.dashboardShowAddIncome) {
             TransactionDialog(
-                title = strings.common.addNewIncomeTransaction,
-                sourceLabel = strings.common.sourceLabel,
                 categories = vm.activeCategories,
                 existingIds = vm.existingIds,
                 currencySymbol = vm.currencySymbol,
@@ -937,7 +958,7 @@ class MainActivity : ComponentActivity() {
                 onClearOcrState = { vm.clearOcrState() },
                 onShowPreselectHelp = {
                     vm.transactionsHelpScrollTo = "preselected_cats"
-                    vm.currentScreen = "transactions_help"
+                    vm.transactionsHelpOverlayShowing = true
                 },
                 onDismiss = {
                     vm.dashboardShowAddIncome = false
@@ -970,8 +991,6 @@ class MainActivity : ComponentActivity() {
 
         if (vm.dashboardShowAddExpense) {
             TransactionDialog(
-                title = strings.common.addNewExpenseTransaction,
-                sourceLabel = strings.common.merchantLabel,
                 categories = vm.activeCategories,
                 existingIds = vm.existingIds,
                 currencySymbol = vm.currencySymbol,
@@ -994,7 +1013,7 @@ class MainActivity : ComponentActivity() {
                 onClearOcrState = { vm.clearOcrState() },
                 onShowPreselectHelp = {
                     vm.transactionsHelpScrollTo = "preselected_cats"
-                    vm.currentScreen = "transactions_help"
+                    vm.transactionsHelpOverlayShowing = true
                 },
                 onDismiss = {
                     vm.dashboardShowAddExpense = false
@@ -2236,7 +2255,7 @@ class MainActivity : ComponentActivity() {
             onClearOcrState = { vm.clearOcrState() },
             onShowPreselectHelp = {
                 vm.transactionsHelpScrollTo = "preselected_cats"
-                vm.currentScreen = "transactions_help"
+                vm.transactionsHelpOverlayShowing = true
             },
             onDialogOpenStateChange = { open -> if (open) vm.transactionDialogOpenCount++ else vm.transactionDialogOpenCount-- },
             pendingSharedImageUris = vm.pendingSharedImageUris,

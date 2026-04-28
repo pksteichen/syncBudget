@@ -1296,8 +1296,6 @@ fun TransactionsScreen(
     // Add Income dialog
     if (showAddIncome) {
         TransactionDialog(
-            title = S.common.addNewIncomeTransaction,
-            sourceLabel = S.common.sourceLabel,
             categories = categories,
             existingIds = existingIds,
             currencySymbol = currencySymbol,
@@ -1359,8 +1357,6 @@ fun TransactionsScreen(
     // Add Expense dialog
     if (showAddExpense) {
         TransactionDialog(
-            title = S.common.addNewExpenseTransaction,
-            sourceLabel = S.common.merchantLabel,
             categories = categories,
             existingIds = existingIds,
             currencySymbol = currencySymbol,
@@ -1430,8 +1426,6 @@ fun TransactionsScreen(
     // Edit dialog
     editingTransaction?.let { txn ->
         TransactionDialog(
-            title = S.transactions.editTransaction,
-            sourceLabel = if (txn.type == TransactionType.EXPENSE) S.common.merchantLabel else S.common.sourceLabel,
             categories = categories,
             existingIds = existingIds,
             currencySymbol = currencySymbol,
@@ -3066,8 +3060,6 @@ private fun TransactionRow(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransactionDialog(
-    title: String,
-    sourceLabel: String,
     categories: List<Category>,
     existingIds: Set<Int>,
     currencySymbol: String = "$",
@@ -3155,6 +3147,10 @@ fun TransactionDialog(
     var addModeReceiptId3 by remember { mutableStateOf<String?>(null) }
     var addModeReceiptId4 by remember { mutableStateOf<String?>(null) }
     var addModeReceiptId5 by remember { mutableStateOf<String?>(null) }
+
+    // Mutable copy of the isExpense parameter so the user (or OCR refund
+    // detection) can flip the type without re-opening the dialog.
+    var typeIsExpense by remember(isExpense) { mutableStateOf(isExpense) }
 
     // Share-intent: notify VM so it knows a TransactionDialog is alive and can
     // route incoming ACTION_SEND images into this dialog instead of discarding
@@ -3505,20 +3501,26 @@ fun TransactionDialog(
                     categories.any { it.id == ca.categoryId }
                 }
 
+                // Refund detection: OCR returns negative cents for return/refund
+                // receipts. BudgeTrak's data model is "amount always positive,
+                // type carries polarity" (CsvParser.kt:869), so flip type → INCOME
+                // and use absolute values for the amount fields.
+                if (r.amount < 0) typeIsExpense = false
+
                 // Amount fields — always overwrite, clearing the "other mode" so
                 // stale values (e.g. a user's typed singleAmountText) don't linger
                 // when OCR switches to multi-cat mode (or vice versa).
                 if (cats.size <= 1) {
-                    singleAmountText = formatAmount(r.amount, maxDecimals)
+                    singleAmountText = formatAmount(kotlin.math.abs(r.amount), maxDecimals)
                     totalAmountText = ""
                     categoryAmountTexts.clear()
                     userOwnedFields = emptySet()
                 } else {
                     singleAmountText = ""
-                    totalAmountText = formatAmount(r.amount, maxDecimals)
+                    totalAmountText = formatAmount(kotlin.math.abs(r.amount), maxDecimals)
                     categoryAmountTexts.clear()
                     cats.forEach {
-                        categoryAmountTexts[it.categoryId] = formatAmount(it.amount, maxDecimals)
+                        categoryAmountTexts[it.categoryId] = formatAmount(kotlin.math.abs(it.amount), maxDecimals)
                     }
                     userOwnedFields = buildSet {
                         add("total")
@@ -3645,7 +3647,47 @@ fun TransactionDialog(
                         .background(headerBg, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
                         .padding(horizontal = 20.dp, vertical = 14.dp)
                 ) {
-                    Text(title, style = MaterialTheme.typography.titleMedium, color = headerTxt)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            if (isEdit) S.transactions.editTransaction else S.common.addTransaction,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = headerTxt
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        // Compact EXPENSE / INCOME pill — tap to swap.
+                        val expColor = Color(0xFFF44336)
+                        val incColor = Color(0xFF4CAF50)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(topStart = 10.dp, bottomStart = 10.dp))
+                                    .background(if (typeIsExpense) expColor else Color.Transparent)
+                                    .border(1.dp, expColor, RoundedCornerShape(topStart = 10.dp, bottomStart = 10.dp))
+                                    .clickable { typeIsExpense = true }
+                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    S.transactions.expensesFilter,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (typeIsExpense) Color.White else expColor
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(topEnd = 10.dp, bottomEnd = 10.dp))
+                                    .background(if (!typeIsExpense) incColor else Color.Transparent)
+                                    .border(1.dp, incColor, RoundedCornerShape(topEnd = 10.dp, bottomEnd = 10.dp))
+                                    .clickable { typeIsExpense = false }
+                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    S.transactions.incomeFilter,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (!typeIsExpense) Color.White else incColor
+                                )
+                            }
+                        }
+                    }
                     Row(
                         modifier = Modifier.align(Alignment.CenterEnd),
                         verticalAlignment = Alignment.CenterVertically
@@ -4099,7 +4141,7 @@ fun TransactionDialog(
                                 val stripped = newVal.lowercase().replace(Regex("[^a-z0-9]"), "")
                                 if (!autoCategorizeFired && stripped.length >= matchChars && selectedCategoryIds.isEmpty()) {
                                     autoCategorizeFired = true
-                                    val temp = Transaction(id = 0, source = source, amount = 0.0, date = selectedDate, type = if (isExpense) TransactionType.EXPENSE else TransactionType.INCOME)
+                                    val temp = Transaction(id = 0, source = source, amount = 0.0, date = selectedDate, type = if (typeIsExpense) TransactionType.EXPENSE else TransactionType.INCOME)
                                     val result = com.techadvantage.budgetrak.data.autoCategorize(temp, allTransactions, categories, matchChars)
                                     if (result.categoryAmounts.isNotEmpty()) {
                                         val catId = result.categoryAmounts.first().categoryId
@@ -4109,7 +4151,7 @@ fun TransactionDialog(
                                     }
                                 }
                             },
-                            label = { Text(sourceLabel) },
+                            label = { Text(if (typeIsExpense) S.common.merchantLabel else S.common.sourceLabel) },
                             enabled = !isSupercharge,
                             isError = showValidation && source.isBlank(),
                             supportingText = if (showValidation && source.isBlank()) ({
@@ -4161,7 +4203,7 @@ fun TransactionDialog(
                     // Hidden entirely for supercharge transactions (linking is locked)
                     if (isSupercharge) {
                         // No linking UI for supercharge transactions
-                    } else if (isExpense) {
+                    } else if (typeIsExpense) {
                         if (linkedRecurringId != null) {
                             val linkedName = recurringExpenses.find { it.id == linkedRecurringId }?.source ?: "?"
                             Row(
@@ -4782,7 +4824,7 @@ fun TransactionDialog(
                         DialogPrimaryButton(
                             onClick = {
                                 if (source.isBlank() || selectedCats.isEmpty()) { showValidation = true; return@DialogPrimaryButton }
-                                val type = if (isExpense) TransactionType.EXPENSE else TransactionType.INCOME
+                                val type = if (typeIsExpense) TransactionType.EXPENSE else TransactionType.INCOME
                                 var catAmounts: List<CategoryAmount>
                                 val totalAmount: Double
 
