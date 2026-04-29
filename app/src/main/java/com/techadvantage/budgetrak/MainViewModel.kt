@@ -324,6 +324,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Idempotent Firebase anonymous-auth attempt. No-op if already
+     * authenticated. Called from init (when online) and from
+     * networkCallback.onAvailable (to retry after offline startup).
+     */
+    private suspend fun attemptAnonymousAuth() {
+        if (firebaseAuthReady) return
+        try {
+            com.google.firebase.auth.FirebaseAuth.getInstance()
+                .signInAnonymously()
+                .await()
+            firebaseAuthReady = true
+        } catch (e: Exception) {
+            android.util.Log.w("Auth", "Anonymous sign-in failed: ${e.message}")
+        }
+    }
+
     private fun loadCachedDevices(): List<DeviceInfo> {
         val json = syncPrefs.getString("cachedDeviceRoster", null) ?: return emptyList()
         return try {
@@ -2363,8 +2380,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // Force App Check token refresh on resume — prevents PERMISSION_DENIED from stale token
-        if (isSyncConfigured) {
+        // Force App Check token refresh on resume — prevents PERMISSION_DENIED from stale token.
+        // Skip when offline; networkCallback.onAvailable already triggers a refresh on recovery.
+        if (isSyncConfigured && isNetworkAvailable) {
             try {
                 com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
                     .getAppCheckToken(false) // false = use cached if valid, force refresh if expired
@@ -2673,6 +2691,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     if (isSyncConfigured) {
                         try { com.google.firebase.appcheck.FirebaseAppCheck.getInstance().getAppCheckToken(false) } catch (_: Exception) {}
                     }
+                    // Retry Firebase anonymous auth if it was skipped at init
+                    // (offline startup) or failed earlier. No-op once auth is ready.
+                    if (!firebaseAuthReady) {
+                        viewModelScope.launch { attemptAnonymousAuth() }
+                    }
                     if (isSyncConfigured && syncStatus == "offline") {
                         syncStatus = if (docSync?.isListening == true) "synced" else "error"
                     }
@@ -2826,17 +2849,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         // ── Firebase anonymous auth ──
+        // Skip when offline — `signInAnonymously().await()` waits the full
+        // SDK timeout (~30-60 s) when there's no network. The networkCallback
+        // .onAvailable hook below retries on recovery via attemptAnonymousAuth().
         viewModelScope.launch {
-            if (!firebaseAuthReady) {
-                try {
-                    com.google.firebase.auth.FirebaseAuth.getInstance()
-                        .signInAnonymously()
-                        .await()
-                    firebaseAuthReady = true
-                } catch (e: Exception) {
-                    android.util.Log.w("Auth", "Anonymous sign-in failed: ${e.message}")
-                }
-            }
+            if (isNetworkAvailable) attemptAnonymousAuth()
         }
 
         // ── Sync time display ──

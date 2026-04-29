@@ -426,8 +426,21 @@ private suspend fun runTier2(
             } else {
                 Log.i(SYNC_TAG, "Tier 2 receipt sync skipped: gid=${gid != null} key=${key != null} device=${deviceId.isNotBlank()}")
             }
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            // Don't swallow — let the worker's outer scope handle cancellation
+            // (Samsung power-management cuts Tier 3 ~1m48s in; equivalent
+            // pattern needs to surface cleanly from Tier 2 for parity with
+            // ImageLedgerService and ReceiptSyncManager.buildSnapshot which
+            // already rethrow per the v2.7 fix).
+            throw ce
         } catch (e: Exception) {
-            Log.w(SYNC_TAG, "Tier 2 receipt sync failed: ${e.message}")
+            // Pass `e` to Log.w so we get a full stack trace (vs message-only),
+            // and surface to Crashlytics + token_log via syncEvent so failure
+            // patterns are visible across the fleet rather than buried in logcat.
+            Log.w(SYNC_TAG, "Tier 2 receipt sync failed: ${e.message}", e)
+            com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent(
+                "$sourceLabel Tier 2 receipt sync failed: ${e.javaClass.simpleName}: ${e.message?.take(200)}"
+            )
         }
     }
     return true
