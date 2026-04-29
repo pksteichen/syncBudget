@@ -113,8 +113,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var transactionsHelpOverlayShowing by mutableStateOf(false)
 
     // ── Dashboard quick-add dialog state ──
-    var dashboardShowAddIncome by mutableStateOf(false)
-    var dashboardShowAddExpense by mutableStateOf(false)
+    // Unified dashboard add-transaction trigger. Opens TransactionDialog
+    // in EXPENSE mode by default; user toggles to INCOME via the dialog
+    // header pill. Replaced separate add-income / add-expense states on
+    // 2026-04-29 to match the consolidated TransactionsScreen toolbar.
+    var dashboardShowAddTransaction by mutableStateOf(false)
 
     // ── Share-intent image (receipt shared from another app) ──
     // Set by MainActivity on ACTION_SEND / ACTION_SEND_MULTIPLE; consumed by a
@@ -2439,9 +2442,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // ═══════════════════════════════════════════════════════════════════
 
     fun handleWidgetIntent(action: String?) {
+        // Both legacy widget actions (ADD_INCOME / ADD_EXPENSE) now route to
+        // the unified add-transaction dialog; the user picks the type via
+        // the in-dialog header pill.
         when (action) {
-            com.techadvantage.budgetrak.widget.BudgetWidgetProvider.ACTION_ADD_INCOME -> dashboardShowAddIncome = true
-            com.techadvantage.budgetrak.widget.BudgetWidgetProvider.ACTION_ADD_EXPENSE -> dashboardShowAddExpense = true
+            com.techadvantage.budgetrak.widget.BudgetWidgetProvider.ACTION_ADD_INCOME,
+            com.techadvantage.budgetrak.widget.BudgetWidgetProvider.ACTION_ADD_EXPENSE -> dashboardShowAddTransaction = true
         }
     }
 
@@ -2552,7 +2558,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             currentScreen = "main"
             if (!canAttachPhotos) {
-                dashboardShowAddExpense = true
+                dashboardShowAddTransaction = true
                 sharedPhotoBlockedToastPending = true
                 return@launch
             }
@@ -2574,7 +2580,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // Re-queue slots 2..N for post-open absorption.
                 pendingSharedImageUris.addAll(uris.drop(1))
             }
-            dashboardShowAddExpense = true
+            dashboardShowAddTransaction = true
         }
     }
 

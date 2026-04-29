@@ -119,7 +119,12 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.offset
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.unit.IntOffset
@@ -334,8 +339,7 @@ fun TransactionsScreen(
     var viewFilter by remember { mutableStateOf(ViewFilter.ALL) }
     var sortMode by remember { mutableStateOf(SortMode.DATE_DESC) }
     var dateRange by remember { mutableStateOf(DateRange.SIX_MONTHS) }
-    var showAddIncome by remember { mutableStateOf(false) }
-    var showAddExpense by remember { mutableStateOf(false) }
+    var showAddTransaction by remember { mutableStateOf(false) }
     var showSearchMenu by remember { mutableStateOf(false) }
 
     // Search state
@@ -923,28 +927,40 @@ fun TransactionsScreen(
                     )
                 }
 
+                // Unified Add Transaction button. Opens TransactionDialog
+                // in EXPENSE mode by default (most common); user toggles
+                // to INCOME via the EXPENSE/INCOME pill in the dialog header.
+                // Two-layer drawable so the plus circle can pulse independently
+                // of the receipt body — body stays static, plus fades a deep
+                // blue between 35% and 100% alpha as a call-to-action cue.
+                val addPulse = rememberInfiniteTransition(label = "addTxnPulse")
+                val plusAlpha by addPulse.animateFloat(
+                    initialValue = 0.35f,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(900, easing = FastOutSlowInEasing),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "addTxnPulseAlpha"
+                )
                 IconButton(
-                    onClick = { showAddIncome = true },
+                    onClick = { showAddTransaction = true },
                     modifier = Modifier.size(48.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.Add,
-                        contentDescription = S.transactions.addIncome,
-                        tint = Color(0xFF4CAF50),
-                        modifier = Modifier.size(36.dp)
-                    )
-                }
-
-                IconButton(
-                    onClick = { showAddExpense = true },
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Remove,
-                        contentDescription = S.transactions.addExpense,
-                        tint = Color(0xFFF44336),
-                        modifier = Modifier.size(36.dp)
-                    )
+                    Box(modifier = Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_add_transaction_body),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onBackground,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_add_transaction_plus),
+                            contentDescription = S.common.addTransaction,
+                            tint = Color(0xFF0D47A1).copy(alpha = plusAlpha),
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
 
                 Box {
@@ -1293,69 +1309,11 @@ fun TransactionsScreen(
         }
     }
 
-    // Add Income dialog
-    if (showAddIncome) {
-        TransactionDialog(
-            categories = categories,
-            existingIds = existingIds,
-            currencySymbol = currencySymbol,
-            dateFormatter = dateFormatter,
-            chartPalette = chartPalette,
-            recurringExpenses = recurringExpenses,
-            amortizationEntries = amortizationEntries,
-            incomeSources = incomeSources,
-            savingsGoals = savingsGoals,
-            pastSources = pastSources,
-            allTransactions = transactions,
-            matchChars = matchChars,
-            budgetPeriod = budgetPeriod,
-            isPaidUser = isPaidUser,
-            isSubscriber = isSubscriber,
-            ocrState = ocrState,
-            onRunOcr = onRunOcr,
-            onClearOcrState = onClearOcrState,
-            onShowPreselectHelp = onShowPreselectHelp,
-            onDismiss = {
-                showAddIncome = false
-                onClearOcrState?.invoke()
-            },
-            onSave = { txn ->
-                val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null || txn.linkedSavingsGoalId != null
-                val dups = findDuplicates(txn, transactions, percentTolerance, matchDollar, matchDays, matchChars)
-                if (dups.isNotEmpty()) {
-                    pendingManualSave = txn
-                    manualDuplicateMatches = dups
-                    pendingManualIsEdit = false
-                    showManualDuplicateDialog = true
-                } else if (alreadyLinked) {
-                    addAndScroll(txn)
-                } else {
-                    // Income: check budget income match only
-                    val budgetMatches = findBudgetIncomeMatches(txn, incomeSources, matchChars, matchDays)
-                    if (budgetMatches.isNotEmpty()) {
-                        pendingBudgetIncomeTxn = txn
-                        pendingBudgetIncomeMatches = budgetMatches
-                        pendingBudgetIncomeIsEdit = false
-                        showBudgetIncomeDialog = true
-                    } else {
-                        addAndScroll(txn)
-                    }
-                }
-                showAddIncome = false
-            },
-            onAddAmortization = onAddAmortization,
-            onDeleteAmortization = onDeleteAmortization,
-            autoCapitalize = autoCapitalize,
-            onOpenStateChange = onDialogOpenStateChange,
-            pendingSharedImageUris = pendingSharedImageUris,
-            onConsumeSharedImageUris = onConsumeSharedImageUris,
-            onShareOverflow = onShareOverflow,
-            onPhotoContentChanged = onPhotoContentChanged
-        )
-    }
-
-    // Add Expense dialog
-    if (showAddExpense) {
+    // Add Transaction dialog (unified — type chosen via header pill).
+    // Defaults to EXPENSE since it's the more common case; user toggles
+    // to INCOME via the dialog header. onSave dispatches the post-save
+    // matching chain by the saved transaction's actual type.
+    if (showAddTransaction) {
         TransactionDialog(
             categories = categories,
             existingIds = existingIds,
@@ -1378,7 +1336,7 @@ fun TransactionsScreen(
             onClearOcrState = onClearOcrState,
             onShowPreselectHelp = onShowPreselectHelp,
             onDismiss = {
-                showAddExpense = false
+                showAddTransaction = false
                 onClearOcrState?.invoke()
             },
             onSave = { txn ->
@@ -1391,7 +1349,19 @@ fun TransactionsScreen(
                     showManualDuplicateDialog = true
                 } else if (alreadyLinked) {
                     addAndScroll(txn)
+                } else if (txn.type == TransactionType.INCOME) {
+                    // Income: check budget-income match only.
+                    val budgetMatches = findBudgetIncomeMatches(txn, incomeSources, matchChars, matchDays)
+                    if (budgetMatches.isNotEmpty()) {
+                        pendingBudgetIncomeTxn = txn
+                        pendingBudgetIncomeMatches = budgetMatches
+                        pendingBudgetIncomeIsEdit = false
+                        showBudgetIncomeDialog = true
+                    } else {
+                        addAndScroll(txn)
+                    }
                 } else {
+                    // Expense: recurring → amortization → addAndScroll fall-through.
                     val recurringMatches = findRecurringExpenseMatches(txn, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
                     if (recurringMatches.isNotEmpty()) {
                         pendingRecurringTxn = txn
@@ -1410,7 +1380,7 @@ fun TransactionsScreen(
                         }
                     }
                 }
-                showAddExpense = false
+                showAddTransaction = false
             },
             onAddAmortization = onAddAmortization,
             onDeleteAmortization = onDeleteAmortization,

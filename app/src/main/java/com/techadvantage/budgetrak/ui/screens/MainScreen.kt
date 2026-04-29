@@ -4,8 +4,10 @@ import androidx.compose.animation.animateColor
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -288,8 +290,7 @@ fun MainScreen(
     categories: List<Category> = emptyList(),
     onSettingsClick: () -> Unit,
     onNavigate: (String) -> Unit,
-    onAddIncome: () -> Unit = {},
-    onAddExpense: () -> Unit = {},
+    onAddTransaction: () -> Unit = {},
     onSupercharge: (Map<Int, Double>, Map<Int, SuperchargeMode>) -> Unit = { _, _ -> },
     weekStartDay: DayOfWeek = DayOfWeek.SUNDAY,
     chartPalette: String = "Bright",
@@ -593,34 +594,22 @@ fun MainScreen(
                     }
                 }
 
-                // ── +/- buttons (fixed, protected) ──
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(customColors.displayBackground)
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Add,
-                        contentDescription = S.dashboard.addIncome,
-                        tint = Color(0xFF4CAF50),
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clickable(onClick = onAddIncome)
-                    )
-                    Icon(
-                        imageVector = Icons.Filled.Remove,
-                        contentDescription = S.dashboard.addExpense,
-                        tint = Color(0xFFF44336),
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clickable(onClick = onAddExpense)
-                    )
-                }
-
                 // ── Nav icons (fixed, most protected) ──
+                // Replaces the prior separate +/- transaction bar (removed
+                // 2026-04-29). The leftmost item is the unified Add Transaction
+                // icon — same pulsing layered drawable used in the Transactions
+                // toolbar — opening the unified TransactionDialog in EXPENSE
+                // mode by default; user toggles to INCOME via header pill.
+                val dashAddPulse = rememberInfiniteTransition(label = "dashAddTxnPulse")
+                val dashPlusAlpha by dashAddPulse.animateFloat(
+                    initialValue = 0.35f,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(900, easing = FastOutSlowInEasing),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "dashAddTxnPulseAlpha"
+                )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -628,6 +617,22 @@ fun MainScreen(
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    IconButton(onClick = onAddTransaction, modifier = Modifier.size(48.dp)) {
+                        Box(modifier = Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_add_transaction_body),
+                                contentDescription = null,
+                                tint = customColors.accentTint,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_add_transaction_plus),
+                                contentDescription = S.common.addTransaction,
+                                tint = Color(0xFF0D47A1).copy(alpha = dashPlusAlpha),
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
                     IconButton(onClick = { onNavigate("transactions") }, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.AutoMirrored.Filled.List, S.dashboard.transactions, tint = customColors.accentTint, modifier = Modifier.size(32.dp))
                     }

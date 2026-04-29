@@ -413,8 +413,7 @@ class MainActivity : ComponentActivity() {
                         categories = vm.activeCategories,
                         onSettingsClick = { vm.currentScreen = "settings" },
                         onNavigate = { vm.currentScreen = it },
-                        onAddIncome = { vm.dashboardShowAddIncome = true },
-                        onAddExpense = { vm.dashboardShowAddExpense = true },
+                        onAddTransaction = { vm.dashboardShowAddTransaction = true },
                         weekStartDay = if (vm.weekStartSunday) java.time.DayOfWeek.SUNDAY else java.time.DayOfWeek.MONDAY,
                         chartPalette = vm.chartPalette,
                         dateFormatPattern = vm.dateFormatPattern,
@@ -939,60 +938,10 @@ class MainActivity : ComponentActivity() {
         strings: AppStrings,
         toastState: AppToastState,
     ) {
-        if (vm.dashboardShowAddIncome) {
-            TransactionDialog(
-                categories = vm.activeCategories,
-                existingIds = vm.existingIds,
-                currencySymbol = vm.currencySymbol,
-                dateFormatter = vm.dateFormatter,
-                chartPalette = vm.chartPalette,
-                recurringExpenses = vm.activeRecurringExpenses,
-                amortizationEntries = vm.activeAmortizationEntries,
-                incomeSources = vm.activeIncomeSources,
-                savingsGoals = vm.activeSavingsGoals,
-                pastSources = vm.activeTransactions.groupingBy { it.source }.eachCount().entries.sortedByDescending { it.value }.map { it.key },
-                allTransactions = vm.activeTransactions,
-                matchChars = vm.matchChars,
-                budgetPeriod = vm.budgetPeriod,
-                isPaidUser = vm.isPaidUser || vm.isSubscriber,
-                isSubscriber = vm.isSubscriber,
-                ocrState = vm.ocrState,
-                onRunOcr = { rid, preSelected -> vm.runOcrOnSlot1(rid, preSelected) },
-                onClearOcrState = { vm.clearOcrState() },
-                onShowPreselectHelp = {
-                    vm.transactionsHelpScrollTo = "preselected_cats"
-                    vm.transactionsHelpOverlayShowing = true
-                },
-                onDismiss = {
-                    vm.dashboardShowAddIncome = false
-                    vm.clearOcrState()
-                },
-                onSave = { txn ->
-                    vm.runMatchingChain(txn)
-                    vm.dashboardShowAddIncome = false
-                    vm.clearOcrState()
-                },
-                onAddAmortization = { entry ->
-                    val added = entry.copy(deviceId = vm.localDeviceId)
-                    vm.amortizationEntries.add(added)
-                    vm.saveAmortizationEntries(listOf(added))
-                },
-                onDeleteAmortization = { entry ->
-                    val idx = vm.amortizationEntries.indexOfFirst { it.id == entry.id }
-                    if (idx >= 0) {
-                        vm.amortizationEntries[idx] = vm.amortizationEntries[idx].copy(deleted = true)
-                        vm.saveAmortizationEntries(listOf(vm.amortizationEntries[idx]))
-                    }
-                },
-                autoCapitalize = vm.autoCapitalize,
-                onOpenStateChange = { open -> if (open) vm.transactionDialogOpenCount++ else vm.transactionDialogOpenCount-- },
-                pendingSharedImageUris = vm.pendingSharedImageUris,
-                onConsumeSharedImageUris = { vm.pendingSharedImageUris.clear() },
-                onShareOverflow = { vm.shareOverflowToastPending = true }
-            )
-        }
-
-        if (vm.dashboardShowAddExpense) {
+        // Unified Add Transaction dialog (replaces former separate income +
+        // expense dashboard dialogs on 2026-04-29). Defaults to EXPENSE mode;
+        // user toggles to INCOME via the dialog header pill.
+        if (vm.dashboardShowAddTransaction) {
             TransactionDialog(
                 categories = vm.activeCategories,
                 existingIds = vm.existingIds,
@@ -1019,13 +968,13 @@ class MainActivity : ComponentActivity() {
                     vm.transactionsHelpOverlayShowing = true
                 },
                 onDismiss = {
-                    vm.dashboardShowAddExpense = false
+                    vm.dashboardShowAddTransaction = false
                     vm.pendingSharedReceiptId = null
                     vm.clearOcrState()
                 },
                 onSave = { txn ->
                     vm.runMatchingChain(txn)
-                    vm.dashboardShowAddExpense = false
+                    vm.dashboardShowAddTransaction = false
                     vm.pendingSharedReceiptId = null
                     vm.clearOcrState()
                 },

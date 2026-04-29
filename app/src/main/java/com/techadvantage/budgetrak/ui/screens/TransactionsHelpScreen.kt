@@ -67,6 +67,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
@@ -321,8 +322,11 @@ fun TransactionsHelpScreen(
                 )
             }
             Spacer(modifier = Modifier.height(6.dp))
-            IconExplanationRow(Icons.Filled.Add, S.transactions.addIncome, S.transactionsHelp.addIncomeDesc, Color(0xFF4CAF50))
-            IconExplanationRow(Icons.Filled.Remove, S.transactions.addExpense, S.transactionsHelp.addExpenseDesc, Color(0xFFF44336))
+            IconExplanationRow(
+                painterResource(id = com.techadvantage.budgetrak.R.drawable.ic_add_transaction),
+                S.common.addTransaction,
+                S.transactionsHelp.addTransactionDesc
+            )
             IconExplanationRow(Icons.Filled.Search, S.transactions.search, S.transactionsHelp.searchDesc)
             Spacer(modifier = Modifier.height(4.dp))
             Column(modifier = Modifier.padding(start = 40.dp)) {
@@ -972,6 +976,37 @@ private fun IconExplanationRow(
     ) {
         Icon(
             imageVector = icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            buildAnnotatedString {
+                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(label) }
+                append(" \u2014 $description")
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+            lineHeight = 20.sp
+        )
+    }
+}
+
+/** Painter overload for drawable-resource icons (e.g. ic_add_transaction). */
+@Composable
+private fun IconExplanationRow(
+    icon: androidx.compose.ui.graphics.painter.Painter,
+    label: String,
+    description: String,
+    tint: Color = MaterialTheme.colorScheme.onBackground
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(vertical = 3.dp)
+    ) {
+        Icon(
+            painter = icon,
             contentDescription = null,
             tint = tint,
             modifier = Modifier.size(20.dp)
