@@ -15,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -2194,6 +2195,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // was persisted with items (crash recovery). Exits when the queue drains;
     // on upload failure, backs off (30s → 60s → 2m → 5m → 10m cap) before
     // retrying the same queue.
+    @Volatile
     private var uploadDrainerJob: kotlinx.coroutines.Job? = null
 
     fun kickUploadDrainer() {
@@ -2565,11 +2567,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun runOcrOnSlot1(receiptId: String, preSelectedCategoryIds: Set<Int> = emptySet()) {
         if (ocrState is OcrState.Loading) return
         // Fail fast when offline. Gemini calls don't have a fast-fail path —
-        // they wait the full SDK timeout (~30-60 s) before erroring. The
-        // dialog's OcrState.Failed handler picks the offline-specific toast
-        // when message == "OFFLINE".
+        // they wait the full SDK timeout (~30-60 s) before erroring.
         if (!isNetworkAvailable) {
-            ocrState = OcrState.Failed("OFFLINE")
+            ocrState = OcrState.Offline
             return
         }
         ocrState = OcrState.Loading
@@ -2678,15 +2678,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     // Resume queued receipt uploads. The drainer's exponential
                     // backoff loop may currently be sleeping (up to 10 min)
-                    // after no-progress cycles during the outage; cancel +
-                    // restart so uploads resume immediately rather than
-                    // waiting out the backoff.
-                    val pending = com.techadvantage.budgetrak.data.sync.ReceiptManager
-                        .loadPendingUploads(context).size
-                    if (pending > 0 && (isPaidUser || isSubscriber) && isSyncConfigured) {
-                        uploadDrainerJob?.cancel()
-                        uploadDrainerJob = null
-                        kickUploadDrainer()
+                    // after no-progress cycles during the outage; cancelAndJoin
+                    // + restart so uploads resume immediately and the old
+                    // drainer fully exits before the new one starts (avoids
+                    // two drainers briefly racing on the same queue / ledger
+                    // bumps). The pending-queue check + cancel/join run on a
+                    // viewModelScope coroutine because (a) cancelAndJoin is
+                    // suspending and (b) loadPendingUploads is disk I/O we
+                    // don't want on the system binder thread.
+                    if ((isPaidUser || isSubscriber) && isSyncConfigured) {
+                        viewModelScope.launch(Dispatchers.IO) {
+                            val pending = com.techadvantage.budgetrak.data.sync.ReceiptManager
+                                .loadPendingUploads(context).size
+                            if (pending > 0) {
+                                uploadDrainerJob?.cancelAndJoin()
+                                uploadDrainerJob = null
+                                kickUploadDrainer()
+                            }
+                        }
                     }
                 }
                 override fun onLost(network: android.net.Network) {

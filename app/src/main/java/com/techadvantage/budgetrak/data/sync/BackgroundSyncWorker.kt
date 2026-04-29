@@ -189,27 +189,35 @@ class BackgroundSyncWorker(
             }
             val startMs = System.currentTimeMillis()
             try {
-                val ok: Boolean = if (timeBudgetMs != null) {
-                    kotlinx.coroutines.withTimeoutOrNull(timeBudgetMs) {
+                // workDone = real sync work happened (Tier 2/3 ran past their
+                // offline-skip checks and reached the end). timedOut = the
+                // budget elapsed before the body returned. Keeping these
+                // separate so we don't stamp the slim-path window after an
+                // offline-skipped FCM heartbeat (which would suppress 30 min
+                // of legitimate sync attempts after the network returns).
+                val timedOut: Boolean
+                val workDone: Boolean = if (timeBudgetMs != null) {
+                    val result = kotlinx.coroutines.withTimeoutOrNull(timeBudgetMs) {
                         runFullSyncBody(context, sourceLabel)
-                        true
-                    } ?: false
+                    }
+                    timedOut = (result == null)
+                    result ?: false
                 } else {
+                    timedOut = false
                     runFullSyncBody(context, sourceLabel)
-                    true
                 }
-                if (!ok && timeBudgetMs != null) {
+                if (timedOut) {
                     val elapsed = System.currentTimeMillis() - startMs
                     com.techadvantage.budgetrak.BudgeTrakApplication
                         .syncEvent("$sourceLabel: TIME-BUDGET-EXPIRED at ${elapsed}ms (budget=${timeBudgetMs}ms)")
                 }
-                if (ok && sourceLabel.startsWith("FCM-")) {
+                if (workDone && sourceLabel.startsWith("FCM-")) {
                     // Phase 4-alt: stamp last-successful-FCM-inline so the
                     // periodic worker can take the slim path until it's stale.
                     context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
                         .edit().putLong(KEY_LAST_INLINE_AT, System.currentTimeMillis()).apply()
                 }
-                return ok
+                return workDone
             } finally {
                 isRunning.set(false)
             }
@@ -280,30 +288,37 @@ class BackgroundSyncWorker(
 
 private const val SYNC_TAG = "BackgroundSync"
 
-private suspend fun runFullSyncBody(context: Context, sourceLabel: String) {
+/**
+ * Returns true if real sync work was done; false if any path early-returned
+ * without doing meaningful work (Tier 1 app-active skip, Tier 2/3 offline
+ * skip, sync-not-configured skip). The caller uses the return value to
+ * decide whether to stamp `KEY_LAST_INLINE_AT` for the slim-path window —
+ * stamping after an offline-skip would suppress the next 30 min of real
+ * sync attempts.
+ */
+private suspend fun runFullSyncBody(context: Context, sourceLabel: String): Boolean {
     // Tier 1: app foregrounded — main app handles everything
     if (com.techadvantage.budgetrak.MainActivity.isAppActive) {
         com.techadvantage.budgetrak.BudgeTrakApplication
             .syncEvent("$sourceLabel: app active, skipped")
-        return
+        return false
     }
 
     val vm = com.techadvantage.budgetrak.MainViewModel.instance?.get()
     if (vm != null) {
-        runTier2(context, vm, sourceLabel)
-        return
+        return runTier2(context, vm, sourceLabel)
     }
-    runTier3(context, sourceLabel)
+    return runTier3(context, sourceLabel)
 }
 
 private suspend fun runTier2(
     context: Context,
     vm: com.techadvantage.budgetrak.MainViewModel,
     sourceLabel: String
-) {
+): Boolean {
     com.techadvantage.budgetrak.BudgeTrakApplication
         .syncEvent("$sourceLabel Tier 2: ViewModel alive, sync=${vm.isSyncConfigured}")
-    if (!vm.isSyncConfigured) return
+    if (!vm.isSyncConfigured) return false
 
     // Skip the entire Tier 2 work cycle when offline — every operation here
     // (App Check, listener restart, RTDB ping, receipt sync) hits the network
@@ -313,7 +328,7 @@ private suspend fun runTier2(
     if (!NetworkUtils.isOnline(context)) {
         com.techadvantage.budgetrak.BudgeTrakApplication
             .syncEvent("$sourceLabel Tier 2: offline, skipping")
-        return
+        return false
     }
 
     // Proactively refresh App Check token before it expires.
@@ -415,9 +430,10 @@ private suspend fun runTier2(
             Log.w(SYNC_TAG, "Tier 2 receipt sync failed: ${e.message}")
         }
     }
+    return true
 }
 
-private suspend fun runTier3(context: Context, sourceLabel: String) {
+private suspend fun runTier3(context: Context, sourceLabel: String): Boolean {
     val tier3StartMs = System.currentTimeMillis()
     val syncPrefs = context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
     val groupId = syncPrefs.getString("groupId", null)
@@ -453,7 +469,11 @@ private suspend fun runTier3(context: Context, sourceLabel: String) {
             "$sourceLabel Tier 3 SLIM: complete in ${elapsedMs}ms " +
                     "(solo=${!isSyncConfigured} freshFcm=$freshFcmInline)"
         )
-        return
+        // Slim path did real local work (period refresh + cash recompute +
+        // widget). Return true — though FCM- prefix doesn't take this path
+        // in normal flow (slim is gated on sourceLabel == "Worker"), so
+        // this won't extend the slim-path stamp window.
+        return true
     }
 
     val standbyBucket = try {
@@ -469,7 +489,7 @@ private suspend fun runTier3(context: Context, sourceLabel: String) {
     if (!NetworkUtils.isOnline(context)) {
         com.techadvantage.budgetrak.BudgeTrakApplication
             .syncEvent("$sourceLabel Tier 3: offline, skipping")
-        return
+        return false
     }
 
     // Anonymous auth (only when sync is configured — solo users skip)
@@ -603,6 +623,7 @@ private suspend fun runTier3(context: Context, sourceLabel: String) {
     val elapsedMs = System.currentTimeMillis() - tier3StartMs
     com.techadvantage.budgetrak.BudgeTrakApplication
         .syncEvent("$sourceLabel Tier 3: complete in ${elapsedMs}ms")
+    return true
 }
 
 // ── Resolve photo-capable device list with fallback chain ──────────────

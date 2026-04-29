@@ -20,4 +20,7 @@ sealed class OcrState {
     object Loading : OcrState()
     data class Success(val result: OcrResult) : OcrState()
     data class Failed(val message: String) : OcrState()
+    /** Distinguished from Failed so the UI picks an offline-specific toast
+     *  without string-matching the message field. */
+    object Offline : OcrState()
 }

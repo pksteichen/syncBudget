@@ -3542,8 +3542,11 @@ fun TransactionDialog(
                 onClearOcrState?.invoke()
             }
             is com.techadvantage.budgetrak.data.ocr.OcrState.Failed -> {
-                val msg = if (state.message == "OFFLINE") S.settings.aiOcrOffline else S.settings.aiOcrFailed
-                toastState.show(msg, windowYPx = aiIconWindowY)
+                toastState.show(S.settings.aiOcrFailed, windowYPx = aiIconWindowY)
+                onClearOcrState?.invoke()
+            }
+            is com.techadvantage.budgetrak.data.ocr.OcrState.Offline -> {
+                toastState.show(S.settings.aiOcrOffline, windowYPx = aiIconWindowY)
                 onClearOcrState?.invoke()
             }
             else -> Unit
