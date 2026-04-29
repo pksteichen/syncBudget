@@ -63,6 +63,15 @@ object ReceiptOcrService {
     private const val TAG = "ReceiptOcrService"
     private const val TIMEOUT_MS = 90_000L
 
+    // Cap C1.5 latency at 2 s past C2 completion. The reconciliation is
+    // best-effort (already falls back to C1 values on parse/API error in
+    // `runCall1Reconcile`); this is a third fallback for the case where
+    // C1.5 reasons unusually long. Verified 2026-04-29 against two
+    // identical refund-receipt runs where C1.5 consistently took ~7 s past
+    // C2 completion (vs ~1 s typical per the V18 design notes); the cap
+    // converts those tail cases into a bounded ~2 s wait.
+    private const val CALL1R_TIMEOUT_PAST_C2_MS = 2_000L
+
     // ── Schemas ────────────────────────────────────────────────────
 
     // Call 1: header + item name list + focused transcript. Categorisation
@@ -256,12 +265,27 @@ object ReceiptOcrService {
 
         // Call 1.5 (text-only reconciliation) and Call 2 (image+items) run in
         // parallel. Each depends only on Call 1's output; neither depends on
-        // the other. Launching concurrently hides Call 1.5's ~1s latency
-        // behind Call 2's longer image-bearing round-trip.
+        // the other. Launching concurrently hides Call 1.5's typical ~1 s
+        // latency behind Call 2's longer image-bearing round-trip.
+        //
+        // Cap C1.5 at CALL1R_TIMEOUT_PAST_C2_MS past C2 completion so a
+        // slow C1.5 (observed up to ~7 s on refund receipts) doesn't block
+        // the user — fall back to C1's values, same posture as the
+        // pre-existing parse/API-error fallback in `runCall1Reconcile`.
         val (c1r, c2) = coroutineScope {
-            val c1rDeferred = async { runCall1Reconcile(c1) }
             val c2Deferred = async { runCall2(imageBytes, c1.itemNames, promptCats, preselected) }
-            Pair(c1rDeferred.await(), c2Deferred.await())
+            val c1rDeferred = async { runCall1Reconcile(c1) }
+            val c2Result = c2Deferred.await()
+            val c1rResult = kotlinx.coroutines.withTimeoutOrNull(CALL1R_TIMEOUT_PAST_C2_MS) {
+                c1rDeferred.await()
+            } ?: run {
+                c1rDeferred.cancel()
+                if (BuildConfig.DEBUG) {
+                    Log.d(TAG, "Call1.5: timed out ${CALL1R_TIMEOUT_PAST_C2_MS}ms past C2 — using C1 values")
+                }
+                Call1Reconciled(c1.merchant, c1.date, c1.amountCents, null)
+            }
+            Pair(c1rResult, c2Result)
         }
         if (BuildConfig.DEBUG && (c1r.merchant != c1.merchant || c1r.date != c1.date || c1r.amountCents != c1.amountCents)) {
             Log.d(TAG, "Call1.5 reconciled: merchant ${c1.merchant}→${c1r.merchant}, date ${c1.date}→${c1r.date}, amountCents ${c1.amountCents}→${c1r.amountCents}${c1r.notes?.let { " — $it" } ?: ""}")
@@ -293,9 +317,12 @@ object ReceiptOcrService {
     }
 
     private suspend fun runCall1(imageBytes: ByteArray): Call1Header {
+        if (BuildConfig.DEBUG) Log.d(TAG, "Call1 dispatch (image=${imageBytes.size}B)")
+        val startNs = System.nanoTime()
         val raw = generateWithRetry(call1Model, imageBytes, buildCall1Prompt())
         if (BuildConfig.DEBUG) {
-            Log.d(TAG, "Call1 imageBytes=${imageBytes.size}")
+            val elapsedMs = (System.nanoTime() - startNs) / 1_000_000
+            Log.d(TAG, "Call1 response after ${elapsedMs}ms (image=${imageBytes.size}B)")
             raw.chunked(3500).forEachIndexed { i, chunk -> Log.d(TAG, "Call1 raw[$i]: $chunk") }
         }
         val json = JSONObject(raw)
@@ -328,8 +355,12 @@ object ReceiptOcrService {
         val fallback = Call1Reconciled(c1.merchant, c1.date, c1.amountCents, null)
         if (c1.fullTranscript.isEmpty()) return fallback
         return try {
+            if (BuildConfig.DEBUG) Log.d(TAG, "Call1.5 dispatch (transcript=${c1.fullTranscript.size} lines)")
+            val startNs = System.nanoTime()
             val raw = generateTextOnlyWithRetry(call1rModel, buildCall1ReconcilePrompt(c1))
             if (BuildConfig.DEBUG) {
+                val elapsedMs = (System.nanoTime() - startNs) / 1_000_000
+                Log.d(TAG, "Call1.5 response after ${elapsedMs}ms")
                 raw.chunked(3500).forEachIndexed { i, chunk -> Log.d(TAG, "Call1r raw[$i]: $chunk") }
             }
             val json = JSONObject(raw)
@@ -360,9 +391,12 @@ object ReceiptOcrService {
         promptCats: List<Category>,
         preselected: Boolean
     ): Call2Categorization {
+        if (BuildConfig.DEBUG) Log.d(TAG, "Call2 dispatch (items=${itemNames.size} cats=${promptCats.size} preselected=$preselected)")
+        val startNs = System.nanoTime()
         val raw = generateWithRetry(call2Model, imageBytes, buildCall2Prompt(itemNames, promptCats, preselected))
         if (BuildConfig.DEBUG) {
-            Log.d(TAG, "Call2 items=${itemNames.size} cats=${promptCats.size} preselected=$preselected")
+            val elapsedMs = (System.nanoTime() - startNs) / 1_000_000
+            Log.d(TAG, "Call2 response after ${elapsedMs}ms (items=${itemNames.size} cats=${promptCats.size} preselected=$preselected)")
             raw.chunked(3500).forEachIndexed { i, chunk -> Log.d(TAG, "Call2 raw[$i]: $chunk") }
         }
         val json = JSONObject(raw)
@@ -423,7 +457,13 @@ object ReceiptOcrService {
     ): OcrResult {
         val items = collapseItemsToLineItems(c2.items, promptCats)
 
+        if (BuildConfig.DEBUG) Log.d(TAG, "Call3 dispatch (items=${items.size})")
+        val c3StartNs = System.nanoTime()
         val c3Json = generateWithRetry(call3Model, imageBytes, buildCall3Prompt(items.map { it.description }))
+        if (BuildConfig.DEBUG) {
+            val elapsedMs = (System.nanoTime() - c3StartNs) / 1_000_000
+            Log.d(TAG, "Call3 response after ${elapsedMs}ms (items=${items.size})")
+        }
         val c3 = JSONObject(c3Json)
         val priceCentsRaw = c3.optJSONArray("prices")?.let { arr ->
             (0 until arr.length()).map { i ->
