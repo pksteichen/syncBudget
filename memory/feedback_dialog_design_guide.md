@@ -16,7 +16,7 @@ All dialogs must follow these standards. Never use raw Material3 `AlertDialog` o
 2. **Scrollable body** — content must scroll when space is limited (keyboard open, long content)
 3. **Button bar always visible** — footer/buttons stay pinned at the bottom, never scrolled off-screen
 4. **Optimal vertical space** — dialogs should use available screen space, not be a fixed size that gets clipped
-5. **PulsingScrollArrows** (bidirectional) — pulsing up-arrow at TopStart when content can scroll up, pulsing down-arrow at BottomStart when content can scroll down. Both appear automatically via `BoxScope.PulsingScrollArrows(scrollState)` — no modifier needed, positioning is standardized (`topPadding = 36.dp` clears the DialogHeader, `bottomPadding = 50.dp` clears the footer). The older down-only `PulsingScrollArrow` is deprecated but kept for backward compatibility.
+5. **PulsingScrollArrows** (bidirectional) — pulsing up-arrow at TopStart when content can scroll up, pulsing down-arrow at BottomStart when content can scroll down. Both appear automatically via `BoxScope.PulsingScrollArrows(scrollState)` — no modifier needed, positioning is standardized (`topPadding = 36.dp` clears the DialogHeader, `bottomPadding = 50.dp` clears the footer).
 
 `AdAwareAlertDialog` handles all of these automatically (built into Theme.kt). For `AdAwareDialog` (custom layout), you must add `.imePadding()`, `.verticalScroll()`, and `DialogFooter` manually.
 

@@ -8,7 +8,7 @@ type: reference
 
 ## App structure
 
-- Single Activity (`MainActivity.kt`, 2438 lines: screen router, lifecycle observer, composable wrappers) + `MainViewModel.kt` (2650 lines: ~80 state vars, business logic, sync lifecycle, background loops via `viewModelScope`).
+- Single Activity (`MainActivity.kt`, ~2.6 K lines: screen router, lifecycle observer, composable wrappers) + `MainViewModel.kt` (~3.2 K lines: ~80 state vars, business logic, sync lifecycle, background loops via `viewModelScope`).
 - Kotlin + Jetpack Compose. No Navigation Component; navigation via `currentScreen: String` mutable state on the ViewModel.
 - 7 JSON-file repositories load async on `Dispatchers.IO` with a learned-timing progress bar, gated by `dataLoaded`. See `MEMORY.md` "Async Loading & Lifecycle".
 - Derived state (`derivedStateOf`) for `activeTransactions`, `safeBudgetAmount`, `budgetAmount`, `simAvailableCash`, etc.
@@ -53,7 +53,7 @@ Never use raw `AlertDialog` / `Dialog`. Use:
 - `AdAwareDialog` — custom form layouts; wrap with `Surface + DialogHeader + DialogFooter`; manually add `.imePadding()`, `.verticalScroll()`.
 - `AdAwareDatePickerDialog` — date pickers.
 
-Styles: `DialogStyle.DEFAULT` (green `#2E7D32`/`#1B5E20`), `DANGER` (red `#B71C1C`), `WARNING` (orange `#E65100`). Buttons: `DialogPrimaryButton / SecondaryButton / DangerButton / WarningButton` (500 ms debounce). Bidirectional `PulsingScrollArrows` (BoxScope extension) show up+down arrows when content overflows — standard in every dialog as of 2026-04-13. Older down-only `PulsingScrollArrow` kept for backward compat. `DropdownMenu` / `ExposedDropdownMenu` use `ScrollableDropdownContent { … }` wrapper (own `ScrollState`, 280dp height cap, 32dp content left-indent to clear the arrow column).
+Styles: `DialogStyle.DEFAULT` (green `#2E7D32`/`#1B5E20`), `DANGER` (red `#B71C1C`), `WARNING` (orange `#E65100`). Buttons: `DialogPrimaryButton / SecondaryButton / DangerButton / WarningButton` (500 ms debounce). Bidirectional `PulsingScrollArrows` (BoxScope extension) show up+down arrows when content overflows — standard in every dialog. `DropdownMenu` / `ExposedDropdownMenu` use `ScrollableDropdownContent { … }` wrapper (own `ScrollState`, 280dp height cap, 32dp content left-indent to clear the arrow column).
 
 Full guide: `feedback_dialog_design_guide.md`.
 

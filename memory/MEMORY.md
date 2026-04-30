@@ -5,7 +5,7 @@
 - Package/namespace: `com.techadvantage.budgetrak` (renamed from `com.securesync.app` / `com.syncbudget.app` on 2026-04-11).
 - GitHub: `techadvantagesupport/BudgeTrak` (transferred from `pksteichen/syncBudget`; old URL redirects).
 - Privacy policy: `https://techadvantagesupport.github.io/privacy`. Pages repo clone at `/storage/emulated/0/Download/Tech Advantage Pages` (legacy `budgetrak-legal` repo still serves v2.7 fallback URL).
-- Working dir: `/data/data/com.termux/files/home/dailyBudget`. ~47 k lines, ~94 Kotlin files.
+- Working dir: `/data/data/com.termux/files/home/dailyBudget`. ~51.5 k lines, ~100 Kotlin files.
 
 ## Build Environment (Termux)
 - `export JAVA_HOME=/data/data/com.termux/files/usr` before builds.
@@ -19,7 +19,7 @@
 - Do NOT bump core-ktx ≥ 1.15 or Compose BOM ≥ 2024.12.01 (require compileSdk 35).
 
 ## Architecture
-- Single `MainActivity.kt` (2438 lines — router, lifecycle, wrappers) + `MainViewModel.kt` (2650 lines — state, business logic, sync lifecycle, background loops).
+- Single `MainActivity.kt` (~2.6 K lines — router, lifecycle, wrappers) + `MainViewModel.kt` (~3.2 K lines — state, business logic, sync lifecycle, background loops).
 - `MainViewModel.Companion.instance: WeakReference<MainViewModel>` lets `BackgroundSyncWorker` pick Tier 2 vs Tier 3.
 - File map: [`architecture.md`](architecture.md). UI layer: [`spec_ui_architecture.md`](spec_ui_architecture.md).
 

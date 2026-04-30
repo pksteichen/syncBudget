@@ -13,8 +13,6 @@ data class DeviceRecord(
     val isAdmin: Boolean = false,
     val lastSyncVersion: Long = 0L,
     val lastSeen: Long = 0L,
-    val fingerprintData: String? = null,
-    val fingerprintSyncVersion: Long = 0L,
     val photoCapable: Boolean = false,
     val uploadSpeedBps: Long = 0L,
     val uploadSpeedMeasuredAt: Long = 0L
@@ -59,7 +57,6 @@ object FirestoreService {
         deviceId: String,
         deviceName: String = "",
         syncVersion: Long,
-        fingerprintJson: String? = null,
         appSyncVersion: Int = 0,
         minSyncVersion: Int = 0,
         photoCapable: Boolean = false,
@@ -75,10 +72,6 @@ object FirestoreService {
         if (appSyncVersion > 0) {
             data["appSyncVersion"] = appSyncVersion
             data["minSyncVersion"] = minSyncVersion
-        }
-        if (fingerprintJson != null) {
-            data["fingerprintData"] = fingerprintJson
-            data["fingerprintSyncVersion"] = syncVersion
         }
         if (uploadSpeedBps > 0) {
             data["uploadSpeedBps"] = uploadSpeedBps
@@ -227,8 +220,6 @@ object FirestoreService {
                     isAdmin = doc.getBoolean("isAdmin") ?: false,
                     lastSyncVersion = doc.getLong("lastSyncVersion") ?: 0L,
                     lastSeen = doc.getLong("lastSeen") ?: 0L,
-                    fingerprintData = doc.getString("fingerprintData"),
-                    fingerprintSyncVersion = doc.getLong("fingerprintSyncVersion") ?: 0L,
                     photoCapable = doc.getBoolean("photoCapable") ?: false,
                     uploadSpeedBps = doc.getLong("uploadSpeedBps") ?: 0L,
                     uploadSpeedMeasuredAt = doc.getLong("uploadSpeedMeasuredAt") ?: 0L

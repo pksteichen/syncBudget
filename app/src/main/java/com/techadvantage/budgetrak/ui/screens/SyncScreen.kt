@@ -86,7 +86,6 @@ import androidx.compose.ui.layout.positionInWindow
 import com.techadvantage.budgetrak.ui.strings.LocalStrings
 import com.techadvantage.budgetrak.ui.theme.LocalAppToast
 import com.techadvantage.budgetrak.ui.theme.LocalSyncBudgetColors
-import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrow
 import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrows
 
 private val COMMON_TIMEZONES = listOf(

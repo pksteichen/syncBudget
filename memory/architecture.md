@@ -6,12 +6,12 @@ type: reference
 
 # Architecture Notes
 
-Total: ~47,000 lines across ~94 Kotlin source files.
+Total: ~51,500 lines across ~100 Kotlin source files.
 
 ## Top-level files
-- `MainActivity.kt` (2438 lines) — screen router, lifecycle observer, composable wrappers, ad-banner host. All state + logic lives in MainViewModel.
-- `MainViewModel.kt` (2650 lines) — `AndroidViewModel` holding ~80 state vars (mutableStateOf / mutableStateListOf / derivedStateOf), save functions, business logic, sync lifecycle, background loops (viewModelScope). `companion object { var instance: WeakReference<MainViewModel> }` lets `BackgroundSyncWorker` check whether the ViewModel is alive. Background work dispatches through `vm.launchIO { ... }` (ViewModelScope + Dispatchers.IO) rather than raw `CoroutineScope`/`GlobalScope` so coroutines cancel cleanly on `onCleared`.
-- `BudgeTrakApplication.kt` (107 lines) — App-level init: App Check provider (Debug/Play Integrity via `BuildConfig.DEBUG`), Crashlytics opt-out read, debug token capture to `token_log.txt`, `tokenLog()`, `syncEvent()`, `recordNonFatal()`, `updateDiagKeys()`.
+- `MainActivity.kt` (~2.6 K lines) — screen router, lifecycle observer, composable wrappers, ad-banner host. All state + logic lives in MainViewModel.
+- `MainViewModel.kt` (~3.2 K lines) — `AndroidViewModel` holding ~80 state vars (mutableStateOf / mutableStateListOf / derivedStateOf), save functions, business logic, sync lifecycle, background loops (viewModelScope). `companion object { var instance: WeakReference<MainViewModel> }` lets `BackgroundSyncWorker` check whether the ViewModel is alive. Background work dispatches through `vm.launchIO { ... }` (ViewModelScope + Dispatchers.IO) rather than raw `CoroutineScope`/`GlobalScope` so coroutines cancel cleanly on `onCleared`.
+- `BudgeTrakApplication.kt` (~170 lines) — App-level init: App Check provider (Debug/Play Integrity via `BuildConfig.DEBUG`), Crashlytics opt-out read, debug token capture to `token_log.txt`, `tokenLog()`, `syncEvent()`, `recordNonFatal()`, `updateDiagKeys()`, `processScope`.
 
 ## `ui/screens/` (10 navigable + 10 help + QuickStartGuide overlay)
 - `MainScreen.kt` (1303) — dashboard: Solari flip display, spending chart, nav cards, supercharge bolt modal, +/- quick-add.
@@ -33,7 +33,7 @@ Total: ~47,000 lines across ~94 Kotlin source files.
 - `SwipeablePhotoRow.kt` (669) — receipt photo swipe panel + full-screen viewer with rotation.
 
 ## `ui/theme/`
-- `Theme.kt` (665) — `AdAwareDialog/AlertDialog/DatePickerDialog`, dialog styles/buttons, `LocalAppToast`, `LocalAdBannerHeight`, `LocalSyncBudgetColors`, `FlipFontFamily`.
+- `Theme.kt` (~760) — `AdAwareDialog/AlertDialog/DatePickerDialog`, dialog styles/buttons, `PulsingScrollArrows` + `ScrollableDropdownContent`, `LocalAppToast`, `LocalAdBannerHeight`, `LocalSyncBudgetColors`, `FlipFontFamily`.
 - `Color.kt`, `Type.kt`.
 
 ## `ui/strings/`

@@ -3,12 +3,10 @@
 **Application:** BudgeTrak  **Package / applicationId:** `com.techadvantage.budgetrak`
 **Vendor:** Tech Advantage LLC.  **Platform:** Android (minSdk 28, targetSdk 34)
 **Framework:** Jetpack Compose, Material Design 3  **Language:** Kotlin
-**Document Version:** 2.8 (in development — dialog consolidation + refund OCR, April 2026)
-**Source:** ~100 Kotlin files, ~51,500 lines (v2.8 dev; refreshed at release tags)
+**Document Version:** 2.8 (in development, April 2026)
+**Source:** ~100 Kotlin files, ~51,500 lines (refreshed at release tags)
 
-> **What's new in 2.8 (vs 2.7, in dev):** `TransactionDialog` consolidated to a single Composable used for Add Income, Add Expense, and Edit — `title` and `sourceLabel` parameters dropped (derived inside from `editTransaction != null` and a new mutable `typeIsExpense` state seeded by the `isExpense` parameter). New layered drawables `ic_add_transaction_body.png` + `ic_add_transaction_plus.png` (both 169×192, same frame) overlay in a Compose `Box`; the plus circle pulses 35% → 100% alpha on a 900 ms `FastOutSlowInEasing` reverse-repeat in deep blue `Color(0xFF0D47A1)` while the receipt body renders static in `MaterialTheme.colorScheme.onBackground`. The Transactions toolbar's two old IconButtons (Filled.Add green / Filled.Remove red) collapsed into one IconButton; the Dashboard's standalone +/- Row (between the spending chart and the nav icons) deleted entirely — the pulsing icon prepends the existing dashboard nav-icon Row instead. `MainViewModel.dashboardShowAddIncome` + `dashboardShowAddExpense` collapsed into `dashboardShowAddTransaction`; the two prior dashboard `TransactionDialog` blocks in `MainActivity.DashboardDialogs` merged into one. Widget intents `BudgetWidgetProvider.ACTION_ADD_INCOME` + `ACTION_ADD_EXPENSE` both route to the unified state. Help-screen reference uses the static `ic_add_transaction.png` (the original combined PNG, unchanged) — no pulse in help to avoid distraction. Header gains a compact two-segment EXPENSE/INCOME pill toggle that flips `typeIsExpense`; the source-field label and linking UI track it. OCR prefill detects refund receipts (negative `amountCents` from Call 1) and auto-flips `typeIsExpense=false` + applies `kotlin.math.abs(...)` to amount fields. `ReceiptOcrService.runCall1` and `runCall1Reconcile` change the "missing" sentinel from `-1` to `Int.MIN_VALUE` so legitimate negative cents flow through. AI preselect-help banner relocated under the photo thumbnail bar (visible only when photos attached); now sets `vm.transactionsHelpOverlayShowing` instead of changing `currentScreen`; help screen renders inside a top-level `androidx.compose.ui.window.Dialog` (sibling Dialog window to AdAwareDialog), so it stacks above the open transaction dialog while the dialog stays mounted underneath — in-progress entries and photos survive the round-trip. i18n: removed `addNewIncomeTransaction` + `addNewExpenseTransaction`; added `addTransaction`, `aiOcrOffline`, `syncNowOffline`. **Network-awareness pass:** new `NetworkUtils.isOnline(context)` static check; `ReceiptSyncManager.processPendingUploads` / `.processRecovery` early-return when offline; `BackgroundSyncWorker.runTier2` / `.runTier3` early-return when offline AND now return `Boolean` (workDone) propagated through `runFullSyncBody` to `runFullSyncInline` so offline-skipped FCM runs don't stamp `KEY_LAST_INLINE_AT`; `MainViewModel.runOcrOnSlot1` returns `OcrState.Offline` (new typed sentinel) when offline; `MainActivity.onSyncNow` lambdas gate on `vm.isNetworkAvailable` with `syncNowOffline` toast; `MainViewModel.networkCallback.onAvailable` now `cancelAndJoin`s + restarts `uploadDrainerJob` (now `@Volatile`) inside a `viewModelScope.launch(Dispatchers.IO)` so queued uploads resume immediately and `loadPendingUploads` doesn't run on the binder thread. **Pre-existing-issue closures** (audit follow-up): Firebase `signInAnonymously` extracted to idempotent `attemptAnonymousAuth()` and gated on `isNetworkAvailable` at init + retried in `onAvailable` (was hanging the auth coroutine on a 30-60 s SDK timeout when launched offline); `onResume` App Check refresh gated on `isNetworkAvailable` (was firing wasted Tasks offline); Tier 2 receipt-sync `catch (e: Exception)` now rethrows `CancellationException` (parity with v2.7 ImageLedgerService rethrow), passes the throwable to `Log.w(..., e)` for stack-trace capture, and surfaces failure type+message to Crashlytics + `token_log.txt` via `syncEvent`. **Bug-1 fix (Tier 2 receipt-sync VM state):** `BackgroundSyncWorker.runTier2` captures `syncReceipts`' updated transactions and propagates changed receiptId fields back to `vm.transactions` on Main; the Firestore listener echo-filter (`lastEditBy == ourDeviceId`) used to keep in-memory state stale after `clearLostReceiptSlot` cleared a slot. **Receipt forensic instrumentation (debug-only):** `ReceiptManager.deleteLocalReceipt` / `addToPendingQueue` / `removeFromPendingQueue` log via `BudgeTrakApplication.syncEvent` with caller stack-trace tag; drainer's "no local file" branch in `processPendingUploads` re-checks the persistent queue to distinguish concurrent user-delete from genuine file loss; `DiagDumpBuilder` adds a "Receipt Files Audit" section.
-
-> **What's new in 2.7:** `ReceiptOcrService` (3-call Lite pipeline with Call 1 routing probe); `AiCategorizerService` (CSV categorization, merchant+amount only); `SwipeablePhotoRow` + dialog photo bar gain long-press highlight + long-press-drag reorder (implemented with `detectDragGesturesAfterLongPress` + `rememberUpdatedState` snapshots + `animateIntAsState` shift animation); pending-download placeholders tap→toast via `LocalAppToast`; PDF import via `PdfRenderer`; `BackgroundSyncWorker.isRunning` `AtomicBoolean` guard; `FcmService.handleWakeForSync` 9 s busy-wait. Memory system consolidated via symlink — `memory/` is the single source of truth for both git-tracked specs and Claude's auto-memory.
+> Per-release diff in §15.
 
 ## Table of Contents
 
@@ -48,34 +46,25 @@ BudgeTrak is a personal budget-management Android application built with Jetpack
 
 Two languages (English, Spanish), multiple currency formats, export to CSV / XLSX / PDF, CSV import (generic auto-detect + US Bank format), automatic encrypted backups, a home-screen widget with quick-add, and multi-device synchronization via **SYNC** (Firestore-native per-document encrypted sync). Domain data is persisted as JSON in app-private storage; preferences in `SharedPreferences`.
 
-Architecture: single-activity Compose with an `AndroidViewModel` (`MainViewModel`) holding all state and business logic. `MainActivity` is a thin UI-only shell (2,438 lines) with a `LoadingScreen` composable gating on `dataLoaded`. `MainViewModel` (2,650 lines) owns ~80 state variables, save functions, sync lifecycle, and background loops via `viewModelScope`. Data loading runs asynchronously on `Dispatchers.IO` with a learned-timing progress bar.
-
-### Architecture Versioning
-
-| Version | Change |
-|---|---|
-| v2.1 | Firestore-native sync (replaces hand-rolled CRDT). |
-| v2.2 | Per-field encryption + performance optimizations. Data classes lose `_clock` fields; only `deviceId` and `deleted` remain as sync fields. |
-| v2.3 | Shared services + background period refresh. `SyncMergeProcessor`, `PeriodRefreshService`, `BackgroundSyncWorker`. `WidgetRefreshWorker` removed. |
-| v2.4 | ViewModel extraction; `MainActivity` UI-only. RTDB presence via `RealtimePresenceService`. Filtered listeners with per-collection `updatedAt` cursors. `awaitInitialSync()` `CompletableDeferred`. App Check (`firebase-appcheck`). `firebase-database` + `lifecycle-viewmodel-compose:2.8.6`. |
-| v2.5 | Async data loading (LoadingScreen + learned-timing progress bar). Back = Home (`moveTaskToBack(true)`). Synchronous `recomputeCash()`. `MainViewModel.Companion.instance: WeakReference<MainViewModel>`. Consolidated `runPeriodicMaintenance()`. Calculated period-refresh sleep. Transaction archiving (`archiveThreshold`, `archiveCutoffDate`, `carryForwardBalance`, `lastArchiveInfo`). |
-| v2.6 | Two-layer consistency check (`runConsistencyCheck()`: Layer 1 count aggregation, Layer 2 cashHash majority vote). Echo suppression (`bgPushKeys`, `recentPushes`, `enc_hash_cache.json`). Solo-user gating on sync paths. `cashHash` (hex digest of availableCash.toString().hashCode()) — raw cash never leaves the device. Orphan-no-possession cleanup. Namespace + `applicationId` rebrand from `com.syncbudget.app` / `com.securesync.app` to `com.techadvantage.budgetrak`. Crashlytics opt-out toggle, `HEALTH_BEACON` daily non-fatal, `updateDiagKeys()`. Real-time SYNC eviction, admin-claim voting, TTL `expiresAt` fix, subscription-expiry popup, SAF backup restore, same-day backup versioning, auto-capitalize, match-char normalization, ranked match dialogs. |
+Architecture: single-activity Compose with an `AndroidViewModel` (`MainViewModel`) holding all state and business logic. `MainActivity` is a thin UI-only shell with a `LoadingScreen` composable gating on `dataLoaded`. `MainViewModel` owns ~80 state variables, save functions, sync lifecycle, and background loops via `viewModelScope`. Data loading runs asynchronously on `Dispatchers.IO` with a learned-timing progress bar.
 
 ### Source File Summary
 
-| Package / Directory | Files | Lines | Description |
-|---|---|---|---|
-| com.techadvantage.budgetrak | 3 | ~5,195 | `BudgeTrakApplication` (107), `MainActivity` (2,438), `MainViewModel` (2,650) |
-| com.techadvantage.budgetrak.data | 30 | ~5,280 | Data classes, repositories, utilities, `PeriodRefreshService`, `DiagDumpBuilder` |
-| com.techadvantage.budgetrak.data.sync | 22 | ~6,528 | Sync engine, encryption, receipts, `SyncMergeProcessor`, `BackgroundSyncWorker` (3-tier), `RealtimePresenceService` |
-| com.techadvantage.budgetrak.ui.screens | 22 | ~23,995 | Main screens + help screens |
-| com.techadvantage.budgetrak.ui.components | 5 | ~2,005 | Flip display, charts, photo row |
-| com.techadvantage.budgetrak.ui.theme | 3 | ~712 | Theme, colors, typography |
-| com.techadvantage.budgetrak.ui.strings | 5 | ~5,977 | i18n, translation context |
-| com.techadvantage.budgetrak.sound | 1 | ~134 | Flip sound player |
-| com.techadvantage.budgetrak.widget | 3 | ~1,551 | Home-screen widget |
-| **Total (v2.7)** | **94** | **~47,000** | Kotlin source files |
-| **Total (v2.8 dev)** | **~100** | **~51,500** | adds `data/ocr/` (3 files) + `data/telemetry/` (1) + `data/sync/NetworkUtils.kt` |
+| Package / Directory | Files | Description |
+|---|---|---|
+| com.techadvantage.budgetrak | 3 | `BudgeTrakApplication`, `MainActivity`, `MainViewModel` |
+| com.techadvantage.budgetrak.data | 31 | Data classes, repositories, utilities, `PeriodRefreshService`, `DiagDumpBuilder` |
+| com.techadvantage.budgetrak.data.sync | 22 | Sync engine, encryption, receipts, `SyncMergeProcessor`, `BackgroundSyncWorker` (3-tier), `RealtimePresenceService`, `NetworkUtils` |
+| com.techadvantage.budgetrak.data.ocr | 2 | `ReceiptOcrService` (Gemini Flash-Lite pipeline), `OcrResult` |
+| com.techadvantage.budgetrak.data.ai | 2 | `AiCategorizerService`, `CategorizerPromptBuilder` |
+| com.techadvantage.budgetrak.data.telemetry | 1 | `AnalyticsEvents` |
+| com.techadvantage.budgetrak.ui.screens | 22 | Main screens + help screens |
+| com.techadvantage.budgetrak.ui.components | 5 | Flip display, charts, photo row |
+| com.techadvantage.budgetrak.ui.theme | 3 | Theme, colors, typography |
+| com.techadvantage.budgetrak.ui.strings | 5 | i18n, translation context |
+| com.techadvantage.budgetrak.sound | 1 | Flip sound player |
+| com.techadvantage.budgetrak.widget | 3 | Home-screen widget |
+| **Total** | **~100** | ~51,500 lines |
 
 ### Firestore / RTDB / Storage Structure
 
@@ -97,7 +86,7 @@ pairing_codes/{code}         -- 10-minute TTL
 
 (Collection names are camelCase. Legacy `deltas`/`snapshots` appear only in the Cloud Function retention list.)
 
-Firebase Realtime Database (v2.4):
+Firebase Realtime Database:
   groups/{groupId}/presence/{deviceId}   -- online/offline presence, capabilities
 
 Cloud Storage:
@@ -113,7 +102,7 @@ Kotlin 2.0.21, JVM 17, Gradle 8.9, AGP 8.7.3, compileSdk/targetSdk 34, minSdk 28
 
 ### 2.1 BudgeTrakApplication
 
-**File:** `BudgeTrakApplication.kt` (~135 lines) | **Extends:** `Application`
+**File:** `BudgeTrakApplication.kt` | **Extends:** `Application`
 
 `onCreate` runs before any Activity, even when WorkManager starts the process. Order:
 
@@ -128,13 +117,13 @@ Kotlin 2.0.21, JVM 17, Gradle 8.9, AGP 8.7.3, compileSdk/targetSdk 34, minSdk 28
 |---|---|
 | `tokenLog(msg)` | Crashlytics `log()` + logcat; debug builds also append to `token_log.txt` (rotated at 100 KB). |
 | `recordNonFatal(tag, message, exception?)` | Records a non-fatal `RuntimeException` in Crashlytics with custom tag/message. |
-| `syncEvent(msg)` | Crashlytics `log()` + logcat for key sync lifecycle breadcrumbs. **Debug builds also append to `token_log.txt`** (same rotation as `tokenLog`) so sync events (FCM arrivals, RTDB pings, WakeReceiver fires, worker-tier transitions) are visible in dumps. Added 2026-04-13; without this, all the v2.6 FCM instrumentation was invisible to dump-based diagnostics. |
+| `syncEvent(msg)` | Crashlytics `log()` + logcat for key sync lifecycle breadcrumbs. Debug builds also append to `token_log.txt`, so sync events (FCM arrivals, RTDB pings, WakeReceiver fires, worker-tier transitions) are visible in dumps. |
 | `updateDiagKeys(keys)` | Batch-sets Crashlytics custom keys (attached to every future crash/non-fatal). |
-| `processScope: CoroutineScope` (v2.7) | Process-lifetime `SupervisorJob() + Dispatchers.Default`. Used by `FcmService` to launch Tier 2 work asynchronously when VM is alive — FCM thread returns immediately, ViewModel keeps the process alive until the work completes naturally (no time budget). Cancelled implicitly when Android kills the process. |
+| `processScope: CoroutineScope` | Process-lifetime `SupervisorJob() + Dispatchers.Default`. Used by `FcmService` to launch Tier 2 work asynchronously when VM is alive — FCM thread returns immediately, ViewModel keeps the process alive until the work completes naturally (no time budget). Cancelled implicitly when Android kills the process. |
 
 ### 2.2 MainActivity
 
-**File:** `MainActivity.kt` (2,438 lines) | **Extends:** `ComponentActivity`
+**File:** `MainActivity.kt` | **Extends:** `ComponentActivity`
 
 Thin UI shell. Handles edge-to-edge setup, the (debug-only) file-based crash logger, Firebase anonymous auth, lifecycle observation, ViewModel acquisition (`viewModel()`), the `LoadingScreen` gate, and `setContent` screen routing.
 
@@ -162,7 +151,7 @@ Set `true` in `onCreate` and on `ON_START`; cleared on `ON_STOP`. `BackgroundSyn
 | `simulation_graph` | SimulationGraphScreen |
 | `*_help` | 10 help screens + QuickStartOverlay |
 
-#### Loading Gate (v2.5)
+#### Loading Gate
 
 `LoadingScreen(progress: Float)` — private `@Composable` at the bottom of `MainActivity.kt`. Renders a 192 dp app-icon image (rounded 24 dp), the "BudgeTrak" title at 28 sp bold, and a 200 dp × 4 dp `LinearProgressIndicator` bound to `vm.loadProgress`. Dark/light palette (dark: `#2A3A2F` / `#E8D5A0`; light: `#BDD5CC` / `#2E5C80`). Gates all UI:
 
@@ -170,7 +159,7 @@ Set `true` in `onCreate` and on `ON_START`; cleared on `ON_STOP`. `BackgroundSyn
 if (!vm.dataLoaded) { LoadingScreen(vm.loadProgress); return@setContent }
 ```
 
-#### Back = Home (v2.5)
+#### Back = Home
 
 ```kotlin
 if (vm.currentScreen == "main") BackHandler { moveTaskToBack(true) }
@@ -179,7 +168,7 @@ else BackHandler { vm.currentScreen = parentOf(vm.currentScreen) }
 
 On the dashboard, Back sends the task to the background (keeps the process + ViewModel alive). On every other screen, Back navigates to the parent.
 
-#### Lifecycle Observer Placement (v2.5)
+#### Lifecycle Observer Placement
 
 `DisposableEffect(lifecycleOwner)` registering `LifecycleEventObserver` is placed **after** the loading gate. The initial `ON_RESUME` during activity creation is therefore intentionally missed — `onResume` work is already covered by the async init block. The observer flips `isAppActive` on `ON_START`/`ON_STOP` and calls `vm.onResume()` on `ON_RESUME`.
 
@@ -192,7 +181,7 @@ On the dashboard, Back sends the task to the background (keeps the process + Vie
 | Firebase anonymous auth | Handled in `MainViewModel.init` via `FirebaseAuth.signInAnonymously().await()`; required by Firestore security rules (`request.auth != null`). |
 | `setContent { ... }` | Loading gate, lifecycle observer, eviction/admin-claim popups, and the `when (vm.currentScreen)` branch that routes to each screen composable. |
 
-#### JIT Composable Extraction (v2.3+)
+#### JIT Composable Extraction
 
 | Extracted | Role |
 |---|---|
@@ -205,11 +194,11 @@ BudgetConfigScreen extraction was reverted: the 18 required setter lambdas added
 
 ### 2.3 MainViewModel
 
-**File:** `MainViewModel.kt` (2,650 lines) | **Extends:** `AndroidViewModel`
+**File:** `MainViewModel.kt` | **Extends:** `AndroidViewModel`
 
 Central coordinator. Owns ~80 state variables, all save functions, budget/derived calculations, sync lifecycle, matching chain, period refresh, maintenance, and background loops via `viewModelScope`. Survives configuration changes.
 
-#### Companion Object (v2.5)
+#### Companion Object
 
 ```kotlin
 companion object {
@@ -243,10 +232,10 @@ Set in `init { instance = WeakReference(this) }`, cleared in `onCleared()`. Read
 | showWidgetLogo | Boolean | true | Widget logo toggle |
 | autoCapitalize | Boolean | true | Title-case merchants/descriptions |
 | crashlyticsEnabled | Boolean | true | Crashlytics opt-out |
-| archiveThreshold | Int | 10000 | v2.5; 0 = disabled |
-| loadSegTime_0..6 | Float | [50,10,5,5,5,5,5] | EMA-smoothed segment times (v2.5) |
-| lastMaintenanceCheck | Long | 0 | 24-h maintenance gate (v2.5) |
-| checksumMismatchAt | Long | 0 | Pending consistency recheck (v2.6) |
+| archiveThreshold | Int | 10000 | 0 = disabled |
+| loadSegTime_0..6 | Float | [50,10,5,5,5,5,5] | EMA-smoothed segment times |
+| lastMaintenanceCheck | Long | 0 | 24-h maintenance gate |
+| checksumMismatchAt | Long | 0 | Pending consistency recheck |
 
 Two additional `SharedPreferences` are exposed: `sync_engine` (`syncPrefs`) and `backup_prefs` (`backupPrefs`).
 
@@ -264,12 +253,12 @@ Two additional `SharedPreferences` are exposed: `sync_engine` (`syncPrefs`) and 
 | simAvailableCash | Double (derived) | Projected cash using current-period applied amount |
 | availableCash | Double | Spendable cash; `recomputeCash()` writes it |
 | lastSyncActivity / lastSyncTimeDisplay | Long / String? | Elapsed since last push/receive |
-| syncDevices | List\<DeviceInfo\> | Merged Firestore + RTDB presence. Initialised at process start from `loadCachedDevices()` (`sync_engine/cachedDeviceRoster` JSON). **v2.7: cache now persists `lastSeen` and `online`** in addition to `id/name/admin` so the roster doesn't show stale "13 days ago" (Firestore `registerDevice` value) during the seconds–minutes window between process start and the RTDB presence listener delivering its initial snapshot. Default 0L/false for backward-compat with pre-v2.7 cache JSON. |
+| syncDevices | List\<DeviceInfo\> | Merged Firestore + RTDB presence. Initialised at process start from `loadCachedDevices()` (`sync_engine/cachedDeviceRoster` JSON). The cache persists `lastSeen` and `online` so the roster avoids showing stale Firestore `registerDevice` values during the seconds–minutes window before the RTDB presence listener delivers its initial snapshot. |
 | syncStatus | String | "off" / "synced" / "offline" / "error" |
 | isSyncConfigured / syncGroupId / isSyncAdmin | Boolean / String? / Boolean | GroupManager-derived |
 | initialSyncReceived | Boolean | true for solo; flipped after first batch for sync users |
-| dataLoaded / loadProgress | Boolean / Float | v2.5 loading gate |
-| archiveThreshold | Int | v2.5 |
+| dataLoaded / loadProgress | Boolean / Float | Loading gate |
+| archiveThreshold | Int | Threshold for transaction archiving |
 | archiveCutoffDate | LocalDate? (derived) | Parsed from `sharedSettings.archiveCutoffDate` |
 | carryForwardBalance | Double (derived) | `sharedSettings.carryForwardBalance` |
 | loadedArchivedTransactions | List\<Transaction\> | Lazy-loaded view; see `loadArchivedTransactionsAsync()` |
@@ -280,30 +269,30 @@ Two additional `SharedPreferences` are exposed: `sync_engine` (`syncPrefs`) and 
 
 | Method | Purpose |
 |---|---|
-| `init { ... }` | `instance = WeakReference(this)`; registers connectivity callback; launches async data-load coroutine on `Dispatchers.IO`; launches Firebase anonymous auth via `attemptAnonymousAuth()` (v2.8: idempotent, gated on `isNetworkAvailable` at init + retried inside `networkCallback.onAvailable` so offline launches don't hang on the SDK's 30-60 s auth timeout), sync-time display (`snapshotFlow` + 10 s ticker), `configureSyncGroup()` after data loads, one-time migrations, QuickStart auto-launch, period-refresh loop, App Check keep-alive (45 min; v2.8 skips the loop body when `!isNetworkAvailable`). All data-dependent coroutines gate on `snapshotFlow { dataLoaded }.first { it }`. |
+| `init { ... }` | `instance = WeakReference(this)`; registers connectivity callback; launches async data-load coroutine on `Dispatchers.IO`; launches Firebase anonymous auth via idempotent `attemptAnonymousAuth()` (gated on `isNetworkAvailable` at init + retried inside `networkCallback.onAvailable` so offline launches don't hang on the SDK's 30–60 s auth timeout); sync-time display (`snapshotFlow` + 10 s ticker), `configureSyncGroup()` after data loads, one-time migrations, QuickStart auto-launch, period-refresh loop, App Check keep-alive (45-min check, skipped when `!isNetworkAvailable`). All data-dependent coroutines gate on `snapshotFlow { dataLoaded }.first { it }`. |
 | Async data load | 7 repos loaded sequentially on IO: transactions, categories, incomeSources, recurringExpenses, amortizationEntries, savingsGoals, periodLedger. A ticker coroutine interpolates `loadProgress` at ~60 fps using EMA-stored segment times. `withContext(Main) { addAll(...); dataLoaded = true }`. Minimum 500 ms display (delay fills if load was faster). |
 | Learned-timing progress bar | `loadSegTime_0..6` floats in `app_prefs`. First run saves actual times directly. Subsequent runs: `updated = (4 * old + new) / 5` (EMA). `boundaries[]` derived proportionally to `segTimes`. |
 | `saveTransactions / saveCategories / saveIncomeSources / saveRecurringExpenses / saveAmortizationEntries / saveSavingsGoals / savePeriodLedger(hint?)` | All delegate to `saveCollection()` which: (1) persists to disk; (2) if `SyncWriteHelper.isInitialized()`, pushes via `SyncWriteHelper.pushBatch()` — hint-driven if supplied, otherwise diff vs. last-saved cache; (3) updates `lastSyncActivity`. `saveTransactions()` additionally dedups by id. |
 | `saveSharedSettings()` | Persists + pushes via `SyncWriteHelper.pushSharedSettings`. |
 | `persistAvailableCash()` | Guards NaN/Infinity → 0; rounds cents; writes `availableCash` pref; notifies widget provider. |
-| `recomputeCash()` | **Synchronous** (v2.5 — no coroutine wrapper). Reads `budgetStartDate`, `periodLedger`, `activeTransactions`, `activeRecurringExpenses`, `incomeMode`, `activeIncomeSources`, `carryForwardBalance`, `archiveCutoffDate` and calls `BudgetCalculator.recomputeAvailableCash(...)`. Assigns + persists. |
-| `addTransactionWithBudgetEffect(txn)` | Stamps `deviceId`. Then **atomically** under one `transactions.none { it.id == stamped.id }` guard: deducts from linked savings goal if any → `transactions.add` → `saveTransactions(listOf(stamped))` (which writes JSON + pushes to Firestore). After the guard: `recomputeCash()`; `checkAndTriggerArchive()` if threshold exceeded. The all-or-nothing guard prevents double-tap or recomposition replay from leaking partial side effects (pre-2026-04-27 the SG deduction and Firestore push happened outside the guard, which could double-deduct on double-tap and leak "saved on Firestore but missing locally" state). |
+| `recomputeCash()` | **Synchronous** (no coroutine wrapper, to avoid startup races). Reads `budgetStartDate`, `periodLedger`, `activeTransactions`, `activeRecurringExpenses`, `incomeMode`, `activeIncomeSources`, `carryForwardBalance`, `archiveCutoffDate` and calls `BudgetCalculator.recomputeAvailableCash(...)`. Assigns + persists. |
+| `addTransactionWithBudgetEffect(txn)` | Stamps `deviceId`. Then **atomically** under one `transactions.none { it.id == stamped.id }` guard: deducts from linked savings goal if any → `transactions.add` → `saveTransactions(listOf(stamped))` (writes JSON + pushes to Firestore). After the guard: `recomputeCash()`; `checkAndTriggerArchive()` if threshold exceeded. The all-or-nothing guard makes double-tap and recomposition replay complete no-ops rather than leaking partial side effects (e.g., a Firestore push without a local list mutation, or a duplicate SG deduction). |
 | `runLinkingChain(txn)` | Recurring → Amortization (expense) / Budget-income (income). Background search on `Dispatchers.Default`; shows confirm dialog or calls `addTransactionWithBudgetEffect`. |
 | `runMatchingChain(txn)` | Duplicate check first (`findDuplicates` on Default); shows `ManualDuplicateDialog` or delegates to `runLinkingChain`. |
 | `configureSyncGroup()` | Disposes any prior `FirestoreDocSync`/`SyncWriteHelper`, creates new `FirestoreDocSync`, wires `onBatchChanged` + `onListenerRecovered`, calls `startListeners()`, `startSyncSetup()`, and sets up `RealtimePresenceService.setupPresence() + listenToGroupPresence(...)`. Presence merges into `syncDevices`. |
 | `startSyncSetup()` | After data + group ready: initial device-list fetch (one retry), early dissolution/removal check via `getGroupHealthStatus` + `isDeviceRemoved`, one-time `updateDeviceMetadata` (photoCapable, appSyncVersion=2, minSyncVersion=2), device-doc listener (own device removed / admin flipped), admin-claim listener, FCM registration, one-time migrations, image-ledger listener, `awaitInitialSync(30_000)` → `runIntegrityCheck()` + `recomputeCash()`. |
-| `runIntegrityCheck()` | Private suspend (v2.5). Compares local record IDs vs. `FirestoreDocService.readDocIdsFromCache()` (`Source.CACHE`, zero network). Pushes any local-only records via `SyncWriteHelper.push*`. Callable from startup and `runPeriodicMaintenance`. |
-| `runConsistencyCheck()` | Private suspend (v2.6). **Layer 1:** per-collection `countActiveDocs()` vs. `local.active.size`; on mismatch, clears the collection cursor to force a full re-read on next listener attach. **Layer 2:** cashHash majority vote — writes `deviceChecksums[deviceId].cashHash` on the group doc (hex digest: `availableCash.toString().hashCode().toString(16)`), with a 1-hour confirmation gate before triggering any re-read recovery. |
-| `recheckConsistency()` | Public suspend wrapper; called from `onResume` and `BackgroundSyncWorker` Tier 3 step 4b when `checksumMismatchAt > 0`. |
-| `runPeriodicMaintenance()` | Private suspend (v2.5). Called from `onResume` under a 24-hour gate (`lastMaintenanceCheck`). Consolidates: (1) daily `HEALTH_BEACON` non-fatal + `updateDiagKeys` (sync users, crashlytics-enabled); (2) backup check (`BackupManager.isBackupDue` → `performBackup` on IO); (3) `runIntegrityCheck` + `recomputeCash` + `runConsistencyCheck` (sync users only); (4) receipt-orphan cleanup (solo-user reference cleanup + orphan local files); (5) receipt-storage pruning (`receiptPruneAgeDays`); (6) admin-tombstone + cloud-orphan cleanup — time-gated to 30 days via `lastAdminCleanup` and gated on admin-only. |
-| `checkAndTriggerArchive() / applyArchiveCutoff(cutoff)` | v2.5. When active count > `archiveThreshold` and initial sync received, archives ~25 % of the oldest transactions. Computes new `carryForwardBalance` for the archived slice via `BudgetCalculator.recomputeAvailableCash(...)`, appends to `archived_transactions.json` (off-thread), removes from active list, writes `archiveCutoffDate` + `carryForwardBalance` + `lastArchiveInfo` to `SharedSettings`, pushes SharedSettings, `recomputeCash()`. |
+| `runIntegrityCheck()` | Private suspend. Compares local record IDs vs. `FirestoreDocService.readDocIdsFromCache()` (`Source.CACHE`, zero network). Pushes any local-only records via `SyncWriteHelper.push*`. Callable from startup and `runPeriodicMaintenance`. |
+| `runConsistencyCheck()` | Private suspend. **Layer 1:** per-collection `countActiveDocs()` vs. `local.active.size`; on mismatch, clears the collection cursor to force a full re-read on next listener attach. **Layer 2:** cashHash majority vote — writes `deviceChecksums[deviceId].cashHash` on the group doc (hex digest: `availableCash.toString().hashCode().toString(16)`), with a 1-hour confirmation gate before triggering any re-read recovery. |
+| `recheckConsistency()` | Public suspend wrapper; called from `onResume` and `BackgroundSyncWorker` Tier 3 when `checksumMismatchAt > 0`. |
+| `runPeriodicMaintenance()` | Private suspend. Called from `onResume` under a 24-hour gate (`lastMaintenanceCheck`). Consolidates: (1) daily `HEALTH_BEACON` non-fatal + `updateDiagKeys` (sync users, crashlytics-enabled); (2) backup check (`BackupManager.isBackupDue` → `performBackup` on IO); (3) `runIntegrityCheck` + `recomputeCash` + `runConsistencyCheck` (sync users only); (4) receipt-orphan cleanup (solo-user reference cleanup + orphan local files); (5) receipt-storage pruning (`receiptPruneAgeDays`); (6) admin-tombstone + cloud-orphan cleanup — time-gated to 30 days via `lastAdminCleanup` and gated on admin-only. |
+| `checkAndTriggerArchive() / applyArchiveCutoff(cutoff)` | When active count > `archiveThreshold` and initial sync received, archives ~25% of the oldest transactions. Computes new `carryForwardBalance` for the archived slice via `BudgetCalculator.recomputeAvailableCash(...)`, appends to `archived_transactions.json` (off-thread), removes from active list, writes `archiveCutoffDate` + `carryForwardBalance` + `lastArchiveInfo` to `SharedSettings`, pushes SharedSettings, `recomputeCash()`. |
 | `onBatchChanged(events)` | Suspend. Calls `SyncMergeProcessor.processBatch(...)`; applies non-null collection results to state lists; pushes any conflict-resolved transactions back; deletes remapped categories; applies settings/prefs; saves each mutated repo; `recomputeCash()`; Layer 1 fast-path: downloads any newly-referenced receipts via `ReceiptSyncManager.downloadReceiptWithRetry` (5 concurrent); misses are handed to `kickFgDownloadRetry` for Layer 2 backoff retry. |
-| `kickUploadDrainer()` (v2.7) | Layer 0. Launches or reuses `uploadDrainerJob` on `viewModelScope` (IO). While `pending_receipt_uploads.json` is non-empty, calls `ReceiptSyncManager.processPendingUploads()` and backs off 30 s → 60 s → 2 m → 5 m → 10 m on failure. Kicked from `saveTransactions` when a new receiptId attaches, from rotation callback (`onPhotoContentChanged`), and once at VM init after `dataLoaded = true` for crash recovery. |
-| `kickFgDownloadRetry(receiptId)` (v2.7) | Layer 2. Adds id to in-memory `fgDownloadRetryQueue` and launches / reuses `fgDownloadRetryJob`. Coroutine drains the set with the same exponential backoff as Layer 0; self-filters each tick (drops ids now in transactions as unreferenced or that arrived via another path); uses `ReceiptSyncManager.downloadReceiptWithRetry` which runs the 3-retry-to-recovery-request escalation shared with `processRecovery`. |
-| `isReceiptSyncActive()` (v2.7) | Returns `uploadDrainerJob?.isActive == true || fgDownloadRetryJob?.isActive == true`. Read by `BackgroundSyncWorker` Tier 2 to skip the transient `syncReceipts()` call when foreground is already handling things. |
-| `cancelReceiptSyncJobs()` (v2.7) | Cancels `uploadDrainerJob` + `fgDownloadRetryJob` and clears `fgDownloadRetryQueue`. Called from `resetSyncState()` (leave/dissolve/evict), the inline leave handler, and `MainActivity` paid/subscriber downgrade toggles — any transition that invalidates the captured `syncGroupId` or encryption key. |
-| Period refresh loop | After data loads + `initialSyncReceived` (or 60 s timeout for solo users). Builds `PeriodRefreshService.RefreshConfig`, calls `refreshIfNeeded(context, config)`, applies `RefreshResult` to state, pushes ledger/SG/RE via hint-driven save functions. **Sleep:** computes `nextBoundary` from `BudgetCalculator.currentPeriodStart(...)` + one period; sleeps `boundaryMs - nowMs + 60_000`, **clamped to [60 s, 15 min]**. Replaces pre-v2.5 fixed `delay(30_000)`. |
-| `onResume()` | Early-return if `!dataLoaded`. Bumps `syncTrigger`; **add-only disk merge** — reads `TransactionRepository.load` on IO and adds any disk-only ids to memory (never wipes in-memory state, see below); App Check token refresh (sync users); RTDB presence re-setup; runs `runPeriodicMaintenance()` if 24-h gate elapsed, else `recheckConsistency()` if mismatch pending; updates Crashlytics diag keys (if opted-in). The pre-2026-04-27 version did `transactions.clear(); transactions.addAll(diskTransactions)` whenever sizes/ids differed — that race-clobbered (a) just-saved transactions whose disk write completed AFTER the IO read started but whose stale read returned pre-write content, and (b) sync-merged in-memory state whose disk write was still pending (`onBatchChanged` updates memory synchronously and writes via `withContext(IO)` separately). Add-only avoids both because memory is never the loser. |
+| `kickUploadDrainer()` | Layer 0. Launches or reuses `uploadDrainerJob` on `viewModelScope` (IO). While `pending_receipt_uploads.json` is non-empty, calls `ReceiptSyncManager.processPendingUploads()` and backs off 30 s → 60 s → 2 m → 5 m → 10 m on failure. Kicked from `saveTransactions` when a new receiptId attaches, from the rotation callback (`onPhotoContentChanged`), and once at VM init after `dataLoaded = true` for crash recovery. |
+| `kickFgDownloadRetry(receiptId)` | Layer 2. Adds id to in-memory `fgDownloadRetryQueue` and launches / reuses `fgDownloadRetryJob`. Coroutine drains the set with the same exponential backoff as Layer 0; self-filters each tick (drops ids now unreferenced or that arrived via another path); uses `ReceiptSyncManager.downloadReceiptWithRetry` (3-retry-to-recovery-request escalation, shared with `processRecovery`). |
+| `isReceiptSyncActive()` | Returns `uploadDrainerJob?.isActive == true || fgDownloadRetryJob?.isActive == true`. Read by `BackgroundSyncWorker` Tier 2 to skip the transient `syncReceipts()` call when foreground is already handling it. |
+| `cancelReceiptSyncJobs()` | Cancels `uploadDrainerJob` + `fgDownloadRetryJob` and clears `fgDownloadRetryQueue`. Called from `resetSyncState()` (leave/dissolve/evict), the inline leave handler, and `MainActivity` paid/subscriber downgrade toggles — any transition that invalidates the captured `syncGroupId` or encryption key. |
+| Period refresh loop | After data loads + `initialSyncReceived` (or 60 s timeout for solo users). Builds `PeriodRefreshService.RefreshConfig`, calls `refreshIfNeeded(context, config)`, applies `RefreshResult` to state, pushes ledger/SG/RE via hint-driven save functions. **Sleep:** computes `nextBoundary` from `BudgetCalculator.currentPeriodStart(...)` + one period; sleeps `boundaryMs - nowMs + 60_000`, **clamped to [60 s, 15 min]**. |
+| `onResume()` | Early-return if `!dataLoaded`. Bumps `syncTrigger`; **add-only disk merge** — reads `TransactionRepository.load` on IO and adds any disk-only ids to memory (never wipes in-memory state); App Check token refresh (sync users); RTDB presence re-setup; runs `runPeriodicMaintenance()` if 24-h gate elapsed, else `recheckConsistency()` if mismatch pending; updates Crashlytics diag keys (if opted-in). Add-only avoids two race classes: (a) just-saved transactions whose disk write completed after the IO read started, and (b) sync-merged in-memory state whose disk write is still pending (`onBatchChanged` updates memory synchronously and writes via `withContext(IO)` separately). |
 | `handleWidgetIntent(action)` | Maps widget `ACTION_ADD_INCOME` / `ACTION_ADD_EXPENSE` to dashboard quick-add flags. |
 | `reloadAllFromDisk()` | Full state reload after backup restore. |
 | `disposeSyncListeners()` | Disposes `FirestoreDocSync`, `SyncWriteHelper`, `RealtimePresenceService`, and all three persistent listeners. |
@@ -332,7 +321,7 @@ On startup the system reconciles required categories by tag; any missing is auto
 
 ### 2.4 MainScreen
 
-**File:** `ui/screens/MainScreen.kt` (1,303 lines)
+**File:** `ui/screens/MainScreen.kt`
 
 Dashboard: Solari split-flap display, spending charts (pie + bar), quick-add dialogs, Supercharge, sync-status indicators, five-button nav bar.
 
@@ -346,9 +335,9 @@ Key observed state: `vm.availableCash`, `vm.budgetAmount`, `vm.budgetStartDate`,
 
 ### 2.5 TransactionsScreen
 
-**File:** `ui/screens/TransactionsScreen.kt` (5,633 lines)
+**File:** `ui/screens/TransactionsScreen.kt`
 
-Largest screen. List + filter + search + multi-select + entry/edit dialogs, CSV import (generic auto-detect, US Bank, BudgeTrak CSV), export (CSV / XLSX / PDF expense report), linked-transaction display, receipt photo capture/display, full-backup load. The manual encrypted save format was removed in v2.5.x; encryption remains only in the auto-backup feature.
+Largest screen. List + filter + search + multi-select + entry/edit dialogs, CSV import (generic auto-detect, US Bank, BudgeTrak CSV), export (CSV / XLSX / PDF expense report), linked-transaction display, receipt photo capture/display, full-backup load. Encryption is used only in the auto-backup feature (no manual encrypted save format).
 
 | Composable | Visibility | Role |
 |---|---|---|
@@ -356,7 +345,7 @@ Largest screen. List + filter + search + multi-select + entry/edit dialogs, CSV 
 | `TransactionDialog` | public | Add/edit with receipt slots |
 | `TransactionRow` | private | Row with expand + photo thumbnails |
 | `TransactionCard` | private | Card layout helper |
-| `DuplicateResolutionDialog` | public | CSV + manual-add duplicate confirm. **Non-dismissable** (2026-04-27): `MatchDialogCard.onDismiss = {}` so tap-outside / back are no-ops; user must pick Keep Existing / Keep New / Keep Both / Ignore All (import only). The pre-fix dismiss handler was `onKeepExisting`, which silently dropped the new transaction when the user tapped outside. The widget's inline duplicate dialog (`WidgetTransactionActivity.kt`) follows the same non-dismissable pattern. |
+| `DuplicateResolutionDialog` | public | CSV + manual-add duplicate confirm. **Non-dismissable** — `MatchDialogCard.onDismiss = {}` so tap-outside / back are no-ops; user must pick Keep Existing / Keep New / Keep Both / Ignore All (import only). Required because a dismissable variant silently dropped the new transaction when the user tapped outside. The widget's inline duplicate dialog (`WidgetTransactionActivity.kt`) follows the same pattern. |
 | `RecurringExpenseConfirmDialog` | public | RE match confirm. Dismiss = "no match", txn proceeds — intentionally dismissable. |
 | `AmortizationConfirmDialog` | public | Amortization match confirm. Dismiss = "no match", txn proceeds — intentionally dismissable. |
 | `BudgetIncomeConfirmDialog` | public | Budget-income confirm. Dismiss = "no match", txn proceeds — intentionally dismissable. |
@@ -366,15 +355,13 @@ Largest screen. List + filter + search + multi-select + entry/edit dialogs, CSV 
 
 ### 2.6 BudgetConfigScreen
 
-**File:** `ui/screens/BudgetConfigScreen.kt` (1,243 lines)
+**File:** `ui/screens/BudgetConfigScreen.kt`
 
-Income sources, budget-period selection, reset hour/day configuration, safe-budget display, manual override with warnings, income mode, budget reset.
-
-Top-level composables: `BudgetConfigScreen` (public), two private dialog helpers at lines 573 and 1072 (income-source add/edit + reset-confirm).
+Income sources, budget-period selection, reset hour/day configuration, safe-budget display, manual override with warnings, income mode, budget reset. Top-level composables: `BudgetConfigScreen` (public) + two private dialog helpers (income-source add/edit, reset-confirm).
 
 ### 2.7 SettingsScreen
 
-**File:** `ui/screens/SettingsScreen.kt` (1,651 lines)
+**File:** `ui/screens/SettingsScreen.kt`
 
 Currency, category management (charted / widgetVisible toggles, reassign), match tolerances, language, date format, chart palette, widget logo, paid features, backup / restore (SAF directory picker), expense-report generation, Crashlytics opt-out, auto-capitalize.
 
@@ -385,55 +372,43 @@ Currency, category management (charted / widgetVisible toggles, reassign), match
 
 ### 2.8 SavingsGoalsScreen
 
-**File:** `ui/screens/SavingsGoalsScreen.kt` (808 lines)
+**File:** `ui/screens/SavingsGoalsScreen.kt`
 
-Savings goals with target-date and fixed-contribution types, progress tracking, Supercharge integration, `PulsingScrollArrow` in form dialogs.
-
-Top-level composables: `SavingsGoalsScreen` (public) + private goal add/edit dialog at line 593.
+Savings goals with target-date and fixed-contribution types, progress tracking, Supercharge integration. Top-level composables: `SavingsGoalsScreen` (public) + private goal add/edit dialog.
 
 ### 2.9 AmortizationScreen
 
-**File:** `ui/screens/AmortizationScreen.kt` (642 lines)
+**File:** `ui/screens/AmortizationScreen.kt`
 
-Amortization entries with progress tracking, per-period deductions, pause/resume, `PulsingScrollArrow` in form dialogs.
-
-Top-level composables: `AmortizationScreen` (public) + private entry dialog at line 447.
+Amortization entries with progress tracking, per-period deductions, pause/resume. Top-level composables: `AmortizationScreen` (public) + private entry dialog.
 
 ### 2.10 RecurringExpensesScreen
 
-**File:** `ui/screens/RecurringExpensesScreen.kt` (1,097 lines)
+**File:** `ui/screens/RecurringExpensesScreen.kt`
 
-Recurring expenses with 6 repeat types, "savings required" simulation box, Why-explanation dialog, set-aside tracking, accelerated-expense toggle, `PulsingScrollArrow` in all dialogs. Help page now documents the Accelerated Set-Aside flow per v2.5 audit.
-
-Top-level composables: `RecurringExpensesScreen` (public) + private add/edit dialog (line 507) + "Why" simulation popup (line 587).
+Recurring expenses with 6 repeat types, "savings required" simulation box, Why-explanation dialog, set-aside tracking, accelerated-expense toggle. Top-level composables: `RecurringExpensesScreen` (public) + private add/edit dialog + "Why" simulation popup.
 
 ### 2.11 SyncScreen
 
-**File:** `ui/screens/SyncScreen.kt` (1,206 lines)
+**File:** `ui/screens/SyncScreen.kt`
 
-SYNC configuration screen (rebranded from "Family Sync"). Create / join / leave / dissolve groups; sync status; device list with online status; admin claims; subscription management; admin-only gating on budget-period + reset-config edits; device naming; device removal; FCM-triggered debug-file request.
-
-Top-level composable: `SyncScreen` (public).
+SYNC configuration screen. Create / join / leave / dissolve groups; sync status; device list with online status; admin claims; subscription management; admin-only gating on budget-period + reset-config edits; device naming; device removal; FCM-triggered debug-file request. Top-level composable: `SyncScreen` (public).
 
 ### 2.12 BudgetCalendarScreen
 
-**File:** `ui/screens/BudgetCalendarScreen.kt` (469 lines)
+**File:** `ui/screens/BudgetCalendarScreen.kt`
 
-Calendar showing daily spending, income events, and recurring expense / income due dates across budget periods. Blue tint marks the reset day (documented in help page as of v2.5).
-
-Top-level composable: `BudgetCalendarScreen` (public); private helper `formatCurrencyRounded`.
+Calendar showing daily spending, income events, and recurring expense / income due dates across budget periods. Blue tint marks the reset day. Top-level composable: `BudgetCalendarScreen` (public).
 
 ### 2.13 SimulationGraphScreen
 
-**File:** `ui/screens/SimulationGraphScreen.kt` (686 lines)
+**File:** `ui/screens/SimulationGraphScreen.kt`
 
-Cash-flow projection over time based on income, recurring expenses, savings goals, and budget spending. Marked as a subscriber feature (v2.5 help audit).
-
-Top-level composable: `SimulationGraphScreen` (public).
+Cash-flow projection over time based on income, recurring expenses, savings goals, and budget spending. Subscriber feature. Top-level composable: `SimulationGraphScreen` (public).
 
 ### 2.14 QuickStartGuide
 
-**File:** `ui/screens/QuickStartGuide.kt` (357 lines)
+**File:** `ui/screens/QuickStartGuide.kt`
 
 Multi-step onboarding overlay auto-launched once per install when `incomeSources.isEmpty() && !isSyncConfigured && !quickStartCompleted`.
 
@@ -504,8 +479,8 @@ Horizontally swipeable row for up to 5 receipt photos per transaction. Swipe-lef
 | `AdAwareDialog` | Raw dialog wrapper; `SOFT_INPUT_ADJUST_NOTHING`; respects `LocalAdBannerHeight` + `LocalAppToast` anchoring. Overlays `PulsingScrollArrows` onto the body automatically when a `scrollState` is provided. |
 | `AdAwareAlertDialog` | AlertDialog replacement with Surface/Column layout, optional body ScrollState, auto bidirectional scroll arrows |
 | `AdAwareDatePickerDialog` | Date picker wrapped in AdAwareDialog |
-| `BoxScope.PulsingScrollArrows(scrollState, topPadding=36.dp, bottomPadding=50.dp)` | **v2.6.2** bidirectional scroll affordance: pulsing up-arrow at `Alignment.TopStart` when `canScrollBackward`, down-arrow at `Alignment.BottomStart` when `canScrollForward`. 24-dp icons, 600 ms `RepeatMode.Reverse` bounce, alpha 0.5 onSurface. Default paddings clear a `DialogHeader` at the top and a footer button row at the bottom. |
-| `ScrollableDropdownContent(maxHeight=280.dp, contentStartPadding=32.dp, content)` | **v2.6.2** drop-in wrapper for `DropdownMenu` / `ExposedDropdownMenu` bodies. Owns its own `ScrollState`, caps height to `maxHeight`, indents content start by `contentStartPadding` so items clear the left-edge arrow column. Short lists wrap to content size. |
+| `BoxScope.PulsingScrollArrows(scrollState, topPadding=36.dp, bottomPadding=50.dp)` | Bidirectional scroll affordance: pulsing up-arrow at `Alignment.TopStart` when `canScrollBackward`, down-arrow at `Alignment.BottomStart` when `canScrollForward`. 24-dp icons, 600 ms `RepeatMode.Reverse` bounce, alpha 0.5 onSurface. Default paddings clear a `DialogHeader` at the top and a footer button row at the bottom. |
+| `ScrollableDropdownContent(maxHeight=280.dp, contentStartPadding=32.dp, content)` | Drop-in wrapper for `DropdownMenu` / `ExposedDropdownMenu` bodies. Owns its own `ScrollState`, caps height to `maxHeight`, indents content start by `contentStartPadding` so items clear the left-edge arrow column. Short lists wrap to content size. |
 | `PulsingScrollArrow(scrollState, modifier)` | Legacy down-only variant. Kept for backward compatibility; new code uses `PulsingScrollArrows` (plural). |
 | `DialogHeader`, `DialogFooter` | Colored header/footer per `DialogStyle` |
 | `DialogPrimaryButton`, `DialogSecondaryButton`, `DialogDangerButton`, `DialogWarningButton` | Standardized buttons, 500 ms debounce |
@@ -573,7 +548,7 @@ All per-record entities carry exactly two sync-metadata fields: `deviceId: Strin
 
 | Field | Type | Default | Purpose |
 |---|---|---|---|
-| id | Int | required | Unique ID (random `(1..Int.MAX_VALUE)`, rejected against local existingIds; was 16-bit `0..65535` pre-2026-04-27) |
+| id | Int | required | Unique ID (random `(1..Int.MAX_VALUE)`, rejected against local `existingIds`) |
 | type | TransactionType | required | EXPENSE / INCOME |
 | date | LocalDate | required | Transaction date |
 | source | String | required | Merchant name |
@@ -758,7 +733,7 @@ SnapshotLedgerEntry: `requestedBy, requestedAt, builderId?, builderAssignedAt, s
 
 ### 5.15 ID Generators
 
-All follow the same pattern: random `Int` in `1..Int.MAX_VALUE`, rejected against `existingIds` in a do/while loop. The range was widened from `0..65535` on 2026-04-27 to eliminate cross-device id collisions in sync groups (16-bit space made simultaneous picks across devices a real risk; full positive Int range drops collision probability to ≈1 in 2.1B per concurrent pair). Existing low-range ids from prior versions remain valid — the ranges overlap, and the local existingIds rejection loop handles either pool.
+All follow the same pattern: random `Int` in `1..Int.MAX_VALUE`, rejected against `existingIds` in a do/while loop. The full positive `Int` range drops cross-device collision probability in a sync group to ≈1 in 2.1 B per concurrent pair (the local rejection loop handles same-device collisions; previously a 16-bit space made simultaneous picks across devices a real risk).
 
 | Function | File |
 |---|---|
@@ -825,7 +800,7 @@ Authenticated encryption via ChaCha20-Poly1305. Cipher params + mode summary: SS
 
 ### 6.3 CsvParser
 
-**File:** `data/CsvParser.kt` (996 lines). Top-level functions + enums.
+**File:** `data/CsvParser.kt`. Top-level functions + enums.
 
 Parses US Bank CSV, generic bank CSV, and the native "BudgeTrak CSV Save File" format; serializes transactions back to CSV. Includes merchant-name cleaning and multi-format auto-detect.
 
@@ -837,10 +812,8 @@ Parses US Bank CSV, generic bank CSV, and the native "BudgeTrak CSV Save File" f
 | `serializeTransactionsCsv(txns)` | Native CSV export |
 | `parseSyncBudgetCsv(reader, existingIds)` | Native CSV import |
 
-`BankFormat`: `GENERIC_CSV` (auto-detect), `US_BANK`, `SECURESYNC_CSV` (native).  
+`BankFormat`: `GENERIC_CSV` (auto-detect), `US_BANK`, `SECURESYNC_CSV` (native — name preserved across rebrand).  
 `SaveFormat` (in TransactionsScreen): `CSV`, `XLS` (.xlsx), `PDF` (expense report).
-
-The legacy `SECURESYNC_ENCRYPTED` format was removed in v2.5.x (commit 292c5e6, 2026-03-18) along with `encryptedFormatTitle`, `loadEncrypted`, and the PBKDF2 explanation strings; the password-strength table and encryption blurb were moved into `SettingsHelpStrings` where they still document auto-backup encryption.
 
 ### 6.4 DuplicateDetector
 
@@ -1004,7 +977,7 @@ Dump sections: timestamp, deviceId, admin/sync flags, App Prefs, SharedSettings 
 
 All classes below live in package `com.techadvantage.budgetrak.data.sync` unless noted. Line counts reflect the verified source.
 
-### 7.1 EncryptedDocSerializer (object, 1039 lines)
+### 7.1 EncryptedDocSerializer (object)
 
 Serializes data classes to/from encrypted Firestore documents using per-field encryption. Each business field is individually encrypted as `enc_<fieldName>` via `CryptoHelper.encryptWithKey` (ChaCha20-Poly1305, direct 256-bit key); metadata fields (`deviceId`, `updatedAt`, `deleted`, `lastEditBy`) are plaintext. Backward-compatible with the legacy single-blob format (key `"enc"`).
 
@@ -1046,7 +1019,7 @@ Nullable fields set to null emit `FieldValue.delete()`.
 
 ---
 
-### 7.2 FirestoreDocService (object, 257 lines)
+### 7.2 FirestoreDocService (object)
 
 Low-level Firestore ops. No encryption logic — that's EncryptedDocSerializer. All ops use `withTimeout(OP_TIMEOUT_MS = 30_000L)`; cache reads use `5_000L`.
 
@@ -1066,7 +1039,7 @@ Low-level Firestore ops. No encryption logic — that's EncryptedDocSerializer. 
 
 ---
 
-### 7.3 FirestoreDocSync (class, 927 lines)
+### 7.3 FirestoreDocSync (class)
 
 Firestore-native sync coordinator. Manages 8 persistent listeners (7 collection + `sharedSettings/current`), per-collection `updatedAt` cursors, an `awaitInitialSync()` gate, echo prevention, enc-hash skip, diff-based field updates, and conflict detection. Listener lifecycle driven by `MainViewModel`, not `DisposableEffect`.
 
@@ -1128,7 +1101,7 @@ On init: restores `enc_hash_cache.json`, restores pending edits, and loads persi
 
 ---
 
-### 7.4 SyncWriteHelper (object, 90 lines)
+### 7.4 SyncWriteHelper (object)
 
 Fire-and-forget push wrapper. `pushXxx()` methods for each type plus `pushTransactions/pushCategories` list variants. `pushBatch(records: List<Any>)` calls `FirestoreDocSync.pushRecordsBatch`, retries once, and on a second failure falls back to per-record `pushRecord()`. All pushes run on an internal `CoroutineScope(Dispatchers.IO + SupervisorJob())`.
 
@@ -1141,15 +1114,15 @@ Fire-and-forget push wrapper. `pushXxx()` methods for each type plus `pushTransa
 
 ---
 
-### 7.5 FirestoreService (object, 621 lines)
+### 7.5 FirestoreService (object)
 
-Device/group management, pairing, admin claims, subscriptions, debug-file upload. No delta/snapshot methods (removed in v2.2). `fingerprintJson` parameter still accepted but not meaningfully written (optional for backward compat).
+Device/group management, pairing, admin claims, subscriptions, debug-file upload.
 
 **Data classes (defined in file):**
 
 | Class | Key fields |
 |---|---|
-| `DeviceRecord` | deviceId, deviceName, isAdmin, lastSyncVersion, lastSeen, fingerprintData, fingerprintSyncVersion, photoCapable, uploadSpeedBps, uploadSpeedMeasuredAt |
+| `DeviceRecord` | deviceId, deviceName, isAdmin, lastSyncVersion, lastSeen, photoCapable, uploadSpeedBps, uploadSpeedMeasuredAt |
 | `PairingData` | groupId, encryptedKey |
 | `AdminClaim` | claimantDeviceId, claimantName, claimedAt, expiresAt, votes (deviceId→"accept"/"reject"), status |
 | `GroupHealthStatus` | isDissolved, subscriptionExpiry |
@@ -1159,7 +1132,7 @@ Device/group management, pairing, admin claims, subscriptions, debug-file upload
 
 | Method | Purpose |
 |---|---|
-| `updateDeviceMetadata(gid, did, deviceName, syncVersion, fingerprintJson, appSyncVersion, minSyncVersion, photoCapable, uploadSpeedBps, uploadSpeedMeasuredAt)` | One-time launch write of device caps. No `lastSeen` — RTDB owns presence |
+| `updateDeviceMetadata(gid, did, deviceName, syncVersion, appSyncVersion, minSyncVersion, photoCapable, uploadSpeedBps, uploadSpeedMeasuredAt)` | One-time launch write of device caps. No `lastSeen` — RTDB owns presence |
 | `getDeviceRecord(gid, did)` | Single doc read; treats `removed==true` as absent |
 | `getGroupHealthStatus(gid): GroupHealthStatus` | Single read returning `isDissolved` + `subscriptionExpiry`. Trusts "not exists" only from server (cache miss ≠ dissolved) |
 | `isDeviceRemoved(gid, did)` | Single doc read |
@@ -1168,18 +1141,18 @@ Device/group management, pairing, admin claims, subscriptions, debug-file upload
 | `redeemPairingCode(code): PairingData?` | Reads, checks expiry (Timestamp or legacy Long), deletes on success |
 | `getDevices(gid)` | List non-removed devices |
 | `registerDevice/registerMembership/removeDevice/removeMembership/updateDeviceName` | Roster ops; `registerDevice` also calls `updateGroupActivity(gid)` |
-| `deleteGroup(gid, onProgress)` | 6-step dissolve: (1) `status = dissolved`, (2) paginated delete of 11 subcollections (**`deltas`/`snapshots` omitted** — Cloud Function handles legacy via admin SDK), (3) Storage receipts + `photoSnapshot.enc`, (4) RTDB `groups/{gid}`, (5) group doc, (6) own `members/{authUid}` |
+| `deleteGroup(gid, onProgress)` | 6-step dissolve: (1) `status = dissolved`, (2) paginated delete of 11 subcollections (legacy `deltas`/`snapshots` left to the Cloud Function via admin SDK), (3) Storage receipts + `photoSnapshot.enc`, (4) RTDB `groups/{gid}`, (5) group doc, (6) own `members/{authUid}` |
 | `createAdminClaim/getAdminClaim/castVote/resolveAdminClaim/deleteAdminClaim/transferAdmin` | Admin-transfer flow (claim TTL 24 h; transaction-based resolution) |
 | `storeFcmToken/getFcmTokens` | FCM device roster |
 | `uploadDebugFiles/downloadDebugFiles/requestDebugDump/getDebugRequestTime` | Encrypted debug-dump transfer (last 50 KB of log/diag each) |
 | `getJoinSnapshotAge/setJoinSnapshotTimestamp/clearJoinSnapshotTimestamp` | Join-snapshot TTL reuse |
 | `updateSubscriptionExpiry/` | Admin subscription write |
 
-Subcollections deleted by dissolve: `transactions, recurringExpenses, incomeSources, savingsGoals, amortizationEntries, categories, periodLedger, sharedSettings, devices, imageLedger, adminClaim` (11 total; `members` handled separately; legacy `deltas`/`snapshots` skipped).
+Subcollections deleted by dissolve: `transactions, recurringExpenses, incomeSources, savingsGoals, amortizationEntries, categories, periodLedger, sharedSettings, devices, imageLedger, adminClaim` (11 total; `members` handled separately).
 
 ---
 
-### 7.6 GroupManager (object, 213 lines)
+### 7.6 GroupManager (object)
 
 Group lifecycle: create, join, leave, dissolve, pairing codes, device roster.
 
@@ -1222,7 +1195,7 @@ Extension properties filtering tombstoned + skeleton records:
 
 ---
 
-### 7.8 SyncIdGenerator (object, 20 lines)
+### 7.8 SyncIdGenerator (object)
 
 `@Synchronized fun getOrCreateDeviceId(ctx): String` — UUID, persisted in SharedPreferences `"sync_device"` at key `"deviceId"`.
 
@@ -1242,7 +1215,7 @@ Extension properties filtering tombstoned + skeleton records:
 
 ---
 
-### 7.10 SecurePrefs (object, 70 lines)
+### 7.10 SecurePrefs (object)
 
 Encrypted SharedPreferences wrapper over `androidx.security:security-crypto`.
 
@@ -1256,7 +1229,7 @@ Encrypted SharedPreferences wrapper over `androidx.security:security-crypto`.
 - `onNewToken(token)` — stores in `fcm_prefs` (`fcm_token`) and sets `token_needs_upload = true` for next Firestore push.
 - `onMessageReceived(msg)` — dispatch by `msg.data["type"]`. Every arrival logs `syncEvent("FCM received: type=$type")` (visible in `token_log.txt` in debug).
 
-Routing table (see SSD §17.15 for VM-lifecycle branching rationale, the v2.7 inline architecture, dedup, and cost):
+Routing table (see SSD §17.15 for VM-lifecycle branching rationale, dedup, and cost):
 
 | Type | VM alive | VM dead |
 |---|---|---|
@@ -1268,7 +1241,7 @@ Routing table (see SSD §17.15 for VM-lifecycle branching rationale, the v2.7 in
 
 ---
 
-### 7.12 FcmSender (object, 134 lines)
+### 7.12 FcmSender (object)
 
 Debug-builds-only helper for sending FCM v1 data-only messages.
 
@@ -1278,7 +1251,7 @@ Debug-builds-only helper for sending FCM v1 data-only messages.
 
 ---
 
-### 7.13 DebugDumpWorker (`CoroutineWorker`, ~25 lines after v2.7 refactor)
+### 7.13 DebugDumpWorker (`CoroutineWorker`)
 
 Fallback worker triggered by FCM `debug_request` (debug builds only). **Primary path is `BackgroundSyncWorker.runDebugDumpInline` called directly from FcmService**; this worker is enqueued only when that inline path returns `false` (8.5 s budget expired before upload completed).
 
@@ -1288,7 +1261,7 @@ Fallback worker triggered by FCM `debug_request` (debug builds only). **Primary 
 
 ### 7.14 BackgroundSyncWorker (`CoroutineWorker`)
 
-> **Routing semantics, slim-vs-full Tier 3 decisions, the v2.8 network-awareness gate, the v2.8 Tier 2 receipt-sync VM propagation, and the cancellation/diagnostic-log behaviour all live in SSD §17.13.** This LLD entry is the call-table only.
+> **Routing semantics, slim-vs-full Tier 3 decisions, the network-awareness gate, the Tier 2 receipt-sync VM propagation, and the cancellation/diagnostic-log behaviour all live in SSD §17.13.** This LLD entry is the call-table only.
 
 | Surface | Purpose |
 |---|---|
@@ -1298,11 +1271,11 @@ Fallback worker triggered by FCM `debug_request` (debug builds only). **Primary 
 | `schedule(ctx)` | Branches on `isSyncConfigured`: sync → periodic, solo → `scheduleNextBoundary`. Cancels the opposite path. |
 | `runOnce(ctx)` | One-shot via `ONESHOT_WORK_NAME`. Used as fallback when `runFullSyncInline` returns false. |
 | `cancel(ctx)` | Cancels both `WORK_NAME` and `BOUNDARY_WORK_NAME`. |
-| `scheduleNextBoundary(ctx)` (v2.7) | Computes next period boundary via `PeriodRefreshService.nextBoundaryAt(...)`, enqueues a one-shot via `BOUNDARY_WORK_NAME` (REPLACE, expedited, clamped 60 s–24 h). Self-rearms at end of every solo run. |
-| `runFullSyncInline(ctx, sourceLabel, timeBudgetMs?): Boolean` (v2.7; v2.8 returns `Boolean`) | Sole owner of Tier 1/2/3 routing. Returns true only when real work was done (offline-skipped runs return false; only `workDone && sourceLabel.startsWith("FCM-")` stamps `KEY_LAST_INLINE_AT`). Guarded by file-static `isRunning: AtomicBoolean`. |
-| `runDebugDumpInline(ctx, timeBudgetMs?)` (v2.7) | FCM `debug_request` analogue of `runFullSyncInline`. |
-| `runFullSyncBody / runTier2 / runTier3` (file-private; all return `Boolean` in v2.8) | The three-tier routing implementation. v2.8: each early-returns false on `!NetworkUtils.isOnline(context)` (and on Tier 1 app-active skip / sync-not-configured skip). Tier 2 captures `syncReceipts(txns, devices)`'s returned list and applies changed `receiptId1..5` back to `vm.transactions` on Main. |
-| `resolveDevicesForReceiptSync(ctx, groupId, vm)` (v2.7) | Four-tier fallback resolver: VM `syncDevices` → RTDB presence → Firestore `groups/{gid}/devices/*` → SharedPref cache. Cold-start Tier 3's RTDB read returns empty before auth handshake; the cache (populated by every successful resolution) covers that gap. |
+| `scheduleNextBoundary(ctx)` | Computes next period boundary via `PeriodRefreshService.nextBoundaryAt(...)`, enqueues a one-shot via `BOUNDARY_WORK_NAME` (REPLACE, expedited, clamped 60 s–24 h). Self-rearms at end of every solo run. |
+| `runFullSyncInline(ctx, sourceLabel, timeBudgetMs?): Boolean` | Sole owner of Tier 1/2/3 routing. Returns `true` only when real work was done; offline-skipped runs return `false`, and only `workDone && sourceLabel.startsWith("FCM-")` stamps `KEY_LAST_INLINE_AT`. Guarded by file-static `isRunning: AtomicBoolean`. |
+| `runDebugDumpInline(ctx, timeBudgetMs?)` | FCM `debug_request` analogue of `runFullSyncInline`. |
+| `runFullSyncBody / runTier2 / runTier3` (file-private) | Three-tier routing impl, all return `Boolean`. Each early-returns `false` on `!NetworkUtils.isOnline(context)` (and on Tier 1 app-active skip / sync-not-configured skip). Tier 2 captures `syncReceipts(txns, devices)`'s returned list and applies changed `receiptId1..5` back to `vm.transactions` on Main. |
+| `resolveDevicesForReceiptSync(ctx, groupId, vm)` | Four-tier fallback resolver: VM `syncDevices` → RTDB presence → Firestore `groups/{gid}/devices/*` → SharedPref cache. Cold-start Tier 3's RTDB read returns empty before auth handshake; the cache (populated by every successful resolution) covers that gap. |
 
 **`doWork()` is a thin wrapper:** `try { runFullSyncInline(applicationContext, "Worker", null) } catch (ce: CancellationException) { syncEvent(stopReason); throw ce }`. Other exceptions are caught and converted to `Result.success()` so the next scheduled run isn't penalized.
 
@@ -1314,7 +1287,7 @@ Manifest-registered for `ACTION_POWER_CONNECTED` / `ACTION_POWER_DISCONNECTED`. 
 
 ---
 
-### 7.16 RealtimePresenceService (object, 198 lines)
+### 7.16 RealtimePresenceService (object)
 
 Firebase RTDB presence. Path: `groups/{gid}/presence/{did}`.
 
@@ -1333,7 +1306,7 @@ Firebase RTDB presence. Path: `groups/{gid}/presence/{did}`.
 
 ---
 
-### 7.17 ReceiptManager (object, 406 lines)
+### 7.17 ReceiptManager (object)
 
 Local receipt photos: capture, downsize, encrypt, store, thumbnails, and the pending-upload queue.
 
@@ -1361,32 +1334,32 @@ ImageLedgerEntry(receiptId, originatorDeviceId, createdAt,
     possessions: Map<String, Boolean>,  // deviceId → true/false (key absent = unknown)
     uploadAssignee: String?, assignedAt: Long, uploadedAt: Long,
     contentVersion: Long = 0L,
-    lastEditBy: String? = null)         // v2.7 — used by upload race-detection logic
+    lastEditBy: String? = null)         // upload race-detection
 
 SnapshotLedgerEntry(requestedBy, requestedAt, builderId, builderAssignedAt,
     status, progressPercent, errorMessage, lastProgressUpdate,
     snapshotReceiptCount, readyAt, consumedBy: Map<String, Boolean>)
 ```
 
-`possessions` is three-state: `true` / `false` / key-absent. `lastEditBy` (v2.7) is set by `createLedgerEntry`, `incrementContentVersion`, `createRecoveryRequest`, `resetEntryToRecoveryRequest`, `markReuploadComplete` — used by `processPendingUploads` resume-detection (see §7.20) and by `onImageLedgerWrite` writer-skip filter (see §7.26.2a).
+`possessions` is three-state: `true` / `false` / key-absent. `lastEditBy` is set by `createLedgerEntry`, `incrementContentVersion`, `createRecoveryRequest`, `resetEntryToRecoveryRequest`, `markReuploadComplete` — used by `processPendingUploads` resume-detection (see §7.20) and by `onImageLedgerWrite` writer-skip filter (see §7.26.2a).
 
 ---
 
-### 7.19 ImageLedgerService (object, 741 lines)
+### 7.19 ImageLedgerService (object)
 
 Firestore CRUD for `groups/{gid}/imageLedger/*` and Cloud Storage for `groups/{gid}/receipts/{rid}.enc`. `SNAPSHOT_DOC_ID = "_snapshot_request"` (single underscore — double-underscore was a Firestore reserved ID). UUID regex gate on receiptIds.
 
 | Method | Description |
 |---|---|
 | `uploadToCloud(gid, rid, bytes): Boolean` | 60 s timeout; updates `lastUploadError` on failure |
-| `downloadFromCloud(gid, rid): ByteArray?` | 30 s (v2.7, down from 60 s — 200 KB receipts transfer in seconds), 2 MB max. Rethrows `CancellationException` cleanly so Samsung-canceled workers don't waste subsequent suspension points |
-| `getFlagClock(gid): Long` + `getLedgerEntry(gid, rid)` (v2.7 update) | Same 30 s timeout pattern; also rethrow `CancellationException` instead of swallowing as generic Exception |
+| `downloadFromCloud(gid, rid): ByteArray?` | 30 s timeout, 2 MB max. Rethrows `CancellationException` cleanly so Samsung-canceled workers don't waste subsequent suspension points |
+| `getFlagClock(gid): Long` + `getLedgerEntry(gid, rid)` | Same 30 s timeout; rethrow `CancellationException` instead of swallowing as generic Exception |
 | `existsInCloud(gid, rid)` / `deleteFromCloud(gid, rid)` | Metadata read / hard delete |
 | `purgeOrphanedCloudFiles(gid): Int` | Lists cloud + reads full ledger; deletes files with no ledger entry and >10 min old |
-| `createLedgerEntry(gid, rid, originatorDeviceId)` | After successful upload of a fresh receipt; writes `contentVersion = 0`. **v2.7: also stamps `lastEditBy = originatorDeviceId`** so `processPendingUploads` can recognize a partial-commit resume (see §7.20). **Does NOT bump flag clock** — peers discover via transaction-sync `onBatchChanged`, and pruning is triggered inline at every download site |
+| `createLedgerEntry(gid, rid, originatorDeviceId)` | After successful upload of a fresh receipt; writes `contentVersion = 0` and stamps `lastEditBy = originatorDeviceId` so `processPendingUploads` can recognize a partial-commit resume (see §7.20). **Does NOT bump flag clock** — peers discover via transaction-sync `onBatchChanged`, and pruning is triggered inline at every download site |
 | `incrementContentVersion(gid, rid, editingDeviceId)` | After rotation / edit re-upload: batch-writes `possessions = {editor: true}`, `uploadedAt = now`, `contentVersion += 1`, `lastEditBy = editingDeviceId`, bumps flag clock. Cloud Function `onImageLedgerWrite` fires `sync_push` to all non-writer peers; their BG worker kicks `syncReceipts()` which invalidates stale local copies via `lastSeenContentVersion` mismatch |
 | `createRecoveryRequest(gid, rid, originatorDeviceId, preserveContentVersion = 0L)` | File lost; empty `possessions`; bumps flag clock. Stamps `lastEditBy = originatorDeviceId`. `preserveContentVersion` keeps the monotonic counter across a `deleteLedgerEntry → createRecoveryRequest` recovery cycle so stale peers still invalidate through future rotations. Cloud Function pushes peers to consider re-uploading |
-| `resetEntryToRecoveryRequest(gid, rid, requestingDeviceId, fallbackContentVersion)` (v2.7) | Atomic Firestore transaction: reads existing entry (if any), rewrites to recovery-request state (`uploadedAt=0, possessions={}`, `uploadAssignee=null`, `assignedAt=0`, `lastEditBy=requester`), preserves existing `contentVersion` + `createdAt`, bumps flag clock in the same transaction. Used by `downloadReceiptWithRetry` on the 3rd real failure instead of `delete + create`, which opened a window for concurrent re-uploaders to race and reset the version counter. |
+| `resetEntryToRecoveryRequest(gid, rid, requestingDeviceId, fallbackContentVersion)` | Atomic Firestore transaction: reads existing entry (if any), rewrites to recovery-request state (`uploadedAt=0, possessions={}`, `uploadAssignee=null`, `assignedAt=0`, `lastEditBy=requester`), preserves existing `contentVersion` + `createdAt`, bumps flag clock in the same transaction. Used by `downloadReceiptWithRetry` on the 3rd real failure (a `delete + create` pair would race concurrent re-uploaders and reset the version counter). |
 | `markPossession(gid, rid, did)` / `markNonPossession(gid, rid, did)` | Dot-notation `update("possessions.$did", true/false)` |
 | `checkPhotoLost(gid, rid, photoCapableDeviceIds): Boolean` | Transaction: confirms permanent loss when all photo-capable devices have `false` and deletes ledger entry |
 | `pruneCheckTransaction(gid, rid, allDeviceIds): Boolean` | Transaction: if all devices possess it, delete ledger + Cloud Storage. Called inline inside `downloadReceiptWithRetry` and the `processLedgerOperations` "have-it" branch |
@@ -1400,30 +1373,30 @@ Firestore CRUD for `groups/{gid}/imageLedger/*` and Cloud Storage for `groups/{g
 
 ---
 
-### 7.20 ReceiptSyncManager (class, 741 lines)
+### 7.20 ReceiptSyncManager (class)
 
 Coordinates receipt photo sync. Paid devices only. Constructor: `(context, groupId, deviceId, encryptionKey, syncLog: (String)->Unit = {})`.
 
 Constants: `STALE_ASSIGNMENT_MS = 5 min`, `FOURTEEN_DAYS_MS`, `MAX_DOWNLOAD_RETRIES = 3`, `SPEED_STALENESS_MS = 24 h`, `SNAPSHOT_THRESHOLD = 50`, `SNAPSHOT_STALE_MS = 2 h`, `BATCH_RECOVERY_CAP = 50`, `SNAPSHOT_GRACE_PERIOD_MS = 5 min`, `SNAPSHOT_MAGIC = "SNAP"`.
 
 **Public entry points** (called from `MainViewModel` foreground drainers and `BackgroundSyncWorker` Tier 2/3):
-- `syncReceipts(transactions, allDevices): List<Transaction>` — full 5-step pipeline below. **v2.8: returns the (potentially modified) transaction list** so callers can propagate changes back to in-memory state. `BackgroundSyncWorker.runTier2` uses this to apply `clearLostReceiptSlot`'s nulled `receiptId*` fields back to `vm.transactions` on Main — without it, the Firestore listener's echo filter (`lastEditBy == ourDeviceId`) keeps in-memory state stale after the slot clear, leaving phantom photo frames in open dialogs until app restart. Tier 3 also calls this but discards the return (VM is dead in that path; next launch loads from disk). v2.7 emits phase-boundary `syncEvent` logs (`syncReceipts START/step1/step2/step3/step3b/step4/END`, with elapsed-ms on END) and a `CANCELLED after Nms` log on `CancellationException`, rethrown to the caller. Runs through all 5 `ReceiptSyncManager` construction sites' persistent log channel (Tier2/Tier3/SyncNow/onBatch/UploadDrainer/FgRetry). v2.8 adds offline gates at top of `processPendingUploads` and `processRecovery` (skip + log when `!NetworkUtils.isOnline(context)`).
+- `syncReceipts(transactions, allDevices): List<Transaction>` — full 5-step pipeline below. Returns the (potentially modified) transaction list so callers can propagate changes back to in-memory state. `BackgroundSyncWorker.runTier2` uses this to apply `clearLostReceiptSlot`'s nulled `receiptId*` fields back to `vm.transactions` on Main — required because the Firestore listener's echo filter (`lastEditBy == ourDeviceId`) would otherwise keep in-memory state stale until app restart, leaving phantom photo frames in open dialogs. Tier 3 calls it too but discards the return (VM is dead; next launch loads from disk). Phase-boundary `syncEvent` logs (`syncReceipts START/step1/step2/step3/step3b/step4/END`, with elapsed-ms on END) and a `CANCELLED after Nms` log on `CancellationException` (rethrown). Routes through all `ReceiptSyncManager` construction sites' persistent log channel (Tier2/Tier3/SyncNow/onBatch/UploadDrainer/FgRetry). `processPendingUploads` and `processRecovery` early-return + log when `!NetworkUtils.isOnline(context)`.
 - `processPendingUploads(): Int` — drains upload queue in chunks of 5; returns # completed. Used by `MainViewModel.kickUploadDrainer` in a backoff loop. After a successful Cloud Storage upload, applies the three-way ledger decision (fresh / partial-commit resume / real rotation) — see SSD §18.5 *Rotation / edit propagation via `contentVersion`*.
-- `downloadReceiptWithRetry(receiptId, photoCapableDeviceIds): Boolean` — single-receipt download + save + `markPossession` + `pruneCheckTransaction` + retry counter. On 3rd real failure with `uploadedAt > 0`, deletes ledger entry and creates recovery request. Used by `onBatchChanged` fast path, `kickFgDownloadRetry` coroutine, and `processRecovery`.
-- `bumpLocalContentVersionForRotation(ctx, receiptId)` (companion, v2.7) — increments `receipt_sync_prefs/content_version_<receiptId>` by 1. Called from `ReceiptManager.replaceReceipt` to mark a rotation as pending before queueing.
+- `downloadReceiptWithRetry(receiptId, photoCapableDeviceIds): Boolean` — single-receipt download + save + `markPossession` + `pruneCheckTransaction` + retry counter. On 3rd real failure with `uploadedAt > 0`, resets the ledger entry to a recovery request. Used by `onBatchChanged` fast path, `kickFgDownloadRetry` coroutine, and `processRecovery`.
+- `bumpLocalContentVersionForRotation(ctx, receiptId)` (companion) — increments `receipt_sync_prefs/content_version_<receiptId>` by 1. Called from `ReceiptManager.replaceReceipt` to mark a rotation as pending before queueing.
 
 **`syncReceipts` — 5 steps:**
 1. `processPendingUploads` — upload-first: encrypt → upload → create-or-bump ledger entry per the three-way logic above.
-2. `processLedgerOperations` — flag-clock check + ledger cache. Handles (a) re-upload requests when we have the file, (b) non-possession marking + `checkPhotoLost` for recovery requests, (c) `markPossession` + `pruneCheckTransaction` for entries we already have locally. **Does not download** — the old `handleDownload` branch was removed.
+2. `processLedgerOperations` — flag-clock check + ledger cache. Handles (a) re-upload requests when we have the file, (b) non-possession marking + `checkPhotoLost` for recovery requests, (c) `markPossession` + `pruneCheckTransaction` for entries we already have locally. **Does not download** — downloads route through `processRecovery` or the foreground paths.
 3. `processRecovery` — missing local files referenced in transactions. Delegates per-receipt to `downloadReceiptWithRetry`; if no ledger entry exists at all, creates one (recovery request). Re-uploader selected by online filter + fastest `uploadSpeedBps` in last 24 h + `abs(hash(receiptId+deviceId)) % 1000` tiebreak.
-4. `processSnapshotLifecycle` — build/download snapshot archives when ≥ 50 missing (also used by join). v2.7 `buildSnapshot` / `processSnapshotDownload` rethrow `CancellationException` separately and leave status `"building"` on cancel — see SSD §18.5 *Snapshot cancellation handling*.
+4. `processSnapshotLifecycle` — build/download snapshot archives when ≥ 50 missing (also used by join). `buildSnapshot` / `processSnapshotDownload` rethrow `CancellationException` separately and leave status `"building"` on cancel — see SSD §18.5 *Snapshot cancellation handling*.
 5. `processStalePruning` — 14-day cleanup, noon trigger, local 24 h skip gate (`lastStalePruneRun`) + group `imageLastCleanupDate` check, plain `markCleanupDone` write (no CAS; idempotent).
 
 Foreground polls `imageLedgerFlagClock` (single field on the group doc) — **not** a dedicated listener. Transaction-arrival downloads are driven by the business collection listener. See SSD §18.5 for the full four-layer architecture.
 
 ---
 
-### 7.21 SyncMergeProcessor (object, 303 lines)
+### 7.21 SyncMergeProcessor (object)
 
 Stateless merge. Used by both `MainViewModel.onBatchChanged` and `BackgroundSyncWorker`.
 
@@ -1440,7 +1413,7 @@ Stateless merge. Used by both `MainViewModel.onBatchChanged` and `BackgroundSync
 
 ---
 
-### 7.22 PeriodRefreshService (`data/PeriodRefreshService.kt`, 261 lines)
+### 7.22 PeriodRefreshService (`data/PeriodRefreshService.kt`)
 
 Package `com.techadvantage.budgetrak.data`. Shared period-refresh logic, used by foreground ViewModel and `BackgroundSyncWorker`.
 
@@ -1460,7 +1433,7 @@ Package `com.techadvantage.budgetrak.data`. Shared period-refresh logic, used by
 
 ---
 
-### 7.23 DiagDumpBuilder (`data/DiagDumpBuilder.kt`, 241 lines)
+### 7.23 DiagDumpBuilder (`data/DiagDumpBuilder.kt`)
 
 Package `com.techadvantage.budgetrak.data`. Generates diagnostic text dumps from disk (SharedPrefs + JSON repos) — usable from any worker.
 
@@ -1487,18 +1460,18 @@ Package `com.techadvantage.budgetrak.data`. Generates diagnostic text dumps from
 ## 7.25 App Check
 
 - **Provider:** `DebugAppCheckProviderFactory` (debug) / `PlayIntegrityAppCheckProviderFactory` (release), switched by `BuildConfig.DEBUG` in `BudgeTrakApplication.onCreate`.
-- **Token TTL is provider-dependent** (verified empirically 2026-04-26):
+- **Token TTL is provider-dependent**:
   - Play Integrity (release): 40 h, set via Firebase Console → Project Settings → Your apps → BudgeTrak Android → App Check section dropdown.
   - Debug provider: **always 1 h, ignores Console setting** by design (Google-imposed for short-lived dev tokens). Means debug-build refresh cadence is 40× higher than release.
 - **Debug token:** extracted from logcat on startup, written to `token_log.txt`, included in FCM dump uploads.
-- **Play Integrity advanced settings (verified 2026-04-26):** `PLAY_RECOGNIZED` required (anti-piracy — blocks modified/re-signed APKs), `LICENSED` not required (don't gatekeep free users on Huawei / degooglified devices), device integrity = "Don't explicitly check" (relies on `PLAY_RECOGNIZED` + per-field encryption for actual data protection; tighten post-launch only if Crashlytics shows abuse patterns — see `project_prelaunch_todo.md` item 2).
+- **Play Integrity advanced settings:** `PLAY_RECOGNIZED` required (anti-piracy — blocks modified/re-signed APKs), `LICENSED` not required (don't gatekeep free users on Huawei / degooglified devices), device integrity = "Don't explicitly check" (relies on `PLAY_RECOGNIZED` + per-field encryption for actual data protection).
 - **Authentication enforcement:** Monitor (not Enforce). Anonymous Auth must always succeed for sync setup; downstream Firestore/RTDB/Storage rules enforce App Check, so a bot-acquired anonymous UID can't actually do anything.
 - **All `getAppCheckToken()` calls wrapped with `withTimeoutOrNull(10–15 s)`.**
 - **Refresh triggers** (all gated by `isSyncConfigured`):
   - `onResume`, `onAvailable` network callback
-  - `BackgroundSyncWorker` Tier 2/3 proactive (**v2.7: 16-min threshold**, dropped from 35 on 2026-04-25 — heartbeats are reliable enough that one heartbeat per 4 h Play Integrity cycle catches the refresh, the rest skip)
+  - `BackgroundSyncWorker` Tier 2/3 proactive (16-min threshold — server heartbeats are reliable enough that one per ~4 h Play Integrity cycle catches the refresh, the rest skip)
   - `FirestoreDocSync.triggerFullRestart()` on PERMISSION_DENIED
-  - `MainViewModel` keep-alive loop (45-min check / **v2.7: 16-min refresh**, dropped from 35 on 2026-04-26 to dedupe with Worker — VM still serves as backup if Worker silenced for >45 min by Doze)
+  - `MainViewModel` keep-alive loop (45-min check, 16-min refresh — VM is the backup if Worker is silenced >45 min by Doze)
   - SDK auto-refresh (~5 min before expiry, in-process only).
 
 ---
@@ -1517,18 +1490,18 @@ Triggered by `onDelete` of `groups/{groupId}`. Cascade:
 
 Client `FirestoreService.deleteGroup` deletes the 11 active subcollections itself; the Function handles anything left plus legacy deltas/snapshots.
 
-### 7.26.2 `onSyncDataWrite` — Firestore onWrite (v2.6)
+### 7.26.2 `onSyncDataWrite` — Firestore onWrite
 
 Triggered by `onWrite` on `groups/{groupId}/{collection}/{docId}`. Filters collection name against `SYNC_PUSH_COLLECTIONS` (the 8 sync-data collections — transactions, recurringExpenses, incomeSources, savingsGoals, amortizationEntries, categories, periodLedger, sharedSettings). Skips deletes (`!change.after.exists`).
 
 Flow:
 1. Read `lastEditBy` (fallback `deviceId`) from the new doc — the writer to exclude from fan-out.
-2. `collectRecipientTokens(gid, writerDeviceId)` walks `groups/{gid}/devices`, returning `fcmToken` for every device where `removed != true` and the device ID isn't the writer. **Defense-in-depth writer validation (v2.7):** before building the token list, the helper searches the same snapshot for `writerDeviceId`; if the writer isn't found or is flagged `removed`, the helper returns `[]` and the fan-out is suppressed. Free — uses the snapshot already fetched. Catches Firestore-rule regressions where a non-member write could otherwise trigger group-wide FCM spam.
+2. `collectRecipientTokens(gid, writerDeviceId)` walks `groups/{gid}/devices`, returning `fcmToken` for every device where `removed != true` and the device ID isn't the writer. **Defense-in-depth writer validation:** before building the token list, the helper searches the same snapshot for `writerDeviceId`; if the writer isn't found or is flagged `removed`, the helper returns `[]` and the fan-out is suppressed. Catches Firestore-rule regressions where a non-member write could trigger group-wide FCM spam.
 3. `sendFcm(tokens, {type:"sync_push", collection, groupId}, "sync_push")` — chunks at 500 tokens per `sendEachForMulticast`, `android.priority = "high"`, logs per-token failures.
 
 Purpose: cross-device sync in near-real-time despite Android Doze / App-Standby bucket restrictions on peer devices. Client receiver in §7.11.
 
-### 7.26.2a `onImageLedgerWrite` — Firestore onWrite (v2.7)
+### 7.26.2a `onImageLedgerWrite` — Firestore onWrite
 
 Triggered by `onWrite` on `groups/{groupId}/imageLedger/{receiptId}`. `imageLedger` is intentionally NOT in `SYNC_PUSH_COLLECTIONS` because most of its writes are bookkeeping chatter (`markPossession`, `markNonPossession`, `pruneCheckTransaction` deletions) that peers don't need to react to. This trigger applies a content filter so only meaningful writes fan out.
 
@@ -1547,7 +1520,7 @@ Writer skipped via `after.lastEditBy` (client writes `incrementContentVersion`, 
 
 Peers' `BackgroundSyncWorker.runOnce` uses `enqueueUniqueWork(KEEP)` so bursts (e.g. batch rotation) collapse into one `syncReceipts()` run per peer.
 
-### 7.26.2b `presenceOrphanCleanup` — scheduled (v2.7)
+### 7.26.2b `presenceOrphanCleanup` — scheduled
 
 Weekly pub/sub (`every sunday 03:00 UTC`). Walks every group's RTDB presence node, bulk-fetches the corresponding Firestore `devices/{deviceId}` via `db.getAll(...refs)`, and removes any RTDB presence entry whose matching Firestore device is absent or `removed = true`. Mitigates the RTDB presence write gap (rules allow any authenticated user to write presence; can't cross-reference Firestore to enforce membership). Orphan presence can't escalate to FCM spam — `presenceHeartbeat` gates FCM sends via Firestore `devices/{id}/fcmToken` which requires `isMember` — but it can bloat the RTDB node and slow `RealtimePresenceService.getDevices()` for legitimate users.
 
@@ -1555,11 +1528,11 @@ Counters logged: `groupsChecked`, `totalPruned`.
 
 **Scale caveat:** sequential per-group walk, same O(n) concern as `presenceHeartbeat`. Fine at current scale; upgrade alongside the heartbeat (tracked in `project_prelaunch_todo.md`).
 
-### 7.26.3 `presenceHeartbeat` — scheduled (v2.6)
+### 7.26.3 `presenceHeartbeat` — scheduled
 
 Pub/Sub schedule `every 15 minutes` (UTC). Walks all groups in Firestore; for each, reads RTDB `groups/{gid}/presence`; collects `deviceId`s whose `lastSeen < now − 15 min`; calls `tokensForDevices(gid, staleIds)` → `sendFcm(tokens, {type:"heartbeat", groupId}, "heartbeat")`.
 
-Purpose: backstop when Android stops scheduling the periodic `BackgroundSyncWorker` (observed 4h46m silence on the 2026-04-12 dump).
+Purpose: backstop when Android stops scheduling the periodic `BackgroundSyncWorker` (observed up to 4h46m worker silence on Samsung devices in App-Standby Bucket `restricted`).
 
 **Scale caveat:** the current implementation walks groups sequentially. At ~50 ms/group the 60 s default timeout is hit at ~1.2K groups and the 9-min Gen-1 ceiling at ~10K. Migration to an indexed presence query (tracked in `memory/project_prelaunch_todo.md` #7) eliminates the loop entirely.
 
@@ -1573,22 +1546,19 @@ Purpose: backstop when Android stops scheduling the periodic `BackgroundSyncWork
 
 ## 7.26a Telemetry — Crashlytics + Firebase Analytics + BigQuery
 
-**SDK initialization** (`BudgeTrakApplication.onCreate`): both Crashlytics and Analytics share the `crashlyticsEnabled` SharedPref toggle (default true). Setting renamed in UI to "Send crash reports and anonymous usage data". `setAnalyticsCollectionEnabled(crashlyticsEnabled)` runs at app start; toggle changes in `MainActivity` UI propagate immediately.
+**SDK initialization** (`BudgeTrakApplication.onCreate`): both Crashlytics and Analytics share the `crashlyticsEnabled` SharedPref toggle (default true). UI label: "Send crash reports and anonymous usage data". `setAnalyticsCollectionEnabled(crashlyticsEnabled)` runs at app start; toggle changes in `MainActivity` UI propagate immediately.
 
-**Crashlytics events:** non-fatals via `BudgeTrakApplication.recordNonFatal(tag, message, e?)`. Sites: `PERMISSION_DENIED` recovery, consistency mismatch, `TOKEN_REFRESH_TIMEOUT` (worker + ViewModel keep-alive 15 s timeouts). Custom keys via `updateDiagKeys(map)` attached to every future event: `cashDigest, listenerStatus, lastRefreshDate, activeDevices, txnCount, reCount, plCount, lastTokenExpiry, authAnonymous`.
+**Crashlytics events:** non-fatals via `BudgeTrakApplication.recordNonFatal(tag, message, e?)`. Sites: `PERMISSION_DENIED` recovery, consistency mismatch, `TOKEN_REFRESH_TIMEOUT` (worker + ViewModel keep-alive 15 s timeouts). Custom keys via `updateDiagKeys(map)`: `cashDigest, listenerStatus, lastRefreshDate, activeDevices, txnCount, reCount, plCount, lastTokenExpiry, authAnonymous`.
 
-**Analytics events** (`data/telemetry/AnalyticsEvents.kt`, ~115 lines):
-- `logHealthBeacon(ctx, listenerUp, activeDevices, txnCount, reCount, plCount)` — daily sync-user heartbeat. Fired from `MainViewModel.runPeriodicMaintenance` once per 24 h on `onResume`. Migrated 2026-04-22 from Crashlytics non-fatal (which has a 10/session cap and pollutes the crash dashboard).
-- `logOcrFeedback(ctx, merchantChanged, dateChanged, amountDeltaCents, catsAdded, catsRemoved, hadMultiCat)` — fires on save of an OCR-populated transaction. Anonymous deltas/booleans only — no merchant text or amounts. Used to measure per-field user-correction rate.
+**Analytics events** (`data/telemetry/AnalyticsEvents.kt`):
+- `logHealthBeacon(ctx, listenerUp, activeDevices, txnCount, reCount, plCount)` — daily sync-user heartbeat from `runPeriodicMaintenance` (24 h gate).
+- `logOcrFeedback(ctx, merchantChanged, dateChanged, amountDeltaCents, catsAdded, catsRemoved, hadMultiCat)` — fires on save of an OCR-populated transaction. Anonymous deltas/booleans only — no merchant text or amounts. Measures per-field user-correction rate.
 
-Both gated by `isEnabled(ctx)` reading the same `crashlyticsEnabled` pref.
+Both gated by `isEnabled(ctx)` reading the same `crashlyticsEnabled` pref. Modern Firebase Analytics SDK (BoM 32.x) auto-discovers measurement ID at runtime via `mobilesdk_app_id`; `google-services.json` doesn't need an explicit `analytics_service` block. The Firebase project must be linked to a GA4 property in Project Settings → Integrations → Google Analytics — without it, the SDK accepts events but they are silently dropped.
 
-**BigQuery export** (configured via Firebase Console → Project Settings → Integrations → BigQuery):
-- **Crashlytics** (legacy table set, `com_securesync_app_ANDROID*`): receiving until 2026-04-12 rebrand. New table set `com_techadvantage_budgetrak_ANDROID*` enabled 2026-04-26 (~24 h propagation).
-- **Performance Monitoring** + **Sessions** (`firebase_performance.*`, `firebase_sessions.*`): same pattern — legacy + new exports both enabled 2026-04-26.
-- **Firebase Analytics** (`analytics_<propertyId>`): not exported until 2026-04-26 — Firebase project wasn't linked to a GA4 property, so events were silently dropped despite the SDK calls. Linkage completed 2026-04-26 (property ID 534603748, stream "BudgeTrak Android" id 14591145419, BigQuery export enabled with Daily + Streaming, no advertising IDs). Modern Firebase Analytics SDK (BoM 32.x) auto-discovers measurement ID at runtime via `mobilesdk_app_id`; `google-services.json` doesn't need an explicit `analytics_service` block. Configuration drift cause: the linkage UI is in Project Settings → Integrations → Google Analytics, separate from the GA4 data-stream view that confusingly looks "linked" on its own.
+**BigQuery export** (Firebase Console → Project Settings → Integrations → BigQuery): Crashlytics, Performance Monitoring, Sessions, and `analytics_<propertyId>` all stream into `com_techadvantage_budgetrak_ANDROID*` with Daily + Streaming and no advertising IDs.
 
-**Query helper** `tools/query-crashlytics.js`: hardcoded to legacy `com_securesync_app_ANDROID*` table names; needs update to UNION across both legacy + new tables for cross-rebrand history. Fixed table-name bugs in v2.7 (script previously referenced `os_version` and `app_version` fields that don't exist in the actual BigQuery schema). Auth via `~/.config/configstore/firebase-tools.json` refresh token — periodically expires with `rapt_required` error, requires `firebase login --reauth` (interactive only — fails in non-TTY environments like Claude Code's bash).
+**Query helper** `tools/query-crashlytics.js`: auth via `~/.config/configstore/firebase-tools.json` refresh token — periodically expires with `rapt_required` error, requires `firebase login --reauth` (interactive only).
 
 ---
 
@@ -1738,7 +1708,7 @@ Object singleton. Canvas-based bitmap renderer for the Solari card shown in the 
 
 ### 11.5 Historical note
 
-**`WidgetRefreshWorker` was REMOVED in v2.3 (2026-03-29)** and absorbed into `BackgroundSyncWorker`. The single background worker now handles sync, period refresh, cash recompute, and widget update together.
+A single `BackgroundSyncWorker` handles sync, period refresh, cash recompute, and widget update together.
 
 ---
 
@@ -1775,7 +1745,7 @@ Object singleton. Canvas-based bitmap renderer for the Solari card shown in the 
 
 **PeriodLedger row:** `periodStartDate`, `appliedAmount`, `corrected` (unused; kept for compat), `deviceId`.
 
-**v2.2 note:** no per-field `*_clock` fields in any schema.
+No per-field `*_clock` fields in any schema (sync uses `lastEditBy` + Firestore field-level updates instead).
 
 ### 12.2 SharedPreferences files
 
@@ -1839,7 +1809,7 @@ Every repository uses `SafeIO` for atomic writes (temp file → fsync → rename
 
 **14.4 Repository loading** — existence check, empty-blank returns `emptyList()`, missing fields default to backward-compatible values, corrupt records skipped with warn log.
 
-**14.5 ID collision** — all entity-id generators (Transaction / RE / IS / AE / SG / Category) use do-while retry against the local existingIds. Range is `1..Int.MAX_VALUE` (widened from `0..65535` on 2026-04-27); the do-while loop guarantees no LOCAL collision, and the wide range makes CROSS-device collisions in a sync group ≈1 in 2.1B per concurrent pair — practically impossible. `SyncIdGenerator` (string deviceId) is unrelated to the entity-id generators.
+**14.5 ID collision** — all entity-id generators (Transaction / RE / IS / AE / SG / Category) use do-while retry against the local `existingIds`. Range is `1..Int.MAX_VALUE`; the do-while loop guarantees no local collision, and the wide range makes cross-device collisions in a sync group ≈1 in 2.1 B per concurrent pair. `SyncIdGenerator` (string deviceId) is unrelated to the entity-id generators.
 
 **14.6 Budget calculation safety** — division by zero guarded (`totalPeriods > 0`, `repeatInterval > 0`), day-of-month clamped to month length, rounded to 2 decimals, NaN/Infinity guarded by `SafeIO.safeDouble()`.
 
@@ -1853,177 +1823,59 @@ Every repository uses `SafeIO` for atomic writes (temp file → fsync → rename
 
 ---
 
-## Appendix A: Complete File Listing
+## Appendix A: File Inventory
 
-94 Kotlin files, 47,192 lines.
+For exact current line counts run `find app/src/main/java -name "*.kt" | xargs wc -l`. Brief inventory by package; detailed responsibilities are in the body sections referenced.
 
-### Root (`com.techadvantage.budgetrak`)
+### Root (`com.techadvantage.budgetrak`) — 3 files
+`MainActivity` (UI shell, navigation, lifecycle, LoadingScreen, BackHandler — §2.2), `MainViewModel` (state + business logic + sync lifecycle + save functions + async load + maintenance + archiving — §2.3), `BudgeTrakApplication` (Application entry, App Check, Crashlytics, FCM helpers — §2.1).
 
-| File | Lines | Purpose |
-|---|---|---|
-| MainActivity.kt | 2,438 | UI shell, navigation, lifecycle, LoadingScreen, BackHandler |
-| MainViewModel.kt | 2,650 | All state, business logic, sync lifecycle, save functions, async load, maintenance, archiving |
-| BudgeTrakApplication.kt | 107 | Application entry, Crashlytics + token logging |
+### `data/` — 31 files
+Data classes: `Transaction`, `Category`, `IncomeSource`, `RecurringExpense`, `AmortizationEntry`, `SavingsGoal`, `SharedSettings`, `BudgetPeriod` (enum) — §5.
+Repositories: `TransactionRepository`, `CategoryRepository`, `IncomeSourceRepository`, `RecurringExpenseRepository`, `AmortizationRepository`, `SavingsGoalRepository`, `SharedSettingsRepository` (one per JSON file) — §13.
+Utilities: `BudgetCalculator`, `CryptoHelper`, `CsvParser`, `DuplicateDetector`, `AutoCategorizer`, `CategoryIcons`, `SavingsSimulator`, `DefaultCategories`, `FullBackupSerializer`, `BackupManager`, `SafeIO`, `PrefsCompat`, `TitleCaseUtil`, `ExpenseReportGenerator`, `DiagDumpBuilder`, `PeriodRefreshService` — §6.
 
-### `data/` (26 files)
+### `data/sync/` — 22 files
+Sync engine: `EncryptedDocSerializer`, `FirestoreDocService`, `FirestoreDocSync`, `SyncWriteHelper`, `FirestoreService`, `GroupManager`, `SyncFilters`, `SyncIdGenerator`, `PeriodLedger`, `SecurePrefs`. Receipts: `ImageLedgerEntry`, `ImageLedgerService`, `ReceiptManager`, `ReceiptSyncManager`. Workers + FCM: `BackgroundSyncWorker`, `DebugDumpWorker`, `WakeReceiver`, `FcmService`, `FcmSender`. Presence: `RealtimePresenceService`. Merge: `SyncMergeProcessor`. Network: `NetworkUtils`. Detail: §7.
 
-| File | Lines | Purpose |
-|---|---|---|
-| AmortizationEntry.kt | 24 | Data class + ID gen |
-| AmortizationRepository.kt | 60 | JSON persistence |
-| AutoCategorizer.kt | 53 | Auto-categorize imported transactions (CSV-only scope) |
-| BackupManager.kt | 405 | Backup/restore with photo archives; retention default 10 |
-| BudgetCalculator.kt | 504 | Budget calculations, cash recompute |
-| BudgetPeriod.kt | 5 | DAILY/WEEKLY/MONTHLY enum |
-| Category.kt | 13 | Data class |
-| CategoryIcons.kt | 327 | 120+ icon map |
-| CategoryRepository.kt | 55 | JSON persistence |
-| CryptoHelper.kt | 93 | ChaCha20-Poly1305 |
-| CsvParser.kt | 996 | CSV import/export |
-| DefaultCategories.kt | 50 | System category defaults |
-| DiagDumpBuilder.kt | 241 | Diagnostic dump builder (shared) |
-| DuplicateDetector.kt | 249 | Transaction matching |
-| ExpenseReportGenerator.kt | 365 | PDF report |
-| FullBackupSerializer.kt | 287 | Complete state serialization (incl. archive) |
-| IncomeSource.kt | 28 | Data class + ID gen |
-| IncomeSourceRepository.kt | 67 | JSON persistence |
-| PeriodRefreshService.kt | 261 | Shared period refresh |
-| PrefsCompat.kt | 23 | `getDoubleCompat` extension |
-| RecurringExpense.kt | 29 | Data class + ID gen |
-| RecurringExpenseRepository.kt | 72 | JSON persistence |
-| SafeIO.kt | 119 | Atomic writes, file locks, `safeDouble` |
-| SavingsGoal.kt | 48 | Data class |
-| SavingsGoalRepository.kt | 65 | JSON persistence |
-| SavingsSimulator.kt | 517 | Cash flow simulation |
-| SharedSettings.kt | 28 | Data class |
-| SharedSettingsRepository.kt | 134 | JSON persistence |
-| TitleCaseUtil.kt | 54 | Title-case normalization |
-| Transaction.kt | 48 | Data class + ID gen |
-| TransactionRepository.kt | 130 | JSON persistence |
+### `data/ocr/` — 2 files
+`ReceiptOcrService` (Gemini 2.5 Flash-Lite pipeline with Call 1 routing probe + Call 1.5 reconciliation; reconcilePrices / aggregateCategoryAmounts / remapInvalidCategoryIds post-processing); `OcrResult` (`OcrResult`, `OcrCategoryAmount`, `OcrState` sealed class). SSD §11.3.
 
-### `data/sync/` (20 files)
+### `data/ai/` — 2 files
+`AiCategorizerService` (Gemini Flash-Lite CSV categorizer; batched 100-at-a-time; `{i, merchant, amount}` payload; 30 s timeout + 3× exponential retry); `CategorizerPromptBuilder` (`CSV_CATEGORIZER_PROMPT_VERSION`). SSD §11.2.
 
-| File | Lines | Purpose |
-|---|---|---|
-| BackgroundSyncWorker.kt | 610 | Periodic background sync, period refresh, widget update (3-tier) |
-| DebugDumpWorker.kt | 86 | FCM debug dump (debug builds) |
-| EncryptedDocSerializer.kt | 1,039 | Per-field encryption for 8 data types |
-| FcmSender.kt | 134 | FCM v1 send |
-| FcmService.kt | 47 | FCM message handling |
-| FirestoreDocService.kt | 257 | Low-level Firestore ops + filtered listeners + cache reads |
-| FirestoreDocSync.kt | 927 | Sync coordinator, cursors, awaitInitialSync |
-| FirestoreService.kt | 621 | Group/device mgmt, pairing, GroupHealthStatus |
-| GroupManager.kt | 213 | Group lifecycle, DeviceInfo |
-| ImageLedgerEntry.kt | 25 | Receipt/snapshot ledger data classes |
-| ImageLedgerService.kt | 741 | Cloud Storage + Firestore ledger CRUD |
-| PeriodLedger.kt | 73 | Data class + repository |
-| RealtimePresenceService.kt | 198 | RTDB presence |
-| ReceiptManager.kt | 406 | Local receipt mgmt |
-| ReceiptSyncManager.kt | 741 | Receipt cloud sync |
-| SecurePrefs.kt | 70 | EncryptedSharedPreferences wrapper |
-| SyncFilters.kt | 37 | `.active` extension |
-| SyncIdGenerator.kt | 20 | 16-bit ID generation |
-| SyncMergeProcessor.kt | 303 | Batch sync event processing |
-| SyncWriteHelper.kt | 90 | Fire-and-forget push dispatcher |
-| WakeReceiver.kt | 39 | AlarmManager wake receiver |
+### `data/telemetry/` — 1 file
+`AnalyticsEvents` (`logHealthBeacon`, `logOcrFeedback`). §7.26a.
 
-### `data/ocr/` (2 files — new in 2.7)
+### `sound/` — 1 file
+`FlipSoundPlayer` (procedural flip audio). §4.
 
-| File | Lines | Purpose |
-|---|---|---|
-| OcrResult.kt | ~25 | `OcrResult`, `OcrCategoryAmount`, `OcrState` sealed class (Idle/Loading/Success/Failed) |
-| ReceiptOcrService.kt | ~510 | 3-call Gemini Flash-Lite pipeline with Call 1 routing probe; inline prompts; reconcilePrices + aggregateCategoryAmounts + remapInvalidCategoryIds post-processing |
+### `ui/components/` — 5 files
+`FlipChar`, `FlipDigit`, `FlipDisplay`, `PieChartEditor`, `SwipeablePhotoRow`. §3.
 
-### `data/ai/` (2 files — new in 2.7)
+### `ui/screens/` — 22 files
+11 main: `MainScreen`, `TransactionsScreen`, `RecurringExpensesScreen`, `AmortizationScreen`, `SavingsGoalsScreen`, `BudgetConfigScreen`, `BudgetCalendarScreen`, `SimulationGraphScreen`, `SyncScreen`, `SettingsScreen`, `QuickStartGuide`. 10 help screens (one per main, except BudgetCalendar/Sync/Simulation share the pattern). 1 shared: `HelpComponents`. §2.4–2.14, §10.
 
-| File | Lines | Purpose |
-|---|---|---|
-| AiCategorizerService.kt | ~140 | Gemini Flash-Lite CSV categorizer — batched 100-at-a-time; payload is `{i, merchant, amount}` (no date); 30 s timeout, 3× exponential retry |
-| CategorizerPromptBuilder.kt | ~30 | Prompt builder; constant `CSV_CATEGORIZER_PROMPT_VERSION = "v1"` |
+### `ui/strings/` — 5 files
+`AppStrings` (interface, 22 data classes, ~1,393 fields), `EnglishStrings`, `SpanishStrings`, `TranslationContext`, `LocalStrings`. §9.
 
-### `sound/` (1 file)
+### `ui/theme/` — 3 files
+`Color`, `Theme` (palette, dialogs, scroll arrows, toast), `Type` (`FlipFontFamily`). §8.
 
-| File | Lines | Purpose |
-|---|---|---|
-| FlipSoundPlayer.kt | 134 | Procedural flip audio |
-
-### `ui/components/` (5 files)
-
-| File | Lines | Purpose |
-|---|---|---|
-| FlipChar.kt | 293 | Character flip card |
-| FlipDigit.kt | 316 | Digit flip card |
-| FlipDisplay.kt | 258 | Solari display compositor |
-| PieChartEditor.kt | 470 | Interactive donut chart |
-| SwipeablePhotoRow.kt | 669 | Receipt photo carousel |
-
-### `ui/screens/` (22 files — 11 main + 10 help + HelpComponents)
-
-| File | Lines | Purpose |
-|---|---|---|
-| MainScreen.kt | 1,303 | Dashboard with flip display |
-| TransactionsScreen.kt | 5,633 | Transactions list, import, edit, photos, archive view |
-| TransactionsHelpScreen.kt | 965 | Help: transactions |
-| RecurringExpensesScreen.kt | 1,097 | Recurring expenses |
-| RecurringExpensesHelpScreen.kt | 325 | Help: recurring |
-| AmortizationScreen.kt | 642 | Amortization |
-| AmortizationHelpScreen.kt | 271 | Help: amortization |
-| SavingsGoalsScreen.kt | 808 | Savings goals |
-| SavingsGoalsHelpScreen.kt | 300 | Help: savings goals |
-| BudgetConfigScreen.kt | 1,243 | Income / budget config |
-| BudgetConfigHelpScreen.kt | 374 | Help: budget config |
-| BudgetCalendarScreen.kt | 469 | Spending calendar |
-| BudgetCalendarHelpScreen.kt | 87 | Help: calendar |
-| SimulationGraphScreen.kt | 686 | Cash flow projection |
-| SimulationGraphHelpScreen.kt | 88 | Help: simulation |
-| SyncScreen.kt | 1,206 | Family sync |
-| SyncHelpScreen.kt | 116 | Help: sync |
-| SettingsScreen.kt | 1,651 | Settings + category mgmt |
-| SettingsHelpScreen.kt | 511 | Help: settings |
-| DashboardHelpScreen.kt | 503 | Help: dashboard |
-| QuickStartGuide.kt | 357 | Onboarding overlay |
-| HelpComponents.kt | 165 | Shared help composables |
-
-### `ui/strings/` (5 files)
-
-| File | Lines | Purpose |
-|---|---|---|
-| AppStrings.kt | 1,498 | Localization interface (22 data classes, ~1,393 val fields) |
-| EnglishStrings.kt | 1,896 | English translations |
-| SpanishStrings.kt | 1,882 | Spanish translations |
-| TranslationContext.kt | 1,477 | Translator-facing context map |
-| LocalStrings.kt | 5 | CompositionLocal provider |
-
-### `ui/theme/` (3 files)
-
-| File | Lines | Purpose |
-|---|---|---|
-| Color.kt | 29 | Color constants |
-| Theme.kt | 665 | Theme, dialogs, toast, scroll arrow |
-| Type.kt | 18 | Typography, `FlipFontFamily` |
-
-### `widget/` (3 files)
-
-| File | Lines | Purpose |
-|---|---|---|
-| BudgetWidgetProvider.kt | 288 | AppWidgetProvider; 5 s throttle; schedules BackgroundSyncWorker |
-| WidgetRenderer.kt | 276 | Canvas bitmap renderer |
-| WidgetTransactionActivity.kt | 996 | Quick-add transaction from widget |
+### `widget/` — 3 files
+`BudgetWidgetProvider` (AppWidgetProvider, 5 s throttle, schedules `BackgroundSyncWorker`), `WidgetRenderer` (Canvas bitmap), `WidgetTransactionActivity` (quick-add from widget). §11.
 
 ---
 
 ## 15. Document Revision History
 
-| Version | Date | Author | Changes |
-|---|---|---|---|
-| 1.0 | February 2026 | BudgeTrak Team | Initial LLD covering app classes, data models, persistence schema, error handling. |
-| 2.0 – 2.5 | Mar–Apr 2026 | BudgeTrak Team | **CRDT → Firestore-native sync migration + ViewModel extraction + async load.** v2.0 added SYNC, simulator, dialog framework, linked transactions. v2.2 replaced ~4,000 LOC of CRDT with ~1,860 LOC of per-field encryption + Firestore-native sync; removed all `_clock` fields; renamed to BudgeTrak. v2.3 extracted `SyncMergeProcessor` / `PeriodRefreshService` / `BackgroundSyncWorker` (15-min periodic, replacing `WidgetRefreshWorker`); widget 5 s throttle; `DiagDumpBuilder`. v2.4 extracted `MainViewModel` from `MainActivity`; per-collection `updatedAt` cursors + `awaitInitialSync`; RTDB presence; receipt listener replaces 60-s poll. v2.5 async IO load + LoadingScreen + EMA progress; Back = Home; synchronous `recomputeCash()`; consolidated `runPeriodicMaintenance()`; three-tier `BackgroundSyncWorker`; transaction archiving. End of v2.5: 93 files / ~45,095 lines. |
-| 2.6 | April 2026 | BudgeTrak Team | **Rebrand + doc audit.** Package rebranded to `com.techadvantage.budgetrak` under Tech Advantage LLC (April 11). Full memory + doc audit (April 12): cleaned stale artifacts; documented three-state possession; corrected auto-categorize scope (CSV-only); calibrated App Check TTL to 4 h; confirmed Cloud Functions on Node.js 22. Backup retention default: 1 → **10**. Backup `localPrefs` adds `autoCapitalize`, `showWidgetLogo`, `incomeMode`. 94 files / ~47,192 lines. |
-| 2.6.1 | April 13 2026 | BudgeTrak Team | **FCM wake architecture.** Two Cloud Functions: `onSyncDataWrite` (Firestore onWrite, fan-out `sync_push` FCM; skips writer via `lastEditBy`) and `presenceHeartbeat` (Pub/Sub 15 min). Closes the 4h46m worker-silence gap on Kim's Samsung. `BackgroundSyncWorker.runOnce` uses `enqueueUniqueWork(KEEP)` + `setExpedited` on API 31+. `BudgeTrakApplication.syncEvent` appends to `token_log.txt` in debug. `countActiveDocs` skips `deleted == false` filter for `periodLedger` (no such field). |
-| 2.6.2 | April 13 2026 | BudgeTrak Team | **Bidirectional scroll affordance.** New `BoxScope.PulsingScrollArrows(scrollState)` replaces the down-only `PulsingScrollArrow` across all 18 dialog callsites; `ScrollableDropdownContent { … }` gives the same affordance to 12 dropdown callsites (caps height at 280 dp, 32 dp start indent). |
-| 2.7 | April 18 2026 | BudgeTrak Team | **AI features + photo-bar UX overhaul.** `data/ocr/ReceiptOcrService.kt` (Gemini 2.5 Flash-Lite 3-call pipeline + Call 1 routing probe + reconcile/remap/aggregate post-process). `data/ai/AiCategorizerService.kt` (CSV categorization fallback, merchant+amount payload only). Photo-bar long-press selects AI scan target + drag reorders with real-time reshuffle (`SwipeablePhotoRow` + TransactionDialog thumb bar). `ReceiptManager.readAsJpegBytes` PDF path via `PdfRenderer` (q=95, ~1500 px). `SwipeablePhotoRow` dedupe (~160 LOC removed). `MIN_IMAGE_DIMENSION = 400` floor. `addToPendingQueue` moved to `saveTransactions`. `BackgroundSyncWorker` `AtomicBoolean isRunning` double-fire guard. Cash Flow Simulation widened to Paid+Subscriber. Anchored toasts via `AppToastState.show(msg, windowYPx)`. 98 files / 49,088 lines. |
-| 2.7.1 | April 27 2026 | BudgeTrak Team | **Transaction save audit — six silent-loss vectors closed.** Non-dismissable `DuplicateResolutionDialog` (txn screen + widget); `MainViewModel.onResume` disk reload now add-only merge; entity-id range widened `0..65535` → `1..Int.MAX_VALUE` across 7 generators; multi-category save validation toasts on every silent return; `onUpdateTransaction` toasts on missing edit target; `addTransactionWithBudgetEffect` made atomic via single dedup gate. New strings `multiCategoryAmountsInvalid`, `editFailedTransactionMissing`. New `feedback_silent_save_failures.md` memory. |
-| 2.8 | April 27 2026 | BudgeTrak Team | **TransactionDialog unification + network-awareness pass.** `TransactionDialog` consolidated from three Add Income / Add Expense / Edit entry points (header pill toggle); single layered Add-Transaction icon (deep-blue pulsing plus + receipt body) replaces +/- IconButton pairs on Transactions toolbar + Dashboard nav row; standalone Dashboard +/- bar deleted. OCR refund-receipt support: negative `amountCents` auto-flips dialog + `abs()` for fields; parser fixed to use `Int.MIN_VALUE` sentinel. Preselect-help banner relocated under photo bar + opens Transactions Help via fullscreen Compose `Dialog` overlay. **Network-awareness pass** across receipt sync / AI OCR / Sync Now / `BackgroundSyncWorker` / App Check / anonymous auth — fail-fast offline, auto-resume on `networkCallback.onAvailable` (drainer uses `cancelAndJoin`; auth via idempotent `attemptAnonymousAuth()`); `Boolean` work-done signal threaded through `runFullSyncBody` / `runTier2` / `runTier3`. Tier 2 receipt-sync rethrows `CancellationException` and propagates state to `vm.transactions`. Debug-build receipt forensics: `addToPendingQueue` / `removeFromPendingQueue` / `deleteLocalReceipt` log to `token_log.txt`; `sync_diag.txt` Receipt Files Audit section. New files: `data/ocr/ReceiptOcrService.kt` (Call 1.5 with 2 s past-Call-2 cap + per-call timing logs), `data/sync/NetworkUtils.kt`. ~100 files / ~51,500 lines. |
+| Version | Date | Changes |
+|---|---|---|
+| 1.0 – 2.5 | Feb–Apr 2026 | Initial LLD; CRDT → Firestore-native sync migration; per-field encryption + filtered listeners + receipt system; SecureSync → BudgeTrak rename; `BackgroundSyncWorker` periodic 15-min; `MainViewModel` extracted from `MainActivity`; per-collection `updatedAt` cursors + `awaitInitialSync`; RTDB presence; async IO load + LoadingScreen; Back = Home; synchronous `recomputeCash()`; consolidated `runPeriodicMaintenance()`; three-tier `BackgroundSyncWorker`; transaction archiving. |
+| 2.6 / 2.6.x | Apr 2026 | Package rebranded to `com.techadvantage.budgetrak` under Tech Advantage LLC. FCM wake architecture: Cloud Functions `onSyncDataWrite` + `presenceHeartbeat` (closes the 4h46m worker-silence gap on Samsung). Bidirectional scroll affordance (`PulsingScrollArrows` plural, `ScrollableDropdownContent`). Backup retention default raised to 10. |
+| 2.7 | Apr 18 2026 | **AI features + photo-bar UX overhaul.** `data/ocr/ReceiptOcrService.kt` (Gemini 2.5 Flash-Lite 3-call pipeline + Call 1 routing probe + reconcile/remap/aggregate post-process). `data/ai/AiCategorizerService.kt` (CSV categorization fallback, merchant+amount payload only). Photo-bar long-press selects AI scan target + drag reorders. PDF import via `PdfRenderer`. `MIN_IMAGE_DIMENSION = 400` floor. `BackgroundSyncWorker.isRunning` `AtomicBoolean` double-fire guard. Cash Flow Simulation widened to Paid+Subscriber. Anchored toasts. |
+| 2.7.1 | Apr 27 2026 | **Transaction save audit — six silent-loss vectors closed.** Non-dismissable `DuplicateResolutionDialog`; `onResume` add-only disk merge; entity-id range widened to `1..Int.MAX_VALUE`; multi-category validation toasts; `onUpdateTransaction` missing-target toast; `addTransactionWithBudgetEffect` atomic. |
+| 2.8 | Apr 27 2026 | **TransactionDialog unification + network-awareness pass.** Three add/edit entry points consolidated (header EXPENSE/INCOME pill toggle); single layered Add-Transaction icon replaces +/- IconButton pairs. OCR refund-receipt support (`Int.MIN_VALUE` sentinel; auto-flip `typeIsExpense` + `abs()`). Preselect-help banner opens as a sibling-`Dialog` overlay so the underlying transaction dialog survives the round-trip. Fail-fast offline + auto-resume across receipt sync / AI OCR / Sync Now / `BackgroundSyncWorker` / App Check / anonymous auth via `networkCallback.onAvailable`. Tier 2 receipt-sync rethrows `CancellationException` and propagates `clearLostReceiptSlot` state back to `vm.transactions`. Debug receipt forensics in `token_log.txt` + `sync_diag.txt` Receipt Files Audit. Call 1.5 capped at 2 s past Call 2. ~100 files / ~51,500 lines. **Dead code removed:** down-only `PulsingScrollArrow`; `DeviceRecord.fingerprintData`/`fingerprintSyncVersion` (written but never read); `updateDeviceMetadata.fingerprintJson` parameter (no caller passed it). |
 
 ---
 

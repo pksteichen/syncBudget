@@ -148,7 +148,6 @@ import com.techadvantage.budgetrak.ui.theme.dialogHeaderTextColor
 import com.techadvantage.budgetrak.ui.theme.dialogFooterColor
 import com.techadvantage.budgetrak.ui.theme.dialogSectionLabelColor
 import com.techadvantage.budgetrak.ui.theme.LocalAppToast
-import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrow
 import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrows
 import com.techadvantage.budgetrak.ui.theme.ScrollableDropdownContent
 import androidx.compose.ui.text.input.KeyboardType
@@ -4984,7 +4983,7 @@ fun TransactionDialog(
             onDismissRequest = { showCategoryPicker = false },
             title = { Text(S.transactions.category) },
             scrollable = false,  // content has its own verticalScroll
-            scrollState = catPickerScrollState,  // for PulsingScrollArrow
+            scrollState = catPickerScrollState,  // for PulsingScrollArrows
             text = {
                 Column(
                     modifier = Modifier.verticalScroll(catPickerScrollState),

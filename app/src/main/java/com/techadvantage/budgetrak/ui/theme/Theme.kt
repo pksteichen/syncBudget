@@ -487,37 +487,6 @@ fun AdAwareDialog(
 }
 
 /**
- * Pulsing down-arrow that appears when a scrollable area has more content below.
- * Disappears when scrolled to the bottom or when content fits without scrolling.
- */
-@Composable
-fun PulsingScrollArrow(scrollState: ScrollState, modifier: Modifier = Modifier) {
-    val canScrollDown by remember {
-        derivedStateOf { scrollState.canScrollForward }
-    }
-    if (canScrollDown) {
-        val infiniteTransition = rememberInfiniteTransition(label = "scrollArrow")
-        val offsetY by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 6f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(600),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "arrowBounce"
-        )
-        Icon(
-            imageVector = Icons.Filled.KeyboardArrowDown,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-            modifier = modifier
-                .size(24.dp)
-                .offset(y = offsetY.dp)
-        )
-    }
-}
-
-/**
  * Drop-in scrollable content for a `DropdownMenu` / `ExposedDropdownMenu`
  * that needs bidirectional scroll affordance. Our own `ScrollState` lets
  * `PulsingScrollArrows` do its thing; the `heightIn(max = maxHeight)`
@@ -564,13 +533,11 @@ fun ScrollableDropdownContent(
 /**
  * Bidirectional scroll affordance: pulsing up-arrow at top-start when
  * content can scroll up, pulsing down-arrow at bottom-start when content
- * can scroll down. Drop into any `Box` that contains the scrollable body
- * (no modifier needed — alignments and paddings are managed internally).
- *
- * Prefer this over `PulsingScrollArrow` for any new scrollable dialog or
- * popup. The up-arrow is the key accessibility win for users with
- * enlarged system font — content that fit in one screen at default font
- * size now scrolls, and users need both directions indicated.
+ * can scroll down. Drop into any `Box` containing the scrollable body —
+ * no modifier needed; alignments and paddings are managed internally. The
+ * up-arrow is the key accessibility win for users with enlarged system
+ * font: content that fit in one screen at default font size now scrolls,
+ * and users need both directions indicated.
  *
  * Standard paddings: top `36.dp` drops the up-arrow just below the
  * DialogHeader title line; bottom `50.dp` leaves room for the footer
@@ -648,7 +615,7 @@ fun AdAwareAlertDialog(
     val footerBg = dialogFooterColor()
 
     val bodyScrollState = if (scrollable) (scrollState ?: rememberScrollState()) else null
-    val arrowScrollState = bodyScrollState ?: scrollState  // for PulsingScrollArrow when content manages own scroll
+    val arrowScrollState = bodyScrollState ?: scrollState  // for PulsingScrollArrows when content manages own scroll
 
     AdAwareDialog(onDismissRequest = onDismissRequest) {
         Surface(

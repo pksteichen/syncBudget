@@ -80,7 +80,6 @@ import com.techadvantage.budgetrak.ui.components.CURRENCY_DECIMALS
 import com.techadvantage.budgetrak.ui.strings.LocalStrings
 import com.techadvantage.budgetrak.ui.theme.LocalAppToast
 import com.techadvantage.budgetrak.ui.theme.LocalSyncBudgetColors
-import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrow
 import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrows
 import com.techadvantage.budgetrak.ui.theme.ScrollableDropdownContent
 import androidx.compose.foundation.background
