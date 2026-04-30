@@ -107,23 +107,7 @@ Cloud Storage:
 
 ### Build Configuration
 
-| Setting | Value |
-|---|---|
-| compileSdk | 34 |
-| minSdk | 28 |
-| targetSdk | 34 |
-| Java / Kotlin | JVM 17 |
-| Gradle | 8.9 |
-| AGP | 8.7.3 |
-| Kotlin | 2.0.21 |
-| Compose BOM | 2024.09.03 |
-| Firebase BOM | 32.7.0 |
-| core-ktx | 1.13.1 |
-| lifecycle | 2.8.6 |
-| lifecycle-viewmodel-compose | 2.8.6 |
-| activity-compose | 1.9.2 |
-| work-runtime-ktx | 2.9.1 |
-| google-services | 4.4.2 |
+Kotlin 2.0.21, JVM 17, Gradle 8.9, AGP 8.7.3, compileSdk/targetSdk 34, minSdk 28. Full dependency / version table: SSD §27.
 
 ## 2. Application Classes
 
@@ -538,16 +522,9 @@ Supporting declarations:
 
 **File:** `sound/FlipSoundPlayer.kt` (134 lines)  |  **Package:** `com.techadvantage.budgetrak.sound`
 
-Synthesizes a mechanical clack at init and plays it through a `SoundPool` with low-latency overlap.
+Synthesizes a mechanical clack at init and plays it through a `SoundPool`. Constants and synthesis algorithm: see SSD §3.6.
 
-| Constant | Value |
-|---|---|
-| SAMPLE_RATE | 44100 |
-| DURATION_MS | 45 |
-| MAX_STREAMS | 6 |
-| VOLUME | 0.8 |
-
-Synthesis: exponential-decay envelope `exp(-t*120)` plus a secondary mechanical bounce centered at 10 ms, summed with band-limited noise — three sines at 1200 / 2400 / 800 Hz with randomized phase plus 40 % white noise. Encoded as 16-bit mono PCM RIFF WAV, written to `cacheDir/clack.wav`, loaded into SoundPool (temp file is deleted after load).
+Implementation note: encoded as 16-bit mono PCM RIFF WAV, written to `cacheDir/clack.wav`, loaded into SoundPool (temp file is deleted after load).
 
 ## 5. Data Classes and Enumerations
 
@@ -838,14 +815,7 @@ All budget math: occurrence generation, safe-budget projection, deterministic ca
 
 **File:** `data/CryptoHelper.kt` (93 lines)  |  object singleton
 
-Authenticated encryption via ChaCha20-Poly1305. Two modes: password-based (backups) and direct-key (sync data).
-
-| Constant | Value |
-|---|---|
-| SALT_LENGTH | 16 |
-| NONCE_LENGTH | 12 |
-| KEY_LENGTH | 256 bits |
-| ITERATIONS | 100,000 |
+Authenticated encryption via ChaCha20-Poly1305. Cipher params + mode summary: SSD §10.1–10.2.
 
 | Method | Wire format | Use |
 |---|---|---|
@@ -1283,21 +1253,18 @@ Encrypted SharedPreferences wrapper over `androidx.security:security-crypto`.
 
 ### 7.11 FcmService (`FirebaseMessagingService`, ~120 lines)
 
-- `onNewToken(token)` — stores token in `fcm_prefs` (`fcm_token`) and sets `token_needs_upload = true` for next Firestore push.
-- `onMessageReceived(msg)` — dispatch by `msg.data["type"]`. Every arrival logs via `syncEvent("FCM received: type=$type")` (visible in `token_log.txt` in debug).
+- `onNewToken(token)` — stores in `fcm_prefs` (`fcm_token`) and sets `token_needs_upload = true` for next Firestore push.
+- `onMessageReceived(msg)` — dispatch by `msg.data["type"]`. Every arrival logs `syncEvent("FCM received: type=$type")` (visible in `token_log.txt` in debug).
 
-**v2.7 — inline-execution architecture (2026-04-25/26):** replaced the prior 9-second `runBlocking` busy-wait + WorkManager-enqueue pattern with direct in-process invocation of `BackgroundSyncWorker.runFullSyncInline` (sync) / `runDebugDumpInline` (dump). The handler **branches by VM lifecycle**:
+Routing table (see SSD §17.15 for VM-lifecycle branching rationale, the v2.7 inline architecture, dedup, and cost):
 
-- **VM alive** (`MainViewModel.instance?.get() != null`) → launch on `BudgeTrakApplication.processScope` (file-static `SupervisorJob() + Dispatchers.Default`) and return from the FCM thread immediately. The ViewModel's existence keeps the process alive past `onMessageReceived` returning, so long Tier-2 work (snapshot building, multi-photo upload bursts, App Check refresh on cold cellular) all complete naturally with **no time budget**. No WM fallback needed.
-- **VM dead** → `runBlocking` with `INLINE_BUDGET_MS = 8_500L` (1.5 s headroom in the FCM 10 s window). On budget expiry, the inline call returns `false` and `BackgroundSyncWorker.runOnce(ctx)` is enqueued as a fallback so unfinished work picks up later.
+| Type | VM alive | VM dead |
+|---|---|---|
+| `sync_push` | `processScope.launch { runFullSyncInline(ctx, "FCM-sync_push", null) }` | `runBlocking { runFullSyncInline(ctx, …, 8_500); if(!ok) runOnce(ctx) }` |
+| `heartbeat` | same as sync_push | same as sync_push |
+| `debug_request` | `processScope.launch { runDebugDumpInline(ctx, null) }` | `runBlocking { runDebugDumpInline(ctx, 8_500); if(!ok) enqueue DebugDumpWorker }` |
 
-This split closes a regression introduced by the unconditional 7 s budget shipped earlier on 2026-04-25 (and immediately revised same day): under the old design, long Tier-2 work used to complete via WorkManager's service binding pinning the process for ~10 min; the inline refactor removed WM from the FCM path entirely, so Tier 2 lost its runtime ceiling. The async-on-`processScope` branch restores it.
-
-| Type | Handler (VM alive) | Handler (VM dead) | Notes |
-|---|---|---|---|
-| `sync_push` | `processScope.launch { runFullSyncInline(ctx, "FCM-sync_push", null) }` | `runBlocking { runFullSyncInline(ctx, …, 8_500) ; if(!ok) runOnce(ctx) }` | Fired by server-side Cloud Functions on meaningful Firestore writes: `onSyncDataWrite` for every write to a sync data collection, and `onImageLedgerWrite` for filtered `imageLedger` writes (rotation contentVersion bump, recovery complete, recovery request). Targeted at every group device except the writer (filtered via `lastEditBy`). High-priority FCM → wakes process through Doze. In-process `AtomicBoolean isRunning` dedup collapses bursts to one run (observed 2026-04-26: 16 sync_push FCMs in 350 ms during a CSV import — 1 ran, 15 cleanly skipped). |
-| `heartbeat` | same as sync_push | same as sync_push | Fired by server-side `presenceHeartbeat` every 15 min to devices whose RTDB `lastSeen` is >15 min stale. Backstop when Android stops scheduling the periodic worker. |
-| `debug_request` | `processScope.launch { runDebugDumpInline(ctx, null) }` | `runBlocking { runDebugDumpInline(ctx, 8_500) ; if(!ok) enqueue DebugDumpWorker }` | **Silently ignored in release** (`BuildConfig.DEBUG` gate). `runDebugDumpInline` sets `fcm_debug_requested = true` at entry; body clears on successful upload to dedup with the WM fallback. |
+`debug_request` is **silently ignored in release** (`BuildConfig.DEBUG` gate). `runDebugDumpInline` sets `fcm_debug_requested = true` at entry; body clears on successful upload to dedup with the WM fallback.
 
 ---
 
@@ -1319,67 +1286,25 @@ Fallback worker triggered by FCM `debug_request` (debug builds only). **Primary 
 
 ---
 
-### 7.14 BackgroundSyncWorker (`CoroutineWorker`, ~870 lines after v2.7 refactor)
+### 7.14 BackgroundSyncWorker (`CoroutineWorker`)
 
-Sync entry point shared by WorkManager (`doWork`) and FcmService (`runFullSyncInline` companion). `WORK_NAME = "period_refresh"` (15-min periodic), `ONESHOT_WORK_NAME = "period_refresh_oneshot"` (FCM/wake fallback), `BOUNDARY_WORK_NAME = "period_boundary_oneshot"` (Phase 3 solo path).
+> **Routing semantics, slim-vs-full Tier 3 decisions, the v2.8 network-awareness gate, the v2.8 Tier 2 receipt-sync VM propagation, and the cancellation/diagnostic-log behaviour all live in SSD §17.13.** This LLD entry is the call-table only.
 
-**Companion entry points (v2.7):**
-
-| Function | Purpose |
+| Surface | Purpose |
 |---|---|
-| `schedule(ctx)` | **Branches on `isSyncConfigured`**: sync users get the 15-min `PeriodicWorkRequest` (KEEP policy); solo users get `scheduleNextBoundary(ctx)` instead (Phase 3 — see below). Cancels the opposite path's unique work to switch cleanly. |
-| `runOnce(ctx)` | One-shot via `ONESHOT_WORK_NAME`, KEEP policy, expedited on API 31+. Used as fallback when `runFullSyncInline` returns false (budget expired) and by `WakeReceiver`. |
+| `WORK_NAME = "period_refresh"` | 15-min `PeriodicWorkRequest` (KEEP policy), sync users only |
+| `ONESHOT_WORK_NAME = "period_refresh_oneshot"` | FCM / wake fallback, expedited on API 31+ |
+| `BOUNDARY_WORK_NAME = "period_boundary_oneshot"` | Phase 3 solo path (one-shot per period boundary) |
+| `schedule(ctx)` | Branches on `isSyncConfigured`: sync → periodic, solo → `scheduleNextBoundary`. Cancels the opposite path. |
+| `runOnce(ctx)` | One-shot via `ONESHOT_WORK_NAME`. Used as fallback when `runFullSyncInline` returns false. |
 | `cancel(ctx)` | Cancels both `WORK_NAME` and `BOUNDARY_WORK_NAME`. |
-| `scheduleNextBoundary(ctx)` (v2.7) | Phase 3 solo path. Computes next period boundary via `PeriodRefreshService.nextBoundaryAt(...)`, enqueues a one-shot via `BOUNDARY_WORK_NAME` (REPLACE policy, expedited, delta clamped 60 s–24 h). Self-rearms at the end of every solo run via the slim Tier 3 path. |
-| `runFullSyncInline(ctx, sourceLabel, timeBudgetMs?)` (v2.7) | Sole owner of the full Tier 1/2/3 routing. Used by both `doWork` (no budget, label `"Worker"`) and FcmService (`label="FCM-sync_push"` etc.). Wraps body in `withTimeoutOrNull(timeBudgetMs)` if a budget is given. Sets `lastInlineSyncCompletedAt` SharedPref on successful FCM-labelled runs (consumed by Phase 4-alt slim-path). Guarded by file-static `isRunning: AtomicBoolean` for in-process dedup across periodic + FCM + wake. |
-| `runDebugDumpInline(ctx, timeBudgetMs?)` (v2.7) | Same shape as above but for FCM `debug_request`. |
+| `scheduleNextBoundary(ctx)` (v2.7) | Computes next period boundary via `PeriodRefreshService.nextBoundaryAt(...)`, enqueues a one-shot via `BOUNDARY_WORK_NAME` (REPLACE, expedited, clamped 60 s–24 h). Self-rearms at end of every solo run. |
+| `runFullSyncInline(ctx, sourceLabel, timeBudgetMs?): Boolean` (v2.7; v2.8 returns `Boolean`) | Sole owner of Tier 1/2/3 routing. Returns true only when real work was done (offline-skipped runs return false; only `workDone && sourceLabel.startsWith("FCM-")` stamps `KEY_LAST_INLINE_AT`). Guarded by file-static `isRunning: AtomicBoolean`. |
+| `runDebugDumpInline(ctx, timeBudgetMs?)` (v2.7) | FCM `debug_request` analogue of `runFullSyncInline`. |
+| `runFullSyncBody / runTier2 / runTier3` (file-private; all return `Boolean` in v2.8) | The three-tier routing implementation. v2.8: each early-returns false on `!NetworkUtils.isOnline(context)` (and on Tier 1 app-active skip / sync-not-configured skip). Tier 2 captures `syncReceipts(txns, devices)`'s returned list and applies changed `receiptId1..5` back to `vm.transactions` on Main. |
+| `resolveDevicesForReceiptSync(ctx, groupId, vm)` (v2.7) | Four-tier fallback resolver: VM `syncDevices` → RTDB presence → Firestore `groups/{gid}/devices/*` → SharedPref cache. Cold-start Tier 3's RTDB read returns empty before auth handshake; the cache (populated by every successful resolution) covers that gap. |
 
-**`doWork()` is now a thin wrapper:** `try { runFullSyncInline(applicationContext, "Worker", null) } catch (ce: CancellationException) { syncEvent(stopReason); throw ce }`. All routing logic lives in the file-private `runFullSyncBody` so the implementation is shared with FCM-inline.
-
-**`runFullSyncBody` — three-tier routing:**
-
-| Tier | Condition | Action |
-|---|---|---|
-| 1 | `MainActivity.isAppActive == true` | Skip — foreground owns sync |
-| 2 | `MainViewModel.instance?.get() != null` | If `isSyncConfigured`: proactive AppCheck refresh (16-min threshold v2.7, was 35; 10 s timeout), restart dead listeners via `docSync.startListeners()` on Main, `pingRtdbLastSeen()`, receipt sync for paid/sub (gated on `!vm.isReceiptSyncActive()`) |
-| 3 | ViewModel dead | Slim path OR full sync (see below) |
-
-**Tier 3 routing — slim vs full (v2.7 Phase 3 + Phase 4-alt):**
-
-The first decision in Tier 3 is whether to take a slim ~25 ms path (period refresh + cash recompute + widget update) instead of the full Firestore-listener bring-up:
-
-```
-takeSlimPath = !isSyncConfigured ||
-               (sourceLabel == "Worker" &&
-                lastInlineSyncCompletedAt < 30 min ago &&
-                no consistency mismatch pending)
-```
-
-- **Solo users (`!isSyncConfigured`)** always take the slim path — there's no group to sync. The slim body re-arms `scheduleNextBoundary(ctx)` at the end so the boundary chain perpetuates. Cuts solo workload from ~96 worker runs/day to ~4 (one per period boundary, depending on `budgetPeriod`).
-- **Sync users on the periodic Worker** take the slim path when a successful FCM-inline ran in the last 30 min and no consistency mismatch is pending. FCM has been doing the heavy work; periodic Worker just advances the period clock + refreshes the widget. Phase 4-alt — keeps the periodic as a safety net but avoids redundant Firestore listener cycles.
-- **FCM-triggered runs** (sourceLabel starts with `"FCM-"`) never take the slim path — FCM events signal real data to fetch.
-- **Tier 2 path** is unaffected; Tier 2 always does its own (now-async-on-`processScope`) work.
-
-**Tier-3 full flow** (sync users only when slim conditions don't hold). All Firestore/RTDB blocks gated by `groupId != null`. v2.7 order — receipt sync at step 2b for cancellation resilience, outer `doWork` catches/rethrows `CancellationException`:
-
-1. Anonymous Firebase Auth (gated — only when `groupId != null`).
-2. Proactive AppCheck refresh (16-min threshold v2.7, was 35).
-3. `syncFromFirestore`: spin up temporary `FirestoreDocSync`, `startListeners()`, `awaitInitialSync(60_000)`, `awaitDeserializationComplete()`, `stopListeners(graceful=true)`, drain another 1 s, then `SyncMergeProcessor.processBatch(...)` on `Dispatchers.Default`.
-4. `saveMergeResult` → repositories; apply `settingsPrefsToApply`; archive incoming pre-cutoff transactions.
-5. **Step 2b: Paid-user receipt sync** — `TransactionRepository.load` → `resolveDevicesForReceiptSync(ctx, gid, vm=null)` → `ReceiptSyncManager(...).syncReceipts(txns, devices)`. Positioned early because Samsung power management was observed cancelling Tier 3 cycles ~1m48s in.
-6. `runPeriodRefresh` → builds `RefreshConfig`, calls `PeriodRefreshService.refreshIfNeeded`.
-7. If no period boundary crossed, `recomputeCashFromDisk()` keeps widget accurate.
-8. Push refresh results: new PLE via `createDocIfAbsent`; SG via `fieldUpdate(sg, setOf("totalSavedSoFar"))`; RE via `fieldUpdate(re, setOf("setAsideSoFar","isAccelerated"))`. Then `persistBackgroundPushKeys` writes to `sync_engine/bgPushKeys` for next listener's echo suppression.
-9. Push sync side effects: delete remapped category docs, push conflicted transactions with `fieldUpdate(txn, setOf("isUserCategorized"))`.
-10. Consistency re-check: if `app_prefs.checksumMismatchAt` is >1 h old and a live ViewModel exists, `vm.recheckConsistency()`.
-11. `pingRtdbLastSeen(ctx)` — RTDB `groups/{gid}/presence/{did}/lastSeen = ServerValue.TIMESTAMP`. **v2.7: wrapped in `withTimeoutOrNull(10_000)`** to prevent indefinite hangs that previously cascaded into WorkManager's 10-min cancel + receipt-sync `Job was cancelled` (observed 2026-04-26 at 08:19 + 10:11). Same behavior in Tier 2.
-12. `BudgetWidgetProvider.updateAllWidgets(ctx)`.
-
-**Diagnostic logs (v2.7):** Tier 3 full entry emits `$sourceLabel Tier 3: ViewModel dead, full sync (standbyBucket=N)`; exit emits `$sourceLabel Tier 3: complete in Xms`. Slim path emits `$sourceLabel Tier 3 SLIM: complete in Xms (solo=… freshFcm=…)`. Boundary scheduling emits `Boundary scheduled: +Xs (budget=$budgetPeriod resetHour=$resetHour)`. On cancellation the outer catch logs `BackgroundSyncWorker: CANCELLED (stopReason=N msg=…)` before rethrowing (API 31+ `stopReason` distinguishes power / quota / standby-bucket causes).
-
-**`resolveDevicesForReceiptSync(ctx, groupId, vm)` (v2.7):** four-tier fallback resolver replacing direct `RealtimePresenceService.getDevices()` calls in both Tier 2 and Tier 3 receipt-sync paths. Cold-start Tier 3's RTDB read returns empty before RTDB auth handshake completes (observed: 6/6 Tier 3 calls had `photoCapable=0` while Tier 2 had `photoCapable=2` overnight 2026-04-25). Layers, in order: (1) VM's `syncDevices` if VM alive, (2) RTDB presence read, (3) Firestore `groups/{gid}/devices/*` (which mirrors `photoCapable` via `FirestoreService.updateDeviceMetadata`), (4) SharedPref cache `receipt_sync_prefs/photo_capable_devices_<gid>` populated by every successful resolution. Each successful tier writes to the cache so subsequent tiers can use it. `syncEvent` logs which tier was used.
-
-Exceptions are caught and converted to `Result.success()` so the next scheduled run isn't penalized. `CancellationException` is rethrown explicitly so WorkManager records the stop.
+**`doWork()` is a thin wrapper:** `try { runFullSyncInline(applicationContext, "Worker", null) } catch (ce: CancellationException) { syncEvent(stopReason); throw ce }`. Other exceptions are caught and converted to `Result.success()` so the next scheduled run isn't penalized.
 
 ---
 
@@ -1483,7 +1408,7 @@ Constants: `STALE_ASSIGNMENT_MS = 5 min`, `FOURTEEN_DAYS_MS`, `MAX_DOWNLOAD_RETR
 
 **Public entry points** (called from `MainViewModel` foreground drainers and `BackgroundSyncWorker` Tier 2/3):
 - `syncReceipts(transactions, allDevices): List<Transaction>` — full 5-step pipeline below. **v2.8: returns the (potentially modified) transaction list** so callers can propagate changes back to in-memory state. `BackgroundSyncWorker.runTier2` uses this to apply `clearLostReceiptSlot`'s nulled `receiptId*` fields back to `vm.transactions` on Main — without it, the Firestore listener's echo filter (`lastEditBy == ourDeviceId`) keeps in-memory state stale after the slot clear, leaving phantom photo frames in open dialogs until app restart. Tier 3 also calls this but discards the return (VM is dead in that path; next launch loads from disk). v2.7 emits phase-boundary `syncEvent` logs (`syncReceipts START/step1/step2/step3/step3b/step4/END`, with elapsed-ms on END) and a `CANCELLED after Nms` log on `CancellationException`, rethrown to the caller. Runs through all 5 `ReceiptSyncManager` construction sites' persistent log channel (Tier2/Tier3/SyncNow/onBatch/UploadDrainer/FgRetry). v2.8 adds offline gates at top of `processPendingUploads` and `processRecovery` (skip + log when `!NetworkUtils.isOnline(context)`).
-- `processPendingUploads(): Int` — drains upload queue in chunks of 5; returns # completed. Used by `MainViewModel.kickUploadDrainer` in a backoff loop so photos reach Cloud Storage without waiting for Sync-Now. **v2.7 false-rotation guard:** after a successful Cloud Storage upload, the ledger-write decision is now three-way. If the entry doesn't exist OR exists with `uploadedAt == 0` (recovery state), `createLedgerEntry` writes a fresh entry. If the entry exists with `uploadedAt > 0` AND `lastEditBy == ourDeviceId` AND `contentVersion == getLocalContentVersion(receiptId)` → recognised as a partial-commit resume (cancelled between ledger write and queue removal in a previous cycle); skip the bump and just remove from queue. Otherwise → real rotation or peer conflict, call `incrementContentVersion`. Without this, a worker cancellation between ledger write and queue removal would cause the next cycle to false-rotate, fanning out a flag-clock bump and forcing every peer to re-download identical content. Pairs with `ReceiptManager.replaceReceipt` calling `ReceiptSyncManager.bumpLocalContentVersionForRotation(ctx, receiptId)` BEFORE `addToPendingQueue` so legitimate rotations are detected via `localContentVersion > cloudContentVersion`.
+- `processPendingUploads(): Int` — drains upload queue in chunks of 5; returns # completed. Used by `MainViewModel.kickUploadDrainer` in a backoff loop. After a successful Cloud Storage upload, applies the three-way ledger decision (fresh / partial-commit resume / real rotation) — see SSD §18.5 *Rotation / edit propagation via `contentVersion`*.
 - `downloadReceiptWithRetry(receiptId, photoCapableDeviceIds): Boolean` — single-receipt download + save + `markPossession` + `pruneCheckTransaction` + retry counter. On 3rd real failure with `uploadedAt > 0`, deletes ledger entry and creates recovery request. Used by `onBatchChanged` fast path, `kickFgDownloadRetry` coroutine, and `processRecovery`.
 - `bumpLocalContentVersionForRotation(ctx, receiptId)` (companion, v2.7) — increments `receipt_sync_prefs/content_version_<receiptId>` by 1. Called from `ReceiptManager.replaceReceipt` to mark a rotation as pending before queueing.
 
@@ -1491,7 +1416,7 @@ Constants: `STALE_ASSIGNMENT_MS = 5 min`, `FOURTEEN_DAYS_MS`, `MAX_DOWNLOAD_RETR
 1. `processPendingUploads` — upload-first: encrypt → upload → create-or-bump ledger entry per the three-way logic above.
 2. `processLedgerOperations` — flag-clock check + ledger cache. Handles (a) re-upload requests when we have the file, (b) non-possession marking + `checkPhotoLost` for recovery requests, (c) `markPossession` + `pruneCheckTransaction` for entries we already have locally. **Does not download** — the old `handleDownload` branch was removed.
 3. `processRecovery` — missing local files referenced in transactions. Delegates per-receipt to `downloadReceiptWithRetry`; if no ledger entry exists at all, creates one (recovery request). Re-uploader selected by online filter + fastest `uploadSpeedBps` in last 24 h + `abs(hash(receiptId+deviceId)) % 1000` tiebreak.
-4. `processSnapshotLifecycle` — build/download snapshot archives when ≥ 50 missing (also used by join). **v2.7 cancellation handling:** `buildSnapshot` and `processSnapshotDownload` catch `CancellationException` separately from generic `Exception` and rethrow it after deleting partial files. Build path leaves status as `"building"` (NOT `"error"`) on cancel so the lifecycle's 2 h staleness gate handles re-claim by the same or another device. Without this, the cancellation was silently swallowed by the generic catch and `runFullSyncInline` returned `true` (success), suppressing the WM `runOnce` fallback.
+4. `processSnapshotLifecycle` — build/download snapshot archives when ≥ 50 missing (also used by join). v2.7 `buildSnapshot` / `processSnapshotDownload` rethrow `CancellationException` separately and leave status `"building"` on cancel — see SSD §18.5 *Snapshot cancellation handling*.
 5. `processStalePruning` — 14-day cleanup, noon trigger, local 24 h skip gate (`lastStalePruneRun`) + group `imageLastCleanupDate` check, plain `markCleanupDone` write (no CAS; idempotent).
 
 Foreground polls `imageLedgerFlagClock` (single field on the group doc) — **not** a dedicated listener. Transaction-arrival downloads are driven by the business collection listener. See SSD §18.5 for the full four-layer architecture.
@@ -1675,23 +1600,6 @@ Both gated by `isEnabled(ctx)` reading the same `crashlyticsEnabled` pref.
 
 ---
 
-## 7.28 Removed Classes (v2.0 → v2.5)
-
-| Class | Former Lines | Removed When | Reason |
-|---|---|---|---|
-| LamportClock | 35 | v2.2 | Replaced by Firestore server timestamps + `lastEditBy` |
-| DeltaBuilder | 190 | v2.2 | Per-document writes w/ field-level updates |
-| DeltaSerializer | 79 | v2.2 | Replaced by EncryptedDocSerializer |
-| CrdtMerge | 296 | v2.2 | Firestore LWW |
-| SnapshotManager | 441 | v2.2 | Firestore initial snapshot delivery |
-| SyncEngine | 902 | v2.2 | Replaced by FirestoreDocSync |
-| IntegrityChecker | ~350 | v2.2 | Local Firestore cache comparison (`Source.CACHE`) |
-| PeriodLedgerCorrector | 58 | v2.2 | `createDocIfAbsent` transactions |
-| SyncFileLock | 45 | v2.2 | Firestore concurrency |
-| ReceiptMetadata | ~40 | v2.2 | `ImageLedgerEntry` |
-| WidgetRefreshWorker | 105 | v2.3 | Absorbed into `BackgroundSyncWorker` |
-| Periodic SyncWorker (old) | n/a | v2.x | Replaced by one-shot `DebugDumpWorker` |
-| SubscriptionReminderReceiver (was doc'd) | 109 | n/a | Not present in `data/sync/` — scheduling now lives in the ViewModel/UI layer |
 ## 8. Theme Classes (`ui/theme/`)
 
 ### 8.1 Theme.kt (665 lines)
@@ -1786,22 +1694,11 @@ val LocalStrings = staticCompositionLocalOf<AppStrings> { EnglishStrings }
 
 All help screens follow the same pattern: a `Scaffold` with top app bar, a scrolling body composed of shared `HelpComponents` primitives (`HelpSection`, `HelpSubsection`, bullet lists, note cards). They read strings from `LocalStrings.current.*HelpStrings` and never touch the ViewModel.
 
-| Help Screen | Lines | For Feature |
-|---|---|---|
-| `DashboardHelpScreen.kt` | 503 | Flip display + period/cash cards |
-| `TransactionsHelpScreen.kt` | 965 | Transaction list, import, edit, photos, archive |
-| `RecurringExpensesHelpScreen.kt` | 325 | Recurring expenses |
-| `AmortizationHelpScreen.kt` | 271 | Amortization entries |
-| `SavingsGoalsHelpScreen.kt` | 300 | Savings goals |
-| `BudgetConfigHelpScreen.kt` | 374 | Income / budget configuration |
-| `BudgetCalendarHelpScreen.kt` | 87 | Calendar view |
-| `SimulationGraphHelpScreen.kt` | 88 | Cash flow projection |
-| `SyncHelpScreen.kt` | 116 | Family sync |
-| `SettingsHelpScreen.kt` | 511 | Settings + category management |
+Inventory (10 screens, lines per screen): see SSD §23.2.
 
 ### HelpComponents.kt (165 lines)
 
-Shared scaffolding used by every help screen: section header, sub-header, bullet row, note-card composables, common paddings and colors. Centralizing here keeps help screens visually consistent.
+Shared scaffolding used by every help screen: section header, sub-header, bullet row, note-card composables, common paddings and colors.
 
 ---
 
@@ -2120,17 +2017,14 @@ Every repository uses `SafeIO` for atomic writes (temp file → fsync → rename
 | Version | Date | Author | Changes |
 |---|---|---|---|
 | 1.0 | February 2026 | BudgeTrak Team | Initial LLD covering app classes, data models, persistence schema, error handling. |
-| 2.0 | March 2026 | BudgeTrak Team | Major update: SYNC system (14 classes, CRDT merge, Firestore transport), `SavingsSimulator`, `AdAwareDialog`, `PulsingScrollArrow`, linked transactions, ANNUAL RepeatType, per-field `_clock` fields. 68 files, 27,738 lines. |
-| 2.2 | March 2026 | BudgeTrak Team | Architecture overhaul: replaced hand-rolled CRDT (~4,000 lines) with Firestore-native per-document encrypted sync (~1,860 lines). Removed `LamportClock`, `DeltaBuilder`, `DeltaSerializer`, `CrdtMerge`, `SnapshotManager`, `SyncEngine`, `IntegrityChecker`, `PeriodLedgerCorrector`, `SyncFileLock`, `ReceiptMetadata`. Added `EncryptedDocSerializer`, `FirestoreDocService`, `FirestoreDocSync`, `SyncWriteHelper`. All `_clock` fields removed. `SharedSettings` + `Category` + `RecurringExpense` + `Transaction` gained new fields. Receipt system (`ReceiptManager`, `ReceiptSyncManager`, `ImageLedgerService`, `SwipeablePhotoRow`). New `BudgetCalendarScreen`, `SimulationGraphScreen`. `DialogHeader`/`Footer`/`Primary`/`Secondary`/`Danger`/`Warning` buttons, `DialogStyle`. `SecurePrefs`, `FcmSender`/`Service`, `SubscriptionReminderReceiver`, `ExpenseReportGenerator`, `PrefsCompat`, `BackupManager` with photo archives. Renamed BudgeTrak. 86 files, 42,506 lines. |
-| 2.3 | March 2026 | BudgeTrak Team | Shared services + background refresh. New `SyncMergeProcessor`, `PeriodRefreshService`, `BackgroundSyncWorker`. **Removed `WidgetRefreshWorker`** (absorbed into `BackgroundSyncWorker`). `MainActivity` shed ~220 lines to shared services. `ImageLedgerService.SNAPSHOT_DOC_ID` `"__snapshot_request__"` → `"_snapshot_request"`. `DiagDumpBuilder` extracted. Widget 5 s throttle. 89 files, ~43,405 lines. |
-| 2.4 | March 2026 | BudgeTrak Team | ViewModel extraction, RTDB presence, filtered listeners. New `MainViewModel` (~1,795), `RealtimePresenceService`. `MainActivity` 3,944 → 2,181. `FirestoreDocSync` added per-collection `updatedAt` cursors, `awaitInitialSync()`. `FirestoreDocService` added `listenToCollectionSince()`, `readDocIdsFromCache()`. `FirestoreService` added `GroupHealthStatus`, background-only `lastSeen` heartbeat. `DeviceInfo` gained `online`, `photoCapable`, `uploadSpeedBps`. `SyncWorker` → `DebugDumpWorker` + `BackgroundSyncWorker` absorbs receipt sync. Health check loop eliminated (one-shot after `awaitInitialSync`). Integrity check via local cache (zero-network). Image-ledger persistent listener replaces polling. Deps: firebase-database, lifecycle-viewmodel-compose 2.8.6. 92 files, ~43,924 lines. |
-| 2.5 | April 2026 | BudgeTrak Team | Async data loading, LoadingScreen, maintenance consolidation, transaction archiving. `MainViewModel` async `init` on `Dispatchers.IO`, `companion object` with `WeakReference<MainViewModel>`, `runPeriodicMaintenance()` (24 h-gated), `runIntegrityCheck()`, archive fields (`archiveThreshold`, `archiveCutoffDate`, `applyArchiveCutoff`). `MainActivity` `LoadingScreen` gates UI via `!vm.dataLoaded`, EMA-smoothed progress, `BackHandler { moveTaskToBack(true) }` on dashboard. `BackgroundSyncWorker` three-tier `doWork`: skip if active, restart dead listeners, full sync when VM null. `SharedSettings.archiveCutoffDate`. 93 files, ~45,095 lines. |
-| **2.6** | **April 2026** | **BudgeTrak Team** | **Rebrand + doc audit.** Package rebranded to `com.techadvantage.budgetrak` under Tech Advantage LLC (April 11). Full memory + doc audit (April 12): cleaned stale artifacts; documented three-state possession (orphan-no-possession shipped); corrected auto-categorize scope (CSV-only); updated screen count (11 main + 10 help + HelpComponents); calibrated App Check TTL to 4 h (Console-set); confirmed Cloud Functions on Node.js 22. Backup retention default: 1 → **10**. Backup `localPrefs` now includes `autoCapitalize`, `showWidgetLogo`, `incomeMode`. 94 files, **~47,192 lines**. |
-| **2.6.2** | **April 13 2026** | **BudgeTrak Team** | **Bidirectional scroll affordance.** New `BoxScope.PulsingScrollArrows(scrollState)` (Theme.kt) replaces the down-only `PulsingScrollArrow` across all 18 dialog callsites — pulsing up-arrow at TopStart when `canScrollBackward`, down-arrow at BottomStart when `canScrollForward`, standardized paddings clear the `DialogHeader` (topPadding=36.dp) and footer buttons (bottomPadding=50.dp). Callsite API simplified: `PulsingScrollArrows(scrollState = X)` replaces the old 5-line positional modifier. New `ScrollableDropdownContent { … }` helper gives the same bidirectional affordance to every `DropdownMenu` / `ExposedDropdownMenu` (12 callsites: hour-of-day, day-of-week, budget period, repeat type, currency, date format, week start, palette, language, receipt prune, backup frequency, retention, archive threshold, search menu, camera pickers); owns its own `ScrollState`, caps height at 280dp, indents items by 32dp on the start edge so text clears the arrow column. Motivation: users who enlarge system font push otherwise-fitting dialog / dropdown bodies into scrollable territory — down-only affordance leaves them unaware of content above their scroll position. Widget transaction dialog's inline dual-arrow pattern predated this; now the main app matches. |
-| **2.6.1** | **April 13 2026** | **BudgeTrak Team** | **FCM wake architecture.** Two new Cloud Functions: `onSyncDataWrite` (Firestore onWrite, fan-out high-priority `sync_push` FCM to every group device except the writer via `lastEditBy` filter) and `presenceHeartbeat` (Pub/Sub 15-min cron, wakes devices whose RTDB `lastSeen` is >15 min stale). Closes a 4h46m worker-silence gap observed on Kim's Samsung device (App-Standby `rare` bucket). Client: `FcmService.onMessageReceived` dispatches on `type`, logs via `syncEvent("FCM received: type=$type")`. `BackgroundSyncWorker.runOnce` now uses `enqueueUniqueWork(ONESHOT_WORK_NAME, KEEP, …)` for burst deduplication and `setExpedited(RUN_AS_NON_EXPEDITED_WORK_REQUEST)` on API 31+. `pingRtdbLastSeen` and `WakeReceiver` emit `syncEvent` logs. **`BudgeTrakApplication.syncEvent` now appends to `token_log.txt` in debug builds** so the above instrumentation shows up in dumps. **`FirestoreDocService.countActiveDocs` special-cases `periodLedger`** — skips the `deleted == false` filter since entries have no `deleted` field, fixing a Layer-1 consistency false positive. SYNC page UI: duplicate "Code expires in 10 minutes" label removed (dialog unchanged); group-ID row gated to debug builds only. Operations: $1 budget alert + 4 Cloud Monitoring policies (`onSyncDataWrite >100/min`, `presenceHeartbeat >2/min`, Firestore read >1000/min, Firestore write >500/min) configured on billing account `01ADA3-6ACE89-738567`; `sync-23ce9` migrated into `techadvantagesupport-org`. Design note added above `MainViewModel.runLinkingChain` explaining why the 5 matching-chain entry points are intentionally not consolidated (per-entry-point post-match side effects can't share a single call signature without VM knowing screen-local state). |
-| **2.7.1** | **April 27 2026** | **BudgeTrak Team** | **Transaction save audit — six silent-loss vectors closed.** (1) `DuplicateResolutionDialog` (`TransactionsScreen.kt:2644`) and the widget's inline duplicate dialog (`WidgetTransactionActivity.kt:578`) are non-dismissable: `MatchDialogCard.onDismiss = {}` / `Dialog.onDismissRequest = {}`. Tap-outside / back are no-ops; user must pick Keep Existing / Keep New / Keep Both / Ignore All. The pre-fix dismiss handler was `onKeepExisting`, which silently dropped the new transaction. (2) `MainViewModel.onResume` (line ~2329) disk reload changed from `transactions.clear(); transactions.addAll(diskTransactions)` to add-only merge — iterates disk, `transactions.addAll(diskOnly)` for ids not in memory. Eliminates two races: (a) in-flight saves whose disk write completed after the IO read started but whose stale read returned pre-write content, (b) sync-merge in-memory updates whose `withContext(Dispatchers.IO)` disk write was still pending when `onResume` read disk. `SafeIO.readJsonArray` doesn't acquire the per-file lock so reads aren't serialized with writes. Add-only avoids both because memory is never the loser. (3) Entity-id generators widened from `(0..65535).random()` to `(1..Int.MAX_VALUE).random()` in `Transaction.kt:45`, `RecurringExpense.kt:26`, `IncomeSource.kt:25`, `SavingsGoal.kt:45`, `AmortizationEntry.kt:21`, `MainViewModel.kt:2716` (default-category seed), `SettingsScreen.kt:1452` (inline category-create). Cross-device collision per concurrent pair drops from 1/65536 to 1/(2^31-1). No schema change — existing low-range ids stay valid; the local existingIds rejection loop handles either pool. (4) Multi-category save validation in `TransactionsScreen.kt:4795-4815`: every silent `return@DialogPrimaryButton` (bad total, negative total, no valid percentages, no valid amounts) now sets `showValidation = true` and shows `S.transactions.multiCategoryAmountsInvalid` toast. (5) `MainActivity.onUpdateTransaction` (line ~2058) shows `S.transactions.editFailedTransactionMissing` 5 s toast in the `else` branch of `if (index >= 0)` — surfaces archive-cutoff / tombstone-purge mid-edit instead of silently closing the dialog. (6) `MainViewModel.addTransactionWithBudgetEffect` (line ~1088) made fully atomic: SG deduction, `transactions.add`, `saveTransactions(listOf(stamped))` (writes JSON + pushes to Firestore) all gated by one `transactions.none { it.id == stamped.id }` check. Pre-fix the SG deduction and Firestore push happened outside the guard, allowing double-deduct on double-tap and "saved on Firestore but missing locally" on id collision. New strings `multiCategoryAmountsInvalid` and `editFailedTransactionMissing` added to TransactionsStrings (English + Spanish + TranslationContext). New memory file `feedback_silent_save_failures.md` captures the audit pattern (set a flag, show a toast, or prevent close — pick one, never close-as-if-success on a no-op path). |
-| **2.7** | **April 18 2026** | **BudgeTrak Team** | **AI features + photo-bar UX overhaul.** New `data/ocr/ReceiptOcrService.kt` — 3-call Gemini 2.5 Flash-Lite pipeline with unified Call 1 routing probe: Call 1 returns header + optional `multiCategoryLikely`/`singleCategoryId` hints when no categories pre-selected; if pre-select.size ≥ 2 OR probe says multi-cat, continue to Call 2 (items+categories, v30 prompt: "skip promos/coupons/tenders", "prefer concrete over Other", "avoid rare categories"; soft pre-select nudge + niche-preference when pre-selected), then Call 3 (per-item prices, considers quantity multipliers + line coupons + mfr rebates); otherwise single-cat result from Call 1 alone. Post-process: `remapInvalidCategoryIds` (tax-line hallucinations → Other or dominant valid cat); `reconcilePrices` (proportional scaling so Σ item prices = Call 1 total; absorbs receipt-level discounts like Target Circle 5%); `aggregateCategoryAmounts` (tax rolled into dominant non-tax bucket). New `data/ai/AiCategorizerService.kt` — CSV categorization fallback when deterministic matcher can't find ≥5 matches or ≥80% agreement; payload is `{i, merchant, amount}` only (date removed in this release for privacy); 30 s timeout, 3× exponential backoff, 100-txn chunks. `OcrPromptBuilder.kt` deleted (prompts inlined per-call in `ReceiptOcrService`). `SwipeablePhotoRow.kt` + TransactionDialog thumb bar: `detectDragGesturesAfterLongPress` replaces `combinedClickable`; `rememberUpdatedState` on `occupiedSlots`/`dialogReceiptIds`/`editTransaction` so drag-end callbacks use live state (fix for snap-back where first-render closures saw `draggedVisibleIdx = -1`); `preDragHighlight` snapshot so a no-drag long-press toggles against the prior state instead of the just-set value; `animateIntAsState(tween(150))` on non-dragged thumbs, direct `IntOffset` on dragged. Pending-download placeholders (receiptId set, thumbnail absent) included in `occupiedSlots` and the drag reshuffle; tap shows a `LocalAppToast` ("Waiting for this photo to download from the device that added it"). Full-screen viewer is now the sole deletion path (long-press no longer opens a delete dialog). `ReceiptManager.readAsJpegBytes(uri)` — PDF path uses `android.graphics.pdf.PdfRenderer` on page 0 at ~1500 px long edge, white-background canvas, JPEG q=95; image path unchanged. Gallery launcher switched to `OpenMultipleDocuments(arrayOf("image/*", "application/pdf"))`. `SwipeablePhotoRow` dedupe: removed ~160 LOC of duplicate resize/compress/thumbnail pipeline, now delegates to `ReceiptManager.processAndSavePhoto`. `MIN_IMAGE_DIMENSION = 400` short-edge floor added to `resizeBitmap` so 1080×7785 e-receipts no longer compress to unreadable 35 KB. Pending-queue hardening: `addToPendingQueue` moved from photo-capture to `MainViewModel.saveTransactions` (diffs against `lastSavedTxns`, queues only newly-attached receipts); `cleanOrphans` also prunes stale pending entries. Multi-photo gallery add: `dialogGalleryLauncher` closure now threads `var currentTxn = editTransaction` through iterations so `nextEmptySlot(currentTxn)` sees the updated transaction (fix for "adds 1 of 4" bug). `BackgroundSyncWorker` gains `AtomicBoolean isRunning` guard (two periodic + one-shot work names could double-fire; observed 118 ms apart in Kim's diag dump); `FcmService.handleWakeForSync` busy-waits up to 9 s on `isRunning` so Doze-aggressive OEMs don't kill the FCM process before WorkManager dispatches the enqueued worker. `ReceiptOcrService` wires into `MainViewModel.runOcrOnSlot1(receiptId, preSelectedCategoryIds)` — function name is historical (pre-2.7 OCR always read slot 1); as of 2.7 the caller passes whichever thumbnail the user highlighted via long-press. TransactionDialog adds `ocrTargetSlot` state + a preselect-help banner (subscriber dialogs, above the category picker) that navigates to a new Transactions-Help subsection via `MainViewModel.transactionsHelpScrollTo` + `rememberScrollState().animateScrollTo` on an `onGloballyPositioned` anchor. `OcrState.Success` handler now always overwrites merchant/date/amount/per-cat amounts (user asked for OCR, they want the result; `verified=false` forces review); category checkboxes preserved iff user pre-selected any at sparkle-tap (captured via `ocrHadPreselect`). Cash Flow Simulation entry button on `SavingsGoalsScreen` gated to `isPaidUser || isSubscriber` (was `isSubscriber`); `paidSimulation` string field moved from Subscriber bullets to Paid bullets in `DashboardHelpScreen`. Anchored toasts — `AppToastState.show(msg, windowYPx)` already existed; added `onGloballyPositioned` tracking on AI icon (`aiIconWindowY`) and thumb bars (`thumbBarWindowY`, `photoPanelWindowY`) so toasts render just above their source. `SwipeablePhotoRow` migrated from `android.widget.Toast` to `LocalAppToast` for consistency with the dialog variant. `SavingsGoalsScreen` toast uses `upgradeToAccess` (generic) instead of `subscribeToAccess`. Memory system consolidated — global auto-memory path `~/.claude/projects/-data-data-com-termux-files-home/memory/` is now a symlink to `dailyBudget/memory/` so all auto-memory writes land in the tracked working tree; un-tracked `~/.claude/projects/-data-data-com-termux-files-home/private-notes/` sibling for personal content. `feedback_memory_routing.md` documents the convention. 98 files / 49,088 lines. |
+| 2.0 – 2.5 | Mar–Apr 2026 | BudgeTrak Team | **CRDT → Firestore-native sync migration + ViewModel extraction + async load.** v2.0 added SYNC, simulator, dialog framework, linked transactions. v2.2 replaced ~4,000 LOC of CRDT with ~1,860 LOC of per-field encryption + Firestore-native sync; removed all `_clock` fields; renamed to BudgeTrak. v2.3 extracted `SyncMergeProcessor` / `PeriodRefreshService` / `BackgroundSyncWorker` (15-min periodic, replacing `WidgetRefreshWorker`); widget 5 s throttle; `DiagDumpBuilder`. v2.4 extracted `MainViewModel` from `MainActivity`; per-collection `updatedAt` cursors + `awaitInitialSync`; RTDB presence; receipt listener replaces 60-s poll. v2.5 async IO load + LoadingScreen + EMA progress; Back = Home; synchronous `recomputeCash()`; consolidated `runPeriodicMaintenance()`; three-tier `BackgroundSyncWorker`; transaction archiving. End of v2.5: 93 files / ~45,095 lines. |
+| 2.6 | April 2026 | BudgeTrak Team | **Rebrand + doc audit.** Package rebranded to `com.techadvantage.budgetrak` under Tech Advantage LLC (April 11). Full memory + doc audit (April 12): cleaned stale artifacts; documented three-state possession; corrected auto-categorize scope (CSV-only); calibrated App Check TTL to 4 h; confirmed Cloud Functions on Node.js 22. Backup retention default: 1 → **10**. Backup `localPrefs` adds `autoCapitalize`, `showWidgetLogo`, `incomeMode`. 94 files / ~47,192 lines. |
+| 2.6.1 | April 13 2026 | BudgeTrak Team | **FCM wake architecture.** Two Cloud Functions: `onSyncDataWrite` (Firestore onWrite, fan-out `sync_push` FCM; skips writer via `lastEditBy`) and `presenceHeartbeat` (Pub/Sub 15 min). Closes the 4h46m worker-silence gap on Kim's Samsung. `BackgroundSyncWorker.runOnce` uses `enqueueUniqueWork(KEEP)` + `setExpedited` on API 31+. `BudgeTrakApplication.syncEvent` appends to `token_log.txt` in debug. `countActiveDocs` skips `deleted == false` filter for `periodLedger` (no such field). |
+| 2.6.2 | April 13 2026 | BudgeTrak Team | **Bidirectional scroll affordance.** New `BoxScope.PulsingScrollArrows(scrollState)` replaces the down-only `PulsingScrollArrow` across all 18 dialog callsites; `ScrollableDropdownContent { … }` gives the same affordance to 12 dropdown callsites (caps height at 280 dp, 32 dp start indent). |
+| 2.7 | April 18 2026 | BudgeTrak Team | **AI features + photo-bar UX overhaul.** `data/ocr/ReceiptOcrService.kt` (Gemini 2.5 Flash-Lite 3-call pipeline + Call 1 routing probe + reconcile/remap/aggregate post-process). `data/ai/AiCategorizerService.kt` (CSV categorization fallback, merchant+amount payload only). Photo-bar long-press selects AI scan target + drag reorders with real-time reshuffle (`SwipeablePhotoRow` + TransactionDialog thumb bar). `ReceiptManager.readAsJpegBytes` PDF path via `PdfRenderer` (q=95, ~1500 px). `SwipeablePhotoRow` dedupe (~160 LOC removed). `MIN_IMAGE_DIMENSION = 400` floor. `addToPendingQueue` moved to `saveTransactions`. `BackgroundSyncWorker` `AtomicBoolean isRunning` double-fire guard. Cash Flow Simulation widened to Paid+Subscriber. Anchored toasts via `AppToastState.show(msg, windowYPx)`. 98 files / 49,088 lines. |
+| 2.7.1 | April 27 2026 | BudgeTrak Team | **Transaction save audit — six silent-loss vectors closed.** Non-dismissable `DuplicateResolutionDialog` (txn screen + widget); `MainViewModel.onResume` disk reload now add-only merge; entity-id range widened `0..65535` → `1..Int.MAX_VALUE` across 7 generators; multi-category save validation toasts on every silent return; `onUpdateTransaction` toasts on missing edit target; `addTransactionWithBudgetEffect` made atomic via single dedup gate. New strings `multiCategoryAmountsInvalid`, `editFailedTransactionMissing`. New `feedback_silent_save_failures.md` memory. |
+| 2.8 | April 27 2026 | BudgeTrak Team | **TransactionDialog unification + network-awareness pass.** `TransactionDialog` consolidated from three Add Income / Add Expense / Edit entry points (header pill toggle); single layered Add-Transaction icon (deep-blue pulsing plus + receipt body) replaces +/- IconButton pairs on Transactions toolbar + Dashboard nav row; standalone Dashboard +/- bar deleted. OCR refund-receipt support: negative `amountCents` auto-flips dialog + `abs()` for fields; parser fixed to use `Int.MIN_VALUE` sentinel. Preselect-help banner relocated under photo bar + opens Transactions Help via fullscreen Compose `Dialog` overlay. **Network-awareness pass** across receipt sync / AI OCR / Sync Now / `BackgroundSyncWorker` / App Check / anonymous auth — fail-fast offline, auto-resume on `networkCallback.onAvailable` (drainer uses `cancelAndJoin`; auth via idempotent `attemptAnonymousAuth()`); `Boolean` work-done signal threaded through `runFullSyncBody` / `runTier2` / `runTier3`. Tier 2 receipt-sync rethrows `CancellationException` and propagates state to `vm.transactions`. Debug-build receipt forensics: `addToPendingQueue` / `removeFromPendingQueue` / `deleteLocalReceipt` log to `token_log.txt`; `sync_diag.txt` Receipt Files Audit section. New files: `data/ocr/ReceiptOcrService.kt` (Call 1.5 with 2 s past-Call-2 cap + per-call timing logs), `data/sync/NetworkUtils.kt`. ~100 files / ~51,500 lines. |
 
 ---
 
-BudgeTrak Low-Level Design Document v2.7 — April 2026 — END OF DOCUMENT
+BudgeTrak Low-Level Design Document v2.8 — April 2026 — END OF DOCUMENT
