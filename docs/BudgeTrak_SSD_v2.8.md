@@ -9,7 +9,7 @@
 | Platform | Android 9.0+ (minSdk 28, compile/target SDK 34) |
 | Language / UI | Kotlin 2.0.21, Jetpack Compose + Material 3 |
 | Build | Gradle 8.9 (Kotlin DSL), JVM 17 |
-| Code Size | ~98 Kotlin files, ~49,000 lines |
+| Code Size | ~100 Kotlin files, ~51,500 lines (v2.8 dev; refreshed at release tags — see §26) |
 | Status | Dev — Internal / Technical Reference |
 
 > Rebranded 2026-04-11 from `com.securesync.app` / `com.syncbudget.app`. v2.7 (versionCode=4) is the production release on Google Play; dev branch is v2.8 (versionCode=5).
@@ -33,20 +33,21 @@
 11. Auto-Categorization System
 12. Category Management System
 13. Spending Charts System
-14. Localization System
-15. Theme System
-16. SYNC System (Firestore-Native)
-17. Receipt Photo System
-18. Home Screen Widget
-19. Data Models
-20. Persistence Strategy
-21. PieChartEditor Component
-22. Help System
-23. Error Handling
-24. Android Manifest Configuration
-25. Code Statistics
-26. Build Configuration
-27. Document Revision History
+14. PDF Expense Reports
+15. Localization System
+16. Theme System
+17. SYNC System (Firestore-Native)
+18. Receipt Photo System
+19. Home Screen Widget
+20. Data Models
+21. Persistence Strategy
+22. PieChartEditor Component
+23. Help System
+24. Error Handling
+25. Android Manifest Configuration
+26. Code Statistics
+27. Build Configuration
+28. Document Revision History
 
 ---
 
@@ -122,59 +123,63 @@ Single-Activity + AndroidViewModel + Composable navigation.
 
 ### 2.2 Component Architecture
 
-| Component | File | Lines | Purpose |
-|---|---|---|---|
-| MainActivity | MainActivity.kt | 2,438 | UI shell: observes VM, renders screens, `isAppActive` flag, `LoadingScreen`, `moveTaskToBack` back-handler |
-| MainViewModel | MainViewModel.kt | 2,650 | State + saves + sync lifecycle + background loops + archiving + maintenance |
-| MainScreen | MainScreen.kt | 1,304 | Dashboard: flip display, charts, Supercharge dialog, quick-add, sync indicators |
-| TransactionsScreen | TransactionsScreen.kt | 5,573 | Transactions CRUD, import/export, bulk, receipts, archive view |
-| BudgetConfigScreen | BudgetConfigScreen.kt | 1,241 | Income sources, period, reset timing, manual override |
-| SettingsScreen | SettingsScreen.kt | 1,577 | Currency, categories, matching, language, palettes, widget, archive threshold |
-| SavingsGoalsScreen | SavingsGoalsScreen.kt | 804 | Target-date and fixed-contribution goals |
-| AmortizationScreen | AmortizationScreen.kt | 638 | Amortization entries with progress and pause |
-| RecurringExpensesScreen | RecurringExpensesScreen.kt | 1,093 | Recurring bills + savings-required simulation |
-| SyncScreen | SyncScreen.kt | 1,180 | Group management, device list, sync status |
-| BudgetCalendarScreen | BudgetCalendarScreen.kt | 434 | Monthly calendar of recurring events |
-| SimulationGraphScreen | SimulationGraphScreen.kt | 686 | Cash-flow projection timeline |
-| QuickStartGuide | QuickStartGuide.kt | 357 | 6-step onboarding overlay |
-| EncryptedDocSerializer | EncryptedDocSerializer.kt | 1,035 | Per-field encrypt/decrypt, `toFieldMap`, `fieldUpdate`, `fromDoc`, `diffFields` |
-| FirestoreDocSync | FirestoreDocSync.kt | 716 | Listener lifecycle, per-collection cursors, diff push, conflict detection, `awaitInitialSync()` |
-| FirestoreDocService | FirestoreDocService.kt | 240 | Low-level `writeDoc`, `updateFields`, `listenToCollection`, cache reads |
-| FirestoreService | FirestoreService.kt | 556 | Device / group / pairing / admin / subscriptions |
-| RealtimePresenceService | RealtimePresenceService.kt | 180 | RTDB presence with `onDisconnect()`, device capabilities |
-| SyncWriteHelper | SyncWriteHelper.kt | 67 | Singleton IO-thread push dispatcher |
-| DebugDumpWorker | DebugDumpWorker.kt | 80 | One-shot FCM debug dump (debug builds) |
-| GroupManager | GroupManager.kt | 195 | Group create / join / leave / dissolve |
-| ImageLedgerService | ImageLedgerService.kt | 736 | Firestore image ledger, event-driven receipt sync |
-| ReceiptSyncManager | ReceiptSyncManager.kt | 724 | Cloud Storage upload/download, encryption, recovery |
-| ReceiptManager | ReceiptManager.kt | 391 | Local capture, compression, thumbnails, delete chain |
-| SwipeablePhotoRow | SwipeablePhotoRow.kt | 669 | Transaction receipt photo UI |
-| BudgetWidgetProvider | BudgetWidgetProvider.kt | 288 | Widget lifecycle, alarms, debounce throttle |
-| WidgetRenderer | WidgetRenderer.kt | 276 | Canvas bitmap renderer for flip cards |
-| WidgetTransactionActivity | WidgetTransactionActivity.kt | 987 | Quick add from widget |
-| BackgroundSyncWorker | BackgroundSyncWorker.kt | 483 | Three-tier `doWork()`; publishes `availableCash` in fingerprintJson |
-| PeriodRefreshService | PeriodRefreshService.kt | 261 | Shared period refresh (`@Synchronized`) |
-| SyncMergeProcessor | SyncMergeProcessor.kt | 303 | Incoming sync merge: dedup, conflict, settings, add-or-replace |
-| FlipDisplay | FlipDisplay.kt | 258 | Currency-aware flip-display compositor |
-| FlipChar | FlipChar.kt | 293 | Animated flip card for strings (sign + currency) |
-| FlipDigit | FlipDigit.kt | 316 | Animated flip card for digits 0–9 + blank |
-| PieChartEditor | PieChartEditor.kt | 470 | Interactive pie with drag / 3 entry modes / 6 palettes |
-| FlipSoundPlayer | FlipSoundPlayer.kt | 134 | Procedural 45 ms mechanical clack at 44.1 kHz |
-| BudgetCalculator | BudgetCalculator.kt | 504 | Occurrence-based budget calc + deterministic cash recompute |
-| SavingsSimulator | SavingsSimulator.kt | 517 | Cash-flow simulation for savings-required |
-| DuplicateDetector | DuplicateDetector.kt | 217 | Amount / date / merchant tolerance matching |
-| CsvParser | CsvParser.kt | 996 | Generic / US Bank / BudgeTrak / encrypted CSV |
-| CryptoHelper | CryptoHelper.kt | 93 | ChaCha20-Poly1305 password + direct-key modes |
-| AutoCategorizer | AutoCategorizer.kt | 49 | Merchant-based category from 6-month history |
-| BackupManager | BackupManager.kt | 390 | Full app backup + restore |
-| BudgeTrakApplication | BudgeTrakApplication.kt | 22 | Initializes App Check (Play Integrity) in `onCreate()` |
-| DiagDumpBuilder | DiagDumpBuilder.kt | 241 | Diagnostic dump from disk, `writeDiagToMediaStore()` |
-| ExpenseReportGenerator | ExpenseReportGenerator.kt | 365 | Expense reports |
-| CategoryIcons | CategoryIcons.kt | 327 | 120+ Material icon map |
-| AppStrings | AppStrings.kt | 1,425 | 16 string-group interfaces, ~800+ fields |
-| EnglishStrings / SpanishStrings | *.kt | 1,724 / 1,719 | Localized implementations |
-| TranslationContext | TranslationContext.kt | 1,426 | Translator notes |
-| Theme | Theme.kt | 665 | Colors, AdAwareDialog, PulsingScrollArrow |
+> **Note on line counts.** Per-file line counts were enumerated through v2.7 release; the columns are kept for *relative* magnitude (e.g. `MainViewModel` and `TransactionsScreen` are the dominant single files; most data-layer files are <1 K lines) but no longer maintained per dev cycle. For exact current sizes, run `find app/src/main/java -name "*.kt" | xargs wc -l` against the working tree. v2.8 dev branch totals ~100 Kotlin files / ~51,500 lines (vs v2.7's 94 / 47,000).
+
+| Component | File | Purpose |
+|---|---|---|
+| MainActivity | MainActivity.kt | UI shell: observes VM, renders screens, `isAppActive` flag, `LoadingScreen`, `moveTaskToBack` back-handler |
+| MainViewModel | MainViewModel.kt | State + saves + sync lifecycle + background loops + archiving + maintenance |
+| MainScreen | MainScreen.kt | Dashboard: flip display, charts, Supercharge dialog, quick-add, sync indicators |
+| TransactionsScreen | TransactionsScreen.kt | Transactions CRUD, import/export, bulk, receipts, archive view |
+| BudgetConfigScreen | BudgetConfigScreen.kt | Income sources, period, reset timing, manual override |
+| SettingsScreen | SettingsScreen.kt | Currency, categories, matching, language, palettes, widget, archive threshold |
+| SavingsGoalsScreen | SavingsGoalsScreen.kt | Target-date and fixed-contribution goals |
+| AmortizationScreen | AmortizationScreen.kt | Amortization entries with progress and pause |
+| RecurringExpensesScreen | RecurringExpensesScreen.kt | Recurring bills + savings-required simulation |
+| SyncScreen | SyncScreen.kt | Group management, device list, sync status |
+| BudgetCalendarScreen | BudgetCalendarScreen.kt | Monthly calendar of recurring events |
+| SimulationGraphScreen | SimulationGraphScreen.kt | Cash-flow projection timeline |
+| QuickStartGuide | QuickStartGuide.kt | 6-step onboarding overlay |
+| EncryptedDocSerializer | EncryptedDocSerializer.kt | Per-field encrypt/decrypt, `toFieldMap`, `fieldUpdate`, `fromDoc`, `diffFields` |
+| FirestoreDocSync | FirestoreDocSync.kt | Listener lifecycle, per-collection cursors, diff push, conflict detection, `awaitInitialSync()` |
+| FirestoreDocService | FirestoreDocService.kt | Low-level `writeDoc`, `updateFields`, `listenToCollection`, cache reads |
+| FirestoreService | FirestoreService.kt | Device / group / pairing / admin / subscriptions |
+| RealtimePresenceService | RealtimePresenceService.kt | RTDB presence with `onDisconnect()`, device capabilities |
+| SyncWriteHelper | SyncWriteHelper.kt | Singleton IO-thread push dispatcher |
+| DebugDumpWorker | DebugDumpWorker.kt | One-shot FCM debug dump (debug builds) |
+| GroupManager | GroupManager.kt | Group create / join / leave / dissolve |
+| ImageLedgerService | ImageLedgerService.kt | Firestore image ledger, event-driven receipt sync |
+| ReceiptSyncManager | ReceiptSyncManager.kt | Cloud Storage upload/download, encryption, recovery |
+| ReceiptManager | ReceiptManager.kt | Local capture, compression, thumbnails, delete chain |
+| ReceiptOcrService | data/ocr/ReceiptOcrService.kt | V18 split-pipeline AI OCR via Gemini 2.5 Flash-Lite (§11.3) |
+| NetworkUtils | data/sync/NetworkUtils.kt | Static `isOnline(context)` for code paths without VM access (§17.13 + §18.5 offline gate) |
+| SwipeablePhotoRow | SwipeablePhotoRow.kt | Transaction receipt photo UI |
+| BudgetWidgetProvider | BudgetWidgetProvider.kt | Widget lifecycle, alarms, debounce throttle |
+| WidgetRenderer | WidgetRenderer.kt | Canvas bitmap renderer for flip cards |
+| WidgetTransactionActivity | WidgetTransactionActivity.kt | Quick add from widget |
+| BackgroundSyncWorker | BackgroundSyncWorker.kt | Three-tier `doWork()` with `Boolean workDone` propagation; publishes `availableCash` in fingerprintJson |
+| PeriodRefreshService | PeriodRefreshService.kt | Shared period refresh (`@Synchronized`) |
+| SyncMergeProcessor | SyncMergeProcessor.kt | Incoming sync merge: dedup, conflict, settings, add-or-replace |
+| FlipDisplay | FlipDisplay.kt | Currency-aware flip-display compositor |
+| FlipChar | FlipChar.kt | Animated flip card for strings (sign + currency) |
+| FlipDigit | FlipDigit.kt | Animated flip card for digits 0–9 + blank |
+| PieChartEditor | PieChartEditor.kt | Interactive pie with drag / 3 entry modes / 6 palettes |
+| FlipSoundPlayer | FlipSoundPlayer.kt | Procedural 45 ms mechanical clack at 44.1 kHz |
+| BudgetCalculator | BudgetCalculator.kt | Occurrence-based budget calc + deterministic cash recompute |
+| SavingsSimulator | SavingsSimulator.kt | Cash-flow simulation for savings-required |
+| DuplicateDetector | DuplicateDetector.kt | Amount / date / merchant tolerance matching |
+| CsvParser | CsvParser.kt | Generic / US Bank / BudgeTrak / encrypted CSV |
+| CryptoHelper | CryptoHelper.kt | ChaCha20-Poly1305 password + direct-key modes |
+| AutoCategorizer | AutoCategorizer.kt | Merchant-based category from 6-month history |
+| BackupManager | BackupManager.kt | Full app backup + restore |
+| BudgeTrakApplication | BudgeTrakApplication.kt | App Check (Play Integrity) init; `tokenLog` / `syncEvent` / `recordNonFatal` Crashlytics+file logging helpers |
+| DiagDumpBuilder | DiagDumpBuilder.kt | Diagnostic dump from disk, `writeDiagToMediaStore()`, Receipt Files Audit (debug) |
+| ExpenseReportGenerator | ExpenseReportGenerator.kt | Expense reports |
+| CategoryIcons | CategoryIcons.kt | 120+ Material icon map |
+| AppStrings | AppStrings.kt | String-group interfaces (~800+ fields) |
+| EnglishStrings / SpanishStrings | *.kt | Localized implementations |
+| TranslationContext | TranslationContext.kt | Translator notes |
+| Theme | Theme.kt | Colors, AdAwareDialog, PulsingScrollArrow |
 
 ### 2.3 Screen / Navigation Map
 
@@ -768,7 +773,7 @@ Singleton `object`. Cipher: ChaCha20-Poly1305 (AEAD).
 
 ### 10.3 Key Storage
 
-Sync key lives in SecurePrefs (~59 lines) on Android KeyStore-backed AES256-GCM. Generated at group creation; distributed to joining devices via pairing code (§16.10).
+Sync key lives in SecurePrefs (~59 lines) on Android KeyStore-backed AES256-GCM. Generated at group creation; distributed to joining devices via pairing code (§17.17 Group Management).
 
 ## 11. Auto-Categorization
 
@@ -797,6 +802,32 @@ Runs only when the deterministic matcher's confidence is low (fewer than 5 histo
 - Retry: 3 attempts with exponential backoff on transient errors; total timeout 30 s per call.
 
 Privacy: data is encrypted in transit (HTTPS); Google's Gemini Developer API terms (Blaze tier) provide no-training-use and brief abuse-detection-only logging. No account identifiers, balances, other transactions, or receipt photos are sent.
+
+### 11.3 AI Receipt OCR Pipeline (Subscriber, opt-in trigger) — `data/ocr/ReceiptOcrService.kt`
+
+Triggered by an explicit tap on the AI sparkle in the transaction dialog header. The user long-presses one of the photo slots first to mark it as the OCR target. All four calls use **Gemini 2.5 Flash-Lite** via Firebase AI Logic.
+
+**V18 split-pipeline (1 / 3 / 4 calls depending on path):**
+
+| Path | Conditions | Calls |
+|---|---|---|
+| Single-call shortcut | `preSelectedCategoryIds.size == 1` OR `c1.itemNames.isEmpty()` | Call 1 only |
+| Single-cat | After Call 1, model returns one dominant category | Call 1 → (Call 1.5 ‖ Call 2) → `buildSingleCatResult` |
+| Multi-cat | `preSelect.size >= 2` OR `deriveMulti(...)` from Call 2 returns true | Call 1 → (Call 1.5 ‖ Call 2) → Call 3 (per-item prices) → reconcile |
+
+**Call 1 — image → header.** Returns `{merchant, merchantLegalName, date, amountCents, itemNames[], fullTranscript[], notes}`. Marketplace rule (Amazon/eBay/etc. with "Sold by:") sets merchant to the platform, not the seller. No-hallucinated-date rule: empty string when no calendar date is visible. Date defaults to MM/DD/YYYY (US); DD/MM only on explicit non-US signal.
+
+**Call 1.5 — text-only reconciliation.** Re-reads `fullTranscript` to validate `date` and `amountCents` from Call 1 (catches digit-OCR errors and locale date swaps). Falls back silently to Call 1's values on parse error, API error, or **timeout**. Runs in PARALLEL with Call 2; capped at `CALL1R_TIMEOUT_PAST_C2_MS = 2_000` ms past Call 2 completion (v2.8 — refund receipts with multiple negative numbers in the transcript were observed taking ~9 s for the model to reason through, blocking the pipeline; the cap converts that tail into a bounded ~2 s wait).
+
+**Call 2 — image + item names → category scores.** For each item, returns top-K category candidates with scores 0-100. `topChoice` field at top level and `multiCategoryLikely` boolean drive the multi-vs-single routing.
+
+**Call 3 — image + line items → per-item prices.** Multi-cat only. Cents per item; reconciled against Call 1's `amountCents` total (drift ≤ $0.05 acceptable; salesTax preserved exactly).
+
+**Refund-receipt support (v2.8).** `runCall1` and `runCall1Reconcile` use `Int.MIN_VALUE` as the "missing amountCents" sentinel instead of `-1`. Negative cents flow through unmodified. The dialog prefill detects `r.amount < 0` and flips `typeIsExpense = false` + `kotlin.math.abs(...)` for the amount field — refunds become INCOME with positive amount (model invariant: amount always positive, type carries polarity).
+
+**Per-call timing logs (debug only, v2.8).** Every call emits `Call N dispatch (...)` at start and `Call N response after Nms (...)` on response. Plus `Call1.5: timed out 2000ms past C2 — using C1 values` when the cap fires. Logs land in `logcat_Paul.txt` (or per-device dump) for forensic latency analysis.
+
+**Cost model.** ≤ 4 API calls per OCR; Lite tier; no separate fallback model. Caller is `MainViewModel.runOcrOnSlot1(receiptId, preSelectedCategoryIds)`. Single entry point: `ReceiptOcrService.extractFromReceipt`.
 
 ## 12. Category Management
 
@@ -957,9 +988,9 @@ arrows to indicate further content above / below. Two composables in
 Down-only `PulsingScrollArrow` still exists for backward compatibility
 but new code should prefer `PulsingScrollArrows` (plural).
 
-## 16. SYNC System (Firestore-Native)
+## 17. SYNC System (Firestore-Native)
 
-### 16.1 Overview
+### 17.1 Overview
 
 Up to 5 devices per household sync via Firestore (per-field encrypted
 docs + filtered snapshot listeners) with RTDB for presence. v2.2
@@ -974,7 +1005,7 @@ FCM fan-out (`onSyncDataWrite`) and a 15-minute heartbeat
 App-Standby Buckets, closing the "widget stale for hours" gap on
 Samsung and similar OEMs.
 
-### 16.2 Per-Field Encryption
+### 17.2 Per-Field Encryption
 
 Each business field is serialized as `enc_fieldName` in its Firestore
 doc using `CryptoHelper.encryptWithKey` (ChaCha20-Poly1305 with the
@@ -983,7 +1014,7 @@ raw 256-bit group key). Metadata fields (`deviceId`, `updatedAt`,
 (`whereGreaterThan("updatedAt", cursor)`), echo filtering via
 `lastEditBy`, and minimal-diff `update()` writes.
 
-### 16.3 Firestore Document Structure
+### 17.3 Firestore Document Structure
 
     groups/{gid}/transactions/{id}:
       enc_source, enc_amount, enc_description, enc_date,
@@ -1001,7 +1032,7 @@ Data classes carry only `deviceId` and `deleted`. Tombstones via
 `groups/{gid}/<name>/{id}`) plus the singleton
 `groups/{gid}/sharedSettings/current`.
 
-### 16.4 Real-Time Sync (Filtered Listeners)
+### 17.4 Real-Time Sync (Filtered Listeners)
 
 `FirestoreDocSync` attaches 8 listeners (7 collections +
 `sharedSettings/current`). Each uses
@@ -1039,7 +1070,7 @@ When `onBatchChanged` sees new `receiptId*` values not present
 locally, up to 5 parallel Cloud Storage downloads fire inline — no
 `imageLedger` listener, no 15-min worker wait.
 
-### 16.5 Push & Diff
+### 17.5 Push & Diff
 
 `FirestoreDocSync.pushRecord`:
 
@@ -1056,7 +1087,7 @@ chunks). `SyncWriteHelper.pushBatch` retries once then falls back to
 individual `pushRecord`. `saveCollection<T>` is the generic
 disk-persist helper (optional `hint`).
 
-### 16.6 Conflict Detection
+### 17.6 Conflict Detection
 
 - `lastEditBy` (plaintext) — device that last wrote the doc.
 - `localPendingEdits` — unpushed local edits, persisted to
@@ -1067,14 +1098,14 @@ Same-field conflict → transaction flagged
 by `BackgroundSyncWorker.pushSyncSideEffects`). Different-field edits
 merge automatically via per-field `update()`.
 
-### 16.7 Enc-Hash Cache
+### 17.7 Enc-Hash Cache
 
 Composite hash of the doc's `enc_*` fields (sorted key=value join,
 `.hashCode().toString()`). Persisted to `enc_hash_cache.json` so
 cold starts skip decryption of unchanged docs. Populated at **both**
 receive time and push time (batch + individual + fallback set).
 
-### 16.8 Echo Filtering
+### 17.8 Echo Filtering
 
 Per-doc key `"{collection}:{docId}"` in `recentPushes`:
 
@@ -1085,7 +1116,7 @@ Per-doc key `"{collection}:{docId}"` in `recentPushes`:
 - `lastEditBy != ours` in a recent-push key = someone else edited →
   process, don't filter.
 
-### 16.9 PERMISSION_DENIED Recovery
+### 17.9 PERMISSION_DENIED Recovery
 
 `triggerFullRestart()` (30-s debounce) stops all listeners,
 force-refreshes the App Check token
@@ -1095,7 +1126,7 @@ waits 500 ms, and restarts everything with reset reconnect counters.
 Other listener errors use exponential backoff
 (5 s × 2^attempts, capped 300 s, max 10 attempts).
 
-### 16.10 Integrity & Consistency Checks
+### 17.10 Integrity & Consistency Checks
 
 Both in `runPeriodicMaintenance()` (24-h gate from `onResume`, after
 initial sync).
@@ -1120,7 +1151,7 @@ for this collection so the count matches local `.size`. Before the
 fix it always returned 0, firing a false mismatch on every
 maintenance pass.
 
-### 16.11 Period Ledger Sync
+### 17.11 Period Ledger Sync
 
 - **Create-if-absent**: `FirestoreDocService.createDocIfAbsent` ensures
   the first device wins the period entry.
@@ -1129,7 +1160,7 @@ maintenance pass.
 - **Solo skip**: non-sync devices run immediately.
 - **Dedup** by epoch day.
 
-### 16.12 Save & Push Architecture
+### 17.12 Save & Push Architecture
 
 Every save in `MainViewModel` persists to disk, then calls
 `SyncWriteHelper.push<Type>(record)` on `Dispatchers.IO`. There's no
@@ -1155,7 +1186,7 @@ writes. Widget transactions push through the same path.
 | DiagDumpBuilder | 241 | Diagnostic dump, sanitized device name |
 | Helpers | — | FcmSender (134), FcmService (47), SecurePrefs (70), PeriodLedger (73), SyncFilters (37), SyncIdGenerator (20), SubscriptionReminder (109) |
 
-### 16.13 Three-Tier BackgroundSyncWorker
+### 17.13 Three-Tier BackgroundSyncWorker
 
 Sync entry point shared by WorkManager (`doWork`) and FcmService
 (`runFullSyncInline` companion). Three unique work names:
@@ -1226,7 +1257,7 @@ log + logcat, surviving process death. Context-prefixed messages:
 `ReceiptSync(onBatch)`, `ReceiptSync(UploadDrainer)`,
 `ReceiptSync(FgRetry)`.
 
-### 16.14 WakeReceiver
+### 17.14 WakeReceiver
 
 Manifest-registered for `ACTION_POWER_CONNECTED` and
 `ACTION_POWER_DISCONNECTED` (the only user-interaction proxies Android
@@ -1234,7 +1265,7 @@ allows static-registered). 5-min rate limit in SharedPrefs, fires
 `BackgroundSyncWorker.runOnce()` and logs via `syncEvent()`.
 Mitigates aggressive process kills on Samsung One UI.
 
-### 16.15 FCM Wake Architecture (v2.6)
+### 17.15 FCM Wake Architecture (v2.6)
 
 Purely-periodic `WorkManager` work stops firing when Android drops
 the app into `rare` / `restricted` App-Standby Buckets — one
@@ -1291,7 +1322,7 @@ heartbeat scan. Optimizations queued in `memory/project_prelaunch_todo.md`
 (cache tokens in group doc; server-side debounce; indexed presence
 query) drop it toward ~$10-15/mo.
 
-### 16.15 Tombstones
+### 17.16 Tombstones
 
 - Soft-delete via `deleted = true`; listeners replicate.
 - Admin tombstone cleanup runs at most every 30 days
@@ -1300,7 +1331,7 @@ query) drop it toward ~$10-15/mo.
 - Migration push skips tombstones (new groups start clean).
 - First-launch purge of local tombstones.
 
-### 16.16 Group Management
+### 17.17 Group Management
 
 **Create (admin)** — 12-char hex groupId + 256-bit random key in
 `SecurePrefs` (AES256-GCM / KeyStore); group doc with
@@ -1353,14 +1384,14 @@ Stay on v1.
 
 Non-admins detect `status = "dissolved"` → auto-leave.
 
-### 16.17 Shared Settings
+### 17.18 Shared Settings
 
 `sharedSettings/current` — one encrypted doc replicated like all
 others. Carries budget period, reset hour/day/week/month,
 `familyTimezone`, currency, income mode, `carryForwardBalance`,
 `archiveCutoffDate`, `receiptPruneAgeDays`, etc.
 
-### 16.18 Deterministic Cash
+### 17.19 Deterministic Cash
 
     availableCash = carryForwardBalance
                   + sum(periodLedgerCredits since archiveCutoff)
@@ -1370,7 +1401,7 @@ Cash is not synced; all devices converge to the same value from the
 same Firestore state. `recomputeCash()` runs **synchronously** on the
 caller (no `Dispatchers.Default`) to prevent startup races.
 
-### 16.19 RTDB Presence
+### 17.20 RTDB Presence
 
 `RealtimePresenceService.kt` — `syncDevices/{gid}/{deviceId}` plus
 `presence/{gid}/{deviceId}/lastSeen`. Launch writes `online: true`;
@@ -1390,7 +1421,7 @@ UI status dots: green <2 min, yellow <10 min, gray older. Label
 `google-services.json` includes the RTDB URL, `firebase-database` in
 `build.gradle.kts`.
 
-### 16.20 App Check
+### 17.21 App Check
 
 | Build | Provider | Token TTL |
 |-------|----------|-----------|
@@ -1420,7 +1451,7 @@ Refresh triggers (v2.7):
 - ViewModel keep-alive loop (check every 45 min, **refresh at 16 min** — dropped from 35 to dedupe with Worker; VM remains as backup if Worker silenced for >45 min by Doze)
 - Firebase SDK auto-refresh (~5 min before expiry, in-process only)
 
-### 16.21 Crashlytics + Firebase Analytics + BigQuery
+### 17.22 Crashlytics + Firebase Analytics + BigQuery
 
 **Crashlytics custom keys** written in `BudgeTrakApplication` + VM
 maintenance: `cashDigest`, `listenerStatus`, `lastRefreshDate`,
@@ -1462,15 +1493,15 @@ SDK (BoM 32.x) auto-discovers measurement ID at runtime via
   hygiene; not running UA campaigns).
 - Cloud Messaging + Imported Segments: not exported (not needed yet).
 
-## 17. Receipt Photo System
+## 18. Receipt Photo System
 
-### 17.1 Overview
+### 18.1 Overview
 
 Users attach up to 5 photos or PDFs per transaction via
 `receiptId1`..`receiptId5`. Paid users sync encrypted blobs across
 devices via Cloud Storage; free users capture and store locally only.
 
-### 17.2 Capture
+### 18.2 Capture
 
 `SwipeablePhotoRow.kt` — swipe-left on a row reveals the photo panel.
 Camera via `ActivityResultContracts.TakePicture()`; gallery/file
@@ -1482,7 +1513,7 @@ pipeline runs. Full-screen viewer supports **rotation** (persisted to
 disk + thumbnail regenerated) and **delete** (the only path to
 deletion; long-press no longer opens a delete dialog).
 
-### 17.3 Compression (`ReceiptManager.kt`)
+### 18.3 Compression (`ReceiptManager.kt`)
 
 | Parameter    | Value |
 |--------------|-------|
@@ -1498,14 +1529,14 @@ The pipeline is a single service method `processAndSavePhoto(uri)` in
 paths now call it directly (previously the list-row duplicated the
 pipeline; dedupe landed in 2.7 at ~160 LOC removed).
 
-### 17.4 Local Storage
+### 18.4 Local Storage
 
 - Full: `filesDir/receipts/{receiptId}.jpg`
 - Thumb: `filesDir/receipt_thumbs/{receiptId}.jpg`
 - `ReceiptManager.cleanOrphans` deletes files not referenced by any
   active transaction and not in the pending-upload queue.
 
-### 17.5 Cloud Sync (Paid Only) — Four-Layer Architecture
+### 18.5 Cloud Sync (Paid Only) — Four-Layer Architecture
 
 **No dedicated listener on `imageLedger`.** Photo propagation runs
 across four complementary layers so originator-side uploads drain
@@ -1643,7 +1674,7 @@ to RTDB presence for re-upload assignment.
 Background: worker Tier 3 only (ViewModel dead + paid) calls
 `syncReceipts()`. Tiers 1–2 skip.
 
-### 17.6 Three-State Possession
+### 18.6 Three-State Possession
 
 | `possessions["dev"]` | Meaning |
 |---------------------|---------|
@@ -1657,7 +1688,7 @@ cleanup nulls `receiptIdN` on the transaction and deletes the ledger
 entry. Gated on completed initial sync so new joiners don't declare
 everything lost before their recovery runs.
 
-### 17.7 Delete Chain — `ReceiptManager.deleteReceiptFull`
+### 18.7 Delete Chain — `ReceiptManager.deleteReceiptFull`
 
 1. Clear receipt slot on transaction.
 2. Remove from pending-upload queue.
@@ -1669,7 +1700,7 @@ Other devices observe `receiptId: X → null` in the transaction update
 and cleanup locally via `SyncMergeProcessor`. The periodic orphan
 scan is the safety net.
 
-### 17.8 Recovery
+### 18.8 Recovery
 
 - Per file: 3 **real** failures (transient network errors don't
   count) → replace ledger entry with a recovery request; bump flag
@@ -1679,7 +1710,7 @@ scan is the safety net.
   `abs(hash(receiptId + deviceId)) % 1000`; `claimUploadAssignment`
   CAS transaction; 5-min stale-assignment failover.
 
-### 17.9 Snapshot Archive (≥ 50 photos)
+### 18.9 Snapshot Archive (≥ 50 photos)
 
 Builder assembles one encrypted archive + manifest, uploads once,
 records a snapshot ledger entry. Consumer downloads once and extracts
@@ -1688,7 +1719,7 @@ join-snapshot (`upload/download/deleteJoinSnapshot`). Doc ID
 `_snapshot_request` (single-underscore — v2.3 fix for Firestore's
 `__*__` reserved-ID rule).
 
-### 17.10 14-Day Cloud Pruning
+### 18.10 14-Day Cloud Pruning
 
 `ReceiptSyncManager.processStalePruning` — hardcoded 14 days,
 possession-independent, after noon local time, once per 24 h per
@@ -1696,13 +1727,13 @@ device (`imageLastCleanupDate` on group doc, no CAS). Deletes cloud
 file + ledger entry, bumps flag clock. `receiptPruneAgeDays` in
 SharedSettings controls **local** pruning only — not wired to cloud.
 
-### 17.11 Orphan Cloud Scan
+### 18.11 Orphan Cloud Scan
 
 Safety net for cloud files with no ledger entry. Admin-only startup,
 30-day gate (`lastAdminCleanup`), 10-min guard against in-progress
 uploads from other devices.
 
-### 17.12 Free vs Paid
+### 18.12 Free vs Paid
 
 | Feature                     | Free            | Paid                 |
 |-----------------------------|-----------------|----------------------|
@@ -1711,7 +1742,7 @@ uploads from other devices.
 | Download from other devices | No              | Yes                  |
 | `photoCapable` in RTDB      | Not set         | Published            |
 
-### 17.13 Thumbnail-Bar Interactions (2.7)
+### 18.13 Thumbnail-Bar Interactions (2.7)
 
 Two renderings of the 5-slot thumbnail bar use one gesture model:
 `SwipeablePhotoRow` (transaction-list swipe-left panel) and the
@@ -1723,7 +1754,7 @@ Add/Edit dialog's inline bar.
   instead of opening the viewer.
 - **Long-press** → picks up the thumbnail; 2 dp blue outline appears.
   Dialog variant: the highlight persists after release and becomes the
-  AI OCR scan target (see §17.14). List-row variant: highlight clears
+  AI OCR scan target (see §18.14). List-row variant: highlight clears
   on release.
 - **Long-press + drag (no lift)** → reorders among occupied slots.
   Non-dragged thumbnails animate via `animateIntAsState(tween(150))`;
@@ -1745,7 +1776,7 @@ composition state. Long-press without drag toggles the dialog-variant
 highlight against a pre-drag snapshot (so the first press doesn't
 clear itself).
 
-### 17.14 AI Receipt OCR Integration (2.7)
+### 18.14 AI Receipt OCR Integration (2.7)
 
 Subscriber-only. The user highlights one thumbnail in the photo bar
 (long-press), then taps the `AutoAwesome` sparkle icon in the
@@ -1759,7 +1790,7 @@ that the AI never modifies the category selection — it only fills
 amounts, so the user must deselect all cats first to let the AI
 re-pick categories on an existing transaction.
 
-## 18. Home Screen Widget
+## 19. Home Screen Widget
 
 ### 18.1 Overview
 
@@ -1834,7 +1865,7 @@ cash, redraws.
   + period refresh, broader than the widget alone).
 - `onReceive(ACTION_RESET_REFRESH)` → `BackgroundSyncWorker.runOnce`
   + re-schedule the reset alarm.
-## 19. Data Models
+## 20. Data Models
 
 ### 19.1 Enumerations
 
@@ -1955,7 +1986,7 @@ Fields: `periodStartDate: LocalDateTime, appliedAmount: Double, corrected: Boole
 | assignedAt | Long | Assignment epoch ms |
 | uploadedAt | Long | 0 = not yet in cloud |
 
-## 20. Persistence Strategy
+## 21. Persistence Strategy
 
 ### 20.1 JSON File Storage
 
@@ -1993,7 +2024,7 @@ All mutations trigger:
 5. Recompute available cash if relevant
 6. Update SharedPreferences if relevant
 
-## 21. PieChartEditor Component
+## 22. PieChartEditor Component
 
 ### 21.1 PieChartEditor (PieChartEditor.kt — 470 lines)
 
@@ -2014,7 +2045,7 @@ Touch captured via `pointerInput`; angle from center via `atan2`; handle positio
 
 Four palettes with paired light/dark variants (8 total): Bright, Pastel, Sunset, Earthy.
 
-## 22. Help System
+## 23. Help System
 
 ### 22.1 Architecture
 
@@ -2039,7 +2070,7 @@ Each major screen has a dedicated help screen accessible from a help icon in its
 
 `HelpComponents.kt` provides section headers, bullet lists with icons, tip/note callouts, key-value rows, and numbered step lists.
 
-## 23. Error Handling
+## 24. Error Handling
 
 ### 23.1 File I/O
 
@@ -2082,7 +2113,7 @@ Minimum data size validation (salt + nonce + 1); Poly1305 tag verification throw
 - RTDB `onDisconnect()` ensures offline state even on unclean shutdown
 - `awaitInitialSync()` has a 30 s timeout to prevent indefinite blocking
 
-## 24. Android Manifest Configuration
+## 25. Android Manifest Configuration
 
 | Config | Value |
 |--------|-------|
@@ -2108,13 +2139,11 @@ Only `INTERNET` is declared in the manifest. CAMERA and media access are handled
 | data.sync.WakeReceiver | Opportunistic wake on ACTION_POWER_CONNECTED / _DISCONNECTED (5-min internal rate limit) |
 | androidx.core.content.FileProvider | `${applicationId}.fileprovider` for CSV/receipt sharing |
 
-## 25. Code Statistics
+## 26. Code Statistics
 
-### 25.1 Total
+> **As-of**: figures below were captured at v2.7 release (versionCode=4). v2.8 dev branch totals **~100 Kotlin files / ~51,500 lines** — most of the growth is in `TransactionsScreen.kt` (now ~6.3 K lines, the unified-dialog refactor + photo-bar reorder + OCR-state plumbing), `MainViewModel.kt` (~3.2 K, network awareness + receipt forensics + ID generators), and `BackgroundSyncWorker.kt` (~1.2 K, three-tier inline routing + offline gates). Refresh on each release tag, not each commit.
 
-~47,192 lines across 94 Kotlin files.
-
-### 25.2 Top Files by Size
+### 26.1 Top Files by Size (v2.7)
 
 | Rank | File | Lines |
 |------|------|-------|
@@ -2139,7 +2168,7 @@ Only `INTERNET` is declared in the manifest. CAMERA and media access are handled
 | 19 | ReceiptSyncManager.kt | 741 |
 | 20 | ImageLedgerService.kt | 741 |
 
-### 25.3 File Count by Package
+### 26.2 File Count by Package (v2.7)
 
 | Package | Files |
 |---------|-------|
@@ -2154,7 +2183,9 @@ Only `INTERNET` is declared in the manifest. CAMERA and media access are handled
 | .widget | 3 |
 | **TOTAL** | **94** |
 
-## 26. Build Configuration
+> v2.8 added `data/ocr/` (3 files), `data/telemetry/` (1 file), and `data/sync/NetworkUtils.kt` (1 file) — the package totals shift to roughly `.data 35` / `.data.sync 22` for current snapshot.
+
+## 27. Build Configuration
 
 ### 26.1 Root build.gradle.kts
 
@@ -2213,7 +2244,7 @@ Do NOT upgrade `core-ktx` past 1.13.1 or Compose BOM past 2024.09.03 — newer v
 | android.nonTransitiveRClass | true |
 | android.aapt2FromMavenOverride | Termux path to aapt2 (build env override) |
 
-## 27. Document Revision History
+## 28. Document Revision History
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
