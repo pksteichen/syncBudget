@@ -1257,6 +1257,34 @@ log + logcat, surviving process death. Context-prefixed messages:
 `ReceiptSync(onBatch)`, `ReceiptSync(UploadDrainer)`,
 `ReceiptSync(FgRetry)`.
 
+**Network-awareness gate (v2.8).** Tier 2 and Tier 3 early-return at
+the top of their bodies when `NetworkUtils.isOnline(context) == false`
+— skipping App Check refresh, listener restart, RTDB ping, and
+receipt sync rather than burning each call's per-SDK timeout. The
+return propagates through a new `Boolean workDone` chain
+(`runFullSyncBody` → `runTier2` / `runTier3` → `runFullSyncInline`)
+so an offline-skipped FCM heartbeat does NOT stamp
+`KEY_LAST_INLINE_AT` — that stamp gates the slim path, and a false
+stamp would suppress real sync for up to 30 min after network
+recovery. `runFullSyncInline` only stamps when `workDone &&
+sourceLabel.startsWith("FCM-")`. The `timedOut` flag is now tracked
+separately from `workDone`, so the `TIME-BUDGET-EXPIRED` log fires
+only on actual `withTimeoutOrNull` expiry — not on offline-skip.
+
+**Tier 2 receipt-sync result propagation (v2.8).** Tier 2 captures
+`syncReceipts(txns, devices)`'s returned transaction list and
+applies the changed `receiptId1..5` fields back to `vm.transactions`
+on `Dispatchers.Main`. Without this, `clearLostReceiptSlot`'s push
+echo-filtered through the Firestore listener (the listener skips
+`lastEditBy == ourDeviceId`) and the in-memory state stayed stale
+until app restart — open dialogs displayed phantom photo frames for
+slots that were already cleared on disk. Targeted update (per-id,
+only `receiptId1..5`) preserves any concurrent foreground edits.
+Tier 2's broad `catch (e: Exception)` now rethrows
+`CancellationException` (parity with the v2.7 `ImageLedgerService`
+fix) and surfaces other exceptions to Crashlytics + `token_log.txt`
+via `syncEvent` with full stack trace.
+
 ### 17.14 WakeReceiver
 
 Manifest-registered for `ACTION_POWER_CONNECTED` and
@@ -1674,6 +1702,25 @@ to RTDB presence for re-upload assignment.
 Background: worker Tier 3 only (ViewModel dead + paid) calls
 `syncReceipts()`. Tiers 1–2 skip.
 
+**v2.8 offline + forensics:** `processPendingUploads` and
+`processRecovery` early-return with `syncLog` when
+`NetworkUtils.isOnline(context) == false` (Cloud Storage has no
+fast-fail path; each queued upload would otherwise burn the full 60 s
+SDK timeout). The persistent queue stays intact;
+`MainViewModel.networkCallback.onAvailable` `cancelAndJoin`s + restarts
+the upload drainer when network returns so queued uploads resume
+immediately rather than waiting out the drainer's exponential backoff
+(was up to 10 min). Debug builds also instrument the receipt-file
+lifecycle: `ReceiptManager.addToPendingQueue` / `removeFromPendingQueue`
+/ `deleteLocalReceipt` log via `BudgeTrakApplication.syncEvent` with a
+caller stack-trace tag (forensic for "phantom photo frame" bugs); the
+upload drainer's "no local file" branch re-checks the persistent queue
+to distinguish concurrent user-delete from genuine file loss;
+`DiagDumpBuilder` adds a "Receipt Files Audit" section listing
+files-on-disk vs active txn refs vs tombstone refs vs pending queue,
+with orphan / missing / queue-without-file / queue-without-ref
+divergence sets.
+
 ### 18.6 Three-State Possession
 
 | `possessions["dev"]` | Meaning |
@@ -1792,13 +1839,13 @@ re-pick categories on an existing transaction.
 
 ## 19. Home Screen Widget
 
-### 18.1 Overview
+### 19.1 Overview
 
 Single home-screen widget: Canvas-bitmap Solari flip-display of
 available cash plus quick-add +/− buttons. Theme-aware,
 paid-gated.
 
-### 18.2 Components
+### 19.2 Components
 
 | Component | File | Lines | Purpose |
 |-----------|------|-------|---------|
@@ -1811,7 +1858,7 @@ paid-gated.
 absorbed into `BackgroundSyncWorker`. `BudgetWidgetProvider.onUpdate`
 simply calls `BackgroundSyncWorker.schedule(context)`.
 
-### 18.3 Visual Design
+### 19.3 Visual Design
 
 - Solari = Canvas bitmap; button bar = XML layout below, aligned to
   card edges via `setViewPadding`.
@@ -1820,12 +1867,13 @@ simply calls `BackgroundSyncWorker.schedule(context)`.
 - Logo (blue tint `#305880`) controlled by `showWidgetLogo` pref.
 - Custom vector `ic_minus.xml` for the red minus button.
 
-### 18.4 Update Triggers
+### 19.4 Update Triggers
 
 - `MainViewModel` (on resume, data change)
 - `WidgetTransactionActivity` (after add)
-- `BackgroundSyncWorker` (periodic 15-min, plus Tier-3 cold-start
-  freshness)
+- `BackgroundSyncWorker` — periodic 15-min for sync users; one-shot
+  per period boundary for solo users (Phase 3, see §17.13). Plus
+  Tier-3 cold-start freshness.
 - Settings (theme, currency, logo toggle)
 - Exact-alarm (`setExactAndAllowWhileIdle`) at the next budget reset
   boundary for every period type
@@ -1843,7 +1891,7 @@ short-lived Firestore listener (~5–10 s from offline cache) applies
 merges via `SyncMergeProcessor`, runs period refresh, recomputes
 cash, redraws.
 
-### 18.5 Size Configuration
+### 19.5 Size Configuration
 
 | Property | Value |
 |----------|-------|
@@ -1851,13 +1899,13 @@ cash, redraws.
 | Default | 4×1 (250 dp) |
 | Maximum | No limits (resizable both directions) |
 
-### 18.6 Free vs Paid
+### 19.6 Free vs Paid
 
 - Free: overlay "Upgrade for full widget" on the Solari display;
   **1 widget transaction per day**.
 - Paid: unlimited; `isPaidUser` in `app_prefs`.
 
-### 18.7 Widget Lifecycle
+### 19.7 Widget Lifecycle
 
 - `onEnabled` / `onUpdate` → `BackgroundSyncWorker.schedule`,
   re-render, rebind click intents.
@@ -1867,7 +1915,7 @@ cash, redraws.
   + re-schedule the reset alarm.
 ## 20. Data Models
 
-### 19.1 Enumerations
+### 20.1 Enumerations
 
 | Enum | Values |
 |------|--------|
@@ -1881,7 +1929,7 @@ cash, redraws.
 
 All sync metadata is `deviceId` + `deleted` only. Per-field CRDT clocks were removed when sync switched to Firestore-native per-field encryption; no data class carries `_clock` fields.
 
-### 19.2 Transaction
+### 20.2 Transaction
 
 | Property | Type | Default |
 |----------|------|---------|
@@ -1907,11 +1955,11 @@ All sync metadata is `deviceId` + `deleted` only. Per-field CRDT clocks were rem
 | deviceId | String | "" |
 | deleted | Boolean | false |
 
-### 19.3 CategoryAmount
+### 20.3 CategoryAmount
 
 `categoryId: Int`, `amount: Double`.
 
-### 19.4 Category
+### 20.4 Category
 
 | Property | Type | Default |
 |----------|------|---------|
@@ -1926,23 +1974,23 @@ All sync metadata is `deviceId` + `deleted` only. Per-field CRDT clocks were rem
 
 Protected tags (cannot be deleted): `"other"`, `"recurring_income"`, `"supercharge"`.
 
-### 19.5 IncomeSource
+### 20.5 IncomeSource
 
 Fields: `id, source, description, amount, repeatType (MONTHS), repeatInterval (1), startDate?, monthDay1?, monthDay2?, deviceId, deleted`.
 
-### 19.6 RecurringExpense
+### 20.6 RecurringExpense
 
 Fields: `id, source, description, amount, repeatType (MONTHS), repeatInterval (1), startDate?, monthDay1?, monthDay2?, deviceId, deleted, setAsideSoFar (0.0), isAccelerated (false)`.
 
-### 19.7 AmortizationEntry
+### 20.7 AmortizationEntry
 
 Fields: `id, source, description, amount, totalPeriods, startDate, deviceId, deleted, isPaused (false)`.
 
-### 19.8 SavingsGoal
+### 20.8 SavingsGoal
 
 Fields: `id, name, targetAmount, targetDate?, totalSavedSoFar (0.0), contributionPerPeriod (0.0), isPaused (false), deviceId, deleted`. `superchargeMode` is app-level state (not a per-goal field).
 
-### 19.9 SharedSettings
+### 20.9 SharedSettings
 
 | Property | Type | Default |
 |----------|------|---------|
@@ -1970,11 +2018,11 @@ Fields: `id, name, targetAmount, targetDate?, totalSavedSoFar (0.0), contributio
 
 Archive fields: `archiveCutoffDate` is the boundary below which transactions have been archived. `carryForwardBalance` is the deterministic cash balance computed over archived transactions (used by `recomputeAvailableCash()`). `lastArchiveInfo` is JSON `{date, count, totalArchived}`.
 
-### 19.10 PeriodLedgerEntry
+### 20.10 PeriodLedgerEntry
 
 Fields: `periodStartDate: LocalDateTime, appliedAmount: Double, corrected: Boolean (unused, kept for JSON back-compat), deviceId: String`. Computed `id = periodStartDate.toLocalDate().toEpochDay().toInt()` is the dedup key.
 
-### 19.11 ImageLedgerEntry
+### 20.11 ImageLedgerEntry
 
 | Property | Type | Description |
 |----------|------|-------------|
@@ -1988,7 +2036,7 @@ Fields: `periodStartDate: LocalDateTime, appliedAmount: Double, corrected: Boole
 
 ## 21. Persistence Strategy
 
-### 20.1 JSON File Storage
+### 21.1 JSON File Storage
 
 All primary data models are persisted as JSON arrays under `filesDir/` via SafeIO atomic writes (temp file + rename). The `future_expenditures.json` name is intentionally preserved across the Future Expenditures -> Savings Goals rebrand for back-compat.
 
@@ -2007,13 +2055,13 @@ All primary data models are persisted as JSON arrays under `filesDir/` via SafeI
 
 Each repository: `save(ctx, list)` serializes JSONArray via SafeIO; `load(ctx)` reads, parses, returns list (emptyList on missing/blank); new fields loaded with backward-compatible defaults.
 
-### 20.2 SharedPreferences
+### 21.2 SharedPreferences
 
 `app_prefs` — primary UI/settings store. Keys include: `currencySymbol, digitCount, showDecimals, dateFormatPattern, appLanguage, chartPalette, weekStartSunday, budgetPeriod, budgetStartDate, resetHour, resetDayOfWeek, resetDayOfMonth, isManualBudgetEnabled, manualBudgetAmount, availableCash, lastRefreshDate, matchDays, matchPercent, matchDollar, matchChars, incomeMode, autoCapitalize, showWidgetLogo, crashlyticsEnabled, archiveThreshold, lastMaintenanceCheck, loadSegTime_0..6, localDeviceId`.
 
 Separate stores: `sync_engine` (groupId, listener cursors, pushed-doc keys, fingerprint, App Check state), `fcm_prefs` (FCM token), plus `backup_prefs` (retention, schedule, last-backup timestamps).
 
-### 20.3 Persistence Timing
+### 21.3 Persistence Timing
 
 All mutations trigger:
 
@@ -2026,32 +2074,32 @@ All mutations trigger:
 
 ## 22. PieChartEditor Component
 
-### 21.1 PieChartEditor (PieChartEditor.kt — 470 lines)
+### 22.1 PieChartEditor (PieChartEditor.kt)
 
 Interactive Composable for allocating a transaction amount across multiple categories. Three input modes with real-time visual feedback.
 
-### 21.2 Visual Design
+### 22.2 Visual Design
 
 - Category-colored arc segments proportional to allocation
 - Draggable handle circles at segment boundaries; pulsing on the active drag
 - Category legend with color swatches and amounts
 - Central total display
 
-### 21.3 Drag Interaction
+### 22.3 Drag Interaction
 
 Touch captured via `pointerInput`; angle from center via `atan2`; handle positions updated with enforced minimum slice; amounts recalculated proportionally and snapped to currency precision.
 
-### 21.4 Color Palettes
+### 22.4 Color Palettes
 
 Four palettes with paired light/dark variants (8 total): Bright, Pastel, Sunset, Earthy.
 
 ## 23. Help System
 
-### 22.1 Architecture
+### 23.1 Architecture
 
 Each major screen has a dedicated help screen accessible from a help icon in its top app bar. Help screens are pure Composables built on shared blocks from `HelpComponents.kt` (165 lines).
 
-### 22.2 Help Screen Inventory
+### 23.2 Help Screen Inventory
 
 | Help Screen | Lines |
 |-------------|-------|
@@ -2066,25 +2114,25 @@ Each major screen has a dedicated help screen accessible from a help icon in its
 | SimulationGraphHelpScreen | 88 |
 | BudgetCalendarHelpScreen | 87 |
 
-### 22.3 Shared Help Components
+### 23.3 Shared Help Components
 
 `HelpComponents.kt` provides section headers, bullet lists with icons, tip/note callouts, key-value rows, and numbered step lists.
 
 ## 24. Error Handling
 
-### 23.1 File I/O
+### 24.1 File I/O
 
 Repository loads check existence first; blank or missing file returns `emptyList()`. SafeIO atomic writes (temp + rename) prevent corruption. New fields get back-compatible defaults.
 
-### 23.2 Import
+### 24.2 Import
 
 `CsvParser` returns `CsvParseResult` with nullable error. Line-level parse errors include line number and exception. Header validation for native CSV; empty file detection; partial results preserved; Generic CSV auto-detection with fallback scoring.
 
-### 23.3 Encryption
+### 24.3 Encryption
 
 Minimum data size validation (salt + nonce + 1); Poly1305 tag verification throws on tamper; wrong password yields authentication failure.
 
-### 23.4 Data Validation
+### 24.4 Data Validation
 
 - Transaction IDs generated with collision-avoidance retry loop
 - Amount matching uses percent AND absolute thresholds
@@ -2094,14 +2142,14 @@ Minimum data size validation (salt + nonce + 1); Poly1305 tag verification throw
 - Amortization periods clamped to `[0, totalPeriods]`
 - Budget calculations rounded to 2 decimal places
 
-### 23.5 Startup
+### 24.5 Startup
 
 - LoadingScreen gates UI until IO-thread data load completes
 - Lifecycle observer registered AFTER the load gate; `onResume()` returns early if `!dataLoaded`
 - `recomputeCash()` synchronous to avoid startup races
 - 500 ms minimum display time prevents loading flash on fast devices
 
-### 23.6 Sync
+### 24.6 Sync
 
 - Persistent filtered listeners auto-reconnect; per-collection cursors prevent data loss on reattach
 - Enc hash skip prevents redundant decryption of own writes
@@ -2187,7 +2235,7 @@ Only `INTERNET` is declared in the manifest. CAMERA and media access are handled
 
 ## 27. Build Configuration
 
-### 26.1 Root build.gradle.kts
+### 27.1 Root build.gradle.kts
 
 | Plugin | Version |
 |--------|---------|
@@ -2197,7 +2245,7 @@ Only `INTERNET` is declared in the manifest. CAMERA and media access are handled
 | com.google.gms.google-services | 4.4.2 |
 | com.google.firebase.crashlytics | 3.0.2 |
 
-### 26.2 App build.gradle.kts
+### 27.2 App build.gradle.kts
 
 | Setting | Value |
 |---------|-------|
@@ -2209,10 +2257,11 @@ Only `INTERNET` is declared in the manifest. CAMERA and media access are handled
 | source/target / jvmTarget | Java 17 |
 | compose / buildConfig | enabled |
 | minify / shrinkResources (release) | true |
+| release signingConfig | reads `BUDGETRAK_KEYSTORE_FILE`, `BUDGETRAK_KEYSTORE_PASSWORD`, `BUDGETRAK_KEY_ALIAS` from `local.properties` (git-ignored). Upload keystore at `~/keystore/upload-keystore.jks` with offline backup; SHA-256 `E0:2B:5D:D6:5E:86:1B:3B:79:AC:F4:F3:F4:76:D4:3B:35:D1:FC:3A:D4:E1:6D:26:C0:CC:0D:22:E9:9D:04:0A`. Used by `./gradlew bundleRelease` to produce signed AAB for Play Store upload. |
 
 BuildConfig emits a UTC `BUILD_TIME` stamp.
 
-### 26.3 Dependencies
+### 27.3 Dependencies
 
 | Dependency | Version |
 |------------|---------|
@@ -2234,7 +2283,7 @@ BuildConfig emits a UTC `BUILD_TIME` stamp.
 
 Do NOT upgrade `core-ktx` past 1.13.1 or Compose BOM past 2024.09.03 — newer versions require `compileSdk 35`.
 
-### 26.4 Gradle Properties
+### 27.4 Gradle Properties
 
 | Property | Value |
 |----------|-------|
