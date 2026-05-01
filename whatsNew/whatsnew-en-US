@@ -1,5 +1,3 @@
-First internal testing build of BudgeTrak v2.9.
-- Unified Add/Edit Transaction dialog with EXPENSE/INCOME toggle
-- AI Receipt OCR now supports refunds (negative amounts auto-flip the type)
-- Improved offline behavior: failed operations auto-resume when the network returns
-- Fixed: rare hourly background crash on devices without SYNC enabled
+BudgeTrak v2.9.1 — internal testing build.
+- Fix: full-backup restore now refreshes the UI immediately. Previously categories, recurring expenses, and recurring income lists could appear empty/default-only until the app was force-stopped and reopened, even though the data was correctly written to disk.
+- Diagnostics: state dump now includes income sources, savings goals, and amortization entries (previously omitted).
