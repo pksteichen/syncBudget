@@ -13,12 +13,12 @@ plugins {
 
 android {
     namespace = "com.techadvantage.budgetrak"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.techadvantage.budgetrak"
         minSdk = 28
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 7
         versionName = "2.9"
     }
