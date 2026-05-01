@@ -69,10 +69,13 @@ jobs:
             echo "GEMINI_API_KEY=$GEMINI_API_KEY"
           } > local.properties
 
-      - name: Build signed release AAB
+      - name: Build signed release AAB and APK
+        # AAB is the Play Store deliverable; APK is for direct sideload
+        # testing (uninstall existing, adb install, verify edge-to-edge
+        # and other targetSdk behaviors before publishing).
         run: |
           chmod +x gradlew
-          ./gradlew bundleRelease --no-daemon --stacktrace
+          ./gradlew bundleRelease assembleRelease --no-daemon --stacktrace
 
       # Pull versionCode + versionName from app/build.gradle.kts so the
       # artifact filename and any later release-naming step has them.
@@ -90,6 +93,13 @@ jobs:
         with:
           name: BudgeTrak-v${{ steps.version.outputs.name }}-${{ steps.version.outputs.code }}
           path: app/build/outputs/bundle/release/app-release.aab
+          retention-days: 30
+
+      - name: Upload signed APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BudgeTrak-v${{ steps.version.outputs.name }}-${{ steps.version.outputs.code }}-apk
+          path: app/build/outputs/apk/release/app-release.apk
           retention-days: 30
 
       # Mapping file is needed for any post-publish stack-trace deobfuscation.
