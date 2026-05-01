@@ -1,4 +1,4 @@
-Primera versión de pruebas internas de BudgeTrak v2.8.
+Primera versión de pruebas internas de BudgeTrak v2.9.
 - Diálogo unificado de Agregar/Editar transacción con selector GASTO/INGRESO
 - El OCR de recibos con IA ahora admite devoluciones (los montos negativos cambian el tipo automáticamente)
 - Mejor comportamiento sin conexión: las operaciones fallidas se reintentan al volver la red
