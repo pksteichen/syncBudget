@@ -118,6 +118,15 @@ class BudgeTrakApplication : Application() {
                 .setAnalyticsCollectionEnabled(crashlyticsEnabled)
         } catch (_: Exception) {}
 
+        // Stamp build identity on every future crash/non-fatal so BigQuery
+        // queries can isolate the latest build's data when many devices in
+        // the wild are still running older APKs. versionName is intentionally
+        // marketing-only ("2.8") — finer-grained separation lives here.
+        try {
+            crashlytics?.setCustomKey("buildTime", BuildConfig.BUILD_TIME)
+            crashlytics?.setCustomKey("versionCode", BuildConfig.VERSION_CODE)
+        } catch (_: Exception) {}
+
         // Install App Check provider factory early — before any Firebase service calls.
         // Must be in Application.onCreate() (not ViewModel) so it runs even when
         // the process is started by WorkManager without a foreground Activity.

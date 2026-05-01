@@ -9,6 +9,11 @@
  *   node tools/query-crashlytics.js --crashes        # Fatals only
  *   node tools/query-crashlytics.js --keys           # Custom keys from recent events
  *   node tools/query-crashlytics.js --analytics      # Firebase Analytics events
+ *   node tools/query-crashlytics.js --build 2026-05  # Only events from builds whose
+ *                                                    #   buildTime custom key starts with prefix
+ *                                                    #   (Application.kt sets buildTime + versionCode
+ *                                                    #   on every crash; "latest build" filter)
+ *   node tools/query-crashlytics.js --list-devices   # Distinct devices/installs/builds last 7d
  *   node tools/query-crashlytics.js --query "SELECT ..."  # Custom SQL
  *
  * Auth (in priority order):
@@ -92,8 +97,52 @@ function unionRealtime(selectCols, whereExtra = '', limit = 50) {
     return `${parts.join(' UNION ALL ')} ORDER BY event_timestamp DESC LIMIT ${limit}`;
 }
 
-function buildQuery({ days, nonFatalsOnly, crashesOnly, keysOnly, analyticsOnly, customQuery }) {
+// Pull a single custom-key value out of the custom_keys ARRAY<STRUCT<key,value>> column.
+const buildTimeProj = `(SELECT value FROM UNNEST(custom_keys) ck WHERE ck.key = 'buildTime' LIMIT 1) AS build_time`;
+
+function buildFilterClause(buildPrefix) {
+    if (!buildPrefix) return '';
+    // Single-quoted prefix; escape any embedded ' to be safe.
+    const safe = buildPrefix.replace(/'/g, "\\'");
+    return ` AND EXISTS (
+        SELECT 1 FROM UNNEST(custom_keys) ck
+        WHERE ck.key = 'buildTime' AND STARTS_WITH(ck.value, '${safe}')
+    )`;
+}
+
+function buildQuery({ days, nonFatalsOnly, crashesOnly, keysOnly, analyticsOnly, listDevices, buildPrefix, customQuery }) {
     if (customQuery) return customQuery;
+
+    if (listDevices) {
+        // Distinct device-fingerprint rollup spanning legacy + rebranded tables.
+        // Useful before a deep-dive query to know what's in the wild.
+        const dateFilter = ` AND DATE(event_timestamp) >= DATE_SUB(CURRENT_DATE(), INTERVAL ${days} DAY)`;
+        const cols = `
+            application.display_version AS app_version,
+            device.model AS device_model,
+            installation_uuid,
+            ${buildTimeProj},
+            event_timestamp,
+            is_fatal
+        `;
+        const parts = CRASHLYTICS_TABLES_REALTIME.map(
+            t => `SELECT ${cols} FROM \`${PROJECT_ID}.${t}\` WHERE TRUE${dateFilter}`
+        );
+        return `
+            SELECT
+              app_version,
+              device_model,
+              installation_uuid,
+              build_time,
+              COUNT(*) AS events,
+              COUNTIF(is_fatal) AS fatals,
+              MIN(event_timestamp) AS first_event,
+              MAX(event_timestamp) AS last_event
+            FROM (${parts.join(' UNION ALL ')})
+            GROUP BY app_version, device_model, installation_uuid, build_time
+            ORDER BY last_event DESC
+        `;
+    }
 
     if (analyticsOnly) {
         // events_* is partitioned by date suffix; events_intraday_* covers today.
@@ -116,27 +165,28 @@ function buildQuery({ days, nonFatalsOnly, crashesOnly, keysOnly, analyticsOnly,
     }
 
     const dateFilter = ` AND DATE(event_timestamp) >= DATE_SUB(CURRENT_DATE(), INTERVAL ${days} DAY)`;
+    const buildFilter = buildFilterClause(buildPrefix);
 
     if (keysOnly) {
-        return unionRealtime('event_timestamp, custom_keys, logs', dateFilter, 20);
+        return unionRealtime('event_timestamp, custom_keys, logs', dateFilter + buildFilter, 20);
     }
     if (nonFatalsOnly) {
         return unionRealtime(
-            'event_timestamp, issue_id, issue_title, blame_frame.file AS file, blame_frame.line AS line, custom_keys, logs',
-            ` AND is_fatal = false${dateFilter}`,
+            `event_timestamp, issue_id, issue_title, blame_frame.file AS file, blame_frame.line AS line, ${buildTimeProj}, custom_keys, logs`,
+            ` AND is_fatal = false${dateFilter}${buildFilter}`,
             50
         );
     }
     if (crashesOnly) {
         return unionRealtime(
-            'event_timestamp, issue_id, issue_title, blame_frame.file AS file, blame_frame.line AS line, device.model AS device_model',
-            ` AND is_fatal = true${dateFilter}`,
+            `event_timestamp, issue_id, issue_title, blame_frame.file AS file, blame_frame.line AS line, device.model AS device_model, ${buildTimeProj}`,
+            ` AND is_fatal = true${dateFilter}${buildFilter}`,
             20
         );
     }
     return unionRealtime(
-        'event_timestamp, is_fatal, issue_id, issue_title, blame_frame.file AS file, blame_frame.line AS line, device.model AS device_model',
-        dateFilter,
+        `event_timestamp, is_fatal, issue_id, issue_title, blame_frame.file AS file, blame_frame.line AS line, device.model AS device_model, ${buildTimeProj}`,
+        dateFilter + buildFilter,
         50
     );
 }
@@ -144,13 +194,17 @@ function buildQuery({ days, nonFatalsOnly, crashesOnly, keysOnly, analyticsOnly,
 // ── Main ──────────────────────────────────────────────────────────────────
 async function main() {
     const args = process.argv.slice(2);
-    const days = args.includes('--days') ? parseInt(args[args.indexOf('--days') + 1]) : 1;
+    const days = args.includes('--days') ? parseInt(args[args.indexOf('--days') + 1])
+                : args.includes('--list-devices') ? 7
+                : 1;
     const opts = {
         days,
         nonFatalsOnly: args.includes('--nonfatals'),
         crashesOnly: args.includes('--crashes'),
         keysOnly: args.includes('--keys'),
         analyticsOnly: args.includes('--analytics'),
+        listDevices: args.includes('--list-devices'),
+        buildPrefix: args.includes('--build') ? args[args.indexOf('--build') + 1] : null,
         customQuery: args.includes('--query') ? args[args.indexOf('--query') + 1] : null,
     };
 

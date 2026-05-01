@@ -1329,7 +1329,7 @@ Refresh triggers:
 
 ### 17.22 Crashlytics + Firebase Analytics + BigQuery
 
-**Crashlytics custom keys** written in `BudgeTrakApplication` + VM maintenance: `cashDigest`, `listenerStatus`, `lastRefreshDate`, `activeDevices`, `txnCount`, `reCount`, `plCount`, `lastTokenExpiry`, `authAnonymous`. Non-fatals on `PERMISSION_DENIED`, consistency mismatch, and `TOKEN_REFRESH_TIMEOUT` (15-s timeouts in Worker + VM keep-alive paths).
+**Crashlytics custom keys** written in `BudgeTrakApplication` + VM maintenance: `buildTime` + `versionCode` (from `BuildConfig`, set in `Application.onCreate` — used to filter to latest-build crashes post-publish via `query-crashlytics.js --build <prefix>`), `cashDigest`, `listenerStatus`, `lastRefreshDate`, `activeDevices`, `txnCount`, `reCount`, `plCount`, `lastTokenExpiry`, `authAnonymous`. Non-fatals on `PERMISSION_DENIED`, consistency mismatch, and `TOKEN_REFRESH_TIMEOUT` (15-s timeouts in Worker + VM keep-alive paths).
 
 **Firebase Analytics** (`data/telemetry/AnalyticsEvents.kt`):
 - `health_beacon` — daily sync-user heartbeat from `runPeriodicMaintenance`.
@@ -1945,7 +1945,7 @@ Only `INTERNET` is declared in the manifest. CAMERA and media access are handled
 | minify / shrinkResources (release) | true |
 | release signingConfig | reads `BUDGETRAK_KEYSTORE_FILE`, `BUDGETRAK_KEYSTORE_PASSWORD`, `BUDGETRAK_KEY_ALIAS` from `local.properties` (git-ignored). Upload keystore at `~/keystore/upload-keystore.jks` with offline backup; SHA-256 `E0:2B:5D:D6:5E:86:1B:3B:79:AC:F4:F3:F4:76:D4:3B:35:D1:FC:3A:D4:E1:6D:26:C0:CC:0D:22:E9:9D:04:0A`. Used by `./gradlew bundleRelease` to produce signed AAB for Play Store upload. |
 
-BuildConfig emits a UTC `BUILD_TIME` stamp.
+BuildConfig emits a UTC `BUILD_TIME` stamp; `BudgeTrakApplication.onCreate` re-publishes it as a Crashlytics custom key so BigQuery queries can isolate the latest build's events post-publish (see §17.22).
 
 ### 27.3 Dependencies
 
