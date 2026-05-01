@@ -84,7 +84,8 @@ class BackgroundSyncWorker(
          */
         fun schedule(context: Context) {
             val syncPrefs = context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
-            val isSyncConfigured = syncPrefs.getString("groupId", null) != null
+            val groupId = syncPrefs.getString("groupId", null)
+            val isSyncConfigured = groupId != null
             if (isSyncConfigured) {
                 // Cancel any solo boundary one-shot left over from a previous
                 // configuration (user just joined a group).
@@ -97,6 +98,35 @@ class BackgroundSyncWorker(
                 )
             } else {
                 // Solo path — drop the periodic, arm a one-shot at next boundary.
+                // Diagnostic capture: we've seen Kim's S10 hit this branch from
+                // the widget BroadcastReceiver (fresh process spawn) even
+                // though MainViewModel context reads groupId as set. Logging
+                // pref state + xml file state + caller stack helps root-cause
+                // whether it's selective key loss, file truncation, atomic
+                // rename interruption, or process-cache desync. syncEvent
+                // routes to Crashlytics + token_log so the data shows up
+                // both in remote dumps and on-device.
+                runCatching {
+                    val prefsFile = java.io.File(
+                        context.applicationInfo.dataDir, "shared_prefs/sync_engine.xml"
+                    )
+                    val keyCount = syncPrefs.all.size
+                    val hasEncKey = syncPrefs.contains("encryptionKey")
+                    val isAdminPref = syncPrefs.getBoolean("isAdmin", false)
+                    val deviceName = syncPrefs.getString("deviceName", null)?.take(20)
+                    val caller = Throwable().stackTrace
+                        .firstOrNull { !it.className.contains("BackgroundSyncWorker") }
+                        ?.let { "${it.className.substringAfterLast('.')}.${it.methodName}:${it.lineNumber}" }
+                        ?: "unknown"
+                    com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent(
+                        "schedule() solo path: caller=$caller " +
+                                "prefsKeys=$keyCount fileExists=${prefsFile.exists()} " +
+                                "fileSize=${if (prefsFile.exists()) prefsFile.length() else -1L} " +
+                                "fileMtime=${if (prefsFile.exists()) prefsFile.lastModified() else 0L} " +
+                                "hasEncKey=$hasEncKey isAdmin=$isAdminPref " +
+                                "deviceName=${deviceName ?: "null"}"
+                    )
+                }
                 WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
                 scheduleNextBoundary(context)
             }
