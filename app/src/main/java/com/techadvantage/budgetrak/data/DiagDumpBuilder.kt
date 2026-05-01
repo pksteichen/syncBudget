@@ -149,6 +149,24 @@ object DiagDumpBuilder {
         }
         dump.appendLine()
 
+        dump.appendLine("── Income Sources ──")
+        for (src in incomeSources.sortedBy { it.source }) {
+            dump.appendLine("  id=${src.id} '${src.source}' amt=${src.amount} ${src.repeatType}/${src.repeatInterval} dev=${src.deviceId.take(8)}… del=${src.deleted}")
+        }
+        dump.appendLine()
+
+        dump.appendLine("── Savings Goals ──")
+        for (g in savingsGoals.sortedBy { it.name }) {
+            dump.appendLine("  id=${g.id} '${g.name}' target=${g.targetAmount} saved=${g.totalSavedSoFar} dev=${g.deviceId.take(8)}… del=${g.deleted}")
+        }
+        dump.appendLine()
+
+        dump.appendLine("── Amortization Entries ──")
+        for (ae in amortizationEntries.sortedBy { it.source }) {
+            dump.appendLine("  id=${ae.id} '${ae.source}' amt=${ae.amount} totalPeriods=${ae.totalPeriods} start=${ae.startDate} dev=${ae.deviceId.take(8)}… del=${ae.deleted}")
+        }
+        dump.appendLine()
+
         dump.appendLine("── Transactions (active, in current period) ──")
         val periodTxns = if (budgetStartDate != null)
             activeTxns.filter { !it.date.isBefore(budgetStartDate) } else activeTxns

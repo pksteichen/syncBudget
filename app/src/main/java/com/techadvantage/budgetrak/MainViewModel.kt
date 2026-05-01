@@ -2622,52 +2622,73 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // ═══════════════════════════════════════════════════════════════════
 
     fun reloadAllFromDisk() {
-        // Reload all data lists
+        // Read all repos into local vars FIRST so the subsequent state-mutation
+        // block doesn't interleave disk I/O with snapshot writes.
         val newTxns = TransactionRepository.load(context)
-        transactions.clear(); transactions.addAll(newTxns)
-
         val newCats = CategoryRepository.load(context)
-        categories.clear(); categories.addAll(newCats)
+        val newRE  = RecurringExpenseRepository.load(context)
+        val newIS  = IncomeSourceRepository.load(context)
+        val newAE  = AmortizationRepository.load(context)
+        val newSG  = SavingsGoalRepository.load(context)
+        val newPL  = PeriodLedgerRepository.load(context)
+        val newSettings = SharedSettingsRepository.load(context)
 
-        val newRE = RecurringExpenseRepository.load(context)
-        recurringExpenses.clear(); recurringExpenses.addAll(newRE)
+        // Bundle ALL Compose state writes into a single mutable snapshot so
+        // `derivedStateOf` observers (activeCategories, activeRecurringExpenses,
+        // activeIncomeSources, …) and any composable readers see one atomic
+        // pre→post-restore transition. Without this, the multi-step
+        // clear()+addAll() sequence produced UI symptoms post-restore where
+        // categories/RE/IS rendered as empty (or seeded defaults) until the
+        // user force-killed the app and relaunched, even though on-disk and
+        // in-memory data were correct (confirmed via state dump). Transactions
+        // happened to render because of follow-up state mutations elsewhere
+        // that nudged recomposition.
+        androidx.compose.runtime.snapshots.Snapshot.withMutableSnapshot {
+            transactions.clear();        transactions.addAll(newTxns)
+            categories.clear();          categories.addAll(newCats)
+            recurringExpenses.clear();   recurringExpenses.addAll(newRE)
+            incomeSources.clear();       incomeSources.addAll(newIS)
+            amortizationEntries.clear(); amortizationEntries.addAll(newAE)
+            savingsGoals.clear();        savingsGoals.addAll(newSG)
+            periodLedger.clear();        periodLedger.addAll(newPL)
+            sharedSettings = newSettings
 
-        val newIS = IncomeSourceRepository.load(context)
-        incomeSources.clear(); incomeSources.addAll(newIS)
+            // Reset save-diff caches — without this, the next save after a
+            // restore would diff the new in-memory state against the
+            // pre-restore cache and incorrectly mark every record as changed,
+            // pushing them all to sync (sync users) or wasting disk writes.
+            lastSavedTxns.clear()
+            lastSavedCat.clear()
+            lastSavedRe.clear()
+            lastSavedIs.clear()
+            lastSavedAe.clear()
+            lastSavedSg.clear()
+            lastSavedPle.clear()
 
-        val newAE = AmortizationRepository.load(context)
-        amortizationEntries.clear(); amortizationEntries.addAll(newAE)
-
-        val newSG = SavingsGoalRepository.load(context)
-        savingsGoals.clear(); savingsGoals.addAll(newSG)
-
-        val newPL = PeriodLedgerRepository.load(context)
-        periodLedger.clear(); periodLedger.addAll(newPL)
-
-        sharedSettings = SharedSettingsRepository.load(context)
-
-        // Reload local prefs
-        currencySymbol = prefs.getString("currencySymbol", "$") ?: "$"
-        digitCount = prefs.getInt("digitCount", 3)
-        showDecimals = prefs.getBoolean("showDecimals", false)
-        dateFormatPattern = prefs.getString("dateFormatPattern", "yyyy-MM-dd") ?: "yyyy-MM-dd"
-        chartPalette = prefs.getString("chartPalette", "Sunset") ?: "Sunset"
-        appLanguage = prefs.getString("appLanguage", "en") ?: "en"
-        budgetPeriod = try { BudgetPeriod.valueOf(prefs.getString("budgetPeriod", "DAILY") ?: "DAILY") }
-                       catch (_: Exception) { BudgetPeriod.DAILY }
-        resetHour = prefs.getInt("resetHour", 0)
-        resetDayOfWeek = prefs.getInt("resetDayOfWeek", 7)
-        resetDayOfMonth = prefs.getInt("resetDayOfMonth", 1)
-        isManualBudgetEnabled = prefs.getBoolean("isManualBudgetEnabled", false)
-        manualBudgetAmount = prefs.getDoubleCompat("manualBudgetAmount")
-        availableCash = prefs.getDoubleCompat("availableCash")
-        budgetStartDate = prefs.getString("budgetStartDate", null)?.let { LocalDate.parse(it) }
-        lastRefreshDate = prefs.getString("lastRefreshDate", null)?.let { LocalDate.parse(it) }
-        weekStartSunday = prefs.getBoolean("weekStartSunday", true)
-        matchDays = prefs.getInt("matchDays", 7)
-        matchPercent = prefs.getDoubleCompat("matchPercent", 1.0)
-        matchDollar = prefs.getInt("matchDollar", 1)
-        matchChars = prefs.getInt("matchChars", 5)
+            // Reload local prefs inside the same snapshot so currency / palette /
+            // language / budget settings flip atomically with the data they describe.
+            currencySymbol = prefs.getString("currencySymbol", "$") ?: "$"
+            digitCount = prefs.getInt("digitCount", 3)
+            showDecimals = prefs.getBoolean("showDecimals", false)
+            dateFormatPattern = prefs.getString("dateFormatPattern", "yyyy-MM-dd") ?: "yyyy-MM-dd"
+            chartPalette = prefs.getString("chartPalette", "Sunset") ?: "Sunset"
+            appLanguage = prefs.getString("appLanguage", "en") ?: "en"
+            budgetPeriod = try { BudgetPeriod.valueOf(prefs.getString("budgetPeriod", "DAILY") ?: "DAILY") }
+                           catch (_: Exception) { BudgetPeriod.DAILY }
+            resetHour = prefs.getInt("resetHour", 0)
+            resetDayOfWeek = prefs.getInt("resetDayOfWeek", 7)
+            resetDayOfMonth = prefs.getInt("resetDayOfMonth", 1)
+            isManualBudgetEnabled = prefs.getBoolean("isManualBudgetEnabled", false)
+            manualBudgetAmount = prefs.getDoubleCompat("manualBudgetAmount")
+            availableCash = prefs.getDoubleCompat("availableCash")
+            budgetStartDate = prefs.getString("budgetStartDate", null)?.let { LocalDate.parse(it) }
+            lastRefreshDate = prefs.getString("lastRefreshDate", null)?.let { LocalDate.parse(it) }
+            weekStartSunday = prefs.getBoolean("weekStartSunday", true)
+            matchDays = prefs.getInt("matchDays", 7)
+            matchPercent = prefs.getDoubleCompat("matchPercent", 1.0)
+            matchDollar = prefs.getInt("matchDollar", 1)
+            matchChars = prefs.getInt("matchChars", 5)
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════

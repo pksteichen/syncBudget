@@ -1,5 +1,3 @@
-Primera versión de pruebas internas de BudgeTrak v2.9.
-- Diálogo unificado de Agregar/Editar transacción con selector GASTO/INGRESO
-- El OCR de recibos con IA ahora admite devoluciones (los montos negativos cambian el tipo automáticamente)
-- Mejor comportamiento sin conexión: las operaciones fallidas se reintentan al volver la red
-- Corregido: bloqueo poco frecuente cada hora en segundo plano en dispositivos sin SYNC
+BudgeTrak v2.9.1 — versión de pruebas internas.
+- Corregido: la restauración de respaldo completo ahora actualiza la interfaz al instante. Antes las listas de categorías, gastos recurrentes e ingresos recurrentes podían verse vacías o solo con los valores predeterminados hasta que se forzaba el cierre y reapertura de la app, aunque los datos estaban correctamente guardados en disco.
+- Diagnóstico: el volcado de estado ahora incluye fuentes de ingreso, metas de ahorro y entradas de amortización (antes omitidas).
