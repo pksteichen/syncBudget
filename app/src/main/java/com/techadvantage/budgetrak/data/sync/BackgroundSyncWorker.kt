@@ -19,6 +19,7 @@ import org.json.JSONObject
 import java.time.LocalDate
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Background worker that syncs from Firestore, runs period refresh, updates
@@ -51,6 +52,17 @@ class BackgroundSyncWorker(
         // for a missed FCM. Set to 0 to disable (always run full Tier 3).
         private const val INLINE_FRESHNESS_MS = 30 * 60 * 1000L
         internal const val KEY_LAST_INLINE_AT = "lastInlineSyncCompletedAt"
+
+        // Sequential FCM dedup window. After a full Tier 3 cycle completes,
+        // any FCM that arrives within this window is skipped — the cursor
+        // advance from the just-completed cycle covers any writes the new
+        // FCM would announce. Catches the burst pattern where one writer
+        // fires N back-to-back Firestore writes (CSV import, photo rotate),
+        // each of which generates an onSyncDataWrite FCM that the peer's
+        // FcmService then serializes through full Tier 3 cycles.
+        // Anchored to completion so heavy syncs auto-extend the buffer.
+        private const val FCM_DEDUP_WINDOW_MS = 5_000L
+        private val lastFcmCompletedAtMs = AtomicLong(0L)
 
         // Guards against double-fire across (a) periodic vs FCM-one-shot
         // worker enqueues (different unique names → KEEP doesn't dedup) and
@@ -187,6 +199,20 @@ class BackgroundSyncWorker(
                     .syncEvent("$sourceLabel: skipped (another run already in progress)")
                 return false
             }
+            // Sequential FCM dedup: skip if the last full cycle completed
+            // less than FCM_DEDUP_WINDOW_MS ago. Only applies to FCM-sourced
+            // runs (Worker / boundary one-shots stay full-fat). The cursor
+            // advance from the previous cycle already covers whatever this
+            // FCM would announce.
+            if (sourceLabel.startsWith("FCM-")) {
+                val sinceLastMs = System.currentTimeMillis() - lastFcmCompletedAtMs.get()
+                if (sinceLastMs < FCM_DEDUP_WINDOW_MS) {
+                    com.techadvantage.budgetrak.BudgeTrakApplication
+                        .syncEvent("$sourceLabel: skipped (recent sync ${sinceLastMs}ms ago)")
+                    isRunning.set(false)
+                    return false
+                }
+            }
             val startMs = System.currentTimeMillis()
             try {
                 // workDone = real sync work happened (Tier 2/3 ran past their
@@ -208,14 +234,25 @@ class BackgroundSyncWorker(
                 }
                 if (timedOut) {
                     val elapsed = System.currentTimeMillis() - startMs
+                    // Doze can suspend the whole coroutine machinery (including
+                    // withTimeoutOrNull's scheduler) for minutes at a time. When
+                    // it resumes, the timeout fires immediately. Distinguish
+                    // those resumes from real budget overruns: anything past
+                    // 4× budget is almost certainly Doze, not the body
+                    // legitimately taking too long.
+                    val label = if (timeBudgetMs != null && elapsed > timeBudgetMs * 4)
+                        "DOZE-RESUMED" else "TIME-BUDGET-EXPIRED"
                     com.techadvantage.budgetrak.BudgeTrakApplication
-                        .syncEvent("$sourceLabel: TIME-BUDGET-EXPIRED at ${elapsed}ms (budget=${timeBudgetMs}ms)")
+                        .syncEvent("$sourceLabel: $label at ${elapsed}ms (budget=${timeBudgetMs}ms)")
                 }
                 if (workDone && sourceLabel.startsWith("FCM-")) {
                     // Phase 4-alt: stamp last-successful-FCM-inline so the
                     // periodic worker can take the slim path until it's stale.
+                    val now = System.currentTimeMillis()
                     context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
-                        .edit().putLong(KEY_LAST_INLINE_AT, System.currentTimeMillis()).apply()
+                        .edit().putLong(KEY_LAST_INLINE_AT, now).apply()
+                    // In-process stamp for the sequential FCM dedup at entry.
+                    lastFcmCompletedAtMs.set(now)
                 }
                 return workDone
             } finally {
@@ -456,12 +493,19 @@ private suspend fun runTier3(context: Context, sourceLabel: String): Boolean {
     //  - Solo user (no group → nothing to sync).
     //  - Sync user, periodic worker, fresh FCM-inline ran in last 30 min,
     //    no consistency mismatch pending (FCM has been doing the work).
+    //  - Sync user, FCM-heartbeat (NOT FCM-sync_push), fresh inline same window.
+    //    Heartbeats are presence backstops, not data signals — re-running full
+    //    Tier 3 on a heartbeat that arrives 5 min after a successful sync
+    //    just re-attaches 8 listeners for a zero-result snapshot. sync_push
+    //    is a real data signal and always goes full (its trigger write may
+    //    be the only thing the cursor hasn't seen yet).
     // Slim path = period refresh + cash recompute + widget update (~25 ms).
     val appPrefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
     val mismatchAt = appPrefs.getLong("checksumMismatchAt", 0L)
     val mismatchPending = mismatchAt > 0L &&
             (System.currentTimeMillis() - mismatchAt) > 60 * 60 * 1000L
-    val freshFcmInline = if (isSyncConfigured && sourceLabel == "Worker") {
+    val freshFcmInline = if (isSyncConfigured &&
+        (sourceLabel == "Worker" || sourceLabel == "FCM-heartbeat")) {
         val lastInline = syncPrefs.getLong(
             com.techadvantage.budgetrak.data.sync.BackgroundSyncWorker.KEY_LAST_INLINE_AT, 0L
         )

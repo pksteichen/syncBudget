@@ -61,6 +61,15 @@ object RealtimePresenceService {
     ) {
         val db = getDatabase() ?: return
 
+        // Idempotent re-arm: callers (configureSyncGroup, onListenerRecovered,
+        // onResume) all call this on every wake. Without tearing down the
+        // previous listener first, each call STACKS another ValueEventListener
+        // on .info/connected — every connectivity event then fires N writes
+        // to myRef and registers N onDisconnect handlers. Observed as 3-4
+        // "Presence online for ..." log lines within a few ms of each wake.
+        connectedListener?.let { connectedRef?.removeEventListener(it) }
+        myPresenceRef?.onDisconnect()?.cancel()
+
         val myRef = db.reference.child("groups/$groupId/presence/$deviceId")
         myPresenceRef = myRef
         val connRef = db.getReference(".info/connected")

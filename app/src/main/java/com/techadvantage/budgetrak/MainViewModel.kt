@@ -2932,6 +2932,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     prefs.edit().putBoolean("migration_purge_tombstones", true).apply()
                 }
             } catch (e: Exception) { android.util.Log.e("Migration", "strip_clock_fields failed", e) }
+
+            // One-time scrub: pre-fix tombstones (deleted=true) carried
+            // dangling receiptIdN refs because the early delete flow only
+            // set `deleted=true` without nulling slots. Current onDelete
+            // flow nulls them at delete time (MainActivity.kt:2052), so
+            // new tombstones are clean — but legacy tombstones can
+            // re-arrive via Firestore listener after migration_purge_tombstones
+            // ran, so scrub them here and push the cleanup so peers
+            // converge to the same state. No blob deletion: cloud blobs
+            // either still serve other refs (unlikely on tombstones) or
+            // are already swept by admin orphan cleanup.
+            try {
+                if (!syncPrefs.getBoolean("migration_scrub_tombstone_receipt_refs", false)) {
+                    val updated = mutableListOf<Transaction>()
+                    transactions.forEachIndexed { i, t ->
+                        if (t.deleted && (t.receiptId1 != null || t.receiptId2 != null ||
+                                t.receiptId3 != null || t.receiptId4 != null || t.receiptId5 != null)) {
+                            transactions[i] = t.copy(
+                                receiptId1 = null, receiptId2 = null, receiptId3 = null,
+                                receiptId4 = null, receiptId5 = null
+                            )
+                            updated.add(transactions[i])
+                        }
+                    }
+                    if (updated.isNotEmpty()) {
+                        saveTransactions(updated)
+                        android.util.Log.i("Migration", "Scrubbed receipt refs from ${updated.size} tombstoned transactions")
+                    }
+                    syncPrefs.edit().putBoolean("migration_scrub_tombstone_receipt_refs", true).apply()
+                }
+            } catch (e: Exception) { android.util.Log.e("Migration", "scrub_tombstone_receipt_refs failed", e) }
+
             try {
                 if (!syncPrefs.getBoolean("migration_fix_stale_budgetstart_ledger_ui", false)) {
                     val bsd = budgetStartDate

@@ -138,6 +138,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [Receipt pruning design](feedback_receipt_pruning_design.md) — cloud 14-day and local prune age are independent.
 - [No flag-clock bump on imageLedger creation](feedback_image_ledger_no_create_bump.md) — peers discover via transaction sync; prune fires inline at every download site; don't re-add the bump.
 - [Firebase rules — source of truth + audit findings](reference_firebase_rules.md) — firestore.rules / storage.rules / database.rules.json committed; `node tools/fetch-rules.js` refreshes from live project.
+- [BigQuery service account](reference_bigquery_service_account.md) — `tools/query-crashlytics.js` reads via SA key at `~/.config/budgetrak/sa-key.json` (roles: bigquery.jobUser + bigquery.dataViewer on `sync-23ce9`). Avoids Firebase CLI RAPT re-auth.
 - [AI feature UX — explicit trigger, tier per-feature](feedback_ai_feature_ux.md) — OCR sub-only; CSV categorization Paid+Sub; OCR prefill always overwrites scalars and preserves cat selection when pre-selected; CSV payload is merchant+amount only (no date).
 - [Share-intent routing when dialogs are open](feedback_share_intent_routing.md) — block with toast for non-transaction dialogs, absorb into open transaction dialog, fall through to new Add dialog otherwise; multi-share supported.
 - [APK naming — always BudgeTrak.apk](feedback_apk_naming.md) — one file in Downloads, overwritten each build; no versioned names.
