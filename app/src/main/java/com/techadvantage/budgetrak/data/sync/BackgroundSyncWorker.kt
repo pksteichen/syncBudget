@@ -130,11 +130,13 @@ class BackgroundSyncWorker(
             // for misconfigured periods.
             val deltaMs = (nextBoundary.toEpochMilli() - System.currentTimeMillis())
                 .coerceIn(60_000L, 24L * 60 * 60 * 1000L)
+            // No setExpedited(): WorkManager forbids expedited + initial-delay
+            // together on API 31+ (throws "Expedited jobs cannot be delayed").
+            // Period boundaries aren't time-critical to the second — accepting
+            // a few minutes of Doze slack is fine; using expedited here would
+            // crash on every widget update for solo users.
             val builder = OneTimeWorkRequestBuilder<BackgroundSyncWorker>()
                 .setInitialDelay(deltaMs, TimeUnit.MILLISECONDS)
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                builder.setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
-            }
             WorkManager.getInstance(context).enqueueUniqueWork(
                 BOUNDARY_WORK_NAME, ExistingWorkPolicy.REPLACE, builder.build()
             )
