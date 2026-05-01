@@ -17,3 +17,8 @@ local.properties
 node_modules/
 functions/node_modules/
 help_edit_catalog.txt
+
+# Screenshots pushed via GitHub web UI during debugging sessions —
+# treat as ephemeral, never check in to main repo.
+Screenshot*.png
+Screenshot*.jpg

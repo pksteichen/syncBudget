@@ -1,4 +1,4 @@
-First internal testing build of BudgeTrak v2.8.
+First internal testing build of BudgeTrak v2.9.
 - Unified Add/Edit Transaction dialog with EXPENSE/INCOME toggle
 - AI Receipt OCR now supports refunds (negative amounts auto-flip the type)
 - Improved offline behavior: failed operations auto-resume when the network returns
