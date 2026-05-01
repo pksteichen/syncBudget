@@ -86,7 +86,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - Support: `/storage/emulated/0/Download/BudgeTrak/support/`. Non-admin: `/Download/Quick Share/`.
 - Key files: `sync_diag.txt`, `native_sync_log.txt`, `token_log.txt` (debug only), `logcat_*.txt`, per-device FCM dumps.
 - Dump button (Settings → "Dump & Sync Debug", debug builds) — encrypted upload via FCM + 90 s poll.
-- Full spec: [`spec_diagnostics.md`](spec_diagnostics.md). Crashlytics/BigQuery tool: [`reference_crashlytics_bigquery.md`](reference_crashlytics_bigquery.md).
+- Full spec: [`spec_diagnostics.md`](spec_diagnostics.md). Crashlytics/BigQuery tool: [`reference_crashlytics_bigquery.md`](reference_crashlytics_bigquery.md). **Backend-infra reconstruction reference: SSD §28** (Firebase project, Auth, Firestore + RTDB + Storage rules verbatim, App Check, Cloud Functions, FCM, Crashlytics, Analytics, BigQuery, Gemini).
 
 ## Matching & Auto-Categorize
 - 4 ranked finders: `findDuplicates` (amount then date), `findRecurringExpenseMatches` + `findBudgetIncomeMatches` (date then amount), `findAmortizationMatches` (amount). Match confirmation dialogs show radio list, best pre-selected.

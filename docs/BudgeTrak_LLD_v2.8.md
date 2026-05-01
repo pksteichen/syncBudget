@@ -1459,106 +1459,43 @@ Package `com.techadvantage.budgetrak.data`. Generates diagnostic text dumps from
 
 ## 7.25 App Check
 
-- **Provider:** `DebugAppCheckProviderFactory` (debug) / `PlayIntegrityAppCheckProviderFactory` (release), switched by `BuildConfig.DEBUG` in `BudgeTrakApplication.onCreate`.
-- **Token TTL is provider-dependent**:
-  - Play Integrity (release): 40 h, set via Firebase Console → Project Settings → Your apps → BudgeTrak Android → App Check section dropdown.
-  - Debug provider: **always 1 h, ignores Console setting** by design (Google-imposed for short-lived dev tokens). Means debug-build refresh cadence is 40× higher than release.
-- **Debug token:** extracted from logcat on startup, written to `token_log.txt`, included in FCM dump uploads.
-- **Play Integrity advanced settings:** `PLAY_RECOGNIZED` required (anti-piracy — blocks modified/re-signed APKs), `LICENSED` not required (don't gatekeep free users on Huawei / degooglified devices), device integrity = "Don't explicitly check" (relies on `PLAY_RECOGNIZED` + per-field encryption for actual data protection).
-- **Authentication enforcement:** Monitor (not Enforce). Anonymous Auth must always succeed for sync setup; downstream Firestore/RTDB/Storage rules enforce App Check, so a bot-acquired anonymous UID can't actually do anything.
-- **All `getAppCheckToken()` calls wrapped with `withTimeoutOrNull(10–15 s)`.**
-- **Refresh triggers** (all gated by `isSyncConfigured`):
-  - `onResume`, `onAvailable` network callback
-  - `BackgroundSyncWorker` Tier 2/3 proactive (16-min threshold — server heartbeats are reliable enough that one per ~4 h Play Integrity cycle catches the refresh, the rest skip)
-  - `FirestoreDocSync.triggerFullRestart()` on PERMISSION_DENIED
-  - `MainViewModel` keep-alive loop (45-min check, 16-min refresh — VM is the backup if Worker is silenced >45 min by Doze)
-  - SDK auto-refresh (~5 min before expiry, in-process only).
+> Backend configuration (provider TTLs, Console enforcement settings, Play Integrity advanced settings, refresh trigger inventory) is consolidated in **SSD §28.6**. This section covers only the in-app code surface.
+
+- **Provider install** in `BudgeTrakApplication.onCreate`: `DebugAppCheckProviderFactory` (debug) / `PlayIntegrityAppCheckProviderFactory` (release), switched by `BuildConfig.DEBUG`.
+- `addAppCheckListener { token -> tokenLog(...); crashlytics?.setCustomKey("lastTokenExpiry", token.expireTimeMillis) }` for refresh observability.
+- Debug builds also `Runtime.exec("logcat -d -s DebugAppCheckProvider:D")` once at startup to capture the debug secret into `token_log.txt`.
+- All `getAppCheckToken()` call sites wrapped with `withTimeoutOrNull(10–15 s)`.
+- Refresh triggered from: `onResume`, `networkCallback.onAvailable`, `BackgroundSyncWorker.runTier2/runTier3` (16-min proactive threshold), `FirestoreDocSync.triggerFullRestart()` on PERMISSION_DENIED, `MainViewModel` keep-alive (45-min check / 16-min refresh).
 
 ---
 
 ## 7.26 Cloud Functions (`functions/index.js`)
 
-All three functions deployed via `firebase deploy --only functions` to `sync-23ce9`. v1 API (`firebase-functions` 5.1.x + `firebase-admin` 12.7.x, Node.js 22 per `functions/package.json`).
+> Each function's behavior, rationale, payload contract, and scale notes are in **SSD §28.7**. This section maps the Kotlin client receivers to the Cloud Function senders so a code reader can trace each FCM message back to its origin.
 
-### 7.26.1 `cleanupGroupData` — Firestore onDelete
+| Function | SSD § | Trigger | Client receiver |
+|---|---|---|---|
+| `cleanupGroupData` | 28.7.1 | Firestore onDelete `groups/{gid}` | None — cascade only |
+| `onSyncDataWrite` | 28.7.2 | Firestore onWrite `groups/{gid}/{coll}/{id}` (8 sync collections) | `FcmService.handleWakeForSync("sync_push")` → `BackgroundSyncWorker.runFullSyncInline("FCM-sync_push")` |
+| `onImageLedgerWrite` | 28.7.3 | Firestore onWrite `groups/{gid}/imageLedger/{id}`, content-filtered to rotation / recovery-complete / recovery-request | Same as `onSyncDataWrite` |
+| `presenceHeartbeat` | 28.7.4 | Pub/Sub `every 15 minutes` UTC | `FcmService.handleWakeForSync("heartbeat")` → `BackgroundSyncWorker.runFullSyncInline("FCM-heartbeat")` |
+| `presenceOrphanCleanup` | 28.7.5 | Pub/Sub `every sunday 03:00` UTC | None — RTDB cleanup only |
 
-Triggered by `onDelete` of `groups/{groupId}`. Cascade:
+Deployment: `firebase deploy --only functions` from project root in Termux. Runtime is Node.js 22 (set in `functions/package.json` engines.node) — `firebase-config-reference.txt` says Node 20 and is stale.
 
-1. Paginated delete (pageSize 500) of 14 subcollections: `transactions, recurringExpenses, incomeSources, savingsGoals, amortizationEntries, categories, periodLedger, sharedSettings, devices, members, imageLedger, adminClaim, deltas, snapshots` (the last two are legacy — may exist on old groups).
-2. RTDB `groups/{gid}` remove.
-3. Cloud Storage `groups/{gid}/*` delete (receipts + snapshot archive).
-
-Client `FirestoreService.deleteGroup` deletes the 11 active subcollections itself; the Function handles anything left plus legacy deltas/snapshots.
-
-### 7.26.2 `onSyncDataWrite` — Firestore onWrite
-
-Triggered by `onWrite` on `groups/{groupId}/{collection}/{docId}`. Filters collection name against `SYNC_PUSH_COLLECTIONS` (the 8 sync-data collections — transactions, recurringExpenses, incomeSources, savingsGoals, amortizationEntries, categories, periodLedger, sharedSettings). Skips deletes (`!change.after.exists`).
-
-Flow:
-1. Read `lastEditBy` (fallback `deviceId`) from the new doc — the writer to exclude from fan-out.
-2. `collectRecipientTokens(gid, writerDeviceId)` walks `groups/{gid}/devices`, returning `fcmToken` for every device where `removed != true` and the device ID isn't the writer. **Defense-in-depth writer validation:** before building the token list, the helper searches the same snapshot for `writerDeviceId`; if the writer isn't found or is flagged `removed`, the helper returns `[]` and the fan-out is suppressed. Catches Firestore-rule regressions where a non-member write could trigger group-wide FCM spam.
-3. `sendFcm(tokens, {type:"sync_push", collection, groupId}, "sync_push")` — chunks at 500 tokens per `sendEachForMulticast`, `android.priority = "high"`, logs per-token failures.
-
-Purpose: cross-device sync in near-real-time despite Android Doze / App-Standby bucket restrictions on peer devices. Client receiver in §7.11.
-
-### 7.26.2a `onImageLedgerWrite` — Firestore onWrite
-
-Triggered by `onWrite` on `groups/{groupId}/imageLedger/{receiptId}`. `imageLedger` is intentionally NOT in `SYNC_PUSH_COLLECTIONS` because most of its writes are bookkeeping chatter (`markPossession`, `markNonPossession`, `pruneCheckTransaction` deletions) that peers don't need to react to. This trigger applies a content filter so only meaningful writes fan out.
-
-Filter — fire `sync_push` only when one of:
-- **Rotation**: `after.contentVersion > before.contentVersion`.
-- **Recovery re-upload complete**: `before.uploadedAt === 0 && after.uploadedAt > 0`.
-- **Recovery request created**: `!before.exists && after.uploadedAt === 0`.
-
-Skipped:
-- Fresh `createLedgerEntry` — already covered by the concurrent `onSyncDataWrite` push on the `transactions` collection (peer's `onBatchChanged` fast-path downloads the photo).
-- Possession updates (`markPossession`, `markNonPossession`) — informational.
-- Prune / deletion — transaction-level changes already propagate.
-- Snapshot-request doc (`_snapshot_request` docId) — uses its own signaling.
-
-Writer skipped via `after.lastEditBy` (client writes `incrementContentVersion`, `createRecoveryRequest`, `markReuploadComplete` stamp this field).
-
-Peers' `BackgroundSyncWorker.runOnce` uses `enqueueUniqueWork(KEEP)` so bursts (e.g. batch rotation) collapse into one `syncReceipts()` run per peer.
-
-### 7.26.2b `presenceOrphanCleanup` — scheduled
-
-Weekly pub/sub (`every sunday 03:00 UTC`). Walks every group's RTDB presence node, bulk-fetches the corresponding Firestore `devices/{deviceId}` via `db.getAll(...refs)`, and removes any RTDB presence entry whose matching Firestore device is absent or `removed = true`. Mitigates the RTDB presence write gap (rules allow any authenticated user to write presence; can't cross-reference Firestore to enforce membership). Orphan presence can't escalate to FCM spam — `presenceHeartbeat` gates FCM sends via Firestore `devices/{id}/fcmToken` which requires `isMember` — but it can bloat the RTDB node and slow `RealtimePresenceService.getDevices()` for legitimate users.
-
-Counters logged: `groupsChecked`, `totalPruned`.
-
-**Scale caveat:** sequential per-group walk, same O(n) concern as `presenceHeartbeat`. Fine at current scale; upgrade alongside the heartbeat (tracked in `project_prelaunch_todo.md`).
-
-### 7.26.3 `presenceHeartbeat` — scheduled
-
-Pub/Sub schedule `every 15 minutes` (UTC). Walks all groups in Firestore; for each, reads RTDB `groups/{gid}/presence`; collects `deviceId`s whose `lastSeen < now − 15 min`; calls `tokensForDevices(gid, staleIds)` → `sendFcm(tokens, {type:"heartbeat", groupId}, "heartbeat")`.
-
-Purpose: backstop when Android stops scheduling the periodic `BackgroundSyncWorker` (observed up to 4h46m worker silence on Samsung devices in App-Standby Bucket `restricted`).
-
-**Scale caveat:** the current implementation walks groups sequentially. At ~50 ms/group the 60 s default timeout is hit at ~1.2K groups and the 9-min Gen-1 ceiling at ~10K. Migration to an indexed presence query (tracked in `memory/project_prelaunch_todo.md` #7) eliminates the loop entirely.
-
-### 7.26.4 Shared helpers
-
-- `collectRecipientTokens(gid, writerDeviceId)` — reads `groups/{gid}/devices` subcollection.
-- `tokensForDevices(gid, deviceIds[])` — per-device lookup.
-- `sendFcm(tokens, data, label)` — chunked multicast with per-batch failure logging.
+Defense-in-depth writer-membership check on every fan-out lives in `collectRecipientTokens` (helper inside `functions/index.js`) — see SSD §28.7.6.
 
 ---
 
 ## 7.26a Telemetry — Crashlytics + Firebase Analytics + BigQuery
 
-**SDK initialization** (`BudgeTrakApplication.onCreate`): both Crashlytics and Analytics share the `crashlyticsEnabled` SharedPref toggle (default true). UI label: "Send crash reports and anonymous usage data". `setAnalyticsCollectionEnabled(crashlyticsEnabled)` runs at app start; toggle changes in `MainActivity` UI propagate immediately.
+> Custom-key inventory, non-fatal sites, GA4 linkage, BigQuery dataset/table layout, service-account auth, and `tools/query-crashlytics.js` flag reference live in **SSD §28.9 / §28.10 / §28.11**. This section covers only the in-app code surface.
 
-**Crashlytics events:** non-fatals via `BudgeTrakApplication.recordNonFatal(tag, message, e?)`. Sites: `PERMISSION_DENIED` recovery, consistency mismatch, `TOKEN_REFRESH_TIMEOUT` (worker + ViewModel keep-alive 15 s timeouts). Custom keys via `updateDiagKeys(map)`: `cashDigest, listenerStatus, lastRefreshDate, activeDevices, txnCount, reCount, plCount, lastTokenExpiry, authAnonymous`.
-
-**Analytics events** (`data/telemetry/AnalyticsEvents.kt`):
-- `logHealthBeacon(ctx, listenerUp, activeDevices, txnCount, reCount, plCount)` — daily sync-user heartbeat from `runPeriodicMaintenance` (24 h gate).
-- `logOcrFeedback(ctx, merchantChanged, dateChanged, amountDeltaCents, catsAdded, catsRemoved, hadMultiCat)` — fires on save of an OCR-populated transaction. Anonymous deltas/booleans only — no merchant text or amounts. Measures per-field user-correction rate.
-
-Both gated by `isEnabled(ctx)` reading the same `crashlyticsEnabled` pref. Modern Firebase Analytics SDK (BoM 32.x) auto-discovers measurement ID at runtime via `mobilesdk_app_id`; `google-services.json` doesn't need an explicit `analytics_service` block. The Firebase project must be linked to a GA4 property in Project Settings → Integrations → Google Analytics — without it, the SDK accepts events but they are silently dropped.
-
-**BigQuery export** (Firebase Console → Project Settings → Integrations → BigQuery): Crashlytics, Performance Monitoring, Sessions, and `analytics_<propertyId>` all stream into `com_techadvantage_budgetrak_ANDROID*` with Daily + Streaming and no advertising IDs.
-
-**Query helper** `tools/query-crashlytics.js`: auth via `~/.config/configstore/firebase-tools.json` refresh token — periodically expires with `rapt_required` error, requires `firebase login --reauth` (interactive only).
+- `BudgeTrakApplication.onCreate` — reads `app_prefs:crashlyticsEnabled` (default true) and applies it to both `setCrashlyticsCollectionEnabled` and `setAnalyticsCollectionEnabled` before any Firebase service call.
+- `BudgeTrakApplication.tokenLog(msg)` / `recordNonFatal(tag, msg, e?)` / `syncEvent(msg)` / `updateDiagKeys(map)` — covered in §2.1.
+- `BudgeTrakApplication.onCreate` stamps `buildTime` (`BuildConfig.BUILD_TIME`) and `versionCode` (`BuildConfig.VERSION_CODE`) as Crashlytics custom keys so post-publish queries can isolate one build's events via `query-crashlytics.js --build <prefix>`.
+- `data/telemetry/AnalyticsEvents.kt` — `logOcrFeedback(...)` and `logHealthBeacon(...)`, both gated by the same `crashlyticsEnabled` pref.
+- Toggle changes in `SettingsScreen` propagate immediately to both SDKs without restart.
 
 ---
 

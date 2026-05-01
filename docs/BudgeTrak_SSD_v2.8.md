@@ -43,7 +43,8 @@
 25. Android Manifest Configuration
 26. Code Statistics
 27. Build Configuration
-28. Document Revision History
+28. Backend Infrastructure & External Services
+29. Document Revision History
 
 ---
 
@@ -975,6 +976,8 @@ raw 256-bit group key). Metadata fields (`deviceId`, `updatedAt`,
 
 ### 17.3 Firestore Document Structure
 
+> **See §28.3.1 for the complete document schema** across all 12 sub-collections plus the top-level `pairing_codes`. Sketch below.
+
     groups/{gid}/transactions/{id}:
       enc_source, enc_amount, enc_description, enc_date,
       enc_categoryAmounts, enc_type, ...     // base64(ChaCha20-P1305)
@@ -1279,6 +1282,8 @@ caller (no `Dispatchers.Default`) to prevent startup races.
 
 ### 17.20 RTDB Presence
 
+> **See §28.4 for the complete RTDB schema, security rules, onDisconnect pattern, and the orphan-presence mitigation.**
+
 `RealtimePresenceService.kt` — `syncDevices/{gid}/{deviceId}` plus
 `presence/{gid}/{deviceId}/lastSeen`. Launch writes `online: true`;
 server-side `onDisconnect()` writes `online: false` + timestamp on
@@ -1329,15 +1334,9 @@ Refresh triggers:
 
 ### 17.22 Crashlytics + Firebase Analytics + BigQuery
 
-**Crashlytics custom keys** written in `BudgeTrakApplication` + VM maintenance: `buildTime` + `versionCode` (from `BuildConfig`, set in `Application.onCreate` — used to filter to latest-build crashes post-publish via `query-crashlytics.js --build <prefix>`), `cashDigest`, `listenerStatus`, `lastRefreshDate`, `activeDevices`, `txnCount`, `reCount`, `plCount`, `lastTokenExpiry`, `authAnonymous`. Non-fatals on `PERMISSION_DENIED`, consistency mismatch, and `TOKEN_REFRESH_TIMEOUT` (15-s timeouts in Worker + VM keep-alive paths).
+> **See §28.9 (Crashlytics), §28.10 (Firebase Analytics), and §28.11 (BigQuery) for the complete picture: custom-key inventory, non-fatal triggers, event schema, GA4 linkage, BigQuery dataset/table layout, service-account auth, and the `tools/query-crashlytics.js` flag reference.**
 
-**Firebase Analytics** (`data/telemetry/AnalyticsEvents.kt`):
-- `health_beacon` — daily sync-user heartbeat from `runPeriodicMaintenance`.
-- `ocr_feedback` — fires on save of an OCR-populated transaction; measures per-field user-correction rate. Anonymous deltas/booleans only — no merchant text or amounts.
-
-Both Crashlytics and Analytics share the `crashlyticsEnabled` SharedPref toggle (default true). UI label: "Send crash reports and anonymous usage data". Modern Firebase Analytics SDK (BoM 32.x) auto-discovers measurement ID at runtime via `mobilesdk_app_id` — `google-services.json` doesn't need an explicit `analytics_service` block.
-
-**BigQuery export:** Crashlytics, Performance Monitoring, Sessions, and Firebase Analytics (`analytics_<propertyId>`) all stream into the `com_techadvantage_budgetrak_ANDROID*` table set with Daily + Streaming and no advertising IDs. Cloud Messaging + Imported Segments not exported.
+In short: both Crashlytics and Analytics share the `crashlyticsEnabled` SharedPref toggle (default true; UI label "Send crash reports and anonymous usage data"). Custom keys (`buildTime`, `versionCode`, `cashDigest`, `listenerStatus`, etc.) are stamped on every future crash/non-fatal so post-publish queries can isolate the latest build via `query-crashlytics.js --build <prefix>`. Crashlytics + Analytics + Performance + Sessions all stream to BigQuery dataset `firebase_crashlytics` / `analytics_<propertyId>`. The query helper UNIONs legacy `com_securesync_app_*` and rebranded `com_techadvantage_budgetrak_*` tables for cross-rebrand history.
 
 ## 18. Receipt Photo System
 
@@ -1945,7 +1944,7 @@ Only `INTERNET` is declared in the manifest. CAMERA and media access are handled
 | minify / shrinkResources (release) | true |
 | release signingConfig | reads `BUDGETRAK_KEYSTORE_FILE`, `BUDGETRAK_KEYSTORE_PASSWORD`, `BUDGETRAK_KEY_ALIAS` from `local.properties` (git-ignored). Upload keystore at `~/keystore/upload-keystore.jks` with offline backup; SHA-256 `E0:2B:5D:D6:5E:86:1B:3B:79:AC:F4:F3:F4:76:D4:3B:35:D1:FC:3A:D4:E1:6D:26:C0:CC:0D:22:E9:9D:04:0A`. Used by `./gradlew bundleRelease` to produce signed AAB for Play Store upload. |
 
-BuildConfig emits a UTC `BUILD_TIME` stamp; `BudgeTrakApplication.onCreate` re-publishes it as a Crashlytics custom key so BigQuery queries can isolate the latest build's events post-publish (see §17.22).
+BuildConfig emits a UTC `BUILD_TIME` stamp; `BudgeTrakApplication.onCreate` re-publishes it as a Crashlytics custom key so BigQuery queries can isolate the latest build's events post-publish (see §28.9.1).
 
 ### 27.3 Dependencies
 
@@ -1979,7 +1978,769 @@ Do NOT upgrade `core-ktx` past 1.13.1 or Compose BOM past 2024.09.03 — newer v
 | android.nonTransitiveRClass | true |
 | android.aapt2FromMavenOverride | Termux path to aapt2 (build env override) |
 
-## 28. Document Revision History
+## 28. Backend Infrastructure & External Services
+
+This chapter consolidates every server-side, cloud, and external-service configuration the app depends on. The intent is reconstructability — given this chapter and the Kotlin source, the live system can be re-deployed from scratch. Where feasible, security rules and Cloud Function logic are reproduced verbatim rather than summarized; where the live console holds settings that don't exist as code, the values are stated with their console paths.
+
+The app's runtime backend is a single Firebase project, **`sync-23ce9`** (display name "SecureSync (Prod)"). It hosts Authentication (anonymous), Cloud Firestore (default database), Realtime Database, Cloud Storage (default bucket), App Check, Cloud Messaging (FCM), Cloud Functions, Crashlytics, and Firebase Analytics linked to a Google Analytics 4 property. Two external dependencies sit alongside: **Google Generative AI / Gemini API** (Flash-Lite 2.5 for AI categorization and OCR) and **BigQuery** (Crashlytics + Analytics streaming export, queried from Termux for diagnostics).
+
+### 28.1 Firebase Project
+
+| Field | Value |
+|---|---|
+| Project ID | `sync-23ce9` |
+| Display name | `SecureSync (Prod)` |
+| Project number | `620762828182` |
+| Plan | Blaze (pay-as-you-go) — required for Cloud Functions, Storage egress, RTDB beyond free tier, BigQuery export |
+| Console URL | `https://console.firebase.google.com/project/sync-23ce9` |
+| Android package | `com.techadvantage.budgetrak` (rebranded 2026-04-11 from `com.securesync.app` / `com.syncbudget.app` — legacy entry retained in the Firebase Console for backward-compat token handling) |
+| Mobile SDK app ID | `1:620762828182:android:2f4fcc7ca522516ccca1b7` |
+| Firestore database | `(default)` |
+| RTDB instance | `sync-23ce9-default-rtdb` (region `us-central1`) |
+| Storage bucket | `sync-23ce9.firebasestorage.app` (default region) |
+| GA4 property | property ID `534603748`, stream "BudgeTrak Android" id `14591145419` |
+| BigQuery project | same — `sync-23ce9` (export lives in the Firebase project, not a separate analytics project) |
+
+`app/google-services.json` carries the project number, RTDB URL, project ID, storage bucket, and the per-app `mobilesdk_app_id` and `api_key`. The file is checked into the repo (no secrets — the `api_key` is a public Android API key gated by App Check + Firestore rules, not an admin credential).
+
+### 28.2 Firebase Anonymous Authentication
+
+**Why anonymous.** BudgeTrak doesn't ask the user for an email/password — it's a local-first budgeting app with optional multi-device sync. The Firebase auth UID is a privacy-preserving handle for two purposes: (1) Firestore membership rules use `request.auth.uid` to gate access to a group's data, and (2) the `groups/{gid}/members/{uid}` doc is the membership record. UIDs aren't surfaced in the UI; the app calls users "you" and "Kim" via local device names.
+
+**Provisioning.** `MainViewModel.signInAnonymouslyIfNeeded()` (around `MainViewModel.kt:338`) calls `FirebaseAuth.getInstance().signInAnonymously().await()` exactly once when both (a) `isSyncConfigured` and (b) `currentUser == null`. Network-aware: skipped offline, retried via the `networkCallback.onAvailable` resume path. `BackgroundSyncWorker` enforces the same precondition before any Firestore call (`BackgroundSyncWorker.kt:585` re-runs `signInAnonymously` synchronously inside Tier 2/3 if VM has been reaped and auth is gone).
+
+**Lifecycle.** `BudgeTrakApplication.onCreate` registers an `addAuthStateListener` that emits a `tokenLog("Auth state: uid=… anon=…")` entry on every transition and updates Crashlytics custom keys (`setUserId(uid)`, `setCustomKey("authAnonymous", isAnonymous)`). The listener is registered after the Crashlytics opt-out check so a user who has disabled telemetry never has their UID stamped.
+
+**Anonymous auth is one-way.** Once an anonymous user is created, the app never converts to email/password. Reinstall produces a new anonymous UID; the old `members/{old_uid}` doc is left dangling and is reaped when the group itself TTLs, when a peer admin manually evicts, or when `cleanupGroupData` cascades. Never use `members/{uid}` count as a "currently active devices" signal — use `groups/{gid}/devices` instead, which has a `removed` flag and an `updatedAt` cursor.
+
+**App Check interaction.** Anonymous Auth is intentionally **not** enforced under App Check (see §28.6). The token is needed to mint App Check tokens for downstream services; if Auth required App Check, it would deadlock on a cold start. Downstream services (Firestore, RTDB, Storage) all enforce, so an attacker who acquires an anonymous UID without App Check still cannot read or write any data.
+
+### 28.3 Cloud Firestore
+
+#### 28.3.1 Document structure
+
+```
+groups/
+  {groupId}/                              # 12-char hex, generated client-side
+    lastActivity         : Timestamp        # Server timestamp (informational only)
+    expiresAt            : Timestamp        # now + 90 d (TTL field)
+    status               : string?          # "dissolved" when group deleted
+    subscriptionExpiry   : number?          # Epoch ms — admin's Play subscription
+    imageLedgerFlagClock : number?          # Counter, bumped on meaningful imageLedger writes
+    imageLastCleanupDate : string?          # "YYYY-MM-DD" of last 14-d prune
+    deviceChecksums      : map<deviceId, {cashHash, txCount, recordedAt}>
+    checksumMismatchAt   : number?          # 1-h confirmation gate for mismatches
+    debug_{deviceId}_*   : string?          # FCM debug-dump fields (per device)
+
+    transactions/                           # Per-field encrypted business data
+      {docId}/
+        enc_{fieldName}  : string           # ChaCha20-Poly1305(base64), each Kotlin field encrypted independently
+        deviceId         : string           # Originating device (plaintext metadata)
+        deleted          : boolean          # Tombstone
+        lastEditBy       : string           # Most recent writer's deviceId
+        updatedAt        : Timestamp        # Server timestamp (cursor source)
+
+    recurringExpenses/                      # Same enc_/metadata pattern
+    incomeSources/
+    savingsGoals/
+    amortizationEntries/
+    categories/
+    periodLedger/                           # Period rollovers (ledger entries)
+
+    sharedSettings/
+      current/                              # Singleton doc (id == "current")
+        enc_*            : string
+        updatedAt        : Timestamp
+        lastEditBy       : string
+
+    members/                                # Membership / security rule source
+      {auth.uid}/
+        deviceId         : string           # Correlated device ID
+        joinedAt         : number           # Epoch ms
+
+    devices/
+      {deviceId}/
+        deviceId         : string
+        deviceName       : string
+        isAdmin          : boolean
+        removed          : boolean          # Soft-delete (admin eviction or self-leave)
+        lastSyncVersion  : number
+        lastSeen         : number           # Written by BackgroundSyncWorker (epoch ms)
+        appSyncVersion   : number
+        minSyncVersion   : number
+        photoCapable     : boolean
+        uploadSpeedBps   : number?
+        fcmToken         : string?          # Per-device FCM token
+
+    imageLedger/
+      {receiptId}/
+        receiptId          : string
+        originatorDeviceId : string
+        createdAt          : number
+        uploadedAt         : number          # 0 = recovery request (no upload yet)
+        contentVersion     : number
+        uploadAssignee     : string?
+        assignedAt         : number
+        possessions        : map<deviceId, boolean>
+        lastEditBy         : string
+      _snapshot_request/                     # Snapshot lifecycle doc (special doc id)
+        requestedBy   : string
+        requestedAt   : number
+        builderId     : string?
+        status        : string
+        consumedBy    : map<deviceId, boolean>
+
+    adminClaim/
+      current/                               # Singleton (id == "current")
+        claimantDeviceId : string
+        claimantName     : string
+        claimedAt        : number
+        expiresAt        : number
+        objections       : string[]
+        status           : string
+
+    deltas/    snapshots/                    # Legacy CRDT collections — may exist on pre-2.0 groups; not written anymore but cleanupGroupData purges them
+
+pairing_codes/
+  {CODE}/                                    # 6-char alphanumeric (A-Z, 2-9), the doc ID is the code itself
+    groupId        : string
+    encryptedKey   : string                  # Group key wrapped under the code
+    expiresAt      : Timestamp               # 10-min TTL
+```
+
+The data-collection layout is duplicated by FirestoreService client code (`FirestoreService.kt`) and by the Cloud Function subcollection list — keep both in sync when adding a collection. The `enc_` field naming convention is enforced by `EncryptedDocSerializer`: every Kotlin field except plaintext metadata (`deviceId`, `deleted`, `lastEditBy`, `updatedAt`) is serialized with the `enc_` prefix.
+
+#### 28.3.2 Security rules (verbatim)
+
+Source of truth: `firestore.rules` at the repo root. Deploy with `firebase deploy --only firestore:rules`. Refresh from live with `node tools/fetch-rules.js`.
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isMember(groupId) {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid));
+    }
+
+    match /groups/{groupId} {
+      // `get` (single doc by ID) is allowed for any authenticated user so
+      // flows like dissolution/eviction detection can work. `list` is
+      // explicitly forbidden — without it, any authenticated user could
+      // enumerate every group in the database and harvest per-device cash
+      // checksums, flag clocks, and timezone metadata.
+      allow get: if request.auth != null;
+      allow list: if false;
+      allow create: if request.auth != null;
+      allow update, delete: if isMember(groupId);
+
+      match /members/{uid} {
+        allow create: if request.auth != null && request.auth.uid == uid;
+        allow read: if request.auth != null && (request.auth.uid == uid || isMember(groupId));
+        allow delete: if request.auth != null &&
+          (request.auth.uid == uid || isMember(groupId));
+      }
+
+      match /transactions/{docId}        { allow read, write: if isMember(groupId); }
+      match /recurringExpenses/{docId}   { allow read, write: if isMember(groupId); }
+      match /incomeSources/{docId}       { allow read, write: if isMember(groupId); }
+      match /savingsGoals/{docId}        { allow read, write: if isMember(groupId); }
+      match /amortizationEntries/{docId} { allow read, write: if isMember(groupId); }
+      match /categories/{docId}          { allow read, write: if isMember(groupId); }
+      match /periodLedger/{docId}        { allow read, write: if isMember(groupId); }
+      match /sharedSettings/{docId}      { allow read, write: if isMember(groupId); }
+      match /devices/{docId}             { allow read, write: if isMember(groupId); }
+      match /imageLedger/{docId}         { allow read, write: if isMember(groupId); }
+      match /adminClaim/{docId}          { allow read, write: if isMember(groupId); }
+    }
+
+    match /pairing_codes/{code} {
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasAll(['groupId', 'encryptedKey', 'expiresAt'])
+        && request.resource.data.expiresAt is timestamp;
+      // `get` requires you to already know the pairing code (it's the doc
+      // ID). `list` would let any authenticated user enumerate every active
+      // pairing code + its encryptedKey — the code itself is the
+      // decryption password, so the encryptedKey alone is useless, but
+      // the doc ID gives the code directly. Must forbid list.
+      allow get: if request.auth != null;
+      allow list: if false;
+      allow delete: if request.auth != null;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+```
+
+**Design notes.**
+- **Membership-based.** `isMember(gid)` checks `exists(groups/{gid}/members/{auth.uid})`. Any access to a data subcollection requires this check.
+- **Self-registration.** `members/{uid}` create is allowed only when `request.auth.uid == uid` so users can join a group only by writing their own membership record (the uid in the path must equal their token).
+- **`get` vs `list`.** Both `groups/{gid}` and `pairing_codes/{code}` allow `get` (read by ID) but forbid `list` (collection enumeration). On groups this prevents harvesting checksums and metadata across the entire database; on pairing codes it prevents harvesting the codes themselves (the doc ID is the code).
+- **Defense in depth on top of encryption.** Even if a rule regression let an attacker read a sub-collection, business data is ChaCha20-Poly1305-encrypted with a per-group key (held client-side in members' encrypted prefs); they would see only `enc_*` blobs and metadata.
+- **Deny-all wildcard.** The trailing `match /{document=**}` ensures any future top-level collection added accidentally is denied until a rule is written.
+
+#### 28.3.3 Indexes
+
+- **Automatic indexes** (built-in, always on): ascending, descending, arrays — collection scope.
+- **No manual composite indexes required.** Filtered listeners use `whereGreaterThan("updatedAt", cursor)` against a single-field index on `updatedAt` which Firestore auto-creates.
+- **Monitoring.** If logcat shows `FAILED_PRECONDITION: The query requires an index`, click the link in the error to auto-create. Don't pre-emptively define indexes.
+
+#### 28.3.4 TTL policies
+
+| Collection group | TTL field | Lifetime | Source of writes |
+|---|---|---|---|
+| `groups` | `expiresAt` | now + 90 d | `FirestoreService.updateGroupActivity()` (called once per app launch + on group join) |
+| `pairing_codes` | `expiresAt` | now + 10 min | `FirestoreService.createPairingCode()` |
+
+Configured at Firestore Console → TTL policies → Add Policy. **Do not** use `lastActivity` (server timestamp) as a TTL field — that caused immediate eligibility (fixed 2026-04-04). Use absolute future timestamps stored in `expiresAt`.
+
+**TTL deletion is not instantaneous** — Firestore reaps within 24–72 h of expiry. TTL also only deletes the matched doc, not subcollections, RTDB nodes, or Storage files. Cascade cleanup is handled by the `cleanupGroupData` Cloud Function (§28.7.1).
+
+### 28.4 Realtime Database
+
+#### 28.4.1 Schema
+
+```
+groups/
+  {groupId}/
+    presence/
+      {deviceId}/
+        online                : boolean        # Server-managed via onDisconnect()
+        lastSeen              : number         # ServerValue.TIMESTAMP, ms
+        deviceName            : string
+        photoCapable          : boolean
+        uploadSpeedBps        : number?
+        uploadSpeedMeasuredAt : number?
+```
+
+Single-purpose: instant online/offline presence detection across group devices, with reliable disconnect detection via the RTDB server's TCP-keep-alive heartbeat. Replaces a pre-2.0 Firestore polling design that was too slow + too expensive.
+
+#### 28.4.2 Security rules (verbatim)
+
+Source of truth: `database.rules.json` at the repo root.
+
+```json
+{
+  "rules": {
+    "groups": {
+      "$groupId": {
+        "presence": {
+          ".read": "auth != null",
+          "$deviceId": {
+            ".write": "auth != null",
+            ".validate": "newData.hasChildren(['online', 'lastSeen', 'deviceName']) && newData.child('online').isBoolean() && newData.child('lastSeen').isNumber()"
+          }
+        }
+      }
+    },
+    ".read": false,
+    ".write": false
+  }
+}
+```
+
+**Design notes.**
+- **Auth-gated read.** Reading `groups/{gid}/presence` requires any authenticated user. Group ID is treated as the access secret (same model as Firestore — the 12-char hex group ID is effectively unguessable).
+- **Validated writes.** Each presence node must have `online` (boolean), `lastSeen` (number), and `deviceName` (any). Prevents garbage writes that would trip the client validators.
+- **Top-level deny.** `".read": false` + `".write": false` at the root ensures nothing else under the database root is accessible.
+- **Known gap:** RTDB rules can't cross-reference Firestore, so `.write: auth != null` permits any authenticated user to write to **any** `groups/$gid/presence/$deviceId` regardless of group membership. Mitigated, not closed, by the `presenceOrphanCleanup` Cloud Function (§28.7.5) and by `presenceHeartbeat`'s membership-gated FCM-send (§28.7.4) which means orphan presence cannot escalate into FCM spam — only into RTDB node bloat. Permanent closure would require either App Check enforcement on RTDB writes (currently `Enforce`d, see §28.6) or a server-mediated write path.
+
+#### 28.4.3 onDisconnect pattern
+
+`RealtimePresenceService.setupPresence(deviceId, deviceName, photoCapable)` is the only writer. On startup it:
+
+1. Connects to `.info/connected` (a special RTDB path that emits `true`/`false` based on the SDK's session state).
+2. Whenever `connected == true`, writes `{ online: true, lastSeen: ServerValue.TIMESTAMP, deviceName, photoCapable, uploadSpeedBps?, uploadSpeedMeasuredAt? }` to `groups/{gid}/presence/{deviceId}`, and registers an `onDisconnect()` handler that will write `{ online: false, lastSeen: ServerValue.TIMESTAMP }` server-side when the connection drops (TCP keep-alive timeout, app process killed, etc.).
+3. **Idempotent re-arm.** `connectedListener` and `myPresenceRef.onDisconnect()` are explicitly canceled before re-installing on each call, so repeated calls (e.g., from network resume) don't stack handlers.
+
+The `RealtimePresenceService` writer is the **only** legitimate writer of presence data. A peer reading `RealtimePresenceService.getDevices()` derives "active devices" by filtering `presence` entries where `online == true && lastSeen > now - 5 min`.
+
+#### 28.4.4 Orphan-presence problem
+
+The `.write: auth != null` rule means a malicious or malformed client could write fake presence entries for arbitrary `(groupId, deviceId)` pairs. Cleanup is `presenceOrphanCleanup` (§28.7.5), which runs every Sunday 03:00 UTC and removes entries whose corresponding Firestore `devices/{deviceId}` is missing or `removed: true`.
+
+### 28.5 Cloud Storage
+
+#### 28.5.1 Bucket layout
+
+Default bucket `sync-23ce9.firebasestorage.app`. Per-group folder, encrypted file payloads:
+
+```
+groups/
+  {groupId}/
+    receipts/
+      {receiptId}.enc           # ChaCha20-Poly1305 receipt photo
+    photoSnapshot.enc           # Encrypted snapshot archive (transient — built on demand for newcomer-onboarding, deleted ≤ 7 d)
+    joinSnapshot.enc            # Onboarding snapshot for a new device
+```
+
+Receipt files are written by `ImageLedgerService.uploadToCloud()` after compression by `ReceiptManager` (§18.3) and ChaCha20-Poly1305 encryption with the same group key used for Firestore. Files are not directly readable from the bucket — they are encrypted blobs.
+
+#### 28.5.2 Security rules (verbatim)
+
+Source of truth: `storage.rules` at the repo root.
+
+```
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /groups/{groupId}/{allPaths=**} {
+      allow read, write: if request.auth != null
+        && firestore.exists(/databases/(default)/documents/groups/$(groupId)/members/$(request.auth.uid));
+    }
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
+```
+
+The `firestore.exists()` call is a **cross-service rule** — Storage rules can read from Firestore. Performance-wise this adds one Firestore read per Storage operation; cost is acceptable for the safety it provides.
+
+#### 28.5.3 Lifecycle
+
+- **Receipt files** are deleted by `ImageLedgerService.deleteFromCloud()` when the corresponding `imageLedger/{receiptId}` document is deleted. Tombstone-driven, not Storage-lifecycle-driven.
+- **14-day cloud pruning** (`ReceiptSyncManager`) deletes any file older than 14 d, regardless of ledger state. Coordinated across devices via `groups/{gid}/imageLastCleanupDate` so only one device per day does the work.
+- **Snapshot archives** are deleted when their `imageLedger/_snapshot_request` doc is deleted (typically ≤ 7 d after build, by the snapshot consumer or the snapshot-cleanup admin path).
+- **Orphan scan** (`runPeriodicMaintenance` admin path, 30-d gate) lists `groups/{gid}/receipts/` and deletes any file with no matching ledger entry. Skips files < 10 min old to avoid races with concurrent uploads.
+- **Group dissolution** triggers `cleanupGroupData` (§28.7.1) which lists every file under `groups/{gid}/` and deletes them all (paginated).
+
+### 28.6 Firebase App Check
+
+App Check ensures only legitimate, signed instances of the BudgeTrak app can talk to the backend. Without it, anyone with a leaked anonymous Auth token + the public Firebase config could read/write the database.
+
+#### 28.6.1 Provider configuration
+
+Installed in `BudgeTrakApplication.onCreate` before any Firebase service call:
+
+```kotlin
+val providerFactory = if (BuildConfig.DEBUG)
+    DebugAppCheckProviderFactory.getInstance()
+else
+    PlayIntegrityAppCheckProviderFactory.getInstance()
+appCheck.installAppCheckProviderFactory(providerFactory)
+```
+
+**Debug builds** use the debug provider. The first launch of a debug build emits a `DebugAppCheckProvider` log line containing the debug secret; `BudgeTrakApplication.onCreate` greps logcat for it (`Regex("debug secret.*: ([a-f0-9-]+)", IGNORE_CASE)`) and writes the secret to `token_log.txt` so it's visible in FCM dump uploads. The secret must be registered manually in Firebase Console → App Check → Apps → BudgeTrak Android → Manage debug tokens.
+
+**Release builds** use Play Integrity. The Play Integrity Service hits Google's attestation servers each refresh, which requires a Play-installed APK (or a Play-signed APK sideload from Internal Testing) — meaningfully harder to forge than the debug provider.
+
+#### 28.6.2 Console settings
+
+| Setting | Path | Value |
+|---|---|---|
+| Token TTL — Play Integrity | Project Settings → Your apps → BudgeTrak Android → App Check section dropdown | **40 hours** (raised from default 1 h to reduce attestation traffic) |
+| Token TTL — Debug | (same dropdown) | **1 hour** — Google-imposed, ignores Console setting (by design for short-lived dev tokens) |
+| Enforcement — Firestore | App Check → APIs → Firestore | **Enforce** |
+| Enforcement — Realtime Database | App Check → APIs → Realtime Database | **Enforce** |
+| Enforcement — Cloud Storage | App Check → APIs → Cloud Storage | **Enforce** |
+| Enforcement — Authentication | App Check → APIs → Authentication | **Monitor** (must remain unenforced — anonymous Auth must succeed before App Check has a token to mint) |
+| Play Integrity — `PLAY_RECOGNIZED` | App Check → Apps → BudgeTrak Android → Play Integrity → Advanced settings | **Required** (anti-piracy: blocks modified or re-signed APKs) |
+| Play Integrity — `LICENSED` | (same panel) | **Not required** (don't gate free users on Huawei / degooglified devices) |
+| Play Integrity — Device integrity | (same panel) | "Don't explicitly check" — relies on `PLAY_RECOGNIZED` plus per-field encryption for actual data protection. Tighten post-launch if abuse appears in Crashlytics. |
+
+The 40 h vs 1 h TTL gap means **debug-build refresh cadence is ~40× higher than release**. When measuring App Check refresh behavior, normalize for this.
+
+#### 28.6.3 Refresh triggers
+
+All gated by `isSyncConfigured` (solo users never call App Check). All `getAppCheckToken()` calls wrapped with `withTimeoutOrNull(10–15 s)` to handle network stalls.
+
+| Trigger | Threshold | Source |
+|---|---|---|
+| `onResume` | Always | `MainActivity.onResume` |
+| Network resume (`onAvailable`) | Always | `MainViewModel.networkCallback` |
+| `BackgroundSyncWorker` Tier 2/3 | Proactive — 16 min before expiry | `BackgroundSyncWorker.runTier2/runTier3` |
+| `triggerFullRestart()` | On `PERMISSION_DENIED` | `FirestoreDocSync` |
+| ViewModel keep-alive | 45-min check, 16-min refresh | `MainViewModel` keep-alive loop |
+| SDK auto-refresh | ~5 min before expiry | Firebase SDK (in-process only) |
+
+The 16-min threshold (dropped from 35 min on 2026-04-25) is calibrated so that one heartbeat per ~4 h Play Integrity token cycle catches the refresh and the rest skip. At 35 min, refreshes were colliding too often between Worker and VM keep-alive.
+
+#### 28.6.4 Failure mode
+
+If App Check refresh fails (Play Integrity timeout, no network), every Firestore/RTDB/Storage operation will start returning `PERMISSION_DENIED`. The client's `FirestoreDocSync` watches for this signature and triggers `triggerFullRestart()` — stops all listeners, force-refreshes App Check, restarts. Debounced 30 s to prevent thrash.
+
+### 28.7 Cloud Functions
+
+All in `functions/index.js` (single file, 347 lines as of 2026-05). v1 API. `firebase-functions ^5.1.1` + `firebase-admin ^12.7.0`. Node.js 22 per `functions/package.json` `engines.node`. Region `us-central1` (default). Deploy: `firebase deploy --only functions` from the project root in Termux.
+
+Five functions: two onWrite/onDelete triggers, two scheduled jobs, plus shared helpers. The first deployment auto-enables `cloudfunctions`, `cloudbuild`, `artifactregistry`, and `cloudscheduler` APIs in the underlying GCP project.
+
+`firebase-config-reference.txt` says Node.js 20 — that's stale; `package.json` engines is the source of truth.
+
+#### 28.7.1 `cleanupGroupData` — Firestore onDelete
+
+```
+functions.firestore.document('groups/{groupId}').onDelete(...)
+```
+
+When the group doc is deleted (TTL after 90 d inactivity, or admin dissolution), cascade-delete:
+
+1. **Firestore subcollections** — paginated delete of:
+   ```
+   transactions, recurringExpenses, incomeSources, savingsGoals,
+   amortizationEntries, categories, periodLedger, sharedSettings,
+   devices, members, imageLedger, adminClaim,
+   deltas, snapshots                             // legacy CRDT (may exist on old groups)
+   ```
+   Page size 500; loop while a page returns >= 500 docs.
+2. **RTDB** — `rtdb.ref('groups/{gid}').remove()`.
+3. **Cloud Storage** — `bucket.getFiles({prefix: 'groups/{gid}/'})` then `Promise.all(file.delete().catch(() => {}))` (best-effort — swallows individual file failures).
+
+Logs `Cleaned up group {gid}: subcollections, RTDB, and Storage` on success. The client's `FirestoreService.deleteGroup` only deletes the group doc itself plus its own member record (per the 2026-04-12 dissolve-bug fix) — this Function does the rest via the Admin SDK (which bypasses security rules).
+
+#### 28.7.2 `onSyncDataWrite` — Firestore onWrite
+
+```
+functions.firestore.document('groups/{groupId}/{collection}/{docId}').onWrite(...)
+```
+
+Fires on every write to **any** subcollection of any group. Filters in-function:
+
+1. `if (!SYNC_PUSH_COLLECTIONS.has(collection)) return;` — only the 8 sync data collections (`transactions, recurringExpenses, incomeSources, savingsGoals, amortizationEntries, categories, periodLedger, sharedSettings`) trigger fan-out.
+2. `if (!change.after.exists) return;` — skip deletes (tombstone has `deleted: true` and is propagated by the listener path; the Function would otherwise double-fire).
+3. Read `lastEditBy` (fallback `deviceId`) — the writer to exclude from fan-out.
+4. `collectRecipientTokens(gid, writerDeviceId)` (§28.7.6) → token list.
+5. `sendFcm(tokens, {type: "sync_push", collection, groupId}, "sync_push")`.
+
+Defense-in-depth: `collectRecipientTokens` also re-validates the writer (§28.7.6). If the writer isn't a current member of the group, the fan-out is suppressed entirely so a security-rule regression that allowed a non-member write cannot escalate into group-wide FCM spam.
+
+Client receivers: `FcmService.handleWakeForSync` → `BackgroundSyncWorker.runFullSyncInline("FCM-sync_push")`. With `enqueueUniqueWork(KEEP)` on the client, bursts of writes (e.g. a 500-row CSV import) collapse to a single sync run per peer.
+
+#### 28.7.3 `onImageLedgerWrite` — Firestore onWrite
+
+```
+functions.firestore.document('groups/{groupId}/imageLedger/{receiptId}').onWrite(...)
+```
+
+`imageLedger` is intentionally **not** in `SYNC_PUSH_COLLECTIONS` because most of its writes are bookkeeping chatter (`markPossession`, `markNonPossession`, `pruneCheckTransaction` deletions) that peers don't need to react to. This trigger applies a content filter so only meaningful writes fan out:
+
+| Condition | Fires |
+|---|---|
+| `before == null && after.uploadedAt == 0` | **Recovery request** — peers with the file should consider re-uploading |
+| `before.uploadedAt == 0 && after.uploadedAt > 0` | **Recovery re-upload complete** — peers should pull the new file |
+| `after.contentVersion > before.contentVersion` | **Rotation** — peers' cached file is stale |
+
+Skipped:
+- Fresh `createLedgerEntry` (a brand-new receipt with no prior version) — already covered by the concurrent `onSyncDataWrite` push on the `transactions` collection (peer's `onBatchChanged` fast-path downloads the photo).
+- Possession updates — informational; UI updates from the next periodic sync.
+- Transaction-driven deletions — propagated via the `transactions` collection.
+- The special `_snapshot_request` doc — uses its own signaling path.
+
+Writer is excluded via `lastEditBy` (fallback `originatorDeviceId`). Client behavior matches §28.7.2.
+
+#### 28.7.4 `presenceHeartbeat` — scheduled
+
+```
+functions.pubsub.schedule('every 15 minutes').timeZone('UTC').onRun(...)
+```
+
+Walks all groups in Firestore. For each, reads `groups/{gid}/presence` from RTDB, collects `deviceId`s with `lastSeen < now - HEARTBEAT_STALE_MS` (15 min), looks up their FCM tokens via `tokensForDevices`, and sends `{type: "heartbeat", groupId}`.
+
+Purpose: backstop for devices that Android has dropped into the App-Standby `rare` or `restricted` bucket so their periodic worker has stopped firing. The 2026-04-12 sync_diag dump showed 4h46m of worker silence on one device — `presenceHeartbeat` closes that gap by waking devices server-side every 15 min.
+
+**Scale caveat:** sequential walk. At ~50 ms/group the 60 s default function timeout is hit at ~1.2 K groups; the 9 min Gen-1 ceiling at ~10 K. Tracked for migration to an indexed presence query in `memory/project_prelaunch_todo.md` #7. Acceptable at current scale.
+
+#### 28.7.5 `presenceOrphanCleanup` — scheduled
+
+```
+functions.pubsub.schedule('every sunday 03:00').timeZone('UTC').onRun(...)
+```
+
+Mitigation for the RTDB `.write: auth != null` gap (§28.4.4). Every Sunday 03:00 UTC:
+
+1. List all groups in Firestore.
+2. For each group, read `groups/{gid}/presence` from RTDB.
+3. Bulk-fetch corresponding `groups/{gid}/devices/{deviceId}` from Firestore via `db.getAll(...refs)` — N reads at most for N presence entries.
+4. For each presence entry whose Firestore device doc is missing or has `removed === true`, queue a `rtdb.ref('groups/{gid}/presence/{deviceId}').remove()`.
+5. `Promise.all` the removals.
+
+Logs `presenceOrphanCleanup: checked {N} group(s), pruned {M} orphan presence entrie(s)`. Same O(n) sequential scaling concern as `presenceHeartbeat`.
+
+Strict replacement for membership-enforcing rules would require either App Check enforcement on RTDB writes (already on, but doesn't substitute for membership) or a server-mediated write path. For now, fresh orphans live up to a week between sweeps.
+
+#### 28.7.6 Shared helpers
+
+`collectRecipientTokens(gid, writerDeviceId)`:
+1. Read `groups/{gid}/devices` (single subcollection get).
+2. **Writer-membership validation** (defense in depth — option A, free because we already read the snapshot): if `writerDeviceId` doesn't appear in the snapshot OR has `removed === true`, log `Fan-out suppressed: writer {id} is not a current member of {gid}` and return `[]`. Catches a security-rule regression that lets a non-member write slip through; suppresses the FCM amplification.
+3. For every other device with a non-empty `fcmToken` and `removed !== true`, collect the token.
+
+`tokensForDevices(gid, deviceIds[])` — per-device lookup variant (used by `presenceHeartbeat`). Skips missing docs, `removed`, empty `fcmToken`.
+
+`sendFcm(tokens, data, label)` — chunks at 500 tokens per `sendEachForMulticast`, Android `priority = "high"`, logs per-batch failure counts. Stringifies all data values (FCM data fields must be strings).
+
+### 28.8 Firebase Cloud Messaging (FCM)
+
+FCM is the wake transport. The server sends data-only messages with `priority: high` so they bypass Doze and App-Standby.
+
+#### 28.8.1 Token lifecycle
+
+`FcmService.onNewToken(token)` saves the new token to `fcm_prefs` SharedPreferences:
+```
+fcm_prefs:
+  fcm_token            : String
+  token_needs_upload   : Boolean
+```
+
+On the next successful Firestore-authenticated sync run, `FirestoreService.storeFcmToken(gid, deviceId, token)` writes the token to `groups/{gid}/devices/{deviceId}.fcmToken` (merge). The flag is cleared after a successful upload.
+
+Tokens rotate on app reinstall, app-data clear, and Google Play services updates. The Cloud Function fan-out paths handle stale tokens via the per-batch failure log (`sendEachForMulticast` returns per-token results) — failed sends don't retry, but the next valid token write replaces the stale one.
+
+#### 28.8.2 Message types
+
+All wakes are data-only messages (`message.data`, never `message.notification`). The `type` field disambiguates routing:
+
+| Type | Source | Effect on receiver |
+|---|---|---|
+| `sync_push` | `onSyncDataWrite`, `onImageLedgerWrite` | `runFullSyncInline("FCM-sync_push")` — Tier 2 if VM alive, Tier 3 inline + budget if dead |
+| `heartbeat` | `presenceHeartbeat` (15-min cron) | Same as `sync_push`, sourceLabel `"FCM-heartbeat"` |
+| `debug_request` | Manual server trigger (admin uses Cloud Console or `gcloud` to send to a specific FCM token) | Debug builds only — `runDebugDumpInline()` builds a diag dump + uploads via Storage |
+
+`sync_push` and `heartbeat` are functionally equivalent in client routing — they both wake the sync pipeline. The distinction is for diagnostics: `heartbeat` indicates a server-detected stale-presence wake; `sync_push` indicates real data has changed. Slim-path eligibility on Tier 3 differs: `heartbeat` slims when there's been a recent inline sync; `sync_push` never slims (signals real data to fetch).
+
+Additional fields in `sync_push`:
+- `collection : String` — which collection was written (e.g. `"transactions"`)
+- `groupId : String` — for cross-membership debugging.
+
+`heartbeat` carries only `groupId`. `debug_request` is empty.
+
+#### 28.8.3 Client routing (`FcmService.kt`)
+
+```
+override fun onMessageReceived(message: RemoteMessage) {
+    val type = message.data["type"] ?: return
+    when (type) {
+        "debug_request" -> handleDebugRequest()
+        "sync_push", "heartbeat" -> handleWakeForSync(type)
+    }
+}
+```
+
+`handleWakeForSync` branches on VM lifecycle:
+
+- **VM alive (Tier 2)** — launches on `BudgeTrakApplication.processScope` and returns from the FCM thread immediately. The ViewModel's existence keeps the process alive past `onMessageReceived` returning, so long Tier 2 work (snapshot building, multi-photo upload) completes naturally. No time budget. No WM fallback needed.
+
+- **VM dead (Tier 3)** — `runBlocking { runFullSyncInline(ctx, "FCM-$type", INLINE_BUDGET_MS) }`. The blocking is load-bearing — it's the only thing keeping the process alive while WorkManager and the inline body do their work. `INLINE_BUDGET_MS = 8500`, leaving 1.5 s of the FCM 10 s service window for service teardown. WM `runOnce` fallback fires if the inline body returns `false` (timeout / offline / failed).
+
+`debug_request` follows the same VM-alive vs dead branch, with `runDebugDumpInline` instead of `runFullSyncInline`.
+
+### 28.9 Crashlytics
+
+#### 28.9.1 Custom keys
+
+Stamped by `BudgeTrakApplication.onCreate` and `BudgeTrakApplication.updateDiagKeys(map)` (which `MainViewModel.runPeriodicMaintenance` calls daily for sync users). All attached to every future crash and non-fatal.
+
+| Key | Source | Purpose |
+|---|---|---|
+| `buildTime` | `BuildConfig.BUILD_TIME` (set in `app/build.gradle.kts` from `SimpleDateFormat("yyyy-MM-dd HH:mm").format(Date()) + " UTC"`) | Identify which build a crash came from when many devices in the wild are on older APKs. Filter via `query-crashlytics.js --build <prefix>`. |
+| `versionCode` | `BuildConfig.VERSION_CODE` | Monotonic version filter. |
+| `lastTokenExpiry` | `addAppCheckListener` callback | Token freshness. |
+| `authAnonymous` | `addAuthStateListener` callback | True/false — should always be true. |
+| `cashDigest` | `runPeriodicMaintenance` | Hex digest of `availableCash`, for cross-device consistency analysis. |
+| `listenerStatus` | `runPeriodicMaintenance` | Aggregated state of all 8 Firestore listeners. |
+| `lastRefreshDate` | `runPeriodicMaintenance` | When did this device last successfully sync? |
+| `activeDevices` | `runPeriodicMaintenance` | Device count — sanity check for "should this group still exist?" |
+| `txnCount`, `reCount`, `plCount` | `runPeriodicMaintenance` | Inventory snapshot. |
+| `isSyncConfigured`, `isSyncAdmin`, `syncGroupId` | `MainViewModel` updates | Sync surface state for crash triage. |
+
+#### 28.9.2 Non-fatal triggers
+
+`BudgeTrakApplication.recordNonFatal(tag, message, exception?)` records a `RuntimeException` with a custom tag and message. Sites:
+
+| Tag | Where | Trigger |
+|---|---|---|
+| `PERMISSION_DENIED` | `FirestoreDocSync` listener-error path | Any sustained Firestore PERMISSION_DENIED |
+| `CONSISTENCY_COUNT_MISMATCH` | `MainViewModel.runConsistencyCheck` | Layer 1 active-doc-count divergence |
+| `CONSISTENCY_HASH_MISMATCH` | `MainViewModel.runConsistencyCheck` | Layer 2 cash-hash divergence (after 1 h confirmation gate) |
+| `TOKEN_REFRESH_TIMEOUT` | `BackgroundSyncWorker` Tier 2/3, ViewModel keep-alive | App Check token refresh exceeded 15 s |
+| `OCR_PIPELINE_FAILURE` | `ReceiptOcrService.kt:202` | Any OCR exception (caught at runtime, recorded via `recordException(e)` before returning `Result.failure`) |
+
+Non-fatals are rate-limited to 10/session by Crashlytics (an SDK-imposed limit). Going over 10 silently drops. `health_beacon` was migrated to Firebase Analytics specifically to avoid burning the cap.
+
+#### 28.9.3 Opt-out
+
+SharedPref `app_prefs:crashlyticsEnabled` (default `true`). Read in `BudgeTrakApplication.onCreate` **before** any Firebase service call, then applied via `setCrashlyticsCollectionEnabled` and `setAnalyticsCollectionEnabled` (one toggle controls both). UI label in Settings: "Send crash reports and anonymous usage data."
+
+### 28.10 Firebase Analytics
+
+`data/telemetry/AnalyticsEvents.kt`. Same opt-out toggle as Crashlytics. Events are silently no-op'd when the toggle is off — `isEnabled(ctx)` short-circuits before `Firebase.analytics.logEvent`.
+
+#### 28.10.1 Event schema
+
+**`ocr_feedback`** — fires on save of an OCR-populated transaction. Anonymous deltas/booleans only — no merchant text or amounts. Measures per-field user-correction rate so OCR quality regressions are observable.
+
+```
+merchant_changed   : Boolean   # User changed the merchant string
+date_changed       : Boolean   # User changed the date
+amount_delta_cents : Long      # finalCents - ocrCents (signed)
+cats_added         : Long      # Count of category IDs added vs OCR
+cats_removed       : Long      # Count of category IDs removed vs OCR
+had_multi_cat      : Boolean   # OCR returned ≥ 2 categoryAmounts
+```
+
+**`health_beacon`** — daily sync-user heartbeat from `runPeriodicMaintenance` (24 h gate). Migrated from a Crashlytics non-fatal so it doesn't burn the 10/session cap.
+
+```
+listener_up    : Boolean  # All 8 Firestore listeners healthy
+active_devices : Long
+txn_count      : Long
+re_count       : Long
+pl_count       : Long
+```
+
+#### 28.10.2 GA4 linkage
+
+The Firebase project must be linked to a GA4 property, or events are silently dropped. Events were dropped on `com.techadvantage.budgetrak` from 2026-04-22 (when SDK calls were added) to 2026-04-26 (when the GA4 link was created) for exactly this reason — fix was at Firebase Console → Integrations → Google Analytics → Link → property `534603748`, stream `14591145419`.
+
+Firebase BoM 32.x autodiscovers the measurement ID at runtime via `mobilesdk_app_id` — `google-services.json` doesn't need an explicit `analytics_service` block. Confirmed working without it.
+
+#### 28.10.3 BigQuery export
+
+Enabled at Firebase Console → Project Settings → Integrations → BigQuery for the `analytics_534603748` dataset on 2026-04-26 alongside Crashlytics streaming. Daily + Streaming. No advertising IDs. See §28.11 for query patterns.
+
+### 28.11 BigQuery
+
+#### 28.11.1 Datasets and tables
+
+| Dataset | Tables | Purpose |
+|---|---|---|
+| `firebase_crashlytics` | `com_securesync_app_ANDROID` (batch, daily) | Legacy Crashlytics — receives data through 2026-04-12 (rebrand date) |
+| | `com_securesync_app_ANDROID_REALTIME` (stream) | Legacy Crashlytics realtime — same cutoff |
+| | `com_techadvantage_budgetrak_ANDROID` (batch) | Rebranded Crashlytics — receives data from 2026-04-26 |
+| | `com_techadvantage_budgetrak_ANDROID_REALTIME` (stream) | Rebranded Crashlytics realtime — same start |
+| `analytics_534603748` | `events_YYYYMMDD` (per-day batch tables) | Firebase Analytics events (`ocr_feedback`, `health_beacon`) |
+| | `events_intraday_YYYYMMDD` | Today's events (until midnight rollover) |
+
+All in BigQuery project `sync-23ce9` (no separate analytics project).
+
+The legacy `com_securesync_app_*` tables don't get renamed when the Android applicationId changes — Firebase keeps existing export tables intact. Both legacy and rebranded must be `UNION ALL`'d for historical lookups spanning 2026-04-12 to 2026-04-26.
+
+#### 28.11.2 Service account
+
+Auth via `~/.config/budgetrak/sa-key.json` (a JSON service-account key). IAM roles required, both project-scoped on `sync-23ce9`:
+- `roles/bigquery.jobUser` — run queries
+- `roles/bigquery.dataViewer` — read data
+
+Key creation may need a Workspace org-policy override if `iam.disableServiceAccountKeyCreation` (legacy constraint) is set. Check at IAM & Admin → Organization Policies for the parent org.
+
+The query helper falls back to `~/.config/configstore/firebase-tools.json` (Firebase CLI refresh token) if the SA key is missing. The fallback is RAPT-limited (re-auth every 3–7 d for Workspace accounts), which is the reason we switched to a SA — see `memory/reference_bigquery_service_account.md`.
+
+#### 28.11.3 Query helper
+
+`tools/query-crashlytics.js`. Modes:
+```
+node tools/query-crashlytics.js                  # last 24 h events
+node tools/query-crashlytics.js --days 7         # window
+node tools/query-crashlytics.js --crashes        # fatals only
+node tools/query-crashlytics.js --nonfatals      # PERMISSION_DENIED + others
+node tools/query-crashlytics.js --keys           # raw custom_keys arrays
+node tools/query-crashlytics.js --analytics      # ocr_feedback + health_beacon
+node tools/query-crashlytics.js --list-devices   # distinct device fingerprints (7 d)
+node tools/query-crashlytics.js --build 2026-05  # filter to one build via STARTS_WITH(buildTime, prefix)
+node tools/query-crashlytics.js --query "SQL"    # custom SQL
+```
+
+The `--build` filter unwraps `custom_keys` from its `ARRAY<STRUCT<key,value>>` shape:
+```sql
+WHERE EXISTS (
+  SELECT 1 FROM UNNEST(custom_keys) ck
+  WHERE ck.key = 'buildTime' AND STARTS_WITH(ck.value, '<prefix>')
+)
+```
+
+Distinct device-fingerprint rollup (`--list-devices`):
+```sql
+SELECT DISTINCT
+  application.display_version AS app_version,
+  device.model AS device_model,
+  installation_uuid,
+  (SELECT value FROM UNNEST(custom_keys) ck WHERE ck.key = 'buildTime') AS build_time,
+  COUNT(*) AS events,
+  MAX(event_timestamp) AS last_event
+FROM `sync-23ce9.firebase_crashlytics.com_techadvantage_budgetrak_ANDROID_REALTIME`
+WHERE event_timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
+GROUP BY 1, 2, 3, 4
+ORDER BY last_event DESC
+```
+
+`installation_uuid` is stable across upgrades and changes only on uninstall + reinstall. Combined with `device.model` and `buildTime`, it uniquely fingerprints a build-on-device.
+
+#### 28.11.4 Cost
+
+Free tier covers BigQuery storage and queries below 1 TiB/month. At BudgeTrak's volume (current beta + foreseeable launch), no real cost. The Crashlytics + Analytics streaming export itself is free on Blaze.
+
+### 28.12 Gemini API (external)
+
+Two app features call Gemini directly: AI CSV categorization (`AiCategorizerService`) and AI Receipt OCR (`ReceiptOcrService`). Both use the **public Generative AI API** (not Vertex AI), addressed via `https://generativelanguage.googleapis.com` by the `com.google.ai.client.generativeai` SDK.
+
+#### 28.12.1 Model selection
+
+Both services use `gemini-2.5-flash-lite`. Selected for the cost-per-token / latency / accuracy sweet spot: Flash-Lite is ~30% the cost of Flash, runs receipt-OCR calls in 600–900 ms per call, and at `temperature = 0` is deterministic enough to be reliable.
+
+#### 28.12.2 API key sourcing
+
+Key lives in `local.properties` (gitignored) under `GEMINI_API_KEY`. `app/build.gradle.kts` reads the property and emits it as `BuildConfig.GEMINI_API_KEY`. The services check `BuildConfig.GEMINI_API_KEY.isBlank()` and return `Result.failure(IllegalStateException("GEMINI_API_KEY missing"))` on missing key. There is no runtime key rotation; ship-time injection only. Rotating requires a rebuild.
+
+For a fresh dev environment: Google AI Studio → Get API Key → paste into `local.properties` as `GEMINI_API_KEY=…`.
+
+#### 28.12.3 Request shapes
+
+**AI categorization** (`AiCategorizerService`): single text-only call per chunk of ≤ 100 transactions. Schema-constrained JSON output — the SDK enforces `responseMimeType = "application/json"` + a `Schema.obj(...)` that returns a list of `{index, categoryId}` records. Prompt includes the known category list (id + name only, no merchant/amount training data leaks). One model instance, lazily initialized. Retries on transient errors (`503|UNAVAILABLE|overloaded|429|RESOURCE_EXHAUSTED|deadline|fetch failed|network|ECONNRESET|ETIMEDOUT|socket`); silent fallback to the on-device heuristic on hard failure.
+
+**Receipt OCR** (`ReceiptOcrService`): three or four sequential / parallel calls per receipt:
+
+```
+Call 1   (image → extract):       merchant, date, amountCents, itemNames[], topChoice, multiCategoryLikely, focusedTranscript
+Call 1.5 (text → reconcile):      re-read date + amountCents from focusedTranscript (no image — cheap)
+Call 2   (image + items[] → categorize): items[{description, categoryId, ...}]
+Call 3   (image + item-list → prices):    priceCents per item, only when multi-category
+```
+
+- **Single-cat path** (`preSelect.isEmpty()`, `multiCategoryLikely == false`): 3 calls — Call 1, then Call 1.5 ‖ Call 2 in parallel.
+- **Multi-cat path** (`preSelect.size >= 2` or `multiCategoryLikely == true`): 4 calls — Call 1, Call 1.5 ‖ Call 2 in parallel, then Call 3.
+
+Why the split: Call 1 produces stable item-name text; Call 2 reasons over text (cheaper, more accurate) with the image as backup. Reconciliation lives in Call 1.5 (text-only) because Flash-Lite still produces single-digit OCR errors at temperature 0; running a text-only sanity pass over the focused transcript catches them.
+
+**Image bytes are passed via `content { blob("image/jpeg", bytes) }`, not `image(bitmap)`.** The SDK's `image(bitmap)` path re-encodes every Bitmap at JPEG quality 80 before sending (`encodeBitmapToBase64Png` in the SDK), which silently degrades the q=92+ receipt JPEGs we store. `blob()` bypasses the re-encode.
+
+Failure handling: any uncaught exception is caught at the service boundary, recorded via `FirebaseCrashlytics.recordException(e)` with tag `OCR_PIPELINE_FAILURE`, and returned as `Result.failure`. The UI shows a toast and lets the user fall back to manual entry.
+
+#### 28.12.4 Quotas + limits
+
+Free tier: 15 RPM, 1.5 K RPD, 1M TPM (per the public limits at writing). At the user's current beta volume this is fine; production launch may need a billing-enabled key with paid tier. Monitor via the Google Cloud Console → APIs & Services → Generative Language API → Quotas. Server-side quota errors surface as `429 RESOURCE_EXHAUSTED` and are retried by the categorization service; OCR fails immediately with a non-fatal.
+
+### 28.13 Cost & Scale Snapshot
+
+Estimates from 2026-04 (40 K groups, 100 K devices, 5 sessions/day, 2 changes/session). Actual current usage is well below.
+
+| Component | Monthly | Notes |
+|---|---|---|
+| Filtered listeners with cursors | ~$27 | Per-collection `whereGreaterThan(updatedAt, cursor)` |
+| Reinstall full reads | ~$135 | One-time per install |
+| Firestore writes | ~$54 | Per-field encrypted docs |
+| Firestore storage | ~$81 | |
+| Cloud Storage (photos) | ~$86 | Receipts + snapshot archives |
+| Startup health-check reads | ~$18 | `Source.CACHE` everywhere — minimal egress |
+| RTDB presence | ~$0 | Free tier |
+| Integrity check | ~$0 | `Source.CACHE` |
+| Cloud Functions | ~$5 | 5 functions; `presenceHeartbeat` dominates at ~3 K invocations/day |
+| BigQuery export + queries | ~$0 | Free tier |
+| FCM | ~$0 | Free |
+| Gemini API | tier-dependent | Paid users only; rates above |
+| **Total (legacy components)** | **~$401** | Pre-optimization v2.3 estimate was ~$50,643 — 99.2% reduction from cursor + cache strategies. |
+
+**Scaling concerns**:
+- `presenceHeartbeat` and `presenceOrphanCleanup` are sequential O(n) walks. Migration to indexed presence queries is in `memory/project_prelaunch_todo.md` #7. Hard ceiling ~10 K groups under Gen-1 9-min limit.
+- Cloud Functions Gen-2 migration would eliminate the 9-min ceiling but requires Cloud Run + Eventarc + IAM setup not currently configured. v1 is sufficient at projected scale.
+
+---
+
+## 29. Document Revision History
 
 | Version | Date | Changes |
 |---------|------|---------|
@@ -1989,6 +2750,7 @@ Do NOT upgrade `core-ktx` past 1.13.1 or Compose BOM past 2024.09.03 — newer v
 | 2.7 | Apr 18 2026 | **AI features + photo-bar UX overhaul.** AI Receipt OCR (Subscriber, explicit-tap sparkle icon, Gemini 2.5 Flash-Lite 3-call pipeline + Call 1 routing probe); AI CSV Categorization (Paid+Sub, opt-in). Photo-bar long-press + drag reorder with real-time reshuffle. Photo-pipeline hardening (dedupe, 400 px floor, PDF via `PdfRenderer`, queue-on-save). Worker `AtomicBoolean isRunning` double-fire guard. Cash Flow Simulation widened to Paid+Subscriber. |
 | 2.7.1 | Apr 27 2026 | **Transaction save audit — six silent-loss vectors closed:** non-dismissable `DuplicateResolutionDialog`; `onResume` add-only disk merge; entity-id range widened to `1..Int.MAX_VALUE`; multi-category validation toasts on silent returns; `onUpdateTransaction` toasts on missing edit target; `addTransactionWithBudgetEffect` made atomic. |
 | 2.8 | Apr 27 2026 | **TransactionDialog unification + network-awareness pass.** Three add/edit entry points consolidated into one dialog with EXPENSE/INCOME pill toggle. Single layered Add-Transaction icon replaces +/- IconButton pairs. OCR refund-receipt support (negative `amountCents` auto-flips type + `abs()`). Preselect-help banner opens as a sibling-`Dialog` overlay so the underlying transaction dialog survives the round-trip. Fail-fast offline + auto-resume across receipt sync / AI OCR / Sync Now / `BackgroundSyncWorker` / App Check / anonymous auth via `networkCallback.onAvailable`. Tier 2 receipt-sync rethrows `CancellationException` and propagates `clearLostReceiptSlot` state back to `vm.transactions`. Debug receipt forensics in `token_log.txt` + `sync_diag.txt` Receipt Files Audit. Call 1.5 capped at 2 s past Call 2. ~100 files / ~51,500 lines. Dead code removed: down-only `PulsingScrollArrow`; `DeviceRecord.fingerprintData/fingerprintSyncVersion` (written but never read); `updateDeviceMetadata.fingerprintJson` parameter (no caller passed it). |
+| 2.8 (post-fix) | May 1 2026 | **Backend-infrastructure consolidation.** Added Chapter 28 covering Firebase project, Auth, Firestore (rules + schema verbatim), RTDB (rules + schema verbatim), Cloud Storage (rules verbatim), App Check (provider config + Console TTL per provider + Play Integrity advanced settings + refresh triggers), Cloud Functions (all 5 documented with rationale), FCM (token lifecycle + message types + client routing), Crashlytics (custom keys + non-fatal triggers + opt-out), Firebase Analytics (event schema + GA4 linkage + BigQuery export), BigQuery (datasets + SA auth + query helper), Gemini API (model + key sourcing + request shapes), and cost snapshot. Designed for project reconstructability if all source were lost. **`scheduleNextBoundary` fatal-crash fix** (illegal `setExpedited` + `setInitialDelay` combo on API 31+ — fired hourly via `widget_info.xml` `updatePeriodMillis="3600000"` for solo users). **Crashlytics `buildTime` + `versionCode` custom keys** stamped in `BudgeTrakApplication.onCreate` for post-publish per-build filtering via `query-crashlytics.js --build <prefix>`. `--list-devices` flag added. |
 
 ---
 
