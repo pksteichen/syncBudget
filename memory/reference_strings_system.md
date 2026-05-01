@@ -37,6 +37,14 @@ Every user-visible string: dialog titles/body/buttons (including common "Cancel"
 
 When adding new entries, follow the same style.
 
+## Spanish locale variant
+The Spanish strings target **neutral Latin American Spanish (es-419)**, not Castilian (es-ES). Confirmed 2026-05-01 by grepping `SpanishStrings.kt`:
+- Uses *computadora* (LATAM), not *ordenador* (Castilian).
+- Zero matches for *vosotros*, *móvil* (cell phone sense), *coche*, *ordenador*.
+- Uses *tú* throughout (151 instances) — works in both regions; no *vos* (so not Argentine/Uruguayan voseo specifically).
+
+**Implication for Play Console / store listing:** use `<es-419>` language tag for release notes, store listing description, screenshot captions, and any other locale-tagged content — never `<es-ES>`. Mismatching the tag means LATAM testers see Castilian release notes (or vice versa) for an app whose UI is the other variant.
+
 ## SYNC in strings
 - "SYNC" is always all-caps in both languages — brand mark, never translated. See `feedback_sync_branding.md`.
 - Spanish "Sincronización" is fine as a concept/verb ("la sincronización está al día") but the **feature/page/button** is always uppercase **SYNC**.

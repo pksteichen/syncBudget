@@ -1,0 +1,134 @@
+name: Release AAB
+
+# Manual-dispatch only for now. Once the workflow is proven, add a tag-based
+# trigger (e.g. `on: push: tags: [v*]`) so `git tag vX.Y.Z && git push --tags`
+# becomes a one-shot release path.
+on:
+  workflow_dispatch:
+    inputs:
+      publish_to_play:
+        description: "Auto-upload the built AAB to Play Console after build succeeds"
+        type: boolean
+        default: false
+      release_track:
+        description: "Play Console track (only used if publish_to_play is true)"
+        type: choice
+        options:
+          - internal
+          - alpha
+          - beta
+          - production
+        default: internal
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      # Decode the upload keystore from a base64-encoded secret. The secret
+      # value is `base64 -w 0 ~/keystore/upload-keystore.jks` from the dev
+      # machine — single line, no whitespace.
+      - name: Decode upload keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          mkdir -p "$HOME/keystore"
+          echo "$KEYSTORE_BASE64" | base64 -d > "$HOME/keystore/upload-keystore.jks"
+          # Sanity: keystore should be at least a few KB. Anything tiny means
+          # the secret was empty or got mangled in transit.
+          if [ "$(stat -c%s "$HOME/keystore/upload-keystore.jks")" -lt 1000 ]; then
+            echo "::error::Decoded keystore is suspiciously small — KEYSTORE_BASE64 secret missing or malformed?"
+            exit 1
+          fi
+
+      # Materialize local.properties (gitignored on dev, doesn't exist on CI)
+      # from secrets so app/build.gradle.kts can read keystore + Gemini key.
+      - name: Materialize local.properties
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          {
+            echo "sdk.dir=$ANDROID_HOME"
+            echo "BUDGETRAK_KEYSTORE_FILE=$HOME/keystore/upload-keystore.jks"
+            echo "BUDGETRAK_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+            echo "BUDGETRAK_KEY_ALIAS=$KEY_ALIAS"
+            echo "GEMINI_API_KEY=$GEMINI_API_KEY"
+          } > local.properties
+
+      - name: Build signed release AAB
+        run: |
+          chmod +x gradlew
+          ./gradlew bundleRelease --no-daemon --stacktrace
+
+      # Pull versionCode + versionName from app/build.gradle.kts so the
+      # artifact filename and any later release-naming step has them.
+      - name: Read version metadata
+        id: version
+        run: |
+          VC=$(grep "versionCode = " app/build.gradle.kts | head -1 | awk '{print $NF}')
+          VN=$(grep "versionName = " app/build.gradle.kts | head -1 | awk -F'"' '{print $2}')
+          echo "code=$VC" >> "$GITHUB_OUTPUT"
+          echo "name=$VN" >> "$GITHUB_OUTPUT"
+          echo "Built BudgeTrak v$VN (versionCode $VC)"
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BudgeTrak-v${{ steps.version.outputs.name }}-${{ steps.version.outputs.code }}
+          path: app/build/outputs/bundle/release/app-release.aab
+          retention-days: 30
+
+      # Mapping file is needed for any post-publish stack-trace deobfuscation.
+      # Crashlytics auto-uploads on Firebase, but we keep a copy as an artifact.
+      - name: Upload R8 mapping artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mapping-${{ steps.version.outputs.code }}
+          path: app/build/outputs/mapping/release/mapping.txt
+          retention-days: 90
+        # mapping.txt only exists when minify is on (release config minifies);
+        # if a future buildType disables minify, skip rather than fail.
+        continue-on-error: true
+
+      # Optional auto-publish to Play Console. Gated on the workflow input
+      # AND on the secret being populated (an unset secret produces an empty
+      # string, which fails the action below — gate prevents a confusing
+      # failure when the secret simply hasn't been added yet).
+      - name: Publish to Play Console
+        if: ${{ inputs.publish_to_play && env.HAS_PLAY_KEY == 'true' }}
+        env:
+          HAS_PLAY_KEY: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON != '' }}
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.techadvantage.budgetrak
+          releaseFiles: app/build/outputs/bundle/release/app-release.aab
+          mappingFile: app/build/outputs/mapping/release/mapping.txt
+          track: ${{ inputs.release_track }}
+          status: completed
+          # Release notes: read from `whatsNew/` directory. Each file named
+          # whatsnew-<bcp47-locale> contains the localized notes for that
+          # locale (e.g., whatsnew-en-US, whatsnew-es-419). Optional — omit
+          # the directory and the action uploads without notes.
+          whatsNewDirectory: whatsNew
+
+      - name: Skipped Play Console publish (secret missing)
+        if: ${{ inputs.publish_to_play && env.HAS_PLAY_KEY != 'true' }}
+        env:
+          HAS_PLAY_KEY: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON != '' }}
+        run: |
+          echo "::warning::publish_to_play was true but PLAY_SERVICE_ACCOUNT_JSON secret is not set; skipping Play upload."
