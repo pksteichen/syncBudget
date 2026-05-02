@@ -652,7 +652,7 @@ object TranslationContext {
         "joinWarningTitle" to "Confirmation dialog title warning that joining a group will replace local data.",
         "joinWarningBody" to "Confirmation dialog body explaining that joining overwrites local transactions, goals, and settings. Irreversible.",
         "dissolveError" to "Error message when the server could not be reached to dissolve the group.",
-        "enterNickname" to "Form field label/placeholder for entering the user's display name in the sync group.",
+        "enterNickname" to "Form field label for the device nickname in the SYNC group setup. Intentionally framed as device-labeling (not personal-name) so users type 'My phone' / 'Office tablet' rather than their actual name — supports the Play Console Data Safety declaration that BudgeTrak does NOT collect personal name data.",
         "createGroupTitle" to "Dialog title for the create-group form.",
         "renameDevice" to "Button label to change a device's display name in the sync group.",
         "removeDeviceTitle" to "Confirmation dialog title when the admin removes a device from the sync group.",

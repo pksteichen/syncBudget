@@ -1,4 +1,4 @@
-Internal testing build of BudgeTrak v2.10.00.
-- Fix: full backup restore now refreshes the UI immediately. Previously categories, recurring expenses, and income sources could appear empty/default until the app was force-stopped and reopened.
-- Restore dialog: auto-opens the folder picker, remembers your backup folder for future restores, and rejects invalid picks (wrong folder or no backup files).
-- Internal testing only: this build defaults all users to Subscriber tier so testers can exercise paid features without a billing flow. Will switch to Google Play billing in a future build.
+BudgeTrak v2.10.01 — internal testing build.
+- Renamed the SYNC group "Your name" field to "Device nickname" to clarify that the entry is a label for this device, not your personal name.
+- Includes the v2.10.00 fixes: backup restore now refreshes UI instantly; restore dialog auto-opens picker, remembers your folder, rejects wrong picks; release builds default to Subscriber tier.
+- Native debug symbols now embedded in the AAB for cleaner crash reports.
