@@ -2718,6 +2718,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     init {
         instance = java.lang.ref.WeakReference(this)
 
+        // ── Release-build subscription override ──
+        // TEMPORARY (until Google Play Billing integration ships): force every
+        // release-build user into Subscriber tier so internal/closed/open
+        // testers can exercise paid-only features without a billing flow.
+        // Debug builds keep the prefs-toggleable state so we can still
+        // exercise free / paid / subscriber UX paths in development.
+        // Remove this block once `BillingClient` flows wire `isPaidUser` /
+        // `isSubscriber` from real Play Store entitlements.
+        if (!BuildConfig.DEBUG) {
+            isPaidUser = true
+            isSubscriber = true
+            prefs.edit()
+                .putBoolean("isPaidUser", true)
+                .putBoolean("isSubscriber", true)
+                .apply()
+        }
+
         // App Check is initialized in BudgeTrakApplication.onCreate() so it
         // runs even when the process is started by WorkManager without an Activity.
 

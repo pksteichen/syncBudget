@@ -19,8 +19,11 @@ android {
         applicationId = "com.techadvantage.budgetrak"
         minSdk = 28
         targetSdk = 35
-        versionCode = 14
-        versionName = "2.9.7"
+        // versionName format: MAJOR.MINOR.PP (third segment is zero-padded
+        // 00-99 to leave 100 patch slots per minor for extensive debugging
+        // cycles before bumping minor).
+        versionCode = 15
+        versionName = "2.10.00"
     }
 
     signingConfigs {
