@@ -148,6 +148,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [Ambiguous categories aren't OCR errors](feedback_ocr_ambiguous_categories_not_errors.md) — rotisserie chicken, steel-toed boots, soap: multiple valid buckets; don't penalize.
 - [Memory routing — project vs private](feedback_memory_routing.md) — tracked `memory/` for project content; un-tracked `~/.claude/projects/.../private-notes/` for personal.
 - [Surface save failures, never silently no-op](feedback_silent_save_failures.md) — six silent-loss vectors found in transaction add/edit (2026-04-27); rules for guards, dismiss handlers, validation toasts.
+- [Activity.recreate() preserves the ViewModel](feedback_recreate_preserves_viewmodel.md) — disk writes need explicit vm.reloadAllFromDisk(); recreate() rebuilds UI but keeps stale VM state. Pair with Snapshot.withMutableSnapshot + key(vm.dataReloadVersion) wrap on the screen-routing block.
 - [Compose Dialog windows stack above main window](feedback_compose_dialog_window_stacking.md) — overlays meant to cover an open Dialog must themselves be a Dialog; a plain Surface renders behind.
 - [Network-touching code must be network-aware](feedback_network_aware_code.md) — fail-fast offline (vm.isNetworkAvailable foreground, NetworkUtils.isOnline background); auto-resume drainer on onAvailable via cancelAndJoin; thread Boolean through to avoid stamping "work done" after offline-skipped runs.
 
