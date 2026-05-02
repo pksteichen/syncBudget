@@ -57,6 +57,15 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Embed native (.so) debug symbols into the AAB so Play Console
+            // can deobfuscate crashes/ANRs from bundled native libs (Firebase,
+            // Compose runtime, etc.). Without this, Play warns "this AAB
+            // contains native code, and you've not uploaded debug symbols."
+            // SYMBOL_TABLE is sufficient for stack-trace symbolication; FULL
+            // adds line numbers but ~triples the symbol payload size.
+            ndk {
+                debugSymbolLevel = "SYMBOL_TABLE"
+            }
         }
     }
 
