@@ -1,3 +1,4 @@
-BudgeTrak v2.9.1 — internal testing build.
-- Fix: full-backup restore now refreshes the UI immediately. Previously categories, recurring expenses, and recurring income lists could appear empty/default-only until the app was force-stopped and reopened, even though the data was correctly written to disk.
-- Diagnostics: state dump now includes income sources, savings goals, and amortization entries (previously omitted).
+Internal testing build of BudgeTrak v2.10.00.
+- Fix: full backup restore now refreshes the UI immediately. Previously categories, recurring expenses, and income sources could appear empty/default until the app was force-stopped and reopened.
+- Restore dialog: auto-opens the folder picker, remembers your backup folder for future restores, and rejects invalid picks (wrong folder or no backup files).
+- Internal testing only: this build defaults all users to Subscriber tier so testers can exercise paid features without a billing flow. Will switch to Google Play billing in a future build.

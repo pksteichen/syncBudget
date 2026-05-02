@@ -1,3 +1,4 @@
-BudgeTrak v2.9.1 — versión de pruebas internas.
-- Corregido: la restauración de respaldo completo ahora actualiza la interfaz al instante. Antes las listas de categorías, gastos recurrentes e ingresos recurrentes podían verse vacías o solo con los valores predeterminados hasta que se forzaba el cierre y reapertura de la app, aunque los datos estaban correctamente guardados en disco.
-- Diagnóstico: el volcado de estado ahora incluye fuentes de ingreso, metas de ahorro y entradas de amortización (antes omitidas).
+Versión de pruebas internas de BudgeTrak v2.10.00.
+- Corregido: la restauración de respaldo completo ahora actualiza la interfaz al instante. Antes las categorías, gastos recurrentes e ingresos recurrentes podían verse vacíos hasta forzar el cierre y reapertura.
+- Diálogo de restauración: abre el selector de carpetas automáticamente, recuerda tu carpeta de respaldos para futuras restauraciones, y rechaza selecciones inválidas (carpeta incorrecta o sin respaldos).
+- Solo pruebas internas: esta versión activa el nivel Subscriber para todos los usuarios para que los probadores puedan usar las funciones de pago sin pasar por un proceso de compra. Se cambiará al sistema de pagos de Google Play en una versión posterior.
