@@ -185,6 +185,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [Pre-launch TODO](project_prelaunch_todo.md) — most done; App Check integrity level deferred.
 - [Period-boundary scheduling (Phase 3 + 4)](project_period_boundary_scheduling.md) — replace BG worker 15-min periodic with one-shots at period boundaries; gated on Phase 1 FCM-inline overnight verification.
 - [Play Store launch plan](project_play_store_launch.md) — personal-first then transfer-to-org strategy, address plan, DUNS timeline.
+- [Play "Verified" badge](project_play_verified_badge.md) — currently VPN-only; criteria + BudgeTrak gap analysis for if/when Google expands to finance category. Requires org account + MASA Level 2 + independent security review + 90 days + 10K/250.
 - [Billing + runaway-bug alerts (configured 2026-04-13)](project_billing_alerts.md) — $1 budget + 4 Monitoring policies + SMS channel. Killswitch still optional.
 - [OCR Spanish / Country setting](project_ocr_spanish_country_setting.md) — when adding Spanish or LatAm launch, add a Country dropdown driving locale/currency/date/tax-vocab hints into the OCR prompt; integer-only currencies (CLP/COP/PYG) block launch without this.
 
