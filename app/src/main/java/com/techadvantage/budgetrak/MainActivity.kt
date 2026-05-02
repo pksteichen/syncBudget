@@ -111,6 +111,7 @@ import com.techadvantage.budgetrak.ui.theme.DialogHeader
 import com.techadvantage.budgetrak.ui.theme.DialogStyle
 import com.techadvantage.budgetrak.ui.theme.DialogWarningButton
 import com.techadvantage.budgetrak.ui.theme.DialogSecondaryButton
+import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrows
 import com.techadvantage.budgetrak.ui.theme.SyncBudgetTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -394,6 +395,15 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
+                // `key(vm.dataReloadVersion) { … }` forces the screen-routing
+                // subtree to unmount and remount whenever a wholesale reload
+                // happens (full-backup restore, SYNC join-snapshot apply).
+                // Without this, screens that read collections via the
+                // `vm.active*` derivedStateOf properties retained stale
+                // snapshots through the clear()+addAll() transition,
+                // manifesting as Categories/RecurringExpenses/IncomeSources
+                // screens showing pre-restore state until process kill.
+                androidx.compose.runtime.key(vm.dataReloadVersion) {
                 when (vm.currentScreen) {
                     "main" -> MainScreen(
                         soundPlayer = soundPlayer,
@@ -866,6 +876,7 @@ class MainActivity : ComponentActivity() {
                         onBack = { vm.currentScreen = "budget_calendar" }
                     )
                 }
+                } // key(vm.dataReloadVersion)
 
                 // Dashboard quick-add dialogs (rendered over any screen)
                 DashboardDialogs(vm, vm.strings, toastState)
@@ -1398,48 +1409,120 @@ class MainActivity : ComponentActivity() {
             var restorePassword by remember { mutableStateOf("") }
             var restoreError by remember { mutableStateOf<String?>(null) }
             var restoring by remember { mutableStateOf(false) }
+            // Tracks whether we've already tried to enumerate files for this dialog
+            // showing — guards the auto-launch-picker LaunchedEffect from racing
+            // against a successful enumeration via the persisted URI.
+            var enumerationAttempted by remember { mutableStateOf(false) }
             val restoreScrollState = rememberScrollState()
+
+            // Load + cache .enc files referenced by a SAF tree URI. Returns the
+            // resulting BackupEntry list (possibly empty). Used by both the picker
+            // callback (after a fresh user pick) and the LaunchedEffect that tries
+            // the persisted URI silently on dialog open.
+            fun loadBackupsFromTree(uri: android.net.Uri): List<BackupManager.BackupEntry> {
+                val docDir = androidx.documentfile.provider.DocumentFile.fromTreeUri(context, uri)
+                    ?: return emptyList()
+                val allFiles = docDir.listFiles()
+                val systemFiles = allFiles.filter {
+                    it.name?.startsWith("backup_") == true && it.name?.endsWith("_system.enc") == true
+                }
+                return systemFiles.mapNotNull { sysDoc ->
+                    val name = sysDoc.name ?: return@mapNotNull null
+                    val date = name.removePrefix("backup_").removeSuffix("_system.enc")
+                    val photosDoc = allFiles.firstOrNull { it.name == "backup_${date}_photos.enc" }
+                    try {
+                        val sysCacheFile = java.io.File(context.cacheDir, name)
+                        context.contentResolver.openInputStream(sysDoc.uri)?.use { input ->
+                            sysCacheFile.outputStream().use { output -> input.copyTo(output) }
+                        }
+                        var photosCacheFile: java.io.File? = null
+                        if (photosDoc != null) {
+                            photosCacheFile = java.io.File(context.cacheDir, photosDoc.name!!)
+                            context.contentResolver.openInputStream(photosDoc.uri)?.use { input ->
+                                photosCacheFile.outputStream().use { output -> input.copyTo(output) }
+                            }
+                        }
+                        BackupManager.BackupEntry(
+                            date = date,
+                            systemFile = sysCacheFile,
+                            photosFile = photosCacheFile,
+                            systemSizeBytes = sysDoc.length(),
+                            photosSizeBytes = photosDoc?.length() ?: 0L
+                        )
+                    } catch (_: Exception) { null }
+                }.sortedByDescending { it.date }
+            }
 
             val dirPickerLauncher = rememberLauncherForActivityResult(
                 androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()
             ) { uri ->
+                enumerationAttempted = true
                 if (uri != null) {
-                    try {
-                        context.contentResolver.takePersistableUriPermission(
-                            uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
-                        )
-                    } catch (_: Exception) {}
+                    // Validate the picked folder. SAF doesn't let us lock the
+                    // picker to a single folder, so the best we can do is
+                    // reject anything that isn't literally a folder named
+                    // `backups` (matching `BackupManager.getBackupDir()`'s
+                    // canonical name) AND that contains at least one
+                    // `backup_*_system.enc` file. The folder-name guard
+                    // catches the realistic mistake where someone picks
+                    // `Download/` (parent of `BudgeTrak/backups/`); without
+                    // it, future auto-backups going to the subfolder would
+                    // be invisible to the SAF tree-URI listing because that
+                    // listing only enumerates immediate children.
                     val docDir = androidx.documentfile.provider.DocumentFile.fromTreeUri(context, uri)
-                    val allFiles = docDir?.listFiles() ?: emptyArray()
-                    val systemFiles = allFiles.filter {
-                        it.name?.startsWith("backup_") == true && it.name?.endsWith("_system.enc") == true
+                    if (docDir == null || docDir.name != "backups") {
+                        restoreError = strings.settings.pickedFolderNotBackups
+                        return@rememberLauncherForActivityResult
                     }
-                    browsedBackups = systemFiles.mapNotNull { sysDoc ->
-                        val name = sysDoc.name ?: return@mapNotNull null
-                        val date = name.removePrefix("backup_").removeSuffix("_system.enc")
-                        val photosDoc = allFiles.firstOrNull { it.name == "backup_${date}_photos.enc" }
+                    val loaded = loadBackupsFromTree(uri)
+                    if (loaded.isNotEmpty()) {
                         try {
-                            val sysCacheFile = java.io.File(context.cacheDir, name)
-                            context.contentResolver.openInputStream(sysDoc.uri)?.use { input ->
-                                sysCacheFile.outputStream().use { output -> input.copyTo(output) }
-                            }
-                            var photosCacheFile: java.io.File? = null
-                            if (photosDoc != null) {
-                                photosCacheFile = java.io.File(context.cacheDir, photosDoc.name!!)
-                                context.contentResolver.openInputStream(photosDoc.uri)?.use { input ->
-                                    photosCacheFile.outputStream().use { output -> input.copyTo(output) }
-                                }
-                            }
-                            BackupManager.BackupEntry(
-                                date = date,
-                                systemFile = sysCacheFile,
-                                photosFile = photosCacheFile,
-                                systemSizeBytes = sysDoc.length(),
-                                photosSizeBytes = photosDoc?.length() ?: 0L
+                            context.contentResolver.takePersistableUriPermission(
+                                uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
                             )
-                        } catch (_: Exception) { null }
-                    }.sortedByDescending { it.date }
+                        } catch (_: Exception) {}
+                        vm.prefs.edit().putString("backup_folder_uri", uri.toString()).apply()
+                        browsedBackups = loaded
+                        restoreError = null
+                    } else {
+                        restoreError = strings.settings.pickedFolderHasNoBackups
+                    }
                 }
+            }
+
+            // On dialog open: if direct File-API auto-backups are empty (typical
+            // after a fresh install — Android scoped storage hides .enc files
+            // owned by previous installs), try the persisted SAF tree URI from
+            // the last successful pick. If nothing pans out, auto-launch the
+            // picker pre-navigated to Download/BudgeTrak/backups so the user
+            // confirms the folder in one tap instead of seeing a confusing
+            // empty-state dialog.
+            LaunchedEffect(Unit) {
+                if (autoBackups.isNotEmpty()) {
+                    enumerationAttempted = true
+                    return@LaunchedEffect
+                }
+                val savedUriStr = vm.prefs.getString("backup_folder_uri", null)
+                if (savedUriStr != null) {
+                    try {
+                        val savedUri = android.net.Uri.parse(savedUriStr)
+                        val loaded = loadBackupsFromTree(savedUri)
+                        if (loaded.isNotEmpty()) {
+                            browsedBackups = loaded
+                            enumerationAttempted = true
+                            return@LaunchedEffect
+                        }
+                    } catch (_: Exception) {
+                        // URI invalid or permission revoked (e.g., reinstall)
+                        // — fall through to auto-launch the picker below.
+                    }
+                }
+                // Nothing local, no usable persisted URI — show the picker.
+                val initialUri = android.provider.DocumentsContract.buildDocumentUri(
+                    "com.android.externalstorage.documents",
+                    "primary:Download/BudgeTrak/backups"
+                )
+                dirPickerLauncher.launch(initialUri)
             }
 
             val availableBackups = if (browsedBackups.isNotEmpty()) browsedBackups else autoBackups
@@ -1451,6 +1534,10 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.surface,
                     tonalElevation = 6.dp
                 ) {
+                    // Box wrapper hosts the dialog content + the PulsingScroll-
+                    // Arrows overlay as siblings, so the bidirectional scroll
+                    // affordance pulses above the scrollable content list.
+                    Box {
                     Column {
                         DialogHeader(strings.settings.restoreBackup)
 
@@ -1462,18 +1549,35 @@ class MainActivity : ComponentActivity() {
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             if (availableBackups.isEmpty()) {
-                                Text(strings.settings.noBackupsFound)
-                                Spacer(modifier = Modifier.height(8.dp))
-                                OutlinedButton(
-                                    onClick = {
-                                        val initialUri = android.provider.DocumentsContract.buildDocumentUri(
-                                            "com.android.externalstorage.documents",
-                                            "primary:Download/BudgeTrak/backups"
-                                        )
-                                        dirPickerLauncher.launch(initialUri)
-                                    },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) { Text(strings.settings.browseForBackup) }
+                                // Empty-state shown only after we've tried the
+                                // persisted URI and the auto-launched picker —
+                                // keeps the dialog quiet during the brief moment
+                                // before the picker pops on first open. After a
+                                // user dismissal of the picker without selecting
+                                // a folder, the message + button is the way back.
+                                if (enumerationAttempted) {
+                                    if (restoreError != null) {
+                                        // Surface "picked folder has no backups"
+                                        // (or any later restore failure) above the
+                                        // retry message so the user sees why
+                                        // they're being asked to pick again.
+                                        Text(restoreError!!, color = MaterialTheme.colorScheme.error)
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                    }
+                                    Text(strings.settings.pickBackupFolderMessage)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    OutlinedButton(
+                                        onClick = {
+                                            restoreError = null
+                                            val initialUri = android.provider.DocumentsContract.buildDocumentUri(
+                                                "com.android.externalstorage.documents",
+                                                "primary:Download/BudgeTrak/backups"
+                                            )
+                                            dirPickerLauncher.launch(initialUri)
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) { Text(strings.settings.browseForBackup) }
+                                }
                             } else {
                                 Text(strings.settings.selectBackupPrompt, style = MaterialTheme.typography.bodyMedium)
                                 availableBackups.forEach { backup ->
@@ -1537,7 +1641,20 @@ class MainActivity : ComponentActivity() {
                                                 restoring = false
                                                 if (sysResult.isSuccess) {
                                                     vm.showRestoreDialog = false
-                                                    this@MainActivity.recreate()
+                                                    // BackupManager.restoreSystemBackup writes the
+                                                    // decrypted JSON to disk via FullBackupSerializer
+                                                    // .restoreFullState BUT doesn't touch VM lists.
+                                                    // Activity.recreate() alone preserves the VM
+                                                    // (that's the whole point of ViewModelStore), so
+                                                    // the rebuilt UI was reading stale pre-restore
+                                                    // data — only a process kill refreshed the in-
+                                                    // memory state. Reload from disk explicitly so
+                                                    // the VM matches what restoreFullState just wrote.
+                                                    // The reload bumps `dataReloadVersion` which our
+                                                    // `key(...)` wrapper around the screen routing
+                                                    // observes to re-mount the UI subtree, so we no
+                                                    // longer need recreate() for the visual refresh.
+                                                    vm.reloadAllFromDisk()
                                                 } else {
                                                     restoreError = sysResult.exceptionOrNull()?.message ?: "Restore failed"
                                                 }
@@ -1547,6 +1664,8 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
+                    }
+                    PulsingScrollArrows(scrollState = restoreScrollState)
                     }
                 }
             }

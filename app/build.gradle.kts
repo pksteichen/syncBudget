@@ -19,8 +19,8 @@ android {
         applicationId = "com.techadvantage.budgetrak"
         minSdk = 28
         targetSdk = 35
-        versionCode = 8
-        versionName = "2.9.1"
+        versionCode = 14
+        versionName = "2.9.7"
     }
 
     signingConfigs {
