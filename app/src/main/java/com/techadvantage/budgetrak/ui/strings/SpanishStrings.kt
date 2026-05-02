@@ -648,7 +648,7 @@ object SpanishStrings : AppStrings {
         joinWarningTitle = "\u00bfReemplazar Datos Locales?",
         joinWarningBody = "Unirte a un grupo SYNC reemplazar\u00e1 tus datos locales con los datos compartidos del grupo. Tus transacciones, metas y configuraciones actuales ser\u00e1n sobrescritas. Esto no se puede deshacer.",
         dissolveError = "No se pudo conectar al servidor \u2014 int\u00e9ntalo m\u00e1s tarde",
-        enterNickname = "Tu nombre",
+        enterNickname = "Apodo del dispositivo",
         createGroupTitle = "Crear Grupo",
         renameDevice = "Renombrar Dispositivo",
         removeDeviceTitle = "Eliminar Dispositivo",

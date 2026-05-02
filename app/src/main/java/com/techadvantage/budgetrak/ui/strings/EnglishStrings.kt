@@ -648,7 +648,7 @@ object EnglishStrings : AppStrings {
         joinWarningTitle = "Replace Local Data?",
         joinWarningBody = "Joining a SYNC group will replace your local budget data with the group's shared data. Your current transactions, goals, and settings will be overwritten. This cannot be undone.",
         dissolveError = "Failed to reach server \u2014 try again later",
-        enterNickname = "Your name",
+        enterNickname = "Device nickname",
         createGroupTitle = "Create Group",
         renameDevice = "Rename Device",
         removeDeviceTitle = "Remove Device",

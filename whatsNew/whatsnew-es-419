@@ -1,4 +1,4 @@
-Versión de pruebas internas de BudgeTrak v2.10.00.
-- Corregido: la restauración de respaldo completo ahora actualiza la interfaz al instante. Antes las categorías, gastos recurrentes e ingresos recurrentes podían verse vacíos hasta forzar el cierre y reapertura.
-- Diálogo de restauración: abre el selector de carpetas automáticamente, recuerda tu carpeta de respaldos para futuras restauraciones, y rechaza selecciones inválidas (carpeta incorrecta o sin respaldos).
-- Solo pruebas internas: esta versión activa el nivel Subscriber para todos los usuarios para que los probadores puedan usar las funciones de pago sin pasar por un proceso de compra. Se cambiará al sistema de pagos de Google Play en una versión posterior.
+BudgeTrak v2.10.01 — versión de pruebas internas.
+- El campo "Tu nombre" del grupo SYNC ahora se llama "Apodo del dispositivo" para aclarar que es una etiqueta para este dispositivo, no tu nombre personal.
+- Incluye las correcciones de v2.10.00: la restauración actualiza la interfaz al instante; el diálogo de restauración abre el selector automáticamente, recuerda la carpeta y rechaza selecciones inválidas; las versiones publicadas activan Subscriber por defecto.
+- Símbolos nativos de depuración integrados en el AAB para mejores reportes de fallos.
