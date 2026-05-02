@@ -260,6 +260,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val savingsGoals = mutableStateListOf<SavingsGoal>()
     val periodLedger = mutableStateListOf<PeriodLedgerEntry>()
 
+    /**
+     * Increments after every wholesale data refresh (full-backup restore,
+     * SYNC join-snapshot apply). Wrap the screen-routing block in
+     * `key(vm.dataReloadVersion) { … }` so the entire UI subtree is
+     * rebuilt when this changes, side-stepping Compose's smart-skipping
+     * that was retaining stale derivedStateOf reads after `clear()`+
+     * `addAll()` mutations on the seven data lists.
+     */
+    var dataReloadVersion by mutableIntStateOf(0)
+        private set
+
     // ── Sync State ──
     var lastSyncActivity by mutableStateOf(0L)
     var isSyncConfigured by mutableStateOf(GroupManager.isConfigured(context))
@@ -2688,6 +2699,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             matchPercent = prefs.getDoubleCompat("matchPercent", 1.0)
             matchDollar = prefs.getInt("matchDollar", 1)
             matchChars = prefs.getInt("matchChars", 5)
+
+            // Bump the reload version inside the same snapshot so the
+            // `key(dataReloadVersion)` wrapper around the screen routing
+            // unmounts the entire UI subtree and re-mounts it fresh against
+            // the post-restore state. Without this, screens that read the
+            // collections via `derivedStateOf`-derived `active*` properties
+            // were holding stale snapshots through the clear()+addAll()
+            // transition, requiring a process kill to refresh.
+            dataReloadVersion++
         }
     }
 
