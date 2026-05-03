@@ -1315,6 +1315,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
+        // Group dissolved (or this device's membership has gone missing) —
+        // FirestoreDocSync detected an unrecoverable PERMISSION_DENIED state
+        // by probing groups/{gid} + members/{uid} directly. Route through
+        // the canonical eviction helper so RTDB presence + Firestore
+        // membership cleanup, listener disposal, prefs wipe, and the user-
+        // visible message all flow through one well-tested path. See
+        // `triggerFullRestart()` in FirestoreDocSync for the detection logic.
+        newDocSync.onGroupDissolved = {
+            viewModelScope.launch {
+                android.util.Log.w("SyncLifecycle", "onGroupDissolved fired for group $gid — evicting local sync state")
+                evictFromSync(strings.sync.evictionDissolved)
+            }
+        }
+
         // Start real-time listeners
         try {
             newDocSync.startListeners()

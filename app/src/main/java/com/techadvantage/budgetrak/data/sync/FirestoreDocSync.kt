@@ -89,6 +89,19 @@ class FirestoreDocSync(
     /** Called when listeners recover from errors (e.g., PERMISSION_DENIED → success). */
     var onListenerRecovered: (() -> Unit)? = null
 
+    /**
+     * Called when the group has been dissolved (or this device's membership
+     * has gone missing) and the local sync state must reset to non-SYNC.
+     *
+     * Triggered from `triggerFullRestart()` when a `groups/{gid}` `get`
+     * returns a non-existent doc, or when `groups/{gid}/members/{uid}` is
+     * missing — both of which cause every listener to fail with
+     * PERMISSION_DENIED in an unrecoverable retry loop. The callback
+     * receiver is expected to dispose listeners + clear local prefs +
+     * surface a user-visible message ("your group is no longer available").
+     */
+    var onGroupDissolved: (() -> Unit)? = null
+
     // Track which collections have delivered their initial snapshot (even if empty).
     // Completes when all 8 (7 data + sharedSettings) have reported.
     private val deliveredCollections = ConcurrentHashMap.newKeySet<String>()
@@ -416,9 +429,75 @@ class FirestoreDocSync(
         lastPermDeniedRestart = now
 
         deserializeScope.launch {
-            syncLog("PERMISSION_DENIED → full listener restart (stop all, refresh token, restart)")
+            syncLog("PERMISSION_DENIED → checking group + membership before listener restart")
             // Stop all existing listeners (stale connections with expired auth)
             kotlinx.coroutines.withContext(Dispatchers.Main) { stopListeners() }
+
+            // Distinguish recoverable (token-stale) from non-recoverable
+            // (group dissolved / membership missing) PERMISSION_DENIED before
+            // burning an App Check refresh + reattach cycle. Firestore rules
+            // explicitly allow `get groups/{gid}` for any authenticated user
+            // and `get groups/{gid}/members/{uid}` for the owning UID — both
+            // are designed for exactly this dissolution-detection path.
+            //
+            // Three outcomes:
+            //   1. group doc missing                → group dissolved (admin
+            //      called dissolveGroup → cleanupGroupData cascade) OR
+            //      group was never created (silent failure during onCreate/
+            //      onJoinGroup leaving phantom local prefs).
+            //   2. group exists but member doc missing → this device was
+            //      evicted, OR the admin reinstalled and dissolved+recreated
+            //      under a new UID, OR a partial join wrote local prefs but
+            //      not the Firestore member record.
+            //   3. both exist                       → token is stale, fall
+            //      through to the App Check refresh + reattach (existing
+            //      behavior).
+            // Cases 1+2 fire onGroupDissolved so the receiver can clear
+            // local state. Case 3 continues to the standard restart.
+            try {
+                val authUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                val groupSnap = kotlinx.coroutines.withTimeoutOrNull(10_000) {
+                    db.document("groups/$groupId")
+                        .get(com.google.firebase.firestore.Source.SERVER)
+                        .await()
+                }
+                if (groupSnap == null) {
+                    syncLog("Group existence check timed out (10s) — falling through to token refresh")
+                } else if (!groupSnap.exists()) {
+                    syncLog("Group $groupId no longer exists in Firestore — firing onGroupDissolved")
+                    com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent(
+                        "Group dissolved (group doc missing) — resetting local sync state"
+                    )
+                    kotlinx.coroutines.withContext(Dispatchers.Main) {
+                        onGroupDissolved?.invoke()
+                    }
+                    return@launch
+                } else if (authUid != null) {
+                    val memberSnap = kotlinx.coroutines.withTimeoutOrNull(10_000) {
+                        db.document("groups/$groupId/members/$authUid")
+                            .get(com.google.firebase.firestore.Source.SERVER)
+                            .await()
+                    }
+                    if (memberSnap != null && !memberSnap.exists()) {
+                        syncLog("Group $groupId exists but members/$authUid is missing — firing onGroupDissolved (evicted, or partial join/create)")
+                        com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent(
+                            "Membership missing — resetting local sync state"
+                        )
+                        kotlinx.coroutines.withContext(Dispatchers.Main) {
+                            onGroupDissolved?.invoke()
+                        }
+                        return@launch
+                    }
+                }
+            } catch (e: Exception) {
+                // Probe failed for some other reason (offline, unrelated
+                // App Check error). Don't conclude dissolution from a probe
+                // error — fall through to the standard token-refresh path.
+                syncLog("Group existence/membership probe failed: ${e.message} — falling through to token refresh")
+            }
+
+            syncLog("PERMISSION_DENIED → full listener restart (stop all, refresh token, restart)")
 
             // Force-refresh App Check token with timeout (can hang in Doze/network loss)
             try {

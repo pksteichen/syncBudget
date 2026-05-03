@@ -1216,10 +1216,12 @@ private suspend fun runDebugDumpBody(context: Context) {
             val supportDir = com.techadvantage.budgetrak.data.BackupManager.getSupportDir()
             val diagText = try {
                 val fresh = com.techadvantage.budgetrak.data.DiagDumpBuilder.build(context)
-                java.io.File(supportDir, "sync_diag.txt").writeText(fresh)
+                com.techadvantage.budgetrak.data.DiagDumpBuilder
+                    .writeDiagToMediaStore(context, "sync_diag.txt", fresh)
                 val diagDevName = devName.replace(Regex("[^a-zA-Z0-9]"), "_").take(20)
                 if (diagDevName.isNotEmpty()) {
-                    java.io.File(supportDir, "sync_diag_${diagDevName}.txt").writeText(fresh)
+                    com.techadvantage.budgetrak.data.DiagDumpBuilder
+                        .writeDiagToMediaStore(context, "sync_diag_${diagDevName}.txt", fresh)
                 }
                 fresh
             } catch (e: Exception) {

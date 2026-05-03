@@ -2,8 +2,8 @@
 name: Group Management Specification
 description: SYNC group lifecycle — create, pair, join, admin transfer, removal, dissolution (Cloud-Function-driven)
 type: reference
+originSessionId: 2ae43715-e466-4f34-8cb2-c1df4c388ef5
 ---
-
 # Group Management Specification
 
 ## Group creation (admin)
@@ -12,6 +12,9 @@ type: reference
 3. Firestore group doc created with `createdAt, updatedAt, expiresAt = now + 90d, status = "active"`. `expiresAt` is the TTL field — `lastActivity` must never be used for TTL (it is always in the past; this caused overnight dissolution before 2026-04-04).
 4. `familyTimezone` defaulted to the device's timezone in `SharedSettings`.
 5. Device registered in `groups/{gid}/devices/{deviceId}` with `isAdmin = true, removed = false`.
+
+### Atomic rollback on partial failure (v2.10.02+)
+The `onCreateGroup` and `onJoinGroup` catch handlers (`MainActivity.kt`) record a `GROUP_CREATE_FAILED` / `GROUP_JOIN_FAILED` non-fatal, then **fully roll back** local state: `vm.disposeSyncListeners()`, `GroupManager.leaveGroup(localOnly = true)`, `vm.resetSyncState()`, plus a `vm.syncErrorMessage` and a localized toast (`createGroupFailed` / `joinGroupFailed`). Replaces the prior silent `vm.syncStatus = "error"` which left `groupId` set in prefs while the Firestore group doc was missing, producing the PERMISSION_DENIED loop on Paul's device (2026-05-01). Rule: any path that writes `groupId` to local prefs must roll it back atomically if the corresponding Firestore writes fail.
 
 ## Pairing code
 - 6 characters drawn from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` (no ambiguous `0/O`, `1/I`).
@@ -55,6 +58,9 @@ Dissolution no longer paginates subcollection deletes from the client. The curre
 3. Client deletes the **group doc** (`groups/{groupId}`) directly.
 4. The `cleanupGroupData` Cloud Function (`functions/index.js`, v1 API, Node.js 22) triggers on group-doc delete and cascade-deletes all 14 subcollections (`transactions, recurringExpenses, incomeSources, savingsGoals, amortizationEntries, categories, periodLedger, sharedSettings, devices, members, imageLedger, adminClaim`, and legacy `deltas, snapshots` for old groups) plus RTDB presence and Cloud Storage photo files — all via admin SDK, bypassing rules.
 5. Non-admin devices detect the missing group doc and auto-leave.
+
+### Dissolution detection in `triggerFullRestart` (v2.10.02+)
+On `PERMISSION_DENIED`, before refreshing the App Check token, `FirestoreDocSync.triggerFullRestart()` probes `groups/{groupId}` and `groups/{groupId}/members/{authUid}` via `Source.SERVER` (10 s timeout each). If either returns "doesn't exist", it fires the `onGroupDissolved` callback wired in `MainViewModel.configureSyncGroup`, which dispatches `evictFromSync(strings.sync.evictionDissolved)` — RTDB presence cleanup, member-doc removal, listener disposal, `leaveGroup(localOnly = true)`, `resetSyncState`, and an eviction-message toast. Any probe-time error (network, timeout) falls through to the standard token-refresh path so transient outages don't trigger spurious eviction. Reason: in v2.10.01 a phantom-group state (after a partial create/join failure) produced an infinite PERMISSION_DENIED loop because the local prefs still referenced a group ID that never existed on the server; the probe + eviction breaks that loop cleanly.
 
 The legacy `deltas` and `snapshots` collections were removed from the **client**-side list on 2026-04-12 (see `project_dissolve_bug_2026_04_12.md`); they remain in the Cloud Function list because old groups may still have leftover docs. Client-side security rules deny queries against collections with no matching rule, so every subcollection touched by the client must have an explicit rule — a trap that caused the dissolve bug before the fix.
 

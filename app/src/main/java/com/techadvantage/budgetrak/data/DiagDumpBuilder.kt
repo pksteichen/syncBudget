@@ -272,44 +272,15 @@ object DiagDumpBuilder {
         return false
     }
 
-    /** Write text to a file in Download/BudgeTrak/support/ (with MediaStore fallback). */
+    /** Write text to a file in Download/BudgeTrak/support/ via the orphan-safe writer. */
     fun writeDiagToMediaStore(context: Context, fileName: String, text: String) {
-        try {
-            val file = java.io.File(BackupManager.getSupportDir(), fileName)
-            file.writeText(text)
-        } catch (e: Exception) {
-            android.util.Log.w("DiagDump", "Direct write failed for $fileName, trying MediaStore: ${e.message}")
-            try {
-                val resolver = context.contentResolver
-                val existing = resolver.query(
-                    android.provider.MediaStore.Files.getContentUri("external"),
-                    arrayOf(android.provider.MediaStore.MediaColumns._ID),
-                    "${android.provider.MediaStore.MediaColumns.DISPLAY_NAME} = ? AND ${android.provider.MediaStore.MediaColumns.RELATIVE_PATH} = ?",
-                    arrayOf(fileName, "Download/BudgeTrak/support/"),
-                    null
-                )
-                val uri = if (existing != null && existing.moveToFirst()) {
-                    val id = existing.getLong(0)
-                    existing.close()
-                    android.content.ContentUris.withAppendedId(
-                        android.provider.MediaStore.Files.getContentUri("external"), id
-                    )
-                } else {
-                    existing?.close()
-                    val values = android.content.ContentValues().apply {
-                        put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-                        put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain")
-                        put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "Download/BudgeTrak/support/")
-                    }
-                    resolver.insert(android.provider.MediaStore.Files.getContentUri("external"), values)
-                }
-                if (uri != null) {
-                    resolver.openOutputStream(uri, "wt")?.use { it.write(text.toByteArray()) }
-                }
-            } catch (e2: Exception) {
-                android.util.Log.e("DiagDump", "MediaStore write also failed for $fileName: ${e2.message}")
-            }
-        }
+        PublicDownloadWriter.writeBytes(
+            context = context,
+            relSubdir = "BudgeTrak/support",
+            fileName = fileName,
+            mimeType = "text/plain",
+            bytes = text.toByteArray()
+        )
     }
 
     fun sanitizeDeviceName(name: String): String =

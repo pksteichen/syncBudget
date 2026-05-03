@@ -2,8 +2,8 @@
 name: Backup Specification
 description: Auto + manual backups, password encryption, SAF restore, photos file, pre-restore snapshot, retention, serialized fields
 type: reference
+originSessionId: 2ae43715-e466-4f34-8cb2-c1df4c388ef5
 ---
-
 # Backup Specification
 
 ## Goal
@@ -14,7 +14,7 @@ Give every user (including free) a simple path to back up and restore without ca
 - **Encryption**: ChaCha20-Poly1305 AEAD with a PBKDF2-SHA256 key (100k iterations, 256-bit key, random salt per file). `CryptoHelper.kt:26, 56-58`. No Android KeyStore dependency — the user's password is the key material, so backups survive reinstall and cross-package moves.
 - **No package-name dependency**: the file format is self-describing (`"type": "syncbudget_full_backup"` or `"syncbudget_join_snapshot"` — names intentionally preserved from the old `com.syncbudget.app` branding so existing backups still restore; see `feedback_preserve_persistence_names.md`).
 - **Two separate files per backup**: a system backup (`{tag}.enc`) with all entities + prefs, and a parallel photos file (`{tag}_photos.enc`) with the receipt-photo blobs + manifest. Same tag lets restore link them.
-- **Same-day versioning**: letter suffix b, c, d, … appended when a second backup is taken the same day, instead of overwriting. `BackupManager.kt:93-101`.
+- **Same-day versioning**: letter suffix b, c, d, … appended when a second backup is taken the same day, instead of overwriting. `BackupManager.kt:93-101`. The same suffix walk also handles orphan files from a previous install — `File.exists()` sees them, so reinstall users get `backup_<date>b_*.enc` rather than EACCES on the canonical name.
 - **SAF directory access for restore**: the Storage Access Framework is used to pick the backup folder (no MANAGE_EXTERNAL_STORAGE permission). This is what makes restore work across a package rename where `File.listFiles()` fails on scoped storage. `MainActivity.kt:1281-1290`.
 
 ## When backups run
@@ -49,7 +49,7 @@ All synced fields — currency, budgetPeriod, reset fields, income mode, manual 
 Restore (`BackupManager.restorePhotosBackup`, 211-283) decrypts each entry, writes the full-size file, and regenerates the 200×Q=70 thumbnail via `BitmapFactory.decodeByteArray` → `ReceiptManager.saveThumbnail`. Thumbnails are **not** stored in the photos file — they're derived on restore.
 
 ## Pre-restore snapshot
-Before any restore, `FullBackupSerializer.kt:212-219` auto-saves the current state to `support/pre_restore_backup.json` (plaintext, for emergency recovery). Gives the user an "undo" if they restore the wrong file.
+Before any restore, `FullBackupSerializer` auto-saves the current state to `support/pre_restore_backup.json` (plaintext, for emergency recovery). Gives the user an "undo" if they restore the wrong file. Since v2.10.03 the write goes through `PublicDownloadWriter.writeBytes` so reinstall-then-restore (the common scenario for this snapshot) doesn't fail with EACCES on an orphan file from the previous install — see `reference_public_download_writes.md`.
 
 ## Toast feedback
 - Success: `"Backup created"`.
@@ -67,6 +67,13 @@ Before any restore, `FullBackupSerializer.kt:212-219` auto-saves the current sta
 - **Settings → Restore Backup** — auto-discovers backups in the configured backup directory; offers "Browse for backup" if none found, which launches the SAF picker.
 - **Fresh-device restore**: default suggested location is `Download/BudgeTrak/backups`, but SAF lets the user navigate anywhere.
 - **Join snapshot** (`"syncbudget_join_snapshot"` type) is used internally by the SYNC join flow and is **not** exposed as a restore option through the UI.
+
+## Restore-list enumeration (v2.10.04+)
+The restore dialog now **merges** two enumeration paths instead of choosing one:
+- **`BackupManager.listAvailableBackups()`** (direct File API) — sees only files the current install owns. On scoped storage (Android 11+), orphan `.enc` files left behind by a previous install are invisible to this path.
+- **SAF tree URI** (persisted at `app_prefs.backup_folder_uri` after the user's first folder pick) — sees everything in the folder, including orphans. Materializes each `.enc` to `cacheDir` so the existing `BackupEntry.systemFile: File` shape works.
+
+`MainActivity` restore dialog: `LaunchedEffect` always tries the persisted SAF URI first if present (regardless of whether direct-API auto-backups exist), then merges results into `availableBackups` deduplicated by `date`. Direct-API entries win on collision so restore uses the canonical Download path instead of the cache copy. This fixes the post-2026-05-02 regression where orphan backups visible via SAF disappeared from the list as soon as the user created their first own auto-backup, because the prior code short-circuited out of SAF whenever direct-API found anything.
 
 ## Not covered by version migration
 - The backup format has no explicit version-migration logic. Breaking changes to the payload would therefore silently fail to restore older files. Worth adding a version bump + migration branch if the format evolves significantly.

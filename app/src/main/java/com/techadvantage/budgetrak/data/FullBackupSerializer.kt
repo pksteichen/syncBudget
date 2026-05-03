@@ -212,10 +212,13 @@ object FullBackupSerializer {
         // Auto-backup current state so the user can recover
         val preRestoreBackup = try { backupBeforeRestore(context) } catch (_: Exception) { null }
         if (preRestoreBackup != null) {
-            try {
-                val dir = BackupManager.getSupportDir()
-                java.io.File(dir, "pre_restore_backup.json").writeText(preRestoreBackup)
-            } catch (_: Exception) { /* best effort */ }
+            PublicDownloadWriter.writeBytes(
+                context = context,
+                relSubdir = "BudgeTrak/support",
+                fileName = "pre_restore_backup.json",
+                mimeType = "application/json",
+                bytes = preRestoreBackup.toByteArray()
+            )
         }
 
         // Write each data array to its repo file using atomic writes

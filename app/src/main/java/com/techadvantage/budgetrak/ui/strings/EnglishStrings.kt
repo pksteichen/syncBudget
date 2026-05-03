@@ -584,6 +584,8 @@ object EnglishStrings : AppStrings {
         dissolveGroup = "Dissolve Group",
         evictionRemoved = "The administrator of your Sync group has removed your device. You can rejoin on the Sync page in Settings.",
         evictionDissolved = "The administrator of your Sync group has dissolved the group. You can create or join a new group on the Sync page in Settings.",
+        createGroupFailed = "Group creation failed. Local state was rolled back — try again.",
+        joinGroupFailed = "Joining the group failed. Local state was rolled back — try again or recheck the pairing code.",
         subscriptionGraceWarning = { days -> "Your group administrator's subscription has expired. Please remind them to renew to keep the group active, or you can subscribe and take over admin duties on the Sync page. Without a subscription, after $days day${if (days != 1) "s" else ""} the Sync feature will go away, but you will not lose data. Each device will operate independently." },
         claimVotePrompt = { name -> "Group member \"$name\" has requested to assume administrator duties." },
         claimAccept = "Accept",

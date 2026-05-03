@@ -2,8 +2,8 @@
 name: Architecture notes
 description: Key files, folder map, and architectural patterns for BudgeTrak
 type: reference
+originSessionId: 2ae43715-e466-4f34-8cb2-c1df4c388ef5
 ---
-
 # Architecture Notes
 
 Total: ~51,500 lines across ~100 Kotlin source files.
@@ -57,6 +57,7 @@ Total: ~51,500 lines across ~100 Kotlin source files.
 - `TitleCaseUtil.kt` — APA title case.
 - `CryptoHelper.kt` — ChaCha20-Poly1305 AEAD (password PBKDF2 or direct 256-bit key).
 - `DiagDumpBuilder.kt` (241) — diagnostic dump builder, works from disk (no live state).
+- `PublicDownloadWriter.kt` (~120, v2.10.03+) — orphan-safe writer for `Download/BudgeTrak/<subdir>/` files. 3-tier: cached path → canonical direct File → MediaStore fallback (auto-suffixes `(1)`, `(2)` past orphans from prior installs). Used by `DiagDumpBuilder.writeDiagToMediaStore`, `ExpenseReportGenerator`, `FullBackupSerializer.applyRestore` (pre-restore snapshot). See `reference_public_download_writes.md`.
 - `CategoryIcons.kt`, `DefaultCategories.kt`, `PrefsCompat.kt`, `SafeIO.kt`.
 
 ## `data/sync/` (Firestore-native sync)

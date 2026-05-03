@@ -2,8 +2,8 @@
 name: Diagnostics Specification
 description: How BudgeTrak captures and exports diagnostic state — DiagDumpBuilder, tokenLog, FCM debug dump, Crashlytics custom keys
 type: reference
+originSessionId: 2ae43715-e466-4f34-8cb2-c1df4c388ef5
 ---
-
 # Diagnostics Specification
 
 ## Goals
@@ -15,7 +15,7 @@ type: reference
 Triggers the full local + remote diagnostic pipeline:
 
 1. `DiagDumpBuilder.build()` assembles a text state dump (see below).
-2. Dump is written to `Download/BudgeTrak/support/sync_diag.txt`.
+2. Dump is written to `Download/BudgeTrak/support/sync_diag.txt` via `PublicDownloadWriter` (orphan-safe — see `reference_public_download_writes.md`).
 3. If a sync group is configured: encrypted and uploaded to Firestore under a well-known document.
 4. An FCM `debug_request` message is sent to other group devices.
 5. Each remote device's `FcmService` kicks off `DebugDumpWorker.runOnce()`, which produces its own dump and uploads it.
@@ -33,7 +33,7 @@ Builds from **disk** (not live state) so a background worker can produce a corre
 - Cash verification — re-run `recomputeAvailableCash` from the on-disk state and compare to the cached `availableCash`.
 - `native_sync_log.txt` tail — last 50 lines of `FirestoreDocSync`'s file log (listener events, pushes, field updates, conflicts, errors).
 
-Also exposes `sanitizeDeviceName()` (used to produce safe device slug prefixes) and `writeDiagToMediaStore()` (SAF fallback when direct file write fails).
+Also exposes `sanitizeDeviceName()` (used to produce safe device slug prefixes) and `writeDiagToMediaStore()` — since v2.10.03 a thin delegate to `PublicDownloadWriter.writeBytes(relSubdir = "BudgeTrak/support", mimeType = "text/plain", ...)`. Function name kept for backward-compat with existing call sites; no longer touches MediaStore directly.
 
 ## `FirestoreDocSync` log file
 `Download/BudgeTrak/support/native_sync_log.txt` — rolling file log written by `FirestoreDocSync` on every listener event, push, field update, conflict, or error. Truncates at ~100 KB. Available even when Crashlytics isn't.
@@ -41,9 +41,8 @@ Also exposes `sanitizeDeviceName()` (used to produce safe device slug prefixes) 
 ## Debug token capture — `BudgeTrakApplication.onCreate`
 For debug builds only:
 - Installs `DebugAppCheckProviderFactory`.
-- Reads logcat with the regex `debug secret.*: ([a-f0-9-]+)` to extract the Firebase-generated debug token.
-- Writes the token to `support/token_log.txt` on startup, which is included in any FCM dump upload.
-- This means a **new debug token** on a remote tester's device can be retrieved without physical access — request a dump, pull the token out, register it in Firebase Console, done.
+- **Pinned UUID seed (v2.10.03+)**: before installing the factory, writes `BuildConfig.APP_CHECK_DEBUG_TOKEN` (sourced from `local.properties:APP_CHECK_DEBUG_TOKEN`) into the SDK's `com.google.firebase.appcheck.debug.store.<persistenceKey>` SharedPreferences under key `com.google.firebase.appcheck.debug.DEBUG_SECRET`. The SDK reuses that token instead of auto-generating a fresh UUID per install. One Console-registered token covers every dev/test device — no re-registration on reinstall or clear-data. See `project_token_debug.md` for the registration UUID and rationale.
+- Logcat scrape (legacy fallback) still runs with regex `debug secret.*: ([a-f0-9-]+)` and writes any captured token to `support/token_log.txt`. Useful when the seed is empty (BuildConfig.APP_CHECK_DEBUG_TOKEN unset) so per-install UUIDs still get surfaced.
 
 ## `token_log.txt`
 - Path: `Download/BudgeTrak/support/token_log.txt`.

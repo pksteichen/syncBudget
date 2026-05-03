@@ -132,6 +132,34 @@ class BudgeTrakApplication : Application() {
         // the process is started by WorkManager without a foreground Activity.
         try {
             val appCheck = com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
+            // Seed a pinned debug-token UUID into the firebase-appcheck-debug
+            // SharedPreferences before installing the factory. The SDK consults this
+            // file (template "com.google.firebase.appcheck.debug.store.<persistenceKey>")
+            // and reuses any token found there instead of auto-generating a per-install
+            // UUID. Lets one Console-registered token cover every debug install on
+            // every dev/test device — no re-registration on reinstall or clear-data.
+            // Caveat: empty/missing token => SDK falls back to per-install UUID.
+            if (BuildConfig.DEBUG && BuildConfig.APP_CHECK_DEBUG_TOKEN.isNotEmpty()) {
+                try {
+                    val key = com.google.firebase.FirebaseApp.getInstance().persistenceKey
+                    val prefs = getSharedPreferences(
+                        "com.google.firebase.appcheck.debug.store.$key",
+                        MODE_PRIVATE
+                    )
+                    val existing = prefs.getString(
+                        "com.google.firebase.appcheck.debug.DEBUG_SECRET", null
+                    )
+                    if (existing != BuildConfig.APP_CHECK_DEBUG_TOKEN) {
+                        prefs.edit().putString(
+                            "com.google.firebase.appcheck.debug.DEBUG_SECRET",
+                            BuildConfig.APP_CHECK_DEBUG_TOKEN
+                        ).apply()
+                        tokenLog("AppCheck debug token seeded from BuildConfig")
+                    }
+                } catch (e: Exception) {
+                    tokenLog("AppCheck debug-token seed failed: ${e.message}")
+                }
+            }
             val providerFactory = if (BuildConfig.DEBUG)
                 com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory.getInstance()
             else

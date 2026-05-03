@@ -86,6 +86,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - Support: `/storage/emulated/0/Download/BudgeTrak/support/`. Non-admin: `/Download/Quick Share/`.
 - Key files: `sync_diag.txt`, `native_sync_log.txt`, `token_log.txt` (debug only), `logcat_*.txt`, per-device FCM dumps.
 - Dump button (Settings → "Dump & Sync Debug", debug builds) — encrypted upload via FCM + 90 s poll.
+- **Public download writes**: 7 active categories (backups, CSV/XLSX/JSON, PDF, photos, support, pre-restore, append-logs); v2.10.03 added `PublicDownloadWriter` for orphan-EACCES resilience on PDF + support files. Photo dumps are NOT deprecated. Survey + helper details: [`reference_public_download_writes.md`](reference_public_download_writes.md).
 - Full spec: [`spec_diagnostics.md`](spec_diagnostics.md). Crashlytics/BigQuery tool: [`reference_crashlytics_bigquery.md`](reference_crashlytics_bigquery.md). **Backend-infra reconstruction reference: SSD §28** (Firebase project, Auth, Firestore + RTDB + Storage rules verbatim, App Check, Cloud Functions, FCM, Crashlytics, Analytics, BigQuery, Gemini).
 
 ## Matching & Auto-Categorize
@@ -154,7 +155,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 
 ## Firebase Backend
 - Plan: Blaze. App Check enforced on Firestore/RTDB/Storage (not Auth). Debug → `DebugAppCheckProviderFactory`, release → `PlayIntegrityAppCheckProviderFactory`. **TTL is provider-dependent**: Play Integrity (release) = 40 h as of 2026-04-26 (set in Firebase Console → Project Settings → Your apps → BudgeTrak Android → App Check section, dropdown selector); Debug provider = 1 h (Google-imposed, ignores Console setting — by design for short-lived dev tokens). So debug-build observed refresh cadence is 40× higher than release will be. **Play Integrity advanced settings**: `PLAY_RECOGNIZED` required (anti-piracy), `LICENSED` not required (don't gate free users on Huawei/degooglified devices), device integrity = "Don't explicitly check" (relies on PLAY_RECOGNIZED + per-field encryption for actual security; tighten post-launch if Crashlytics shows abuse).
-- Debug token captured from logcat → `token_log.txt` → included in FCM dump uploads.
+- **App Check debug token**: pinned UUID `8dc731bc-5213-4b09-bb31-b0382af175f1` (v2.10.03+) seeded from `local.properties:APP_CHECK_DEBUG_TOKEN` → `BuildConfig` → SDK prefs in `BudgeTrakApplication.onCreate`. One Console-registered token covers every dev/test device — no re-registration on reinstall. Logcat scrape fallback still runs; token also lands in `token_log.txt` for FCM dump uploads. Full spec: [`project_token_debug.md`](project_token_debug.md).
 - All App Check calls gated by `isSyncConfigured`; all wrapped `withTimeoutOrNull(10–15 s)`.
 - Refresh triggers: `onResume`, `onAvailable`, `BackgroundSyncWorker` Tier 2/3 (proactive 16-min threshold, dropped from 35 on 2026-04-25), `triggerFullRestart()` on PERMISSION_DENIED, ViewModel keep-alive (45-min check / 16-min refresh, dropped from 35 on 2026-04-26 to dedupe with Worker), SDK auto-refresh (~5 min before expiry, in-process only).
 - TTL policies: `groups/expiresAt` (now + 90 d, refreshed each launch), `pairing_codes/expiresAt` (10 min). **Never** use `lastActivity` as TTL (fixed 2026-04-04).
@@ -169,7 +170,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 ## Rebrand + History
 - [Rebrand 2026-04-11](project_rebrand_2026_04_11.md) — namespace/applicationId/GitHub/PATs, gotchas.
 - [Dissolve bug 2026-04-12](project_dissolve_bug_2026_04_12.md) — legacy `deltas`/`snapshots` security-rule gap; lessons.
-- [Overnight dissolution + PERMISSION_DENIED — resolved](project_token_debug.md).
+- [App Check debug-token management](project_token_debug.md) — pinned UUID for stable debug auth across reinstalls (v2.10.03+); plus the resolved overnight dissolution + PERMISSION_DENIED root causes (2026-04-04).
 - [Firestore-native sync implementation](project_firestore_native_sync.md).
 
 ## Pricing

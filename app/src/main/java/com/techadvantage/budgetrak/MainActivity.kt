@@ -1490,18 +1490,16 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // On dialog open: if direct File-API auto-backups are empty (typical
-            // after a fresh install — Android scoped storage hides .enc files
-            // owned by previous installs), try the persisted SAF tree URI from
-            // the last successful pick. If nothing pans out, auto-launch the
-            // picker pre-navigated to Download/BudgeTrak/backups so the user
-            // confirms the folder in one tap instead of seeing a confusing
-            // empty-state dialog.
+            // On dialog open: always try the persisted SAF tree URI first — it
+            // sees orphan .enc files from previous installs that scoped storage
+            // hides from File.listFiles. Previously this ran only when
+            // autoBackups was empty, but that masked the orphans from view as
+            // soon as the user created their first own auto-backup, even
+            // though SAF would still happily list them all (chat log
+            // 2026-05-02). If nothing pans out, auto-launch the picker
+            // pre-navigated to Download/BudgeTrak/backups so the user confirms
+            // the folder in one tap instead of seeing an empty-state dialog.
             LaunchedEffect(Unit) {
-                if (autoBackups.isNotEmpty()) {
-                    enumerationAttempted = true
-                    return@LaunchedEffect
-                }
                 val savedUriStr = vm.prefs.getString("backup_folder_uri", null)
                 if (savedUriStr != null) {
                     try {
@@ -1514,8 +1512,14 @@ class MainActivity : ComponentActivity() {
                         }
                     } catch (_: Exception) {
                         // URI invalid or permission revoked (e.g., reinstall)
-                        // — fall through to auto-launch the picker below.
+                        // — fall through.
                     }
+                }
+                if (autoBackups.isNotEmpty()) {
+                    // No usable SAF URI but we have own auto-backups visible
+                    // via direct File API — that's enough; no picker needed.
+                    enumerationAttempted = true
+                    return@LaunchedEffect
                 }
                 // Nothing local, no usable persisted URI — show the picker.
                 val initialUri = android.provider.DocumentsContract.buildDocumentUri(
@@ -1525,7 +1529,19 @@ class MainActivity : ComponentActivity() {
                 dirPickerLauncher.launch(initialUri)
             }
 
-            val availableBackups = if (browsedBackups.isNotEmpty()) browsedBackups else autoBackups
+            // Merge SAF list (covers orphan .enc files from prior installs + own
+            // files in the same folder) with the direct File-API list (covers
+            // own files; needed when the user picked a "backups" folder
+            // somewhere other than Download/BudgeTrak/backups, so SAF wouldn't
+            // see the auto-backups going to the canonical location). Dedup by
+            // `date` — autoBackups entries win on collision so restore uses the
+            // canonical file path instead of the cache copy SAF materializes.
+            val availableBackups = if (browsedBackups.isEmpty()) autoBackups else {
+                val byDate = linkedMapOf<String, BackupManager.BackupEntry>()
+                for (e in browsedBackups) byDate[e.date] = e
+                for (e in autoBackups) byDate[e.date] = e
+                byDate.values.sortedByDescending { it.date }
+            }
 
             AdAwareDialog(onDismissRequest = { if (!restoring) vm.showRestoreDialog = false }) {
                 Surface(
@@ -2498,8 +2514,28 @@ class MainActivity : ComponentActivity() {
                         vm.syncEvictionMessage = null
                         vm.configureSyncGroup()
                         com.techadvantage.budgetrak.data.sync.BackgroundSyncWorker.schedule(context)
-                    } catch (_: Exception) {
-                        vm.syncStatus = "error"
+                    } catch (e: Exception) {
+                        // Roll back the half-committed local state. Without
+                        // this, GroupManager.createGroup's prefs writes
+                        // (groupId + isAdmin) survive while Firestore has
+                        // nothing — leaving the user in a phantom-group
+                        // state where every listener attach hammers
+                        // PERMISSION_DENIED forever. See
+                        // feedback_recreate_preserves_viewmodel.md and the
+                        // 2026-05-02 Paul-device diagnosis for the symptom
+                        // (groupId 4f21bc1536f0 with no Firestore-side
+                        // existence).
+                        com.techadvantage.budgetrak.BudgeTrakApplication.recordNonFatal(
+                            "GROUP_CREATE_FAILED", e.message ?: "unknown", e
+                        )
+                        try { vm.disposeSyncListeners() } catch (_: Exception) {}
+                        try {
+                            com.techadvantage.budgetrak.data.sync.GroupManager
+                                .leaveGroup(context, localOnly = true)
+                        } catch (_: Exception) {}
+                        vm.resetSyncState()
+                        vm.syncErrorMessage = e.message ?: "Group creation failed"
+                        toastState.show(vm.strings.sync.createGroupFailed)
                     }
                 }
             },
@@ -2579,9 +2615,23 @@ class MainActivity : ComponentActivity() {
                             vm.syncErrorMessage = "Invalid or expired pairing code"
                         }
                     } catch (e: Exception) {
+                        // Same rollback contract as onCreateGroup: if
+                        // joinGroup wrote prefs (groupId + encryption key)
+                        // before any Firestore write threw, we'd be left
+                        // with a phantom group locally. Wipe local SYNC
+                        // state so the next attempt starts clean.
+                        com.techadvantage.budgetrak.BudgeTrakApplication.recordNonFatal(
+                            "GROUP_JOIN_FAILED", e.message ?: "unknown", e
+                        )
+                        try { vm.disposeSyncListeners() } catch (_: Exception) {}
+                        try {
+                            com.techadvantage.budgetrak.data.sync.GroupManager
+                                .leaveGroup(context, localOnly = true)
+                        } catch (_: Exception) {}
+                        vm.resetSyncState()
                         vm.syncProgressMessage = null
-                        vm.syncStatus = "error"
                         vm.syncErrorMessage = e.message
+                        toastState.show(vm.strings.sync.joinGroupFailed)
                     }
                 }
             },

@@ -20,14 +20,11 @@ object ExpenseReportGenerator {
         categories: List<Category>,
         currencySymbol: String = "$"
     ): List<File> {
-        val outputDir = File(BackupManager.getBudgetrakDir(), "PDF")
-        outputDir.mkdirs()
-
         val catMap = categories.associateBy { it.id }
         val files = mutableListOf<File>()
 
         for (txn in transactions) {
-            val file = generateSingleReport(context, txn, catMap, currencySymbol, outputDir)
+            val file = generateSingleReport(context, txn, catMap, currencySymbol)
             if (file != null) files.add(file)
         }
 
@@ -38,8 +35,7 @@ object ExpenseReportGenerator {
         context: Context,
         txn: Transaction,
         catMap: Map<Int, Category>,
-        currencySymbol: String,
-        outputDir: File
+        currencySymbol: String
     ): File? {
         val doc = PdfDocument()
         var pageNum = 1
@@ -66,12 +62,19 @@ object ExpenseReportGenerator {
             doc.finishPage(pPage)
         }
 
-        // Save
+        // Save via PublicDownloadWriter — direct File API on fresh installs, MediaStore
+        // fallback on reinstall when an orphan PDF (same txn.id from prior install) blocks
+        // the canonical filename. Resolved path is cached so repeat exports of the same
+        // transaction don't accumulate `(N).pdf` siblings.
         val dateStr = txn.date.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
         val merchant = txn.source.take(20).replace(Regex("[^a-zA-Z0-9 ]"), "").trim().replace(" ", "_")
         val fileName = "expense_${dateStr}_${merchant}_${txn.id}.pdf"
-        val outFile = File(outputDir, fileName)
-        outFile.outputStream().use { doc.writeTo(it) }
+        val outFile = PublicDownloadWriter.writeStream(
+            context = context,
+            relSubdir = "BudgeTrak/PDF",
+            fileName = fileName,
+            mimeType = "application/pdf"
+        ) { os -> doc.writeTo(os) }
         doc.close()
 
         return outFile

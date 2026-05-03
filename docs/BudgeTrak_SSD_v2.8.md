@@ -737,6 +737,36 @@ Both `source` strings lowercased, stripped to alphanumeric (regex `[^a-z0-9]`) s
 - Both < `minChars`: require exact equality
 - Else: any common substring of length ≥ `minChars` (sliding window + HashSet)
 
+### 9.7 Public-download writes and orphan resilience
+
+Every BudgeTrak feature that writes into `/storage/emulated/0/Download/BudgeTrak/<subdir>/` falls into one of seven categories. Android scoped storage refuses File API writes to files left by a previous install ("orphans") with `EACCES` — each path below documents how it copes.
+
+| Subdir | Producer | Mechanism | Orphan-safe |
+|---|---|---|---|
+| `backups/` (`.enc`) | `BackupManager` system + photos backup | `nextAvailableSuffix(dir, dateStr, suffix)` walks `_a, _b, …, _z` until a free slot. `File.exists()` sees orphans, so the suffix steps past them. | Yes |
+| `backups/` (`.csv`, `.xlsx`, `.json`) | `TransactionsScreen` SAF launchers | `ActivityResultContracts.CreateDocument` — user picks destination URI, OS owns it. | Yes — SAF, not File API |
+| `PDF/` | `ExpenseReportGenerator` | `PublicDownloadWriter.writeStream` (v2.10.03+) | Yes — via helper |
+| `photos/<yyyy-MM-dd_HHmmss>/` | Settings → "Save Photos" (`MainActivity`) | Fresh timestamped subdir per dump; `FileOutputStream(File(subdir, name))` | Yes — fresh subdir per write. Active feature, not deprecated. |
+| `support/sync_diag*.txt`, `logcat_*.txt` | `DiagDumpBuilder.writeDiagToMediaStore` (called from Dump button + `DebugDumpWorker` FCM path) | `PublicDownloadWriter.writeBytes` (v2.10.03+) | Yes — via helper |
+| `support/pre_restore_backup.json` | `FullBackupSerializer.applyRestore` (production users hit this on restore-after-reinstall) | `PublicDownloadWriter.writeBytes` (v2.10.03+) | Yes — via helper |
+| `support/token_log.txt`, `native_sync_log.txt`, `crash_log.txt` | `BudgeTrakApplication.tokenLog` / `syncEvent`, `FirestoreDocSync.syncLog`, uncaught-exception handler | `File.appendText`, wrapped in `try/catch` (silently swallows `EACCES`). Debug-only or crash-only; content is also captured by Crashlytics. | No — but tolerated |
+
+`PublicDownloadWriter` (`data/PublicDownloadWriter.kt`, v2.10.03) is the helper used by every fixed-name write that doesn't get orphan resilience for free. Three-tier strategy:
+
+1. **Cached path** — after a previous MediaStore-fallback success, the resolved on-disk File path is stored in SharedPreferences `public_download_writer` keyed by `<relSubdir>/<fileName>`. Subsequent writes go straight there, skipping the EACCES round-trip.
+2. **Canonical direct write** — `File(Environment.getExternalStoragePublicDirectory(DIRECTORY_DOWNLOADS), relSubdir).writeBytes(bytes)`. Fast path for fresh installs and own files.
+3. **MediaStore fallback** — `MediaStore.Files.getContentUri("external")` insert with `RELATIVE_PATH = Download/<relSubdir>/`. Auto-suffixes ` (1)`, ` (2)`, … when the canonical path is occupied by an orphan. The resolved path is cached for tier 1.
+
+API:
+```kotlin
+PublicDownloadWriter.writeBytes(context, relSubdir, fileName, mimeType, bytes): File?
+PublicDownloadWriter.writeStream(context, relSubdir, fileName, mimeType, produce): File?
+```
+
+The stream variant materializes via `ByteArrayOutputStream` first so all three tiers can retry without re-invoking `produce` mid-stream.
+
+Trade-off (chosen 2026-05-02): a single `(N)` suffix may appear after a reinstall, then stays stable for the life of that install (the cache keeps subsequent writes pointed at the same physical file). The user never sees a system delete-confirmation dialog — that was the explicit design choice over a `MediaStore.createDeleteRequest`-based clean-overwrite path.
+
 ## 10. Encryption
 
 ### 10.1 CryptoHelper.kt (93 lines)
@@ -871,13 +901,13 @@ Three palettes (selected in Settings, key `chartPalette`): `Bright`, `Pastel`, `
 
 ## 14. PDF Expense Reports
 
-`data/ExpenseReportGenerator.kt` (365 lines). Called from `TransactionsScreen.kt:1849` via `ExpenseReportGenerator.generateReports(context, toSave, categories, currencySymbol)`.
+`data/ExpenseReportGenerator.kt`. Called from `TransactionsScreen.kt` via `ExpenseReportGenerator.generateReports(context, toSave, categories, currencySymbol)`.
 
 - One PDF per transaction (multi-page)
 - Page 1: Expense Report Form (merchant, date, amount, category breakdown)
 - Pages 2-N: Full-size receipt photos (up to 5 slots, via `ReceiptManager.getReceiptFile()`)
 - Paper: US Letter (612 x 792 pts), margin 40pt
-- Output dir: `BackupManager.getBudgetrakDir()/PDF/`
+- Output dir: `Download/BudgeTrak/PDF/` via `PublicDownloadWriter.writeStream(...)` (since v2.10.03). Filename `expense_<yyyy-MM-dd>_<merchant>_<txn.id>.pdf`. The helper handles the EACCES case where a backup-restored transaction reuses an orphan PDF filename from a previous install — falls through to MediaStore insert (auto-suffixed) and caches the resolved path so repeat exports of the same transaction don't accumulate `(N)` siblings. Detail in §9.7.
 
 ## 15. Localization
 
@@ -2325,7 +2355,15 @@ else
 appCheck.installAppCheckProviderFactory(providerFactory)
 ```
 
-**Debug builds** use the debug provider. The first launch of a debug build emits a `DebugAppCheckProvider` log line containing the debug secret; `BudgeTrakApplication.onCreate` greps logcat for it (`Regex("debug secret.*: ([a-f0-9-]+)", IGNORE_CASE)`) and writes the secret to `token_log.txt` so it's visible in FCM dump uploads. The secret must be registered manually in Firebase Console → App Check → Apps → BudgeTrak Android → Manage debug tokens.
+**Debug builds** use the debug provider. Two complementary mechanisms give the SDK a registered token:
+
+1. **Pinned UUID seed (preferred, v2.10.03+)** — `local.properties` carries a fixed UUID under key `APP_CHECK_DEBUG_TOKEN`; `app/build.gradle.kts` exposes it as `BuildConfig.APP_CHECK_DEBUG_TOKEN`; `BudgeTrakApplication.onCreate` (debug branch) writes it into the SDK's prefs file `com.google.firebase.appcheck.debug.store.<FirebaseApp.persistenceKey>` under key `com.google.firebase.appcheck.debug.DEBUG_SECRET` **before** `installAppCheckProviderFactory`. The SDK reuses this pre-seeded token instead of generating a fresh per-install UUID. One Console-registered UUID covers every dev/test device and survives reinstall / clear-data — no Console roundtrip per APK. Skip-if-already-equal so cold starts don't churn the prefs.
+
+   *Security model*: the pinned UUID is baked into every debug APK and recoverable via decompile. Acceptable because (a) debug APKs aren't shipped to end users (release uses Play Integrity, per-install attestation), (b) the UUID only authenticates "BudgeTrak debug" — Firestore/RTDB/Storage rules still enforce per-user/per-group access. Revoke by deleting the Console entry and rotating to a new UUID.
+
+2. **Legacy logcat scrape (fallback)** — the first launch of a debug build emits a `DebugAppCheckProvider` log line containing the active debug secret; `BudgeTrakApplication.onCreate` greps logcat for it (`Regex("debug secret.*: ([a-f0-9-]+)", IGNORE_CASE)`) and writes the secret to `token_log.txt` so it's visible in FCM dump uploads. Useful when `APP_CHECK_DEBUG_TOKEN` is unset (the SDK falls back to per-install UUIDs and the scrape surfaces them for ad-hoc Console registration).
+
+Debug tokens must be registered in Firebase Console → App Check → Apps → BudgeTrak Android → Manage debug tokens.
 
 **Release builds** use Play Integrity. The Play Integrity Service hits Google's attestation servers each refresh, which requires a Play-installed APK (or a Play-signed APK sideload from Internal Testing) — meaningfully harder to forge than the debug provider.
 
@@ -2755,6 +2793,8 @@ Estimates from 2026-04 (40 K groups, 100 K devices, 5 sessions/day, 2 changes/se
 | 2.9.1 | May 1 2026 | **Restore-flow UI refresh fix** (versionCode 8). `MainViewModel.reloadAllFromDisk` now wraps all Compose state mutations (the seven `mutableStateListOf` lists + `sharedSettings` + 19 prefs-backed scalars + `lastSaved*` cache resets) in `Snapshot.withMutableSnapshot { … }`. Without that, the multi-step `clear()`+`addAll()` sequence on each list was producing UI symptoms post-restore where Categories settings, Recurring Expenses, and Income Sources screens rendered as empty (or seeded defaults) until the user force-killed the app and relaunched, even though both on-disk JSON files and in-memory VM lists were correct (confirmed via state dump). Transactions happened to render only because of follow-up state mutations elsewhere that nudged recomposition. Also resets the `lastSaved*` diff caches inside the same snapshot so the next save after a restore doesn't push every record as "changed" against pre-restore state. `DiagDumpBuilder` now also prints Income Sources, Savings Goals, and Amortization Entries sections (previously omitted from dumps). |
 | 2.10.00 | May 1 2026 | **Encrypted-restore stale-VM fix + Restore dialog UX overhaul + version-format change** (versionCode 15). Root cause of the post-restore empty-UI bug identified: `BackupManager.restoreSystemBackup` writes JSON files to disk but never refreshes VM state. The encrypted-restore handler in `MainActivity.kt:1540` called `Activity.recreate()` to "force refresh" — but `recreate()` preserves the `ViewModelStore` by design, so the rebuilt UI continued reading pre-restore in-memory lists. Fixed by replacing `recreate()` with `vm.reloadAllFromDisk()` and adding a `dataReloadVersion` `mutableIntStateOf` that's bumped inside the `Snapshot.withMutableSnapshot` block. `MainActivity.setContent` wraps the `when (vm.currentScreen) { … }` block in `key(vm.dataReloadVersion) { … }`, forcing the screen subtree to unmount + remount on every wholesale reload — bypasses any Compose smart-skipping or stale `derivedStateOf` cache through the `clear()`+`addAll()` transition. **Restore dialog**: auto-launches the SAF folder picker when no backups visible and no usable persisted URI; persists picked tree URI to `app_prefs.backup_folder_uri` so subsequent restore attempts in the same install skip the picker; strict folder-name validation (must be literally `backups`) catches the realistic mistake of picking `Download/` as parent (SAF tree-URI listing only enumerates immediate children, so subfolder backups would be invisible AND future auto-backups would diverge from the read folder); content validation (rejects picks with no `backup_*_system.enc` files); `PulsingScrollArrows` overlay matching other dialog screens. New strings `pickBackupFolderMessage` / `pickedFolderHasNoBackups` / `pickedFolderNotBackups` (en + es-419) replace the `noBackupsFound` wording. **Version format change**: `versionName` now follows `MAJOR.MINOR.PP` with zero-padded `00-99` patch segment for extensive debug-cycle iteration (100 slots per minor before bumping minor). **Release-build subscription override** (TEMPORARY, until Google Play Billing integration ships): `MainViewModel.init` forces `isPaidUser = isSubscriber = true` on `!BuildConfig.DEBUG`, persisting both to prefs every launch, so internal/closed/open testers can exercise paid-only features without a billing flow. Debug builds keep prefs-toggleable state for development-time tier exercise. New feedback memory `feedback_recreate_preserves_viewmodel.md` documents the `recreate()` ↔ `ViewModelStore` interaction. |
 | 2.10.01 | May 2 2026 | **Data Safety hygiene + native debug symbols** (versionCode 16). SYNC group setup field renamed from "Your name" / "Tu nombre" to "Device nickname" / "Apodo del dispositivo" (the `enterNickname` string in `EnglishStrings` / `SpanishStrings`, used by Create-group + Join-group + repair flows in `SyncScreen.kt`). The previous wording implied BudgeTrak collects personal name data, which conflicted with the Data Safety declaration that we don't. Repair Attributions dialog already used "Nickname" — this aligns SYNC group setup with that precedent. `TranslationContext` updated to document the device-labeling intent so translators don't drift the field back toward personal-name semantics. **Native debug symbols** now embedded in release AABs via `ndk { debugSymbolLevel = "SYMBOL_TABLE" }` in the `release` buildType — fixes the Play Console "AAB contains native code, and you've not uploaded debug symbols" warning, gives Crashlytics native-frame symbolication for bundled libs (Firebase, Compose runtime). Privacy policy at `https://techadvantagesupport.github.io/privacy` updated with explicit `## Data Deletion` section enumerating five deletion paths so Play Console Data Safety review (Yes-with-deletion-URL answer) lands on a clearly findable section via `#data-deletion` anchor. |
+| 2.10.02 | May 2 2026 | **Phantom-group-state PERMISSION_DENIED loop fix** (versionCode 17). `onCreateGroup` / `onJoinGroup` catch handlers (`MainActivity.kt`) now record a `GROUP_CREATE_FAILED` / `GROUP_JOIN_FAILED` non-fatal and **fully roll back** local state — `vm.disposeSyncListeners()`, `GroupManager.leaveGroup(localOnly = true)`, `vm.resetSyncState()` — instead of silently leaving `groupId` set in prefs while the Firestore group doc is missing (the v2.10.01 behavior that produced Paul's PERMISSION_DENIED loop on 2026-05-01). New strings `createGroupFailed` / `joinGroupFailed` (en + es-419). **Dissolution detection in `FirestoreDocSync.triggerFullRestart()`**: on PERMISSION_DENIED, before refreshing the App Check token, probes `groups/{groupId}` and `groups/{groupId}/members/{authUid}` via `Source.SERVER` (10 s timeout each); if either returns "doesn't exist", fires the new `onGroupDissolved` callback wired in `MainViewModel.configureSyncGroup`, which dispatches `evictFromSync(strings.sync.evictionDissolved)`. Probe-time errors fall through to the standard token-refresh path so transient outages don't trigger spurious eviction. Together: any path that writes `groupId` to local prefs rolls it back atomically on Firestore failure, and any orphaned `groupId` left over from older bugs gets cleaned up the next time it surfaces a PERMISSION_DENIED. |
+| 2.10.03 | May 2 2026 | **Public-download write hardening + pinned debug token** (versionCode 18). New `data/PublicDownloadWriter.kt` — three-tier orphan-safe writer (cached path → canonical direct → MediaStore fallback with `(N)` auto-suffix). Refactor: `DiagDumpBuilder.writeDiagToMediaStore` (used by Dump button + DebugDumpWorker FCM path), `FullBackupSerializer.applyRestore` (pre-restore snapshot — production users hit this on restore-after-reinstall), `ExpenseReportGenerator.generateSingleReport` (PDF expense reports — production users with backup-restored transactions reusing orphan filenames). Other public-download writes (encrypted backups via `nextAvailableSuffix`, SAF-mediated CSV/XLSX/JSON, photo dumps in fresh timestamped subdirs, append-mode debug logs in swallow-EACCES try/catch) don't need the helper; full survey in §9.7. **Pinned App Check debug token**: `local.properties:APP_CHECK_DEBUG_TOKEN` → `BuildConfig.APP_CHECK_DEBUG_TOKEN` → seeded into `com.google.firebase.appcheck.debug.store.<persistenceKey>` SharedPreferences in `BudgeTrakApplication.onCreate` before `installAppCheckProviderFactory`. One Console-registered UUID covers every dev/test device — no Console roundtrip on reinstall. Skip-if-already-equal so cold starts don't churn the prefs. Empty BuildConfig value disables the seed (SDK falls back to per-install UUIDs; logcat scrape still surfaces them to `token_log.txt`). Detail: §28.6.1. |
 
 ---
 

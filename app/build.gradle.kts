@@ -22,8 +22,8 @@ android {
         // versionName format: MAJOR.MINOR.PP (third segment is zero-padded
         // 00-99 to leave 100 patch slots per minor for extensive debugging
         // cycles before bumping minor).
-        versionCode = 16
-        versionName = "2.10.01"
+        versionCode = 19
+        versionName = "2.10.04"
     }
 
     signingConfigs {
@@ -98,6 +98,13 @@ android {
         }
         val geminiKey = localProps.getProperty("GEMINI_API_KEY", "")
         buildConfigField("String", "GEMINI_API_KEY", "\"$geminiKey\"")
+
+        // Pinned App Check debug token — seeded into the firebase-appcheck-debug
+        // SharedPreferences in BudgeTrakApplication.onCreate so every debug install
+        // reuses the same UUID instead of generating a fresh one. Empty string
+        // disables seeding (SDK falls back to per-install UUID generation).
+        val appCheckToken = localProps.getProperty("APP_CHECK_DEBUG_TOKEN", "")
+        buildConfigField("String", "APP_CHECK_DEBUG_TOKEN", "\"$appCheckToken\"")
     }
 }
 

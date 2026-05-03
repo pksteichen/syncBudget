@@ -956,9 +956,11 @@ Longer all-caps (`DOORDASH`) still get title-cased so a stuck Caps Lock doesn't 
 
 ### 6.14 ExpenseReportGenerator
 
-**File:** `data/ExpenseReportGenerator.kt` (365 lines)  |  object singleton
+**File:** `data/ExpenseReportGenerator.kt`  |  object singleton
 
-Generates a multi-page PDF expense report **per transaction** using Android `PdfDocument` + `Canvas`. Letter pages (612 × 792 pt), 40-pt margins. Page 1 = expense-report form (employee info, expense details, purpose checkboxes, justification, attendees, receipt check, approval). Pages 2–6 = full-size scaled receipt photos (up to 5). Output directory: `BackupManager.getBudgetrakDir()/PDF/`, file name `expense_<yyyy-MM-dd>_<merchant>_<id>.pdf`. Called from `TransactionsScreen.kt:1849`.
+Generates a multi-page PDF expense report **per transaction** using Android `PdfDocument` + `Canvas`. Letter pages (612 × 792 pt), 40-pt margins. Page 1 = expense-report form (employee info, expense details, purpose checkboxes, justification, attendees, receipt check, approval). Pages 2–6 = full-size scaled receipt photos (up to 5).
+
+Output: `Download/BudgeTrak/PDF/expense_<yyyy-MM-dd>_<merchant>_<txn.id>.pdf`. Since v2.10.03 the write goes through `PublicDownloadWriter.writeStream(relSubdir = "BudgeTrak/PDF", mimeType = "application/pdf") { os -> doc.writeTo(os) }` so a backup-restored transaction whose `txn.id` reuses an orphan filename from a previous install falls through to MediaStore (auto-suffixed `(N)`) instead of failing with EACCES. Resolved path is cached so repeat exports of the same transaction don't accumulate `(N)` siblings — see §6.16. Called from `TransactionsScreen.kt`.
 
 ### 6.15 DiagDumpBuilder
 
@@ -969,10 +971,30 @@ Builds a diagnostic state dump **from disk** (repositories + SharedPreferences),
 | Method | Purpose |
 |---|---|
 | `build(context, simAvailableCash?)` | Loads all repos + prefs, computes `budgetAmount` / `safeBudgetAmount`, emits formatted text |
-| `writeDiagToMediaStore(context, fileName, text)` | Writes to `Download/BudgeTrak/support/`; falls back to MediaStore on failure |
+| `writeDiagToMediaStore(context, fileName, text)` | Thin delegate to `PublicDownloadWriter.writeBytes(relSubdir = "BudgeTrak/support", mimeType = "text/plain", ...)` since v2.10.03. Function name preserved for backward compat with existing call sites; no longer touches MediaStore directly. See §6.16. |
 | `sanitizeDeviceName(name)` | Regex `[^a-zA-Z0-9]` → `_`, capped at 20 chars |
 
 Dump sections: timestamp, deviceId, admin/sync flags, App Prefs, SharedSettings snapshot, Sync Metadata (including `catIdRemap`), Native Sync Log tail (last 50 lines of `support/native_sync_log.txt`), Categories, Recurring Expenses, Transactions (active, in current period, with link digest), Cash Verification (ledger credits vs recomputed vs stored), Period Ledger.
+
+### 6.16 PublicDownloadWriter
+
+**File:** `data/PublicDownloadWriter.kt` (v2.10.03+)  |  object singleton
+
+Orphan-safe writer for `Download/BudgeTrak/<subdir>/` files. Solves the scoped-storage `EACCES` that hits whenever a fresh install tries to overwrite a fixed-name file left behind by the previous install.
+
+Three-tier strategy (each tier fails through to the next):
+
+1. **Cached path** — `SharedPreferences("public_download_writer", MODE_PRIVATE)` stores the resolved on-disk path keyed by `<relSubdir>/<fileName>` after a prior MediaStore-fallback success. Subsequent writes go directly there, skipping any EACCES round-trip.
+2. **Canonical direct write** — `File(Environment.getExternalStoragePublicDirectory(DIRECTORY_DOWNLOADS), relSubdir).writeBytes(bytes)`. Fast path for fresh installs and own files.
+3. **MediaStore insert** — `MediaStore.Files.getContentUri("external")` insert with `RELATIVE_PATH = ${DIRECTORY_DOWNLOADS}/<relSubdir>/`. The platform auto-suffixes ` (1)`, ` (2)`, … when the canonical path is occupied by an orphan. The resolved File path (queried via `MediaStore.MediaColumns.DATA`) is cached for tier 1.
+
+| Method | Purpose |
+|---|---|
+| `writeBytes(context, relSubdir, fileName, mimeType, bytes): File?` | Truncate-write byte buffer. Returns the actual on-disk File (may carry `(N)` suffix); null on hard failure. |
+| `writeStream(context, relSubdir, fileName, mimeType, produce): File?` | Stream variant for large content (PDFs). Materializes via `ByteArrayOutputStream` first so the three-tier retry can fall through without re-invoking `produce` mid-stream. |
+
+Callers: `DiagDumpBuilder.writeDiagToMediaStore`, `BackgroundSyncWorker` DebugDumpWorker dump path, `FullBackupSerializer.applyRestore` (pre-restore snapshot), `ExpenseReportGenerator.generateSingleReport`. Other public-download writes (`.enc` backups via `nextAvailableSuffix`, SAF-mediated CSV/XLSX/JSON, photo dumps in fresh timestamped subdirs, append-mode debug logs in swallow-EACCES try/catch) don't need the helper — they're either already orphan-resilient or deliberately tolerate failure. Full survey in SSD §9.7.
+
 ## 7. Sync Classes
 
 All classes below live in package `com.techadvantage.budgetrak.data.sync` unless noted. Line counts reflect the verified source.
@@ -1462,8 +1484,9 @@ Package `com.techadvantage.budgetrak.data`. Generates diagnostic text dumps from
 > Backend configuration (provider TTLs, Console enforcement settings, Play Integrity advanced settings, refresh trigger inventory) is consolidated in **SSD §28.6**. This section covers only the in-app code surface.
 
 - **Provider install** in `BudgeTrakApplication.onCreate`: `DebugAppCheckProviderFactory` (debug) / `PlayIntegrityAppCheckProviderFactory` (release), switched by `BuildConfig.DEBUG`.
+- **Pinned debug-token seed (v2.10.03+)** — debug branch only. Before `installAppCheckProviderFactory`, writes `BuildConfig.APP_CHECK_DEBUG_TOKEN` into the SDK's prefs at `getSharedPreferences("com.google.firebase.appcheck.debug.store.${FirebaseApp.getInstance().persistenceKey}", MODE_PRIVATE)` under key `"com.google.firebase.appcheck.debug.DEBUG_SECRET"`. Skip-if-already-equal so cold starts don't churn. Empty BuildConfig value disables the seed (SDK falls back to per-install UUID generation; logcat scrape still surfaces the generated token to `token_log.txt`). Rationale + security model: SSD §28.6.1.
 - `addAppCheckListener { token -> tokenLog(...); crashlytics?.setCustomKey("lastTokenExpiry", token.expireTimeMillis) }` for refresh observability.
-- Debug builds also `Runtime.exec("logcat -d -s DebugAppCheckProvider:D")` once at startup to capture the debug secret into `token_log.txt`.
+- Debug builds also `Runtime.exec("logcat -d -s DebugAppCheckProvider:D")` once at startup to capture the debug secret into `token_log.txt` (legacy fallback path — primary surfacing is the seed).
 - All `getAppCheckToken()` call sites wrapped with `withTimeoutOrNull(10–15 s)`.
 - Refresh triggered from: `onResume`, `networkCallback.onAvailable`, `BackgroundSyncWorker.runTier2/runTier3` (16-min proactive threshold), `FirestoreDocSync.triggerFullRestart()` on PERMISSION_DENIED, `MainViewModel` keep-alive (45-min check / 16-min refresh).
 
@@ -1767,10 +1790,10 @@ For exact current line counts run `find app/src/main/java -name "*.kt" | xargs w
 ### Root (`com.techadvantage.budgetrak`) — 3 files
 `MainActivity` (UI shell, navigation, lifecycle, LoadingScreen, BackHandler — §2.2), `MainViewModel` (state + business logic + sync lifecycle + save functions + async load + maintenance + archiving — §2.3), `BudgeTrakApplication` (Application entry, App Check, Crashlytics, FCM helpers — §2.1).
 
-### `data/` — 31 files
+### `data/` — 32 files
 Data classes: `Transaction`, `Category`, `IncomeSource`, `RecurringExpense`, `AmortizationEntry`, `SavingsGoal`, `SharedSettings`, `BudgetPeriod` (enum) — §5.
 Repositories: `TransactionRepository`, `CategoryRepository`, `IncomeSourceRepository`, `RecurringExpenseRepository`, `AmortizationRepository`, `SavingsGoalRepository`, `SharedSettingsRepository` (one per JSON file) — §13.
-Utilities: `BudgetCalculator`, `CryptoHelper`, `CsvParser`, `DuplicateDetector`, `AutoCategorizer`, `CategoryIcons`, `SavingsSimulator`, `DefaultCategories`, `FullBackupSerializer`, `BackupManager`, `SafeIO`, `PrefsCompat`, `TitleCaseUtil`, `ExpenseReportGenerator`, `DiagDumpBuilder`, `PeriodRefreshService` — §6.
+Utilities: `BudgetCalculator`, `CryptoHelper`, `CsvParser`, `DuplicateDetector`, `AutoCategorizer`, `CategoryIcons`, `SavingsSimulator`, `DefaultCategories`, `FullBackupSerializer`, `BackupManager`, `SafeIO`, `PrefsCompat`, `TitleCaseUtil`, `ExpenseReportGenerator`, `DiagDumpBuilder`, `PublicDownloadWriter` (v2.10.03+), `PeriodRefreshService` — §6.
 
 ### `data/sync/` — 22 files
 Sync engine: `EncryptedDocSerializer`, `FirestoreDocService`, `FirestoreDocSync`, `SyncWriteHelper`, `FirestoreService`, `GroupManager`, `SyncFilters`, `SyncIdGenerator`, `PeriodLedger`, `SecurePrefs`. Receipts: `ImageLedgerEntry`, `ImageLedgerService`, `ReceiptManager`, `ReceiptSyncManager`. Workers + FCM: `BackgroundSyncWorker`, `DebugDumpWorker`, `WakeReceiver`, `FcmService`, `FcmSender`. Presence: `RealtimePresenceService`. Merge: `SyncMergeProcessor`. Network: `NetworkUtils`. Detail: §7.
@@ -1813,6 +1836,8 @@ Sync engine: `EncryptedDocSerializer`, `FirestoreDocService`, `FirestoreDocSync`
 | 2.7 | Apr 18 2026 | **AI features + photo-bar UX overhaul.** `data/ocr/ReceiptOcrService.kt` (Gemini 2.5 Flash-Lite 3-call pipeline + Call 1 routing probe + reconcile/remap/aggregate post-process). `data/ai/AiCategorizerService.kt` (CSV categorization fallback, merchant+amount payload only). Photo-bar long-press selects AI scan target + drag reorders. PDF import via `PdfRenderer`. `MIN_IMAGE_DIMENSION = 400` floor. `BackgroundSyncWorker.isRunning` `AtomicBoolean` double-fire guard. Cash Flow Simulation widened to Paid+Subscriber. Anchored toasts. |
 | 2.7.1 | Apr 27 2026 | **Transaction save audit — six silent-loss vectors closed.** Non-dismissable `DuplicateResolutionDialog`; `onResume` add-only disk merge; entity-id range widened to `1..Int.MAX_VALUE`; multi-category validation toasts; `onUpdateTransaction` missing-target toast; `addTransactionWithBudgetEffect` atomic. |
 | 2.8 | Apr 27 2026 | **TransactionDialog unification + network-awareness pass.** Three add/edit entry points consolidated (header EXPENSE/INCOME pill toggle); single layered Add-Transaction icon replaces +/- IconButton pairs. OCR refund-receipt support (`Int.MIN_VALUE` sentinel; auto-flip `typeIsExpense` + `abs()`). Preselect-help banner opens as a sibling-`Dialog` overlay so the underlying transaction dialog survives the round-trip. Fail-fast offline + auto-resume across receipt sync / AI OCR / Sync Now / `BackgroundSyncWorker` / App Check / anonymous auth via `networkCallback.onAvailable`. Tier 2 receipt-sync rethrows `CancellationException` and propagates `clearLostReceiptSlot` state back to `vm.transactions`. Debug receipt forensics in `token_log.txt` + `sync_diag.txt` Receipt Files Audit. Call 1.5 capped at 2 s past Call 2. ~100 files / ~51,500 lines. **Dead code removed:** down-only `PulsingScrollArrow`; `DeviceRecord.fingerprintData`/`fingerprintSyncVersion` (written but never read); `updateDeviceMetadata.fingerprintJson` parameter (no caller passed it). |
+| 2.10.02 | May 2 2026 | **Group-state hardening.** `MainActivity.onCreateGroup` / `onJoinGroup` catch handlers record `GROUP_CREATE_FAILED` / `GROUP_JOIN_FAILED` non-fatals and fully roll back via `vm.disposeSyncListeners()` + `GroupManager.leaveGroup(localOnly = true)` + `vm.resetSyncState()` instead of leaving phantom `groupId` in prefs. New `FirestoreDocSync.onGroupDissolved` callback fires from `triggerFullRestart()` after a `Source.SERVER` probe of `groups/{gid}` and `groups/{gid}/members/{uid}`; `MainViewModel.configureSyncGroup` wires it to `evictFromSync(strings.sync.evictionDissolved)`. Probe errors fall through to standard token refresh. New strings `createGroupFailed`, `joinGroupFailed` (en + es-419). |
+| 2.10.03 | May 2 2026 | **`PublicDownloadWriter` + pinned App Check debug token.** New §6.16 utility — three-tier writer (cached path → canonical direct → MediaStore auto-suffix) for orphan-safe `Download/BudgeTrak/<subdir>/` writes. Refactor: `DiagDumpBuilder.writeDiagToMediaStore` (now a thin delegate), `BackgroundSyncWorker` DebugDumpWorker dump path (routes through `writeDiagToMediaStore`), `FullBackupSerializer.applyRestore` (pre-restore snapshot), `ExpenseReportGenerator.generateSingleReport` (PDF write via `writeStream`; `outputDir` plumbing dropped). Encrypted backups, SAF exports, photo-dump timestamped subdirs, and append-mode debug logs unchanged — already orphan-resilient or deliberately tolerate failure. Pinned App Check debug token: `BudgeTrakApplication.onCreate` debug branch seeds `BuildConfig.APP_CHECK_DEBUG_TOKEN` (sourced from `local.properties`) into `com.google.firebase.appcheck.debug.store.<FirebaseApp.persistenceKey>` SharedPreferences before `installAppCheckProviderFactory`. Skip-if-already-equal. `data/` file count: 31 → 32. |
 
 ---
 
