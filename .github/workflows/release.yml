@@ -19,6 +19,23 @@ on:
           - beta
           - production
         default: internal
+      release_status:
+        # Default `draft` is forced while the app is still in "Draft app" state
+        # in Play Console — Google's new-personal-account 12-testers/14-days
+        # closed-test gate blocks API releases with status=completed across
+        # every track. Manual UI uploads default to draft and you promote
+        # them with one click; this workflow defaults to the same so the
+        # publish step succeeds end-to-end. Once the closed-test gate is
+        # satisfied and production access is granted, switch to `completed`
+        # for fully unattended auto-publish. See project_play_store_launch.md.
+        description: "Release status (draft = upload only, you promote in Console)"
+        type: choice
+        options:
+          - draft
+          - inProgress
+          - halted
+          - completed
+        default: draft
 
 jobs:
   build:
@@ -129,7 +146,7 @@ jobs:
           releaseFiles: app/build/outputs/bundle/release/app-release.aab
           mappingFile: app/build/outputs/mapping/release/mapping.txt
           track: ${{ inputs.release_track }}
-          status: completed
+          status: ${{ inputs.release_status }}
           # Release notes: read from `whatsNew/` directory. Each file named
           # whatsnew-<bcp47-locale> contains the localized notes for that
           # locale (e.g., whatsnew-en-US, whatsnew-es-419). Optional — omit
