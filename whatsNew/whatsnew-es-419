@@ -1,4 +1,5 @@
-BudgeTrak v2.10.01 — versión de pruebas internas.
-- El campo "Tu nombre" del grupo SYNC ahora se llama "Apodo del dispositivo" para aclarar que es una etiqueta para este dispositivo, no tu nombre personal.
-- Incluye las correcciones de v2.10.00: la restauración actualiza la interfaz al instante; el diálogo de restauración abre el selector automáticamente, recuerda la carpeta y rechaza selecciones inválidas; las versiones publicadas activan Subscriber por defecto.
-- Símbolos nativos de depuración integrados en el AAB para mejores reportes de fallos.
+BudgeTrak v2.10.04
+- Restaurar Copia muestra ahora copias antiguas tras reinstalar — sin perder puntos de restauración previos.
+- Guardar PDF de gastos y diagnósticos funciona tras reinstalar la app.
+- Errores al crear o unirse a un grupo SYNC se revierten limpiamente.
+- Grupos SYNC disueltos se detectan y se salen automáticamente — sin bucles de "permiso denegado".
