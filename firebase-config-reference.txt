@@ -253,29 +253,102 @@ service firebase.storage {
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  5b. FIREBASE APP CHECK (enabled March 31, 2026)
+  5b. FIREBASE APP CHECK (enabled March 31, 2026; chain fully wired 2026-05-03)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  Provider: Play Integrity
-  Token TTL: 4 hours (overridden from 1 h default in Firebase Console)
-  Integrity level: MEETS_BASIC_INTEGRITY (development)
+  Provider: Play Integrity (release builds) / Debug provider (debug builds)
+  Token TTL — Play Integrity: 40 hours (Firebase Console setting, raised from 1 h)
+  Token TTL — Debug provider: 1 hour (Google-imposed, ignores Console setting)
 
   ENFORCEMENT STATUS:
-    Firestore        : ENFORCED
+    Firestore        : ENFORCED (PLAY_RECOGNIZED required, verified 2026-05-03)
     Realtime Database : ENFORCED
     Cloud Storage    : ENFORCED
     Authentication   : NOT enforced (must remain unenforced — anonymous auth
                        needs to work before App Check can issue a token)
 
-  APP CODE: MainViewModel.init installs PlayIntegrityAppCheckProviderFactory
-  before any Firebase service calls.
+  APP CODE: BudgeTrakApplication.onCreate installs the appropriate provider
+  factory based on BuildConfig.DEBUG. Debug branch ALSO seeds the pinned
+  debug-token UUID (BuildConfig.APP_CHECK_DEBUG_TOKEN, sourced from
+  local.properties) into the firebase-appcheck-debug SharedPreferences
+  before installAppCheckProviderFactory, so every fresh-install debug build
+  authenticates against the same Console-registered token without manual
+  re-registration. See project_token_debug.md.
 
-  DEBUG SHA-256: 7B:81:0C:42:2F:06:A4:05:82:44:2E:EF:50:45:63:FD:DD:40:A5:1C:31:D0:A1:22:1C:B1:4C:BB:EB:44:C5:41
+  PINNED DEBUG TOKEN UUID: 8dc731bc-5213-4b09-bb31-b0382af175f1
+    - Registered under com.techadvantage.budgetrak (App Check → Apps → BudgeTrak
+      Android → Manage debug tokens, "BudgeTrak Dev (shared)")
+    - Registered under com.techadvantage.budgetrak.debug (App Check → Apps →
+      BudgeTrak Debug → Manage debug tokens, "BudgeTrak Debug (shared)")
+      — needed because debug tokens are scoped per-applicationId; the .debug
+      buildType uses applicationIdSuffix = ".debug" to enable side-by-side
+      install with the Play release build.
 
-  PRODUCTION HARDENING (before Play Store launch):
-    - Set integrity level to MEETS_DEVICE_INTEGRITY (blocks emulators)
-    - Enable PLAY_RECOGNIZED (blocks sideloaded fakes)
-    - Register release signing key SHA-256 in Firebase Console
+  DEBUG KEYSTORE SHA-256 (from ~/.android/debug.keystore):
+    7B:81:0C:42:2F:06:A4:05:82:44:2E:EF:50:45:63:FD:DD:40:A5:1C:31:D0:A1:22:1C:B1:4C:BB:EB:44:C5:41
+  DEBUG KEYSTORE SHA-1:
+    FB:09:50:11:F7:88:00:3A:C8:A1:96:2D:EA:59:C2:4D:D5:A3:39:2C
+
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PLAY INTEGRITY SETUP CHECKLIST — MANDATORY FOR ENFORCE MODE TO WORK
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Skip any single one of these and App Check tokens silently fail to
+  decrypt. The symptom is identical for every gap: no `AppCheck token
+  refreshed` log, no metrics card visible at App Check → Apps → BudgeTrak
+  Android → Play Integrity, every Firestore call returns PERMISSION_DENIED,
+  every Storage call returns the misleading "User is not authenticated."
+  Debugged the entire chain on 2026-05-03 — see chat log for the journey.
+
+    1. PLAY INTEGRITY API enabled in Google Cloud Console
+       https://console.cloud.google.com/apis/library/playintegrity.googleapis.com
+       (separate from the Play Developer API used for publishing)
+
+    2. FIREBASE PROJECT linked to GOOGLE PLAY (project-level)
+       Firebase Console → Project settings → Integrations → Google Play
+       Tick all of: App Distribution, Crashlytics, Google Analytics
+       (the OAuth scopes the Play Integrity verifier needs are bundled
+       under these service grants)
+
+    3. CLOUD PROJECT linked to PLAY INTEGRITY API (separate from #2)
+       Play Console → Setup → App integrity → Play Integrity API section
+       → "Link Cloud project" button → select sync-23ce9
+       Status flips from "Integration not started" to "Integration started."
+       Ignore the "Integrate the Play Integrity API" checklist item — that's
+       for apps calling the API directly from their own code; Firebase
+       handles the integration server-side.
+
+    4. PLAY APP SIGNING KEY SHA-256 registered in Firebase
+       Play Console → Setup → App integrity → "App signing" section →
+       expand "App signing key certificate" → copy the SHA-256.
+       Then: Firebase Console → Project settings → Your apps →
+       BudgeTrak Android → SHA certificate fingerprints → Add fingerprint
+       → paste the SHA-256.
+
+       This is the gotcha that cost six debug hours on 2026-05-03. Firebase
+       Console originally only asked for SHA-1 (legacy from OAuth/Sign-In
+       flows). Without the Play app signing key SHA-256, Firebase's App
+       Check verifier doesn't recognize the runtime app fingerprint that
+       Play Integrity attests against (Play strips your upload signature
+       and re-signs the installable APK with its own per-app key, so the
+       runtime fingerprint != the upload-key fingerprint).
+
+       Keep the upload-key SHA-256 in the list too (it covers sideload of
+       upload-signed AABs and certain Auth flows). Both fingerprints
+       coexist; nothing to remove.
+
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PLAY INTEGRITY ADVANCED SETTINGS (App Check → Apps → BudgeTrak Android
+  → Play Integrity → Settings)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    PLAY_RECOGNIZED   : Required (re-enabled 2026-05-03 after fix verified;
+                        anti-piracy — blocks modified or re-signed APKs)
+    LICENSED          : Not required (don't gate free users on degooglified
+                        devices)
+    Device integrity  : "Don't explicitly check" (relies on PLAY_RECOGNIZED
+                        plus per-field encryption for actual security;
+                        tighten post-launch if Crashlytics shows abuse)
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

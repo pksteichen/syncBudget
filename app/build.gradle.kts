@@ -67,6 +67,21 @@ android {
                 debugSymbolLevel = "SYMBOL_TABLE"
             }
         }
+        debug {
+            // Suffix the applicationId so debug builds install as a
+            // separate Android package (com.techadvantage.budgetrak.debug)
+            // and can coexist with the release (Play Store) build on the
+            // same device. Each build then has its own data sandbox,
+            // SecurePrefs, Firestore group, Anonymous Auth UID, FCM token,
+            // and App Check provider — full isolation. The .debug Firebase
+            // app entry must exist (already registered in Firebase Console
+            // 2026-05-03; google-services.json contains both packages).
+            applicationIdSuffix = ".debug"
+            // Tag the version string so a glance at the dashboard, the
+            // Settings screen, or a Crashlytics event makes it obvious
+            // which build is running (e.g. "2.10.04-debug").
+            versionNameSuffix = "-debug"
+        }
     }
 
     compileOptions {
