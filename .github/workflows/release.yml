@@ -54,6 +54,21 @@ jobs:
           java-version: '17'
           cache: gradle
 
+      # Install the Android NDK so AGP can extract native debug symbols at
+      # bundle time (release buildType has `ndk { debugSymbolLevel =
+      # "SYMBOL_TABLE" }`). Without an NDK on PATH, AGP silently skips the
+      # symbol-table emission and the Play Console warns "AAB contains
+      # native code, and you've not uploaded debug symbols" — exactly what
+      # we hit on v2.10.04/05 builds. ubuntu-latest runners come with the
+      # Android SDK preinstalled at $ANDROID_HOME but no NDK by default.
+      # r26d is the long-term-support NDK that pairs cleanly with AGP 8.7.x.
+      - name: Install Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26d
+          add-to-path: false
+          local-cache: true
+
       # Decode the upload keystore from a base64-encoded secret. The secret
       # value is `base64 -w 0 ~/keystore/upload-keystore.jks` from the dev
       # machine — single line, no whitespace.
