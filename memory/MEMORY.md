@@ -190,6 +190,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [Play "Verified" badge](project_play_verified_badge.md) — currently VPN-only; criteria + BudgeTrak gap analysis for if/when Google expands to finance category. Requires org account + MASA Level 2 + independent security review + 90 days + 10K/250.
 - [Billing + runaway-bug alerts (configured 2026-04-13)](project_billing_alerts.md) — $1 budget + 4 Monitoring policies + SMS channel. Killswitch still optional.
 - [OCR Spanish / Country setting](project_ocr_spanish_country_setting.md) — when adding Spanish or LatAm launch, add a Country dropdown driving locale/currency/date/tax-vocab hints into the OCR prompt; integer-only currencies (CLP/COP/PYG) block launch without this.
+- [In-app update prompts via Play Core](project_in_app_updates.md) — defer until post-production-launch; replaces Play Store's silent background-update with a dialog/snackbar inside BudgeTrak so users aren't running stale versions unnoticed. ~150 lines, 1 new dep.
 
 ## Documentation
 - SSD/LLD v2.8 (dev) at `docs/BudgeTrak_SSD_v2.8.md` + `docs/BudgeTrak_LLD_v2.8.md`. Bump on any structural change. v2.7 was the last production-shipped version (renamed to v2.8 on 2026-04-28 when dialog consolidation + refund OCR landed).
