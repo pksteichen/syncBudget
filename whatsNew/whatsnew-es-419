@@ -1,5 +1,2 @@
-BudgeTrak v2.10.04
-- Restaurar Copia muestra ahora copias antiguas tras reinstalar — sin perder puntos de restauración previos.
-- Guardar PDF de gastos y diagnósticos funciona tras reinstalar la app.
-- Errores al crear o unirse a un grupo SYNC se revierten limpiamente.
-- Grupos SYNC disueltos se detectan y se salen automáticamente — sin bucles de "permiso denegado".
+BudgeTrak v2.10.05
+- Ajustes ahora muestra el número de compilación y la versión junto a la fecha y hora, facilitando confirmar qué versión se ejecuta en cada dispositivo de prueba.

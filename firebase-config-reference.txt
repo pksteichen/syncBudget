@@ -342,8 +342,25 @@ service firebase.storage {
   → Play Integrity → Settings)
   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    PLAY_RECOGNIZED   : Required (re-enabled 2026-05-03 after fix verified;
-                        anti-piracy — blocks modified or re-signed APKs)
+    PLAY_RECOGNIZED   : Required (in normal operation; anti-piracy — blocks
+                        modified or re-signed APKs).
+                        ⚠️ MUST be temporarily set to "Not required" during
+                        the 24-72 hours after a new release goes live to
+                        any track. Google's anti-piracy backend indexes
+                        each new versionCode asynchronously and per-device,
+                        so for a brief window after release some devices
+                        receive UNEVALUATED or UNRECOGNIZED_VERSION
+                        verdicts instead of PLAY_RECOGNIZED — those
+                        tokens get rejected with PLAY_RECOGNIZED required
+                        on. Symptom: a fraction of testers see
+                        PERMISSION_DENIED while others on identical
+                        hardware succeed. Re-enable PLAY_RECOGNIZED once
+                        the failing-device fraction goes to zero
+                        (typically within 72 hours of release going live).
+                        Verified 2026-05-03: 4 testers, all on Samsung
+                        hardware, took 0–4 hours each for indexing to
+                        complete after v2.10.04 went live on Internal
+                        Testing.
     LICENSED          : Not required (don't gate free users on degooglified
                         devices)
     Device integrity  : "Don't explicitly check" (relies on PLAY_RECOGNIZED

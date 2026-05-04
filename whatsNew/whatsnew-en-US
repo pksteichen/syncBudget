@@ -1,5 +1,2 @@
-BudgeTrak v2.10.04
-- Restore Backup now lists your older backup files even after reinstalling — no more "missing" restore points.
-- Saving PDF expense reports and diagnostic dumps works reliably across reinstalls.
-- SYNC group create/join failures now roll back cleanly instead of getting stuck.
-- Dissolved sync groups are detected and exited automatically — no more permission-denied loops.
+BudgeTrak v2.10.05
+- Settings now shows the build number and version name alongside the build date/time, making it easier to confirm which build is running on a tester device.

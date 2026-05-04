@@ -238,7 +238,7 @@ fun SettingsScreen(
         ) {
             item {
                 Text(
-                    text = "Build: ${com.techadvantage.budgetrak.BuildConfig.BUILD_TIME}",
+                    text = "Build ${com.techadvantage.budgetrak.BuildConfig.VERSION_CODE} (v${com.techadvantage.budgetrak.BuildConfig.VERSION_NAME}) — ${com.techadvantage.budgetrak.BuildConfig.BUILD_TIME}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
                 )
