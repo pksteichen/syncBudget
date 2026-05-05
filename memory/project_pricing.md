@@ -9,8 +9,10 @@ originSessionId: e62277a3-386c-4af8-8747-78a2f79a4bee
 | Tier | Price | Key gates |
 |---|---|---|
 | Free | $0 | Budget engine, tracking, widget (1/day), join SYNC groups. NO import/save, no photos, has ads. |
-| Paid | $9.99 one-time | CSV/Excel import, save to CSV/Excel/PDF, receipt photos (5/txn), unlimited widget, ad-free, join SYNC. |
-| Subscriber | $4.99/month | All paid features + create/admin SYNC groups, Cash Flow Simulation. |
+| Paid | $9.99 one-time | CSV/Excel import, save to CSV/Excel/PDF, receipt photos (5/txn), Cash Flow Simulation, AI CSV categorization (opt-in), unlimited widget, ad-free, join SYNC. |
+| Subscriber | $4.99/month | All paid features + create/admin SYNC groups, AI receipt scanning (opt-in). |
+
+**Cash Flow Simulation moved from Subscriber to Paid (~mid-April 2026)** — verified in code at `SavingsGoalsScreen.kt:292`: `val canViewChart = isPaidUser || isSubscriber`. The Subscriber-only era is documented for historical context but no longer reflects the gating.
 
 **Free tier can join SYNC groups** but cannot create or admin them. This lets a family member participate without paying — only the admin needs a subscription.
 

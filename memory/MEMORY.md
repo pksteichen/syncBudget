@@ -87,6 +87,8 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - Key files: `sync_diag.txt`, `native_sync_log.txt`, `token_log.txt` (debug only), `logcat_*.txt`, per-device FCM dumps.
 - Dump button (Settings → "Dump & Sync Debug", debug builds) — encrypted upload via FCM + 90 s poll.
 - **Public download writes**: 7 active categories (backups, CSV/XLSX/JSON, PDF, photos, support, pre-restore, append-logs); v2.10.03 added `PublicDownloadWriter` for orphan-EACCES resilience on PDF + support files. Photo dumps are NOT deprecated. Survey + helper details: [`reference_public_download_writes.md`](reference_public_download_writes.md).
+- **Firebase Analytics**: active. Two custom events `ocr_feedback` + `health_beacon` in `data/telemetry/AnalyticsEvents.kt`; same opt-out toggle as Crashlytics ("Send crash reports and anonymous usage data"); IP-geo disabled at GA4 admin (2026-05-05).
+- **Play Console Data Safety form**: 7 declared types submitted 2026-05-05 — see [`project_play_data_safety.md`](project_play_data_safety.md) for per-type answers + change triggers. Audit on any change to data flows, third-party SDKs, opt-out toggles, or AdMob.
 - Full spec: [`spec_diagnostics.md`](spec_diagnostics.md). Crashlytics/BigQuery tool: [`reference_crashlytics_bigquery.md`](reference_crashlytics_bigquery.md). **Backend-infra reconstruction reference: SSD §28** (Firebase project, Auth, Firestore + RTDB + Storage rules verbatim, App Check, Cloud Functions, FCM, Crashlytics, Analytics, BigQuery, Gemini).
 
 ## Matching & Auto-Categorize

@@ -69,14 +69,41 @@ Set on every `onResume` + inside daily maintenance beacon:
 - `recordNonFatal(tag, Throwable)` for PERMISSION_DENIED in listeners (every occurrence tagged with collection name + auth uid), unexpected exceptions in sync lifecycle, or scheduled `HEALTH_BEACON`.
 - `syncEvent(msg)` — Crashlytics custom log line for sync lifecycle (listener start/stop, recovery, worker tiers). Also written to `tokenLog` in debug builds.
 
-### Daily HEALTH_BEACON
-Inside `runPeriodicMaintenance()` on sync users: `recordNonFatal("HEALTH_BEACON", ...)`. This is why **healthy** production devices show up in the Crashlytics dashboard daily — the dashboard would otherwise only ever reflect broken devices.
+### Daily HEALTH_BEACON (now Analytics, see below)
+Was originally a Crashlytics non-fatal fired from `runPeriodicMaintenance()` on sync users. **Migrated to Firebase Analytics as the `health_beacon` event** to keep the crash dashboard clean and lift the 10-non-fatals-per-session cap. Diagnostic custom keys are still set on the Crashlytics side via `BudgeTrakApplication.updateDiagKeys()` so they attach to any real crash that does occur. See "Firebase Analytics integration" below for params.
 
-## BigQuery streaming export (when enabled in Firebase Console)
-- Streaming table: `com_securesync_app_ANDROID_REALTIME`.
-- Batch table: `com_securesync_app_ANDROID`.
+## Firebase Analytics integration — `data/telemetry/AnalyticsEvents.kt`
+
+The `firebase-analytics-ktx` SDK is on the classpath (`app/build.gradle.kts:157`) and **actively used** for two custom event streams. Gated by the **same** `crashlyticsEnabled` SharedPref as Crashlytics — `BudgeTrakApplication.onCreate` (line ~117) calls both `setCrashlyticsCollectionEnabled` and `setAnalyticsCollectionEnabled` with the same value, before any Firebase service is touched. The user-facing setting is "Send crash reports and anonymous usage data" — **single toggle covers both**. `AnalyticsEvents.logIfEnabled` re-checks the pref before every `logEvent` call as belt-and-suspenders.
+
+### Custom events
+- **`ocr_feedback`** — fires on save of an OCR-populated transaction. Params: `merchant_changed` (Bool), `date_changed` (Bool), `amount_delta_cents` (signed Long, `finalCents - ocrCents`), `cats_added` / `cats_removed` (Long), `had_multi_cat` (Bool). Production OCR accuracy signal — feeds prompt-iteration decisions. **No raw merchant strings or dollar values sent — only deltas and booleans.**
+- **`health_beacon`** — daily sync-user heartbeat. Params: `listener_up` (Bool), `active_devices` / `txn_count` / `re_count` / `pl_count` (Long). Replaces the old Crashlytics `HEALTH_BEACON` non-fatal; lets the crash dashboard stay focused on actual crashes.
+
+### Auto-collected defaults
+`first_open`, `session_start`, `screen_view` (auto), `app_remove`, `app_update`, `os_update`, plus `user_pseudo_id` for sessionization. Two opt-outs are configured to keep the auto-collection narrow:
+- **IP-derived geo is disabled** at the GA4 property level: GA4 Admin → Data collection and modification → Data collection → "Granular location and device data collection" toggled OFF (set 2026-05-05 alongside the Play Console Data Safety form work). So no Approximate location data lands in the export — keeps the privacy-policy "no location collected" line accurate.
+- **Advertising ID linking is disabled** via `<meta-data android:name="google_analytics_adid_collection_enabled" android:value="false" />` in `AndroidManifest.xml` (set 2026-05-05). AdMob still collects the ad ID for ad serving on the free tier — that remains the only declared use. Analytics events are no longer linked to the ad ID, so the Device-or-other-IDs declaration on the Data Safety form is justified by AdMob + FCM only.
+
+### Why Analytics, not more Crashlytics non-fatals
+- Analytics is free; Crashlytics non-fatals are rate-limited at 10/session.
+- Analytics dashboard is the right tool for per-user-action events; non-fatals would clutter the crash dashboard with "fake crashes."
+- BigQuery export is free on Blaze.
+
+## BigQuery streaming export
+
+### Crashlytics tables
+- Streaming: `com_securesync_app_ANDROID_REALTIME`.
+- Batch: `com_securesync_app_ANDROID`.
 - Table names still carry the legacy `com_securesync_app` applicationId; Firebase doesn't rename existing export tables after a package rename. Future events continue to land in the same tables.
-- Query via `tools/query-crashlytics.js` (Firebase CLI refresh-token based auth). Flags: `--nonfatals`, `--crashes`, `--keys`, `--days N`, `--query "SQL"`.
+
+### Analytics tables
+- Dataset: `analytics_534603748`.
+- Tables: `events_*` (date-suffixed, populated daily) and `events_intraday_*` (current-day streaming).
+- Currently scoped queries pull `event_name IN ('ocr_feedback', 'health_beacon')` — auto-collected defaults are exported but not queried by tooling.
+
+### Query tooling
+- `tools/query-crashlytics.js` — Firebase CLI refresh-token based auth (with BigQuery service-account fallback per `reference_bigquery_service_account.md`). Flags: `--nonfatals`, `--crashes`, `--keys`, `--analytics`, `--days N`, `--build YYYY-MM`, `--query "SQL"`.
 
 ## FCM
 

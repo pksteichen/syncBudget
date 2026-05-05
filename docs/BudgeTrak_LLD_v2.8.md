@@ -404,7 +404,7 @@ Calendar showing daily spending, income events, and recurring expense / income d
 
 **File:** `ui/screens/SimulationGraphScreen.kt`
 
-Cash-flow projection over time based on income, recurring expenses, savings goals, and budget spending. Subscriber feature. Top-level composable: `SimulationGraphScreen` (public).
+Cash-flow projection over time based on income, recurring expenses, savings goals, and budget spending. Paid + Subscriber feature (gated by `isPaidUser || isSubscriber` in `SavingsGoalsScreen.kt:292`; was Subscriber-only pre-2.7). Top-level composable: `SimulationGraphScreen` (public).
 
 ### 2.14 QuickStartGuide
 
