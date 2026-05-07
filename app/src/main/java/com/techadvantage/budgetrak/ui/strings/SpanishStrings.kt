@@ -495,7 +495,7 @@ object SpanishStrings : AppStrings {
         exampleContribution = "ej. 5.00",
         mustBeLessThanTarget = "Debe ser menor que el objetivo",
         payoffDate = { date -> "Pago final: $date" },
-        savingsRequiredMessage = { amount, _ -> "Necesitas $amount ahorrado para cubrir tu presupuesto, los gastos futuros y las metas de ahorro de abajo." },
+        savingsRequiredMessage = { amount, _ -> "Necesitas $amount ahorrado para cubrir tu presupuesto, los gastos futuros y los montos ahorrados abajo." },
         savingsPeriodDaily = "de hoy",
         savingsPeriodWeekly = "de esta semana",
         savingsPeriodMonthly = "de este mes",
@@ -509,7 +509,7 @@ object SpanishStrings : AppStrings {
         simulationGraphTitle = "Simulaci\u00f3n de Flujo",
         simulationGraphDescription = "Flujo de efectivo proyectado durante el per\u00edodo de simulaci\u00f3n. Ajusta tus ahorros actuales o aparta dinero extra para ver c\u00f3mo afecta tu efectivo futuro esperado.",
         simulationSavingsLabel = "Ahorros Actuales",
-        simulationOverUnderLabel = { period -> "Sobre/Bajo Presupuesto por $period" },
+        simulationOverUnderLabel = { period -> "+/- Presupuesto por $period" },
         simulationSavingsExceedBudget = "El ahorro por per\u00edodo supera el presupuesto",
         simulationNoData = "No hay datos de simulaci\u00f3n disponibles"
     )

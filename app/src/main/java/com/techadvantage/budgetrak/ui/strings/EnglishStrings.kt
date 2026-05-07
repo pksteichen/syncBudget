@@ -495,7 +495,7 @@ object EnglishStrings : AppStrings {
         exampleContribution = "e.g. 5.00",
         mustBeLessThanTarget = "Must be less than target",
         payoffDate = { date -> "Payoff: $date" },
-        savingsRequiredMessage = { amount, _ -> "You need $amount saved to cover your budget, future expenses, and the savings goals below." },
+        savingsRequiredMessage = { amount, _ -> "You need $amount saved to cover your budget, future expenses, and the amounts saved below." },
         savingsPeriodDaily = "today's",
         savingsPeriodWeekly = "this week's",
         savingsPeriodMonthly = "this month's",
@@ -509,7 +509,7 @@ object EnglishStrings : AppStrings {
         simulationGraphTitle = "Cash Flow Simulation",
         simulationGraphDescription = "Projected cash flow over the simulation period. Adjust your current savings or set aside extra money to see how it affects your future expected cash on hand.",
         simulationSavingsLabel = "Current Savings",
-        simulationOverUnderLabel = { period -> "Over/Under Budget per $period" },
+        simulationOverUnderLabel = { period -> "+/- Budget per $period" },
         simulationSavingsExceedBudget = "Savings per period exceed the budget amount",
         simulationNoData = "No simulation data available"
     )
