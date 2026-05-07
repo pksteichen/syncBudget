@@ -1,6 +1,6 @@
 ---
 name: Recurring Expenses and Savings Goals Specification
-description: Accelerated RE mode, set-aside tracking, savings goal math (target-date vs fixed), and the Supercharge bolt flow
+description: Accelerated RE mode, set-aside tracking, single-type savings-goal math (fixed contribution + target-date helper), and the Supercharge bolt flow
 type: reference
 ---
 
@@ -35,16 +35,15 @@ Frozen: excluded from set-aside updates and budget deductions; not shown in simu
 `RecurringExpensesScreen.kt`: list with set-aside progress bar per RE, add/edit dialog, accelerated toggle (with row-level indicator). Help screen `RecurringExpensesHelpScreen.kt` documents the accelerated mode explicitly (audit caught a gap in 2026-04-11).
 
 ## Savings Goals model
-`SavingsGoal`: `id, name, targetAmount, totalSavedSoFar, contributionPerPeriod, targetDate?, superchargeMode?, deviceId, deleted`.
+`SavingsGoal`: `id, name, targetAmount, totalSavedSoFar, contributionPerPeriod, targetDate?, isPaused, deviceId, deleted`. The `targetDate` field exists in the data class for backward compatibility but the add/edit dialog **always saves with `targetDate = null`** as of v2.10.06 — there is now only one goal type.
 
-### Two modes
-- **Target-date goal** — `targetDate` set. `contributionPerPeriod` is derived:
-  `deduction = roundCents(remaining / periodsUntil(today, targetDate))`.
-  Missed periods use each period's own date (not today) when catching up.
-- **Fixed-contribution goal** — `contributionPerPeriod` set, `targetDate` null.
-  `deduction = min(contributionPerPeriod, remaining)`.
+### Single goal type — fixed contribution
+- `deduction = min(contributionPerPeriod, remaining)` per period (`remaining = targetAmount − totalSavedSoFar`).
+- Active iff `!deleted && !isPaused && totalSavedSoFar < targetAmount`.
+- `BudgetCalculator.activeSavingsGoalDeductions` sums deductions across active goals. Per-period deductions are added to `totalSavedSoFar` by `PeriodRefreshService` at each real boundary; the simulator's `simGoalSaved[i]` array projects the same accumulation forward for the chart's floor line.
 
-`BudgetCalculator.activeSavingsGoalDeductions` sums deductions across active (non-deleted, non-complete) goals. Per-period deductions are added to `totalSavedSoFar` by `PeriodRefreshService`.
+### Target-Date helper (calculator, not a goal type)
+The "Calculate with Target Date" button inside the add/edit dialog opens a date picker, then computes `contribution = roundCents(remaining / periodsBetween(today, picked))` and writes that into the Contribution per Period field. The user can edit the suggested number before saving. The saved goal still has `targetDate = null` — it's a one-shot calculator, not a separate goal type. Branch `goal.targetDate != null` exists in `calculatePerPeriodDeduction` and the simulator for legacy synced goals; new goals never take that branch.
 
 ### Linked transactions
 When a transaction is linked to a savings goal:
@@ -59,14 +58,17 @@ UI: transaction row shows green badge (fully funded from savings) or orange badg
 A dashboard affordance when the user has spare cash + eligible goals. Tapping the animated bolt opens a dialog offering two modes:
 
 ### REDUCE_CONTRIBUTIONS
-"You have enough saved — lower future contributions." Redistributes excess `totalSavedSoFar` across eligible goals by lowering each goal's `contributionPerPeriod` (or pushing target dates out for target-date goals). The user has headroom in the current budget period without changing balances.
+"You have enough saved — lower future contributions." Redistributes excess `totalSavedSoFar` across eligible goals by lowering each goal's `contributionPerPeriod`. The user has headroom in the current budget period without changing balances.
 
 ### ACHIEVE_SOONER
-"Dump spare cash into a goal now so you hit the target earlier." Transfers from `availableCash` → `goal.totalSavedSoFar`, pulling target date forward or increasing `contributionPerPeriod`.
+"Dump spare cash into a goal now so you hit the target earlier." Transfers from `availableCash` → `goal.totalSavedSoFar`, increasing `contributionPerPeriod`.
 
-Implementation: `SavingsGoal.superchargeMode` enum, dialog in `MainScreen.kt` (around the bolt composable), math in `MainViewModel` bolt handler. The bolt animates when both conditions hold:
+Implementation: `SuperchargeMode` enum, dialog in `MainScreen.kt` (around the bolt composable), math in `MainViewModel` bolt handler. The bolt animates when both conditions hold:
 1. `simAvailableCash > X` (spare cash exists after live deductions), **and**
-2. At least one goal is "eligible" (either target-date with reachable earlier-date, or fixed-contribution with lowerable rate).
+2. At least one goal is "eligible" (active, not yet at target, with lowerable contribution rate).
+
+## "You need" message + chart floor (v2.10.06+)
+The text at the top of the SG page reads "You need $X saved to cover your budget, future expenses, and the savings goals below." `$X` comes from `SavingsSimulator.calculateSavingsRequired`, which sizes Need as the worst `floor − balance` gap across the 18-month projection (see `spec_simulation.md`). The same calculation drives the chart's red low-point marker and the blue dashed floor line. Together they answer: "what cash floor must I keep so my projected balance never dips below my earmarked savings?"
 
 ## Linking ambiguities — agent guardrails
 - **Accelerated RE** and **Supercharge** are different features. Accelerated is per-RE (pay off a bill faster). Supercharge is per-goal (deploy spare cash to savings goals).

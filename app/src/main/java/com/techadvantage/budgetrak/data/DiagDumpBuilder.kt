@@ -126,7 +126,7 @@ object DiagDumpBuilder {
 
         // Include file-based sync log tail
         try {
-            val nativeLogFile = java.io.File(BackupManager.getSupportDir(), "native_sync_log.txt")
+            val nativeLogFile = java.io.File(BackupManager.getInternalDiagDir(context), "native_sync_log.txt")
             if (nativeLogFile.exists()) {
                 val lines = nativeLogFile.readLines()
                 val tail = lines.takeLast(50)

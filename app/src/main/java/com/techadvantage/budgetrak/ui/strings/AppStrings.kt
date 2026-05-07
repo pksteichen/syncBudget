@@ -540,7 +540,7 @@ data class SavingsGoalsStrings(
     val simulationGraphTitle: String,
     val simulationGraphDescription: String,
     val simulationSavingsLabel: String,
-    val simulationSavedPerLabel: (String) -> String,
+    val simulationOverUnderLabel: (String) -> String,
     val simulationSavingsExceedBudget: String,
     val simulationNoData: String
 )
@@ -1486,6 +1486,8 @@ data class SimulationGraphHelpStrings(
     val currentSavingsBody: String,
     val savedPerPeriodTitle: String,
     val savedPerPeriodBody: String,
+    val floorLineTitle: String,
+    val floorLineBody: String,
     val insightsTitle: String,
     val insightsBody: String,
     val tipsTitle: String,

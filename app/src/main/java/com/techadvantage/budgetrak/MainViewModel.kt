@@ -1542,6 +1542,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         prefs.edit().putBoolean("showAttribution", false).apply()
     }
 
+    /**
+     * If the local device's Firestore record carries a different deviceName
+     * than SharedPrefs (e.g. an admin renamed us remotely), sync local prefs
+     * to match. Without this, the local device's RTDB presence writes and
+     * any UI that reads from GroupManager.getDeviceName() would still show
+     * the pre-rename value until the next reinstall.
+     */
+    private fun syncLocalDeviceNameFromRoster() {
+        val ourEntry = syncDevices.firstOrNull { it.deviceId == localDeviceId } ?: return
+        val firestoreName = ourEntry.deviceName
+        if (firestoreName.isEmpty()) return
+        val localName = GroupManager.getDeviceName(context)
+        if (firestoreName != localName) {
+            GroupManager.setDeviceName(context, firestoreName)
+            BudgeTrakApplication.tokenLog(
+                "Local deviceName synced from roster: '$localName' -> '$firestoreName'"
+            )
+        }
+    }
+
     /** Merge RTDB presence records into the current syncDevices roster. */
     private fun mergePresenceIntoRoster(presenceRecords: List<com.techadvantage.budgetrak.data.sync.PresenceRecord>) {
         val currentDevices = syncDevices
@@ -1552,7 +1572,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 device.copy(
                     online = presence.online,
                     lastSeen = maxOf(device.lastSeen, presence.lastSeen),
-                    deviceName = if (presence.deviceName.isNotEmpty()) presence.deviceName else device.deviceName,
+                    // Always trust Firestore for deviceName (admin renames live there).
+                    // RTDB presence may carry a stale name from a remote device that
+                    // hasn't synced its local prefs yet — using it would re-revert
+                    // the displayed name to the pre-rename value.
+                    deviceName = device.deviceName,
                     photoCapable = presence.photoCapable,
                     uploadSpeedBps = presence.uploadSpeedBps,
                     uploadSpeedMeasuredAt = presence.uploadSpeedMeasuredAt
@@ -1566,6 +1590,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 online = it.online, photoCapable = it.photoCapable,
                 uploadSpeedBps = it.uploadSpeedBps, uploadSpeedMeasuredAt = it.uploadSpeedMeasuredAt) }
         syncDevices = updatedDevices + newDevices
+        syncLocalDeviceNameFromRoster()
         cacheDeviceRoster(syncDevices)
 
         // If a device disappeared from RTDB (left/removed), refresh Firestore device list
@@ -1823,6 +1848,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // Initial device list fetch (retry once on failure)
             try {
                 syncDevices = GroupManager.getDevices(groupId)
+                syncLocalDeviceNameFromRoster()
                 lastPresenceRecords?.let { mergePresenceIntoRoster(it) } // re-apply RTDB data
                 cacheDeviceRoster(syncDevices)
             } catch (e: Exception) {
@@ -1830,6 +1856,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 kotlinx.coroutines.delay(10_000)
                 try {
                     syncDevices = GroupManager.getDevices(groupId)
+                    syncLocalDeviceNameFromRoster()
                     lastPresenceRecords?.let { mergePresenceIntoRoster(it) }
                     cacheDeviceRoster(syncDevices)
                 } catch (e2: Exception) {
@@ -1856,11 +1883,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // Continue — will check again after initial sync
             }
 
-            // Write device capabilities once on foreground launch
+            // Write device capabilities once on foreground launch.
+            // deviceName intentionally omitted — heartbeat must not echo local
+            // SharedPrefs back to Firestore, which would clobber an admin-set
+            // remote rename within seconds. Initial registration writes the
+            // name via FirestoreService.registerDevice; subsequent renames go
+            // through FirestoreService.updateDeviceName explicitly.
             try {
                 FirestoreService.updateDeviceMetadata(
                     groupId, localDeviceId,
-                    deviceName = GroupManager.getDeviceName(context),
                     syncVersion = 0L,
                     appSyncVersion = 2,
                     minSyncVersion = 2,

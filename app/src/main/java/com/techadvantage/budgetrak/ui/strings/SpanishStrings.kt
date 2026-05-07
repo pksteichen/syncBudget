@@ -495,7 +495,7 @@ object SpanishStrings : AppStrings {
         exampleContribution = "ej. 5.00",
         mustBeLessThanTarget = "Debe ser menor que el objetivo",
         payoffDate = { date -> "Pago final: $date" },
-        savingsRequiredMessage = { amount, period -> "Necesitas $amount ahorrado para cubrir el presupuesto $period y estos gastos." },
+        savingsRequiredMessage = { amount, _ -> "Necesitas $amount ahorrado para cubrir tu presupuesto, los gastos futuros y las metas de ahorro de abajo." },
         savingsPeriodDaily = "de hoy",
         savingsPeriodWeekly = "de esta semana",
         savingsPeriodMonthly = "de este mes",
@@ -509,7 +509,7 @@ object SpanishStrings : AppStrings {
         simulationGraphTitle = "Simulaci\u00f3n de Flujo",
         simulationGraphDescription = "Flujo de efectivo proyectado durante el per\u00edodo de simulaci\u00f3n. Ajusta tus ahorros actuales o aparta dinero extra para ver c\u00f3mo afecta tu efectivo futuro esperado.",
         simulationSavingsLabel = "Ahorros Actuales",
-        simulationSavedPerLabel = { period -> "Ahorro por $period" },
+        simulationOverUnderLabel = { period -> "Sobre/Bajo Presupuesto por $period" },
         simulationSavingsExceedBudget = "El ahorro por per\u00edodo supera el presupuesto",
         simulationNoData = "No hay datos de simulaci\u00f3n disponibles"
     )
@@ -1408,25 +1408,26 @@ object SpanishStrings : AppStrings {
         title = "Ayuda de Metas de Ahorro",
         whatTitle = "\u00bfQu\u00e9 son las Metas de Ahorro?",
         whatBody = "Las Metas de Ahorro te permiten planificar y ahorrar para gastos futuros u objetivos " +
-            "financieros sin arruinar tu presupuesto. En vez de que un gasto grande golpee " +
-            "tu efectivo disponible de una sola vez, la app reduce autom\u00e1ticamente tu presupuesto " +
-            "un poco en cada per\u00edodo para ir ahorrando gradualmente.",
+            "financieros sin arruinar tu presupuesto. La app reduce autom\u00e1ticamente tu presupuesto " +
+            "un poco en cada per\u00edodo y destina ese dinero a la meta hasta alcanzar el objetivo.",
         exampleTitle = "Ejemplo",
-        exampleBody = "Quieres crear un fondo de emergencia de \$3,000. Crea una meta de contribuci\u00f3n fija " +
-            "de \$5/d\u00eda. Con un presupuesto diario, apenas notas la deducci\u00f3n, " +
-            "pero despu\u00e9s de 20 meses tu fondo de emergencia est\u00e1 completo. O fija " +
-            "una fecha objetivo de 6 meses para ahorrar \$600 para llantas nuevas \u2014 la app " +
-            "deduce aproximadamente \$3.29/d\u00eda autom\u00e1ticamente. Sin sorpresas, sin estr\u00e9s.",
-        twoTypesTitle = "Dos tipos de metas",
-        twoTypesBody = "Las Metas de Ahorro admiten dos enfoques diferentes para ahorrar:",
-        targetDateTitle = "Fecha objetivo",
-        targetDateBody = "Establece una fecha para cuando necesites el dinero. La app calcula autom\u00e1ticamente " +
-            "cu\u00e1nto deducir en cada per\u00edodo seg\u00fan el monto restante y el tiempo " +
-            "restante. A medida que te acercas a la fecha, la deducci\u00f3n se ajusta din\u00e1micamente.",
-        fixedContribTitle = "Contribuci\u00f3n fija",
-        fixedContribBody = "Establece un monto fijo a contribuir en cada per\u00edodo. No hay fecha objetivo \u2014 " +
-            "la app simplemente deduce el monto elegido cada per\u00edodo hasta alcanzar la meta. " +
-            "Ideal para ahorros sin fecha l\u00edmite, como un fondo de emergencia.",
+        exampleBody = "Quieres crear un fondo de emergencia de \$3,000. Crea una meta que aporta " +
+            "\$5/d\u00eda en un presupuesto diario. Apenas notas la deducci\u00f3n, y despu\u00e9s de unos " +
+            "20 meses el fondo est\u00e1 completo. Si en cambio piensas \"\$600 para llantas nuevas " +
+            "antes de agosto,\" toca el bot\u00f3n Calcular con Fecha Objetivo dentro del di\u00e1logo y " +
+            "la app rellena el aporte por per\u00edodo correcto.",
+        twoTypesTitle = "C\u00f3mo se configura una meta",
+        twoTypesBody = "Cada meta tiene un monto objetivo y un aporte por per\u00edodo. Cada per\u00edodo " +
+            "el aporte se aparta de tu Presupuesto Seguro hasta alcanzar el objetivo. Dos asistentes " +
+            "en el di\u00e1logo facilitan la configuraci\u00f3n:",
+        targetDateTitle = "Calcular con Fecha Objetivo",
+        targetDateBody = "Toca el bot\u00f3n \"Calcular con Fecha Objetivo\" dentro del di\u00e1logo " +
+            "y elige una fecha. La app divide el monto restante por la cantidad de per\u00edodos entre " +
+            "hoy y esa fecha, y rellena el campo de Aporte por Per\u00edodo. Puedes editar el n\u00famero " +
+            "sugerido antes de guardar \u2014 es una calculadora, no un tipo de meta diferente.",
+        fixedContribTitle = "Monto ya ahorrado",
+        fixedContribBody = "Al crear una meta nueva puedes ingresar un monto inicial si ya tienes dinero " +
+            "apartado para esta meta. La barra de progreso parte ya rellenada y la meta se completa antes.",
         headerTitle = "Barra superior",
         headerBody = "La barra superior ofrece navegaci\u00f3n y acciones masivas:",
         backDesc = "Volver al panel principal.",
@@ -1436,71 +1437,69 @@ object SpanishStrings : AppStrings {
         addingTitle = "Agregar una meta de ahorro",
         addingBody = "Toca \"Agregar meta de ahorro\" y completa:",
         addStep1 = "Nombre",
-        addStep1Desc = "Para qu\u00e9 est\u00e1s ahorrando (ej. \"Llantas nuevas\", \"Vacaciones en la playa\", \"Fondo de emergencia\").",
+        addStep1Desc = "Para qu\u00e9 est\u00e1s ahorrando (ej. \"Llantas nuevas\", \"Fondo de emergencia\", \"Vacaciones\").",
         addStep2 = "Monto objetivo",
         addStep2Desc = "El costo total que necesitas ahorrar.",
         addStep3 = "Monto ya ahorrado",
         addStep3Desc = "Opcional. Si ya tienes algo ahorrado para esta meta, ingr\u00e9salo aqu\u00ed para prellenar la barra de progreso.",
-        addStep4 = "Tipo de meta",
-        addStep4Desc = "Elige \"Fecha objetivo\" para establecer un plazo, o \"Contribuci\u00f3n fija\" para un monto regular por per\u00edodo.",
-        addStep5 = "Fecha objetivo / Contribuci\u00f3n",
-        addStep5Desc = "Seg\u00fan el tipo de meta, selecciona una fecha objetivo o ingresa una contribuci\u00f3n por per\u00edodo.",
+        addStep4 = "Aporte por per\u00edodo",
+        addStep4Desc = "Cu\u00e1nto apartar en cada per\u00edodo del presupuesto. Escribe un n\u00famero directamente, o usa el bot\u00f3n Calcular con Fecha Objetivo de abajo para que la app lo complete a partir de un plazo.",
+        addStep5 = "Guardar",
+        addStep5Desc = "Toca Guardar. La meta se a\u00f1ade y empieza a aplicar su aporte en el siguiente l\u00edmite de per\u00edodo.",
         deductionsTitle = "C\u00f3mo funcionan las deducciones",
-        deductionsBody = "Para cada meta activa (no pausada), la app calcula una deducci\u00f3n por per\u00edodo:",
-        targetDateDeductionTitle = "Metas con fecha objetivo",
-        targetDateDeductionFormula = "Deducci\u00f3n = (Monto Objetivo \u2212 Ahorrado Hasta Ahora) \u00f7 Per\u00edodos Restantes hasta la Fecha Objetivo",
-        fixedDeductionTitle = "Metas con contribuci\u00f3n fija",
-        fixedDeductionBody = "La deducci\u00f3n es igual a la contribuci\u00f3n por per\u00edodo que estableciste al crear la meta. " +
-            "Se mantiene constante hasta alcanzar la meta.",
+        deductionsBody = "Para cada meta activa (no pausada), la app resta una deducci\u00f3n por per\u00edodo de tu Presupuesto Seguro:",
+        targetDateDeductionTitle = "Deducci\u00f3n por per\u00edodo",
+        targetDateDeductionFormula = "Deducci\u00f3n = m\u00edn(Aporte por Per\u00edodo, Monto Objetivo \u2212 Ahorrado Hasta Ahora)",
+        fixedDeductionTitle = "Una vez alcanzada la meta",
+        fixedDeductionBody = "Cuando tu monto ahorrado iguala o supera el objetivo, la deducci\u00f3n se " +
+            "detiene autom\u00e1ticamente. La meta se marca como \"\u00a1Meta alcanzada!\" y deja de afectar tu presupuesto.",
         deductionNote = "Estas deducciones se restan de tu Presupuesto Seguro para obtener " +
-            "tu Monto de Presupuesto real. El \"Ahorrado Hasta Ahora\" aumenta autom\u00e1ticamente en cada " +
-            "per\u00edodo seg\u00fan el monto de la deducci\u00f3n.",
+            "tu Monto de Presupuesto real. El \"Ahorrado Hasta Ahora\" aumenta autom\u00e1ticamente en " +
+            "cada per\u00edodo seg\u00fan la deducci\u00f3n.",
         progressTitle = "Seguimiento del progreso",
         progressBody = "Cada meta en la lista muestra:",
         progressName = "Nombre \u2014 para qu\u00e9 est\u00e1s ahorrando",
-        progressTarget = "Monto objetivo (y fecha objetivo para metas basadas en fecha)",
-        progressDeduction = "Deducci\u00f3n del presupuesto o contribuci\u00f3n por per\u00edodo",
+        progressTarget = "Monto objetivo y fecha estimada de finalizaci\u00f3n",
+        progressDeduction = "Aporte por per\u00edodo",
         progressBar = "Barra de progreso \u2014 indicador visual de qu\u00e9 tan cerca est\u00e1s de la meta",
         progressSaved = "Monto ahorrado \u2014 texto verde mostrando el ahorro acumulado vs. objetivo",
         progressGoalReached = "Etiqueta \"\u00a1Meta alcanzada!\" cuando se completa",
         actionsTitle = "Acciones",
-        pauseDesc = "Detener temporalmente las deducciones de esta meta. El presupuesto vuelve a la normalidad mientras est\u00e1 pausada.",
-        resumeDesc = "Reanudar las deducciones. El monto por per\u00edodo se recalcula seg\u00fan el tiempo y ahorro restantes.",
-        deleteDesc = "Eliminar permanentemente la meta de ahorro.",
-        editNote = "Toca cualquier meta para editar su nombre, monto objetivo, tipo de meta u otros ajustes.",
+        pauseDesc = "Detener temporalmente los aportes de esta meta. El monto ya apartado sigue destinado, pero no se a\u00f1ade dinero nuevo cada per\u00edodo.",
+        resumeDesc = "Reanudar los aportes con el mismo monto por per\u00edodo.",
+        deleteDesc = "Eliminar permanentemente la meta. El monto destinado vuelve a estar disponible como presupuesto gastable.",
+        editNote = "Toca cualquier meta para editar su nombre, monto objetivo o aporte. El asistente Calcular con Fecha Objetivo est\u00e1 disponible dentro del di\u00e1logo de edici\u00f3n si quieres recalcular el aporte a partir de un nuevo plazo.",
         statusTitle = "Indicadores de estado",
         activeTitle = "Activa",
-        activeBody = "Estado normal \u2014 la deducci\u00f3n se aplica en cada per\u00edodo y el ahorro se acumula.",
+        activeBody = "Estado normal \u2014 el aporte se aplica en cada per\u00edodo y el ahorro se acumula hacia el objetivo.",
         pausedTitle = "Pausada",
-        pausedBody = "Las deducciones est\u00e1n temporalmente detenidas. La meta aparece atenuada. Pausar es \u00fatil " +
-            "cuando tienes un mes ajustado y necesitas el presupuesto completo temporalmente. El progreso del ahorro " +
-            "se conserva. Al reanudar, la deducci\u00f3n se recalcula con el tiempo restante reducido " +
-            "(para metas con fecha objetivo), por lo que ser\u00e1 un poco mayor.",
+        pausedBody = "Los aportes est\u00e1n temporalmente detenidos. La meta aparece atenuada. El dinero " +
+            "ya ahorrado sigue destinado. Pausar es \u00fatil cuando tienes un mes ajustado y necesitas " +
+            "el presupuesto completo. Al reanudar, el aporte vuelve al mismo monto por per\u00edodo.",
         goalReachedTitle = "Meta alcanzada",
         goalReachedBody = "Muestra \"\u00a1Meta alcanzada!\" en verde cuando el Ahorrado Hasta Ahora alcanza o supera el objetivo. " +
             "No se hacen m\u00e1s deducciones. Puedes eliminar la meta o conservarla como registro.",
         manualOverrideTitle = "Presupuesto manual",
         manualOverrideBody = "Si el Presupuesto manual est\u00e1 activado en Configuraci\u00f3n del presupuesto, las deducciones " +
             "de Metas de Ahorro a\u00fan se restan de tu monto manual. Puedes pausar metas individuales " +
-            "o todas las metas a la vez si quieres el monto manual completo.",
+            "o todas las metas a la vez si quieres el monto manual completo disponible.",
         linkingTitle = "Vincular Transacciones a Metas",
         linkingBody = "Cuando registras una transacci\u00f3n que representa un gasto hacia una meta " +
-            "(por ejemplo, finalmente compras las llantas del auto para las que has estado ahorrando), puedes " +
-            "vincular la transacci\u00f3n a la meta en el di\u00e1logo de edici\u00f3n. El monto que ya has " +
-            "ahorrado para esa meta se acredita a la compra, para que no se descuente dos veces de tu presupuesto.",
+            "(por ejemplo, finalmente compras las llantas del auto para las que has estado ahorrando), vincula " +
+            "la transacci\u00f3n a la meta en el di\u00e1logo de edici\u00f3n. El monto ya ahorrado para esa meta " +
+            "se acredita a la compra, para que no se descuente dos veces de tu presupuesto.",
         linkingPartialNote = "Si tu compra es mayor que el monto ahorrado, solo se acredita la parte ahorrada \u2014 " +
             "el resto se descuenta normalmente del presupuesto. La transacci\u00f3n se muestra en verde cuando " +
             "est\u00e1 totalmente cubierta, o en naranja con el monto restante cuando est\u00e1 parcialmente financiada.",
-        linkingSuperchargeNote = "Las contribuciones de Supercharge y cualquier ahorro hecho con el icono del rayo " +
-            "se rastrean autom\u00e1ticamente por separado, para que puedas impulsar una meta en cualquier momento " +
-            "sin afectar los c\u00e1lculos de tus compras vinculadas.",
+        linkingSuperchargeNote = "Los aportes de Supercharge hechos con el icono del rayo en el panel principal " +
+            "se rastrean igual \u2014 aumentan el monto ahorrado de la meta, disponible para futuras compras vinculadas.",
         tipsTitle = "Consejos",
-        tip1 = "Crea metas con fecha objetivo lo antes posible \u2014 cuanto m\u00e1s tiempo tengas, menor ser\u00e1 la deducci\u00f3n de cada per\u00edodo.",
-        tip2 = "Usa metas de contribuci\u00f3n fija para ahorros sin fecha l\u00edmite, como fondos de emergencia o ahorro general.",
-        tip3 = "Usa Pausar estrat\u00e9gicamente en meses ajustados, pero reanuda pronto para evitar un aumento brusco en las deducciones al acercarse la fecha objetivo.",
-        tip4 = "Ingresa un monto ya ahorrado al crear una meta si ya tienes dinero apartado.",
+        tip1 = "Configura las metas con tiempo \u2014 cuanto m\u00e1s tiempo antes de necesitar el dinero, menor ser\u00e1 el aporte de cada per\u00edodo.",
+        tip2 = "Usa el asistente Calcular con Fecha Objetivo para dimensionar tu aporte a partir de un plazo; siempre puedes editar el n\u00famero resultante.",
+        tip3 = "Ingresa un Monto ya ahorrado al crear una meta si ya tienes dinero apartado en otro lado.",
+        tip4 = "Usa Pausar estrat\u00e9gicamente en meses ajustados \u2014 el dinero ya ahorrado sigue destinado y el aporte simplemente espera hasta que reanudes.",
         tip5 = "Usos comunes: mantenimiento del auto, procedimientos m\u00e9dicos, regalos navide\u00f1os, vacaciones, electr\u00f3nica, muebles, suscripciones anuales, fondo de emergencia.",
-        tip6 = "Comb\u00ednalo con Amortizaci\u00f3n: usa Metas de Ahorro para ahorrar antes de una compra, y Amortizaci\u00f3n para distribuir costos despu\u00e9s de una compra inesperada."
+        tip6 = "Comb\u00ednalo con Amortizaci\u00f3n \u2014 ahorra ANTES de un gasto planeado, y amortiza DESPU\u00c9S de uno inesperado."
     )
 
     override val amortizationHelp = AmortizationHelpStrings(
@@ -1826,11 +1825,20 @@ object SpanishStrings : AppStrings {
             "Este n\u00famero se establece por defecto en un valor que te mantiene justo por encima de cero durante toda la simulaci\u00f3n. " +
             "Si tienes menos dinero que esto (en cuentas corrientes, cuentas de ahorro o enterrado en tu jard\u00edn) " +
             "deber\u00edas considerar crear una Meta de Ahorro para ponerte al d\u00eda. \u00a1Por supuesto, aumentar ingresos o reducir gastos tambi\u00e9n ayuda!",
-        savedPerPeriodTitle = "Campo de Ahorro por Per\u00edodo",
-        savedPerPeriodBody = "El campo \"Ahorro por Per\u00edodo\" simula apartar una cantidad fija cada per\u00edodo. " +
-            "Las Metas de Ahorro ya configuradas en esa p\u00e1gina ya est\u00e1n consideradas. Agregar un monto positivo aqu\u00ed simula dinero adicional ahorrado cada per\u00edodo m\u00e1s all\u00e1 de lo ya configurado. Un " +
-            "valor negativo simula gastar de m\u00e1s. Esto te permite responder preguntas como " +
-            "\"\u00bfQu\u00e9 pasar\u00eda si ahorro \$50 por semana?\" o \"\u00bfQu\u00e9 pasa si gasto de m\u00e1s \$20 por d\u00eda?\"",
+        savedPerPeriodTitle = "Campo de Sobre/Bajo Presupuesto",
+        savedPerPeriodBody = "El campo \"Sobre/Bajo Presupuesto por Per\u00edodo\" simula gastar m\u00e1s o menos que tu presupuesto cada per\u00edodo. " +
+            "Las Metas de Ahorro ya configuradas en esa p\u00e1gina ya est\u00e1n consideradas. Un monto positivo simula gastar de m\u00e1s " +
+            "(por encima de tu presupuesto). Un monto negativo simula gastar por debajo del presupuesto, es decir, ahorrar " +
+            "m\u00e1s cada per\u00edodo de lo ya configurado. Esto te permite responder preguntas como " +
+            "\"\u00bfQu\u00e9 pasa si gasto de m\u00e1s \$20 por d\u00eda?\" o \"\u00bfQu\u00e9 pasar\u00eda si ahorro \$50 m\u00e1s por semana?\"",
+        floorLineTitle = "L\u00ednea de Meta de Ahorro (Punteada Azul)",
+        floorLineBody = "La l\u00ednea punteada azul es tu base de Metas de Ahorro: el efectivo destinado a tus metas " +
+            "que no debe gastarse en gastos regulares del presupuesto. Comienza en el total actualmente apartado entre " +
+            "todas tus metas (incluidas las metas en pausa, ya que su dinero ahorrado sigue destinado). En cada l\u00edmite " +
+            "de per\u00edodo la l\u00ednea sube seg\u00fan las contribuciones que acumular\u00e1n tus metas activas, y se nivela cuando " +
+            "una meta alcanza su objetivo. Tu trayectoria de efectivo (la l\u00ednea s\u00f3lida) debe mantenerse por encima de " +
+            "la l\u00ednea punteada en todo momento; eso es exactamente lo que el monto \"Necesitas\" est\u00e1 dise\u00f1ado para " +
+            "garantizar. Si la l\u00ednea s\u00f3lida baja por debajo de la punteada, estar\u00edas gastando tus ahorros destinados.",
         insightsTitle = "Obteniendo Perspectivas Financieras",
         insightsBody = "Prueba ajustar ambos campos juntos para explorar diferentes escenarios. Por ejemplo, ingresa tu " +
             "saldo real de ahorros y luego experimenta con diferentes montos de ahorro por per\u00edodo para ver qu\u00e9 tan " +

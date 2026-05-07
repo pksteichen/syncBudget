@@ -34,7 +34,8 @@ object SavingsSimulator {
         availableCash: Double,
         resetDayOfWeek: Int,
         resetDayOfMonth: Int,
-        today: LocalDate
+        today: LocalDate,
+        floorOut: MutableList<SimulationPoint>? = null
     ): MutableList<CashEvent>? {
         val horizon = today.plusMonths(18)
 
@@ -50,7 +51,15 @@ object SavingsSimulator {
         if (!hasIncome && !hasExpenses) return null
 
         val events = mutableListOf<CashEvent>()
-        events.add(CashEvent(today, -availableCash, priority = 1))
+        // Neutralize the current period's SG deduction in today's draw —
+        // adding/removing a goal should affect the floor + future periods,
+        // not artificially shift today's spendable. AE and accelerated-RE
+        // deductions are intentionally NOT neutralized: those represent real
+        // upcoming outflows already shaping this period's budget.
+        val currentSGDed = BudgetCalculator.activeSavingsGoalDeductions(
+            savingsGoals, budgetPeriod, today, resetDayOfWeek
+        )
+        events.add(CashEvent(today, -(availableCash + currentSGDed), priority = 1))
 
         for (src in incomeSources) {
             for (date in BudgetCalculator.generateOccurrences(
@@ -72,7 +81,7 @@ object SavingsSimulator {
 
         val boundaries = generatePeriodBoundaries(today, horizon, budgetPeriod, resetDayOfWeek, resetDayOfMonth)
         addDynamicBudgetEvents(events, boundaries, baseBudget, budgetPeriod,
-            amortizationEntries, savingsGoals, recurringExpenses, today)
+            amortizationEntries, savingsGoals, recurringExpenses, today, floorOut)
 
         events.sortWith(compareBy<CashEvent> { it.date }.thenBy { it.priority })
         return events
@@ -90,25 +99,62 @@ object SavingsSimulator {
         resetDayOfMonth: Int,
         today: LocalDate = LocalDate.now()
     ): SimResult {
+        // Need = the cash you must hold so that, at every point in the
+        // 18-month projection, your cash balance never dips below the
+        // savings-goal floor (which itself rises as goals accrue). Computed
+        // as max over t of (floor_at_t − balance_at_t).
+        val initialFloor = savingsGoals
+            .filter { !it.deleted }
+            .sumOf { it.totalSavedSoFar }
+        val floorTimeline = mutableListOf(SimulationPoint(today, initialFloor))
+
         val events = buildSortedEvents(
             incomeSources, recurringExpenses, budgetPeriod, baseBudget,
             amortizationEntries, savingsGoals, availableCash,
-            resetDayOfWeek, resetDayOfMonth, today
-        ) ?: return SimResult(BudgetCalculator.roundCents(maxOf(0.0, availableCash)), today)
+            resetDayOfWeek, resetDayOfMonth, today, floorTimeline
+        ) ?: return SimResult(
+            BudgetCalculator.roundCents(maxOf(0.0, availableCash) + initialFloor),
+            if (initialFloor > 0.0 || availableCash > 0.0) today else null
+        )
 
+        val gap = walkEventsForMaxGap(events, floorTimeline, initialFloor, today)
+        val required = BudgetCalculator.roundCents(maxOf(0.0, gap.maxGap))
+        return SimResult(required, if (required > 0.0) gap.maxGapDate else null)
+    }
+
+    private data class GapResult(val maxGap: Double, val maxGapDate: LocalDate)
+
+    /** Walk events alongside the rising floor; return the worst (floor − balance) point. */
+    private fun walkEventsForMaxGap(
+        events: List<CashEvent>,
+        floorTimeline: List<SimulationPoint>,
+        initialFloor: Double,
+        today: LocalDate
+    ): GapResult {
         var balance = 0.0
-        var minBalance = 0.0
-        var minDate: LocalDate = today
+        var floor = initialFloor
+        // Initial gap at today, before any events.
+        var maxGap = initialFloor
+        var maxGapDate = today
+        // floorTimeline[0] is (today, initialFloor); subsequent entries are
+        // (boundary, prevFloor) and (boundary, newFloor) staircase pairs.
+        var floorIdx = 1
+
         for (event in events) {
+            // Advance floor through any step at-or-before the event's date.
+            while (floorIdx < floorTimeline.size &&
+                   !floorTimeline[floorIdx].date.isAfter(event.date)) {
+                floor = floorTimeline[floorIdx].balance
+                floorIdx++
+            }
             balance += event.amount
-            if (balance < minBalance) {
-                minBalance = balance
-                minDate = event.date
+            val gap = floor - balance
+            if (gap > maxGap) {
+                maxGap = gap
+                maxGapDate = event.date
             }
         }
-
-        val required = BudgetCalculator.roundCents(maxOf(0.0, -minBalance))
-        return SimResult(required, if (required > 0.0) minDate else null)
+        return GapResult(maxGap, maxGapDate)
     }
 
     /**
@@ -126,29 +172,41 @@ object SavingsSimulator {
         resetDayOfWeek: Int,
         resetDayOfMonth: Int,
         today: LocalDate = LocalDate.now()
-    ): Pair<SimResult, List<SimulationPoint>> {
+    ): Triple<SimResult, List<SimulationPoint>, List<SimulationPoint>> {
+        val initialFloor = savingsGoals
+            .filter { !it.deleted }
+            .sumOf { it.totalSavedSoFar }
+        val floorTimeline = mutableListOf(SimulationPoint(today, initialFloor))
+
         val events = buildSortedEvents(
             incomeSources, recurringExpenses, budgetPeriod, baseBudget,
             amortizationEntries, savingsGoals, availableCash,
-            resetDayOfWeek, resetDayOfMonth, today
-        ) ?: return SimResult(BudgetCalculator.roundCents(maxOf(0.0, availableCash)), today) to
-                listOf(SimulationPoint(today, 0.0))
+            resetDayOfWeek, resetDayOfMonth, today, floorTimeline
+        ) ?: return Triple(
+            SimResult(
+                BudgetCalculator.roundCents(maxOf(0.0, availableCash) + initialFloor),
+                if (initialFloor > 0.0 || availableCash > 0.0) today else null
+            ),
+            listOf(SimulationPoint(today, 0.0)),
+            floorTimeline
+        )
 
         val timeline = mutableListOf(SimulationPoint(today, 0.0))
         var balance = 0.0
-        var minBalance = 0.0
-        var minDate: LocalDate = today
         for (event in events) {
             balance += event.amount
-            if (balance < minBalance) {
-                minBalance = balance
-                minDate = event.date
-            }
             timeline.add(SimulationPoint(event.date, balance))
         }
 
-        val required = BudgetCalculator.roundCents(maxOf(0.0, -minBalance))
-        return SimResult(required, if (required > 0.0) minDate else null) to timeline
+        // Need = max over t of (floor_at_t − balance_at_t). Sizes Need so
+        // cash stays at-or-above the rising floor at every point.
+        val gap = walkEventsForMaxGap(events, floorTimeline, initialFloor, today)
+        val required = BudgetCalculator.roundCents(maxOf(0.0, gap.maxGap))
+        return Triple(
+            SimResult(required, if (required > 0.0) gap.maxGapDate else null),
+            timeline,
+            floorTimeline
+        )
     }
 
     private fun addDynamicBudgetEvents(
@@ -159,7 +217,8 @@ object SavingsSimulator {
         amortizationEntries: List<AmortizationEntry>,
         savingsGoals: List<SavingsGoal>,
         recurringExpenses: List<RecurringExpense>,
-        today: LocalDate
+        today: LocalDate,
+        floorOut: MutableList<SimulationPoint>? = null
     ) {
         if (boundaries.isEmpty()) return
 
@@ -167,8 +226,16 @@ object SavingsSimulator {
         val simRESetAside = recurringExpenses.map { it.setAsideSoFar }.toDoubleArray()
         val simREAccelerated = recurringExpenses.map { it.isAccelerated }.toBooleanArray()
 
+        fun nonDeletedFloor(): Double = savingsGoals.indices
+            .filter { !savingsGoals[it].deleted }
+            .sumOf { simGoalSaved[it] }
+        var prevFloor = nonDeletedFloor()
+
         var prevDate = today
         for (boundary in boundaries) {
+            // Carry the previous floor flat up to this boundary (step shape)
+            floorOut?.add(SimulationPoint(boundary, prevFloor))
+
             recurringExpenses.forEachIndexed { i, re ->
                 if (re.deleted) return@forEachIndexed
                 val dueDates = BudgetCalculator.generateOccurrences(
@@ -188,7 +255,7 @@ object SavingsSimulator {
 
             var savingsDed = 0.0
             savingsGoals.forEachIndexed { i, goal ->
-                if (goal.isPaused) return@forEachIndexed
+                if (goal.deleted || goal.isPaused) return@forEachIndexed
                 if (goal.totalSavedSoFar >= goal.targetAmount) return@forEachIndexed
                 val remaining = goal.targetAmount - simGoalSaved[i]
                 if (remaining <= 0) return@forEachIndexed
@@ -226,6 +293,13 @@ object SavingsSimulator {
                 maxOf(0.0, baseBudget - amortDed - savingsDed - accelDed)
             )
             events.add(CashEvent(boundary, -effectiveBudget, priority = 1))
+
+            // Step up to the new floor at the same boundary date
+            val newFloor = nonDeletedFloor()
+            if (newFloor != prevFloor) {
+                floorOut?.add(SimulationPoint(boundary, newFloor))
+                prevFloor = newFloor
+            }
 
             prevDate = boundary
         }
@@ -340,16 +414,24 @@ object SavingsSimulator {
             it.monthDay1, it.monthDay2, today, horizon
         ).isNotEmpty() }
 
+        val initialFloor = savingsGoals
+            .filter { !it.deleted }
+            .sumOf { it.totalSavedSoFar }
+
         sb.appendLine("── HORIZON ──")
         sb.appendLine("Horizon date: $horizon")
         if (!hasIncome && !hasExpenses) {
-            sb.appendLine("Nothing upcoming. Savings required = ${currencySymbol}${fmt(maxOf(0.0, availableCash))}")
+            val fallback = BudgetCalculator.roundCents(maxOf(0.0, availableCash) + initialFloor)
+            sb.appendLine("Nothing upcoming. Savings required = ${currencySymbol}${fmt(fallback)}")
             return sb.toString()
         }
         sb.appendLine()
 
+        val currentSGDed = BudgetCalculator.activeSavingsGoalDeductions(
+            savingsGoals, budgetPeriod, today, resetDayOfWeek
+        )
         val events = mutableListOf<CashEvent>()
-        events.add(CashEvent(today, -availableCash, priority = 1, label = "Today's spending"))
+        events.add(CashEvent(today, -(availableCash + currentSGDed), priority = 1, label = "Today's spending"))
 
         for (src in incomeSources) {
             for (date in BudgetCalculator.generateOccurrences(
@@ -369,9 +451,10 @@ object SavingsSimulator {
         }
 
         val boundaries = generatePeriodBoundaries(today, horizon, budgetPeriod, resetDayOfWeek, resetDayOfMonth)
+        val floorTimeline = mutableListOf(SimulationPoint(today, initialFloor))
         val budgetBreakdowns = addDynamicBudgetEventsWithTrace(
             events, boundaries, baseBudget, budgetPeriod,
-            amortizationEntries, savingsGoals, recurringExpenses, today
+            amortizationEntries, savingsGoals, recurringExpenses, today, floorTimeline
         )
 
         sb.appendLine("── EVENTS (${events.size} total) ──")
@@ -379,18 +462,28 @@ object SavingsSimulator {
 
         events.sortWith(compareBy<CashEvent> { it.date }.thenBy { it.priority })
 
-        sb.appendLine(String.format("%-12s  %-8s  %14s  %14s  %s", "Date", "Type", "Amount", "Balance", "Description"))
-        sb.appendLine("-".repeat(100))
+        sb.appendLine(String.format("%-12s  %-8s  %14s  %14s  %14s  %s",
+            "Date", "Type", "Amount", "Balance", "Floor", "Description"))
+        sb.appendLine("-".repeat(110))
 
         var balance = 0.0
-        var minBalance = 0.0
-        var minDate = today
+        var floor = initialFloor
+        var maxGap = initialFloor
+        var maxGapDate = today
+        var floorIdx = 1
 
         for (event in events) {
+            while (floorIdx < floorTimeline.size &&
+                   !floorTimeline[floorIdx].date.isAfter(event.date)) {
+                floor = floorTimeline[floorIdx].balance
+                floorIdx++
+            }
             balance += event.amount
-            if (balance < minBalance) {
-                minBalance = balance
-                minDate = event.date
+            val gap = floor - balance
+            val isWorst = gap > maxGap
+            if (isWorst) {
+                maxGap = gap
+                maxGapDate = event.date
             }
             val typeLabel = when (event.priority) {
                 0 -> "INCOME"
@@ -399,27 +492,29 @@ object SavingsSimulator {
                 else -> "?"
             }
             val sign = if (event.amount >= 0) "+" else ""
-            val marker = if (balance == minBalance && minBalance < 0) " << LOW" else ""
+            val marker = if (gap == maxGap && maxGap > 0) " << GAP" else ""
             val desc = if (event.label.isNotEmpty()) "  ${event.label}" else ""
             val breakdown = if (event.priority == 1 && event.label.isEmpty()) {
                 budgetBreakdowns[event.date]?.let { "  $it" } ?: ""
             } else desc
             sb.appendLine(String.format(
-                "%-12s  %-8s  %14s  %14s%s%s",
+                "%-12s  %-8s  %14s  %14s  %14s%s%s",
                 event.date, typeLabel,
                 "$sign${currencySymbol}${fmt(event.amount)}",
                 "${currencySymbol}${fmt(balance)}",
+                "${currencySymbol}${fmt(floor)}",
                 marker, breakdown
             ))
         }
 
         sb.appendLine()
         sb.appendLine("── RESULT ──")
-        val required = BudgetCalculator.roundCents(maxOf(0.0, -minBalance))
-        sb.appendLine("Minimum balance:   ${currencySymbol}${fmt(minBalance)}  on $minDate")
+        val required = BudgetCalculator.roundCents(maxOf(0.0, maxGap))
+        sb.appendLine("Worst (floor − balance): ${currencySymbol}${fmt(maxGap)}  on $maxGapDate")
+        sb.appendLine("Initial SG floor: ${currencySymbol}${fmt(initialFloor)}")
         sb.appendLine("Savings required:  ${currencySymbol}${fmt(required)}")
         if (required <= 0.0) {
-            sb.appendLine("No savings buffer needed — income covers all obligations.")
+            sb.appendLine("No savings buffer needed — income covers all obligations and floors.")
         }
 
         return sb.toString()
@@ -433,7 +528,8 @@ object SavingsSimulator {
         amortizationEntries: List<AmortizationEntry>,
         savingsGoals: List<SavingsGoal>,
         recurringExpenses: List<RecurringExpense>,
-        today: LocalDate
+        today: LocalDate,
+        floorOut: MutableList<SimulationPoint>? = null
     ): Map<LocalDate, String> {
         val breakdowns = mutableMapOf<LocalDate, String>()
         if (boundaries.isEmpty()) return breakdowns
@@ -443,8 +539,14 @@ object SavingsSimulator {
         val simRESetAside = recurringExpenses.map { it.setAsideSoFar }.toDoubleArray()
         val simREAccelerated = recurringExpenses.map { it.isAccelerated }.toBooleanArray()
 
+        fun nonDeletedFloor(): Double = savingsGoals.indices
+            .filter { !savingsGoals[it].deleted }
+            .sumOf { simGoalSaved[it] }
+        var prevFloor = nonDeletedFloor()
+
         var prevDate = today
         for (boundary in boundaries) {
+            floorOut?.add(SimulationPoint(boundary, prevFloor))
             recurringExpenses.forEachIndexed { i, re ->
                 if (re.deleted) return@forEachIndexed
                 val dueDates = BudgetCalculator.generateOccurrences(
@@ -464,7 +566,7 @@ object SavingsSimulator {
 
             var savingsDed = 0.0
             savingsGoals.forEachIndexed { i, goal ->
-                if (goal.isPaused) return@forEachIndexed
+                if (goal.deleted || goal.isPaused) return@forEachIndexed
                 if (goal.totalSavedSoFar >= goal.targetAmount) return@forEachIndexed
                 val remaining = goal.targetAmount - simGoalSaved[i]
                 if (remaining <= 0) return@forEachIndexed
@@ -509,6 +611,12 @@ object SavingsSimulator {
             if (savingsDed > 0) parts.add("savings=-${fmt(savingsDed)}")
             if (accelDed > 0) parts.add("accel=-${fmt(accelDed)}")
             breakdowns[boundary] = "[${parts.joinToString(" ")}]"
+
+            val newFloor = nonDeletedFloor()
+            if (newFloor != prevFloor) {
+                floorOut?.add(SimulationPoint(boundary, newFloor))
+                prevFloor = newFloor
+            }
 
             prevDate = boundary
         }

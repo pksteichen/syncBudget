@@ -8,13 +8,35 @@ originSessionId: ea9e173a-ca3d-4f87-b67a-ceac73953250
 
 11. **Period-boundary scheduling for BackgroundSyncWorker (Phase 3 + 4)** — replace the 15-min periodic with one-shots scheduled at the next period boundary. Solo users go from ~96 worker runs/day to ~4 (one per period), big battery + CPU win. Sync users follow once Phase 1 (`runFullSyncInline`, shipped 2026-04-25) is verified reliable overnight (≥ 95% of FCM wakes complete inline on Samsung + Pixel). If FCM-inline doesn't hit that bar, do Phase 4-alternative (keep periodic but no-op when fresh FCM-inline ran in last 30 min). Full plan in [`project_period_boundary_scheduling.md`](project_period_boundary_scheduling.md).
 
+13. **Launch monetization workstream (AdMob + Play Billing Layer 1 + license testing)** — start as soon as listing screenshots are uploaded. Three coordinated sub-tasks; together they unblock public production launch with full monetization on day one. Layer 2 server-side verification (anti-piracy) stays in item #3 below as a post-launch tightening per the small-app risk profile.
+
+    **13a. AdMob real integration (~1–2 days).** Replace the placeholder `Box` at the top of the main column with `AndroidView` wrapping a real `AdView` at 320×50. Wire lifecycle (resume/pause/destroy via `DisposableEffect`). Use Google test ad unit IDs (`ca-app-pub-3940256099942544/6300978111`) during dev; swap to real production unit IDs only when promoting to Production. Keep the existing `if (!vm.isPaidUser)` gate so Paid + Subscriber stay ad-free. The IAB MRC viewability architecture and `AdAwareDialog` offsetting are already in place — no surrounding refactor needed. Ship as `v2.10.06` to Internal Testing.
+
+    **13b. Play Billing Layer 1 — client-side IAP (~1–2 days).** Integrate Google Play Billing Library 7+. Configure two products in Play Console:
+    - In-app product `paid_upgrade` (one-time, $9.99 USD)
+    - Subscription `subscriber` (monthly, $4.99 USD)
+
+    Wait ~24 h after product creation before testing — SKU catalog propagation takes time. Wire purchase + restore + acknowledgement flows. On verified purchase, set `isPaidUser` / `isSubscriber` SharedPref. Re-check subscription state at app start in case it expired or was cancelled while the app was closed. Cross-device restore: rely on Play Billing's `queryPurchasesAsync` against the active Google account (no separate account system needed). Surface upgrade UI in Settings — existing feature gates (`if (vm.isPaidUser || vm.isSubscriber)`) already exist throughout the codebase; just wire the upgrade buttons to launch the billing flow. Ship as `v2.10.07` to Internal Testing.
+
+    **13c. License testing setup + validation.** Play Console → Setup → License testing → add Paul + Kim + 2-3 trusted internal testers as license testers. Their purchases on Internal/Closed Testing succeed without charging real money; subscription cycles are accelerated (1 month → 5 minutes, 1 year → ~1 hour). Validation checklist before promoting to Closed Testing:
+
+    - [ ] Buy `paid_upgrade` as license tester → `isPaidUser = true`, paid features unlock.
+    - [ ] Refund test purchase via Order management → flag drops back to `false`, paid features re-lock.
+    - [ ] Buy `subscriber` subscription → `isSubscriber = true`, subscriber features unlock.
+    - [ ] Wait 5 min for accelerated renewal → renewal succeeds, flag stays.
+    - [ ] Cancel subscription → flag stays until accelerated expiry; verify expiry path.
+    - [ ] Fresh install / new device with same Google account → `restorePurchases()` re-establishes flags.
+
+    **Tester instructions caveat:** the first IAP per Google account requires a payment method on file even for license testers (won't be charged). Some testers think they're being charged — flag this clearly in the tester onboarding email.
+
+    **Target schedule (from 2026-05-05):** screenshots done ~May 7 → 13a complete ~May 9 → 13b complete ~May 12 → 13c validation complete ~May 14 → promote to Closed Testing → 14-day clock → Production access apply ~May 28.
+
 ## Post-launch (data-driven)
 
 2. **App Check device integrity tightening** — Currently set to "Don't explicitly check device integrity level" (most permissive). The `PLAY_RECOGNIZED` app-integrity verdict (enabled) is what actually blocks pirated/re-signed APKs — that's intact. Device integrity is a separate axis. Tightening order if abuse appears post-launch: MEETS_BASIC_INTEGRITY (rejects obvious tampering / emulator+root), then MEETS_DEVICE_INTEGRITY (also rejects rooted real devices + custom ROMs). Don't go to MEETS_STRONG_INTEGRITY (rejects older real devices). Decide after 2-4 weeks of live PERMISSION_DENIED Crashlytics data; per-field encryption means a leaked App Check token can't decrypt data anyway, so device integrity strictness is anti-abuse only, not data protection.
 
-3. **Google Play Billing + server-side purchase verification** — Local paid-feature flags (`isPaidUser` in SharedPreferences) are bypassable by anyone who can decompile + re-sign the APK. App Check already stops pirated APKs from using SYNC / cloud receipts / admin features (unrecognized app signature), but local features (CSV/PDF export, receipt capture, unlimited widget transactions, cash-flow simulation) don't require server calls and aren't protected. Fix:
-   - Integrate Google Play Billing Library in the app.
-   - New Cloud Function (e.g. `verifyPurchase`) that calls Play Developer API `purchases.products.get` with our service-account creds to confirm the purchase token.
+3. **Play Billing Layer 2 — server-side purchase verification (anti-piracy)** — assumes Layer 1 client-side IAP from item #13b is already shipped. Local paid-feature flags (`isPaidUser` in SharedPreferences) are bypassable by anyone who can decompile + re-sign the APK. App Check already stops pirated APKs from using SYNC / cloud receipts / admin features (unrecognized app signature), but local features (CSV/PDF export, receipt capture, unlimited widget transactions, cash-flow simulation) don't require server calls and aren't protected. Fix:
+   - New Cloud Function (e.g. `verifyPurchase`) that calls Play Developer API `purchases.products.get` with our service-account creds to confirm the purchase token from Layer 1.
    - On verified purchase, write `isPaidUser: true` to a per-user Firestore doc that only App Check-validated clients can read.
    - App reads the server-authoritative flag; local flag becomes a cache only. Modified APK that forges the local flag can't read the server flag (App Check blocks it), so features stay locked.
    - Handle restore flow carefully (new device, new install, cross-platform).

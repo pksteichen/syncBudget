@@ -404,7 +404,23 @@ Calendar showing daily spending, income events, and recurring expense / income d
 
 **File:** `ui/screens/SimulationGraphScreen.kt`
 
-Cash-flow projection over time based on income, recurring expenses, savings goals, and budget spending. Paid + Subscriber feature (gated by `isPaidUser || isSubscriber` in `SavingsGoalsScreen.kt:292`; was Subscriber-only pre-2.7). Top-level composable: `SimulationGraphScreen` (public).
+Cash-flow projection over time based on income, recurring expenses, savings goals, and budget spending. Paid + Subscriber feature (gated by `isPaidUser || isSubscriber` in `SavingsGoalsScreen.kt`; was Subscriber-only pre-2.7). Top-level composable: `SimulationGraphScreen` (public).
+
+**Inputs row** (top of screen):
+
+- **Current Savings** — defaults to `simResult.savingsRequired`. Shifts the cash line up/down as the user explores "what if I have $X today."
+- **Over/Under Budget per Day/Week/Month** (v2.10.06+, replaces the older "Saved per period" label) — positive value simulates overspending (bigger drain), negative simulates spending under budget (saving more). Wired into the simulator as `baseBudget + overUnderPerPeriod`. The unsustainable-rate warning fires when `overUnderPerPeriod < 0` and `−overUnderPerPeriod >= baseBudget`.
+
+**Two lines on the chart:**
+
+- **Solid cash line** — `adjustedPoints[i] = adjTimeline[i].balance + currentSavings`, where `adjTimeline` comes from `simulateTimeline`. Filled with the accent color and gradient-shaded down to the bottom.
+- **Dashed blue line — SG floor** (`Color(0xFF2196F3)`, `PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)`) — rendered from the third element of `simulateTimeline`'s `Triple` return. Step shape: starts at total `totalSavedSoFar`, jumps up at each period boundary by the active goals' contributions, plateaus when goals hit target, stays flat for paused goals.
+
+**Y-axis range** is computed from BOTH `adjustedPoints` and `adjFloor` so a high floor doesn't get clipped.
+
+**Red low-point marker** is drawn at `adjSimResult.lowPointDate` (the worst-gap date — where the cash trajectory comes closest to or under the floor). Earlier this was the minimum-balance date; under the v2.10.06 max-gap formula it is the worst `floor − balance` date.
+
+**Help screen** (`SimulationGraphHelpScreen.kt`) includes a dedicated "Savings-Goal Floor (Blue Dashed Line)" section explaining what the line represents and why the cash trajectory should never dip below it.
 
 ### 2.14 QuickStartGuide
 
@@ -853,23 +869,48 @@ Called only on CSV bank imports (`GENERIC_CSV`, `US_BANK`). **Not** called on ma
 
 ### 6.7 SavingsSimulator
 
-**File:** `data/SavingsSimulator.kt` (517 lines)  |  object singleton
+**File:** `data/SavingsSimulator.kt`  |  object singleton
 
-18-month forward-looking cash flow simulation to compute the savings buffer needed to avoid going negative.
+18-month forward-looking cash-flow simulation. Sizes "Need" so the projected cash trajectory stays at-or-above the rising savings-goal floor at every point in the horizon (max-gap formula, v2.10.06+).
 
 Public types:
 
-- `SimResult(savingsRequired: Double, lowPointDate: LocalDate?)`
-- `SimulationPoint(date: LocalDate, balance: Double)` — for graphing.
+- `SimResult(savingsRequired: Double, lowPointDate: LocalDate?)` — `lowPointDate` is the date of the worst `floor − balance` gap.
+- `SimulationPoint(date: LocalDate, balance: Double)` — used for both the cash trajectory and the floor staircase.
 - `CashEvent(date, amount, priority, label)` (private) — priority: `0 = income`, `1 = period deduction`, `2 = expense`.
 
 | Method | Purpose |
 |---|---|
 | `calculateSavingsRequired(...)` | Returns `SimResult` |
-| `simulateTimeline(...)` | `Pair<SimResult, List<SimulationPoint>>` |
-| `traceSimulation(...)` | Human-readable trace string for diagnostics |
+| `simulateTimeline(...)` | `Triple<SimResult, List<SimulationPoint> cash, List<SimulationPoint> floor>` |
+| `traceSimulation(...)` | Human-readable trace string for diagnostics; mirrors the same algorithm |
+| `walkEventsForMaxGap(events, floor, initialFloor, today)` (private) | Shared scan that computes `maxGap` and its date |
 
-Algorithm: horizon = `today + 18 months`. Build events: day-0 (`-availableCash`), all IS occurrences, all RE occurrences, and one period-boundary deduction per boundary (computed via `addDynamicBudgetEvents` — simulates goal accumulation, RE set-aside resets, and accelerated-RE extras forward). Sort by `(date, priority)`. Walk and track `minBalance`. Return `SimResult(roundCents(max(0, -minBalance)), minDate or null)`.
+**Algorithm:**
+
+1. Horizon = `today + 18 months`.
+2. `initialFloor = sum of totalSavedSoFar for non-deleted goals` (paused **included**).
+3. `floorTimeline = [(today, initialFloor)]`. Passed by reference into `buildSortedEvents → addDynamicBudgetEvents`.
+4. Build events:
+   - **Today's draw:** `−(availableCash + currentSGDed)` where `currentSGDed = BudgetCalculator.activeSavingsGoalDeductions(...)`. Neutralizes the per-period SG reduction already baked into `simAvailableCash` so add/remove/pause/resume do not shift today's drain. AE and accelerated-RE deductions are NOT neutralized.
+   - All IS / scheduled-income occurrences: `+amount` (priority 0).
+   - Per period boundary B (`addDynamicBudgetEvents`):
+     - For each RE whose occurrence fell in `(prevDate, B]`: reset `simRESetAside[i] = 0` and `simREAccelerated[i] = false`.
+     - `amortDed = activeAmortizationDeductions(B)`.
+     - For each non-deleted, non-paused goal not yet at target: `ded = min(contributionPerPeriod, remaining)` (or `remaining/periodsToTarget` for legacy `targetDate != null`); `savingsDed += ded`; `simGoalSaved[i] += ded`.
+     - `accelDed` for accelerated REs.
+     - Append cash event `−(base − amortDed − savingsDed − accelDed)`.
+     - Floor staircase: emit `(B, prevFloor)` before contributions and `(B, newFloor)` after if changed; `prevFloor = newFloor`.
+   - All RE / scheduled-expense occurrences: `−amount` (priority 2).
+5. Sort by `(date, priority)`.
+6. **Walk events tracking max gap** (`walkEventsForMaxGap`):
+   - Init `balance=0, floor=initialFloor, maxGap=initialFloor, floorIdx=1`.
+   - For each event: advance `floor` through any `floorTimeline[floorIdx]` whose date `<= event.date` (post-step value wins at boundaries). Then `balance += event.amount`. Compute `gap = floor − balance`; update max + maxDate.
+7. Return `SimResult(roundCents(max(0, maxGap)), maxGapDate or null)`. `simulateTimeline` returns the same plus the cash and floor timelines.
+
+**Empty horizon fallback** (`buildSortedEvents` returns null when no IS or RE occurrences exist in the horizon): `savingsRequired = roundCents(max(0, availableCash) + initialFloor)`.
+
+**Why this formula:** the floor rises over the horizon as goals accrue. Earlier `max(0, −minBalance) + initialFloor` only ensured cash stayed above today's floor at the worst trough; cash could dip below the higher portions of the floor mid-horizon (visible on the chart as the cash line crossing under the dashed floor line). Max-gap sizes Need so the cash trajectory stays at-or-above the floor at every event date. Combined with the today's-draw neutralization, pause/resume leaves Need unchanged and add/delete are mirror operations of ±`totalSavedSoFar`.
 
 ### 6.8 DefaultCategories
 

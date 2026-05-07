@@ -75,6 +75,9 @@ fun SimulationGraphHelpScreen(onBack: () -> Unit) {
             HelpSectionTitle(H.savedPerPeriodTitle)
             HelpBodyText(H.savedPerPeriodBody)
 
+            HelpSectionTitle(H.floorLineTitle)
+            HelpBodyText(H.floorLineBody)
+
             HelpSectionTitle(H.insightsTitle)
             HelpBodyText(H.insightsBody)
 

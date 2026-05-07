@@ -464,19 +464,26 @@ cash = carryForwardBalance
 | id | Int | random `(1..Int.MAX_VALUE)` rejected against existing ids |
 | name | String | Goal name |
 | targetAmount | Double | Total to save |
-| targetDate | LocalDate? | Deadline (null = fixed-contribution) |
+| targetDate | LocalDate? | Legacy field; new goals always save with `null` (v2.10.06+) |
 | totalSavedSoFar | Double | Running total (default 0.0) |
-| contributionPerPeriod | Double | Per-period amount when targetDate null |
-| isPaused | Boolean | Suspends deductions |
+| contributionPerPeriod | Double | Per-period contribution |
+| isPaused | Boolean | Suspends future contributions; saved cash stays earmarked |
 | deviceId | String | Sync origin |
 | deleted | Boolean | Tombstone |
 
-### 5.2 Goal Types
+### 5.2 Goal Type — single (fixed contribution)
 
-| Type | Behavior |
-|---|---|
-| Target-Date | `remaining / periodsUntilTargetDate`; escalates if behind |
-| Fixed-Contribution | `min(contributionPerPeriod, remaining)` |
+As of v2.10.06 the add/edit dialog always saves with `targetDate = null`; there is one goal type. Per-period deduction:
+
+```
+deduction = min(contributionPerPeriod, max(0, targetAmount − totalSavedSoFar))
+```
+
+The **"Calculate with Target Date"** button inside the dialog is a one-shot calculator: pick a date, app fills in `contributionPerPeriod = remaining / periodsBetween(today, picked)`, user can edit before saving. The saved goal still has `targetDate = null`. Legacy synced goals with `targetDate != null` keep using `remaining / periodsUntilTarget`; the branch lives on for back-compat in `BudgetCalculator.activeSavingsGoalDeductions` and the simulator.
+
+### 5.2.1 "You need" amount + chart floor (v2.10.06+)
+
+The text at the top of `SavingsGoalsScreen` reads "You need $X saved to cover your budget, future expenses, and the savings goals below." `$X` is sized so the projected cash trajectory never dips below the rising savings-goal floor at any point in the 18-month projection. See §7.4 for the formula.
 
 ### 5.3 Supercharge
 
@@ -549,22 +556,32 @@ File: `future_expenditures.json` (legacy name). Repository migrates legacy field
 
 `BudgetCalculator.generateOccurrences()` projects over 1-year horizon; total subtracted from income before dividing by period count for safe budget.
 
-### 7.4 SavingsSimulator (517 lines)
+### 7.4 SavingsSimulator
 
-Forward-looking cash-flow simulation to size the savings buffer.
+Forward-looking cash-flow simulation that sizes Need so projected cash stays above the rising SG floor at every point in the horizon.
+
+**Public surface:**
+- `calculateSavingsRequired(...) → SimResult` — Need + worst-gap date.
+- `simulateTimeline(...) → Triple<SimResult, cashTimeline, floorTimeline>` — for `SimulationGraphScreen`.
+- `traceSimulation(...) → String` — diagnostic dump.
 
 **Algorithm:**
 1. Horizon = `today + 18 months`
-2. Build events:
-   - Day-0: `-availableCash` (priority 1)
+2. Compute `initialFloor = sum of totalSavedSoFar across non-deleted goals` (paused **included** — pause stops future contributions, not the earmark).
+3. Build events:
+   - Day-0: `−(availableCash + currentSGDed)` (priority 1). Adding `currentSGDed` cancels the per-period SG reduction already baked into `simAvailableCash`, so add/remove/pause/resume don't artificially shift today's draw. AE and accelerated-RE deductions are NOT neutralized.
    - Income occurrences: `+amount` (priority 0)
-   - Period deductions: `-budgetAmount` (priority 1)
-   - Expense occurrences: `-amount` (priority 2)
-3. Sort `compareBy(date).thenBy(priority)` — same-day order is income > period > expense
-4. Walk timeline from balance=0, track `(minBalance, minDate)`
-5. `savingsRequired = max(0, -minBalance)`
+   - Period deductions at each boundary: `−(base − amortDed − savingsDed − accelDed)` (priority 1). The boundary loop also tracks `simGoalSaved[i]` per goal and emits `(boundary, prevFloor)` and `(boundary, newFloor)` into the floor timeline (staircase shape). Paused/deleted goals are skipped in the contribution loop (their `simGoalSaved[i]` stays flat).
+   - Expense occurrences: `−amount` (priority 2)
+4. Sort `compareBy(date).thenBy(priority)` — same-day order is income > period > expense.
+5. **Walk timeline computing max gap.** Initialize `balance=0, floor=initialFloor, maxGap=initialFloor`. For each event, advance `floor` through floor-timeline entries with `date <= event.date` (post-step value at boundaries), then `balance += event.amount`, then `gap = floor − balance`; track max + maxDate.
+6. `savingsRequired = max(0, maxGap)`.
 
-Returns `SimResult(savingsRequired, lowPointDate)`.
+Returns `SimResult(savingsRequired, maxGapDate or null)`.
+
+**Why max-gap, not `−minBalance + initialFloor`:** the floor rises over the horizon as goals accrue. The static-floor formula only ensured cash stayed above today's floor at the worst trough — cash could (and did) dip below the higher portions of the floor mid-horizon. Max-gap sizes Need so cash >= floor at every point. With the today's-draw neutralization in place, paused/active is invariant on Need; add/delete are mirror operations of ±totalSavedSoFar.
+
+**Empty horizon fallback** (no income, no recurring expenses): `savingsRequired = max(0, availableCash) + initialFloor`.
 
 ### 7.5 Timing Safety
 

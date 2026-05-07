@@ -7,16 +7,25 @@
 - Privacy policy: `https://techadvantagesupport.github.io/privacy`. Pages repo clone at `/storage/emulated/0/Download/Tech Advantage Pages` (legacy `budgetrak-legal` repo still serves v2.7 fallback URL).
 - Working dir: `/data/data/com.termux/files/home/dailyBudget`. ~51.5 k lines, ~100 Kotlin files.
 
-## Build Environment (Termux)
-- `export JAVA_HOME=/data/data/com.termux/files/usr` before builds.
-- Android SDK at `~/android-sdk` via `local.properties` (NOT env vars).
-- AGP-bundled aapt2 is x86_64 — override to build-tools 34 ARM aapt2 via `android.aapt2FromMavenOverride` in gradle.properties.
-- Termux aapt2 (v2.19) cannot load android-35 — pin `compileSdk = 34`.
-- Build: `./gradlew assembleDebug --no-daemon`. APK copies to `/storage/emulated/0/Download/` for install.
+## Build Environment — Bifurcated (CI vs Termux)
+**Committed state:** `compileSdk = 35`, `targetSdk = 35` in `app/build.gradle.kts` — CI uses these for Play release AABs (since 2026-05-01, commit 433029d).
 
-## Dependencies (compileSdk 34)
+**Termux local debug builds need compileSdk = 34** because Termux's aapt2 v2.19 (`/usr/bin/aapt2`, package `aapt2 13.0.0.6-23`) cannot parse android-35 resources. Workflow:
+1. `export JAVA_HOME=/data/data/com.termux/files/usr` (Android SDK at `~/android-sdk` via `local.properties`).
+2. Edit `app/build.gradle.kts`: temporarily set `compileSdk = 34` and `targetSdk = 34`.
+3. `./gradlew assembleDebug --no-daemon` — ~2 min.
+4. `cp app/build/outputs/apk/debug/app-debug.apk /storage/emulated/0/Download/BudgeTrak.apk` (always `BudgeTrak.apk`, overwritten — see `feedback_apk_naming.md`).
+5. **Revert `compileSdk` and `targetSdk` to 35** before any commit. CI must see 35.
+
+The swap works because deps stay 34-compatible (`core-ktx 1.13.1`, Compose BOM `2024.09.03`). Do NOT bump `core-ktx ≥ 1.15` or `Compose BOM ≥ 2024.12.01` — those require compileSdk 35 and would break Termux builds permanently.
+
+**aapt2 override:** `~/.gradle/gradle.properties` (user-scoped, NOT in repo) sets `android.aapt2FromMavenOverride=~/android-sdk/build-tools/34.0.0/aapt2`. The 34.0.0 binary is a symlink to Termux's native ARM aapt2; the SDK manager's `build-tools/35.0.1/aapt2` is x86_64 and won't run on aarch64. Don't repoint to 35.0.1.
+
+**Cleaner long-term option (not yet implemented):** conditional in `app/build.gradle.kts` like `compileSdk = if (project.hasProperty("localTermux")) 34 else 35`, then build with `-PlocalTermux=true` from Termux. Eliminates the manual edit-build-revert cycle.
+
+## Dependencies (committed = compileSdk 35; Termux works at 34)
 - AGP 8.7.3, Gradle 8.9, Kotlin 2.0.21, Compose BOM 2024.09.03, core-ktx 1.13.1, lifecycle 2.8.6, Firebase BOM 32.7.0, work-runtime-ktx 2.9.1, documentfile 1.0.1.
-- Do NOT bump core-ktx ≥ 1.15 or Compose BOM ≥ 2024.12.01 (require compileSdk 35).
+- Do NOT bump core-ktx ≥ 1.15 or Compose BOM ≥ 2024.12.01 — both require compileSdk 35 unconditionally and would break the Termux debug-build path.
 
 ## Architecture
 - Single `MainActivity.kt` (~2.6 K lines — router, lifecycle, wrappers) + `MainViewModel.kt` (~3.2 K lines — state, business logic, sync lifecycle, background loops).
@@ -99,8 +108,8 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 
 ## Dashboard, Simulation, Savings, Receipts, Backup
 - [`spec_dashboard.md`](spec_dashboard.md) — Solari display (canvas + procedural sound), spending chart ranges/palettes, Supercharge bolt, sync indicator.
-- [`spec_simulation.md`](spec_simulation.md) — 18-month cash-flow projection engine (SavingsSimulator) + interactive SimulationGraphScreen.
-- [`spec_recurring_and_savings.md`](spec_recurring_and_savings.md) — accelerated RE mode, set-aside tracking, SG target-date/fixed/supercharge math.
+- [`spec_simulation.md`](spec_simulation.md) — 18-month projection engine; Need = max(floor − balance) over t; today's-draw neutralization; step-shaped floor timeline + dashed blue chart line.
+- [`spec_recurring_and_savings.md`](spec_recurring_and_savings.md) — accelerated RE mode, set-aside tracking, **single-type** SG (fixed contribution + Target-Date helper button), supercharge.
 - [`spec_receipt_photos.md`](spec_receipt_photos.md) — capture, compression, flag-clock polling, possession, pruning, snapshot archive, rotation.
 - [`spec_backup.md`](spec_backup.md) — full backup spec (retention, pre-restore snapshot, photos file, serialized prefs).
 
@@ -154,6 +163,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [Activity.recreate() preserves the ViewModel](feedback_recreate_preserves_viewmodel.md) — disk writes need explicit vm.reloadAllFromDisk(); recreate() rebuilds UI but keeps stale VM state. Pair with Snapshot.withMutableSnapshot + key(vm.dataReloadVersion) wrap on the screen-routing block.
 - [Compose Dialog windows stack above main window](feedback_compose_dialog_window_stacking.md) — overlays meant to cover an open Dialog must themselves be a Dialog; a plain Surface renders behind.
 - [Network-touching code must be network-aware](feedback_network_aware_code.md) — fail-fast offline (vm.isNetworkAvailable foreground, NetworkUtils.isOnline background); auto-resume drainer on onAvailable via cancelAndJoin; thread Boolean through to avoid stamping "work done" after offline-skipped runs.
+- [MediaStore ghost files from Termux rm](feedback_mediastore_ghost_files.md) — never `rm` app-owned public-Download files from Termux; leaves a MediaStore ghost that blocks app O_CREAT with EEXIST. Recover via `touch` placeholder, or delete via Files app. Default new high-frequency logs to `context.filesDir`.
 
 ## Firebase Backend
 - Plan: Blaze. App Check enforced on Firestore/RTDB/Storage (not Auth). Debug → `DebugAppCheckProviderFactory`, release → `PlayIntegrityAppCheckProviderFactory`. **TTL is provider-dependent**: Play Integrity (release) = 40 h as of 2026-04-26 (set in Firebase Console → Project Settings → Your apps → BudgeTrak Android → App Check section, dropdown selector); Debug provider = 1 h (Google-imposed, ignores Console setting — by design for short-lived dev tokens). So debug-build observed refresh cadence is 40× higher than release will be. **Play Integrity advanced settings**: `PLAY_RECOGNIZED` required (anti-piracy), `LICENSED` not required (don't gate free users on Huawei/degooglified devices), device integrity = "Don't explicitly check" (relies on PLAY_RECOGNIZED + per-field encryption for actual security; tighten post-launch if Crashlytics shows abuse).

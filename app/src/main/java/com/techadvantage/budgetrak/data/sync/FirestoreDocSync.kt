@@ -66,12 +66,15 @@ class FirestoreDocSync(
         }
     }
 
-    /** Sync log — always logs to logcat; file output only in debug builds. */
+    /** Sync log — always logs to logcat; file output only in debug builds.
+     *  Writes to per-app private context.filesDir/diag_logs/ so the file is
+     *  immune to public-Download MediaStore ghost EEXIST. The dump button
+     *  republishes the contents to public Download via PublicDownloadWriter. */
     private fun syncLog(msg: String) {
         Log.i(TAG, msg)
         if (com.techadvantage.budgetrak.BuildConfig.DEBUG) {
             try {
-                val dir = BackupManager.getSupportDir()
+                val dir = BackupManager.getInternalDiagDir(context)
                 val file = java.io.File(dir, LOG_FILE)
                 com.techadvantage.budgetrak.BudgeTrakApplication.rotateLogToPrev(file, MAX_LOG_SIZE)
                 file.appendText("[${LocalDateTime.now()}] $msg\n")
@@ -750,13 +753,31 @@ class FirestoreDocSync(
         // For background push keys (persisted from BackgroundSyncWorker), also verify
         // lastEditBy matches our deviceId — if another device edited the same doc
         // since our push, we should process their update, not filter it as our echo.
+        //
+        // CRITICAL: when an echo is filtered out, we MUST also clear its
+        // localPendingEdits entry. The conflict-detection block below (line ~818)
+        // only clears pendingEdits when its own lastEditBy == deviceId branch runs,
+        // and that branch is unreachable for echo-filtered changes (we return early
+        // for pure-echo batches and skip per-change conflict checks for filtered ones).
+        // Without this side-effect, every push leaves a permanent pendingEdits entry
+        // until the 1-hour expiry, which causes false-positive conflicts on any
+        // foreign write within the window.
+        var pendingEditsCleared = false
         val toProcess = changes.filter { change ->
             val key = "$collection:${change.document.id}"
             if (!recentPushes.containsKey(key)) return@filter true
             // Check lastEditBy: if someone else edited since our push, keep the change
             val lastEditBy = change.document.getString("lastEditBy")
-            lastEditBy != null && lastEditBy != deviceId
+            val isOurEcho = lastEditBy != null && lastEditBy == deviceId
+            if (isOurEcho) {
+                // Our push round-tripped successfully — clear the pending edit
+                // so a subsequent foreign write doesn't false-positive as conflict.
+                if (localPendingEdits.remove(key) != null) pendingEditsCleared = true
+                return@filter false
+            }
+            true
         }
+        if (pendingEditsCleared) persistPendingEdits()
         if (toProcess.isEmpty()) {
             // Pure echo batch — still advance the cursor so a fresh listener
             // later (e.g., background worker cold start) doesn't re-deliver

@@ -1231,7 +1231,10 @@ private suspend fun runDebugDumpBody(context: Context) {
                 } catch (_: Exception) { "(no diag file)" }
             }
             val syncLogText = try {
-                java.io.File(supportDir, "native_sync_log.txt").readText()
+                java.io.File(
+                    com.techadvantage.budgetrak.data.BackupManager.getInternalDiagDir(context),
+                    "native_sync_log.txt"
+                ).readText()
             } catch (_: Exception) { "" }
             val tokenLogText = try {
                 java.io.File(supportDir, "token_log.txt").readText()

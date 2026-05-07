@@ -48,6 +48,23 @@ object BackupManager {
         return dir
     }
 
+    /**
+     * Per-app private dir for high-frequency diagnostic logs (native_sync_log,
+     * fcm_debug). Lives under context.filesDir so writes are immune to the
+     * MediaStore EEXIST footgun that hits public Download/ paths after
+     * uninstall+reinstall (orphan paths stay claimed in the MediaStore index
+     * and block new creates). No storage permission needed.
+     *
+     * The dump button reads from here and republishes the contents to public
+     * Download/BudgeTrak/support/ via PublicDownloadWriter, so the operator
+     * still sees the logs in their support dump.
+     */
+    fun getInternalDiagDir(context: Context): File {
+        val dir = File(context.filesDir, "diag_logs")
+        dir.mkdirs()
+        return dir
+    }
+
     fun getBackupDir(): File {
         val dir = File(getBudgetrakDir(), "backups")
         dir.mkdirs()

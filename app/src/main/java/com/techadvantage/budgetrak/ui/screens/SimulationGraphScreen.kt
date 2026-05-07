@@ -62,6 +62,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -114,7 +115,7 @@ fun SimulationGraphScreen(
     val customColors = LocalSyncBudgetColors.current
     val density = LocalDensity.current
 
-    val (simResult, timeline) = SavingsSimulator.simulateTimeline(
+    val (simResult, timeline, _) = SavingsSimulator.simulateTimeline(
         incomeSources, recurringExpenses, budgetPeriod,
         baseBudget, amortizationEntries, savingsGoals,
         availableCash, resetDayOfWeek, resetDayOfMonth, today
@@ -126,8 +127,8 @@ fun SimulationGraphScreen(
     }
     val currentSavings = savingsText.toDoubleOrNull() ?: simResult.savingsRequired
 
-    var savedPerPeriodText by remember { mutableStateOf("") }
-    val savedPerPeriod = savedPerPeriodText.toDoubleOrNull() ?: 0.0
+    var overUnderBudgetText by remember { mutableStateOf("") }
+    val overUnderPerPeriod = overUnderBudgetText.toDoubleOrNull() ?: 0.0
 
     val periodLabel = when (budgetPeriod) {
         BudgetPeriod.DAILY -> S.common.periodDay
@@ -135,12 +136,15 @@ fun SimulationGraphScreen(
         BudgetPeriod.MONTHLY -> S.common.periodMonth
     }
 
-    val savingsExceedBudget = savedPerPeriod > 0 && savedPerPeriod >= baseBudget
+    // Negative entry (under budget) larger than baseBudget would push the
+    // adjusted budget negative — unsustainable saving rate.
+    val savingsExceedBudget = overUnderPerPeriod < 0 && -overUnderPerPeriod >= baseBudget
 
-    // Re-run simulation when savedPerPeriod changes
-    val (adjSimResult, adjTimeline) = SavingsSimulator.simulateTimeline(
+    // Re-run simulation when overUnderPerPeriod changes. Positive = over
+    // budget = bigger per-period drain; negative = under = smaller drain.
+    val (adjSimResult, adjTimeline, adjFloor) = SavingsSimulator.simulateTimeline(
         incomeSources, recurringExpenses, budgetPeriod,
-        baseBudget - savedPerPeriod, amortizationEntries, savingsGoals,
+        baseBudget + overUnderPerPeriod, amortizationEntries, savingsGoals,
         availableCash, resetDayOfWeek, resetDayOfMonth, today
     )
 
@@ -222,7 +226,7 @@ fun SimulationGraphScreen(
                     modifier = Modifier.weight(1f)
                 )
                 OutlinedTextField(
-                    value = savedPerPeriodText,
+                    value = overUnderBudgetText,
                     onValueChange = { newVal ->
                         val cleaned = newVal.filter { it.isDigit() || it == '.' || it == '-' }
                         // Allow empty, just minus, minus-dot, or valid number
@@ -234,10 +238,10 @@ fun SimulationGraphScreen(
                             val minusCount = cleaned.count { it == '-' }
                             if (minusCount > 1 || (minusCount == 1 && cleaned[0] != '-')) return@OutlinedTextField
                             if (maxDecimals == 0 && dotIdx >= 0) { /* block */ }
-                            else if (decs <= maxDecimals) { savedPerPeriodText = cleaned }
+                            else if (decs <= maxDecimals) { overUnderBudgetText = cleaned }
                         }
                     },
-                    label = { Text(S.savingsGoals.simulationSavedPerLabel(periodLabel)) },
+                    label = { Text(S.savingsGoals.simulationOverUnderLabel(periodLabel)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     colors = textFieldColors,
@@ -269,15 +273,20 @@ fun SimulationGraphScreen(
                 val adjustedPoints = remember(adjTimeline, currentSavings) {
                     adjTimeline.map { it.balance + currentSavings }
                 }
-                val yMin = remember(adjustedPoints) {
-                    minOf(0.0, adjustedPoints.minOrNull() ?: 0.0)
+                val yMin = remember(adjustedPoints, adjFloor) {
+                    val cashMin = adjustedPoints.minOrNull() ?: 0.0
+                    val floorMin = adjFloor.minOfOrNull { it.balance } ?: 0.0
+                    minOf(0.0, cashMin, floorMin)
                 }
-                val yMax = remember(adjustedPoints) {
-                    val raw = adjustedPoints.maxOrNull() ?: 1.0
+                val yMax = remember(adjustedPoints, adjFloor) {
+                    val cashMax = adjustedPoints.maxOrNull() ?: 1.0
+                    val floorMax = adjFloor.maxOfOrNull { it.balance } ?: 1.0
+                    val raw = maxOf(cashMax, floorMax)
                     if (raw <= yMin) yMin + 1.0 else raw
                 }
 
                 val lineColor = customColors.accentTint
+                val floorColor = Color(0xFF2196F3)
                 val gridColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f)
                 val axisTextColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                 val zeroLineColor = Color(0xFFF44336).copy(alpha = 0.4f)
@@ -525,6 +534,28 @@ fun SimulationGraphScreen(
                                             join = StrokeJoin.Round
                                         )
                                     )
+
+                                    // Savings-goal floor (dashed blue, steps up at each
+                                    // period boundary as goals accrue)
+                                    if (adjFloor.isNotEmpty()) {
+                                        val floorPath = Path()
+                                        adjFloor.forEachIndexed { i, point ->
+                                            val x = dateToX(point.date)
+                                            val y = valueToY(point.balance)
+                                            if (i == 0) floorPath.moveTo(x, y)
+                                            else floorPath.lineTo(x, y)
+                                        }
+                                        drawPath(
+                                            path = floorPath,
+                                            color = floorColor,
+                                            style = Stroke(
+                                                width = 2.dp.toPx(),
+                                                pathEffect = PathEffect.dashPathEffect(
+                                                    floatArrayOf(12f, 8f), 0f
+                                                )
+                                            )
+                                        )
+                                    }
 
                                     // Low point marker
                                     if (adjSimResult.lowPointDate != null) {

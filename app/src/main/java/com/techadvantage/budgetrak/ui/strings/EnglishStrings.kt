@@ -495,7 +495,7 @@ object EnglishStrings : AppStrings {
         exampleContribution = "e.g. 5.00",
         mustBeLessThanTarget = "Must be less than target",
         payoffDate = { date -> "Payoff: $date" },
-        savingsRequiredMessage = { amount, period -> "You need $amount saved to cover $period budget and these expenses." },
+        savingsRequiredMessage = { amount, _ -> "You need $amount saved to cover your budget, future expenses, and the savings goals below." },
         savingsPeriodDaily = "today's",
         savingsPeriodWeekly = "this week's",
         savingsPeriodMonthly = "this month's",
@@ -509,7 +509,7 @@ object EnglishStrings : AppStrings {
         simulationGraphTitle = "Cash Flow Simulation",
         simulationGraphDescription = "Projected cash flow over the simulation period. Adjust your current savings or set aside extra money to see how it affects your future expected cash on hand.",
         simulationSavingsLabel = "Current Savings",
-        simulationSavedPerLabel = { period -> "Saved per $period" },
+        simulationOverUnderLabel = { period -> "Over/Under Budget per $period" },
         simulationSavingsExceedBudget = "Savings per period exceed the budget amount",
         simulationNoData = "No simulation data available"
     )
@@ -1424,25 +1424,28 @@ object EnglishStrings : AppStrings {
         title = "Savings Goals Help",
         whatTitle = "What Are Savings Goals?",
         whatBody = "Savings Goals let you plan and save for future expenses or financial " +
-            "targets without blowing your budget. Instead of a large expense hitting " +
-            "your available cash all at once, the app automatically reduces your budget " +
-            "by a small amount each period to save up over time.",
+            "targets without blowing your budget. The app automatically reduces your budget " +
+            "by a small amount each period and earmarks that money for the goal until the " +
+            "target is reached.",
         exampleTitle = "Example",
-        exampleBody = "You want to build a \$3,000 emergency fund. Create a fixed contribution " +
-            "goal of \$5/day. On a daily budget, you barely notice the deduction, " +
-            "but after 20 months your emergency fund is fully funded. Or set a " +
-            "target date of 6 months to save \$600 for new tires \u2014 the app " +
-            "deducts about \$3.29/day automatically. No surprise, no stress.",
-        twoTypesTitle = "Two Goal Types",
-        twoTypesBody = "Savings Goals supports two different approaches to saving:",
-        targetDateTitle = "Target Date",
-        targetDateBody = "Set a date by which you need the money. The app automatically calculates " +
-            "how much to deduct each period based on the remaining amount and remaining " +
-            "time. As you get closer to the date, the deduction adjusts dynamically.",
-        fixedContribTitle = "Fixed Contribution",
-        fixedContribBody = "Set a fixed amount to contribute each budget period. There's no target date \u2014 " +
-            "the app simply deducts your chosen amount every period until the goal is " +
-            "reached. This is ideal for open-ended savings like an emergency fund.",
+        exampleBody = "You want to build a \$3,000 emergency fund. Create a goal contributing " +
+            "\$5/day on a daily budget. You barely notice the deduction, and after about 20 months " +
+            "the fund is fully funded. If instead you're thinking \"\$600 for new tires by next August,\" " +
+            "tap the Calculate with Target Date helper inside the add/edit dialog and the app fills " +
+            "in the right per-period number for you.",
+        twoTypesTitle = "How a Goal Is Set Up",
+        twoTypesBody = "Every goal has a target amount and a contribution per period. Each period " +
+            "the contribution is set aside from your Safe Budget Amount until the target is met. " +
+            "Two helpers in the dialog make setup easier:",
+        targetDateTitle = "Calculate with Target Date",
+        targetDateBody = "Tap the \"Calculate with Target Date\" button inside the add/edit dialog " +
+            "and pick a date. The app divides the remaining amount by the number of periods between " +
+            "now and that date, then fills in the Contribution per Period field. You can edit the " +
+            "suggested number before saving \u2014 it's a calculator, not a separate goal type.",
+        fixedContribTitle = "Starting Saved Amount",
+        fixedContribBody = "When creating a new goal you can enter a starting amount if you already " +
+            "have money set aside toward this goal. The progress bar starts pre-filled and the goal " +
+            "completes that much sooner.",
         headerTitle = "Header Bar",
         headerBody = "The header provides navigation and bulk actions:",
         backDesc = "Return to the dashboard.",
@@ -1452,73 +1455,71 @@ object EnglishStrings : AppStrings {
         addingTitle = "Adding a Savings Goal",
         addingBody = "Tap \"Add Savings Goal\" and fill in:",
         addStep1 = "Name",
-        addStep1Desc = "What you're saving for (e.g., \"New Tires\", \"Vacation to Hawaii\", \"Emergency Fund\").",
+        addStep1Desc = "What you're saving for (e.g. \"New Tires\", \"Emergency Fund\", \"Vacation\").",
         addStep2 = "Target Amount",
         addStep2Desc = "The total cost you need to save.",
         addStep3 = "Starting Saved Amount",
         addStep3Desc = "Optional. If you already have some money saved toward this goal, enter it here to pre-fill the progress bar.",
-        addStep4 = "Goal Type",
-        addStep4Desc = "Choose \"Target Date\" to set a deadline, or \"Fixed Contribution\" for a regular per-period amount.",
-        addStep5 = "Target Date / Contribution",
-        addStep5Desc = "Depending on the goal type, select a target date or enter a contribution per period.",
+        addStep4 = "Contribution per Period",
+        addStep4Desc = "How much to set aside each budget period. Type a number directly, or use the Calculate with Target Date button below to have the app fill this in from a deadline.",
+        addStep5 = "Save",
+        addStep5Desc = "Tap Save. The goal is added and starts applying its contribution at the next period boundary.",
         deductionsTitle = "How Budget Deductions Work",
-        deductionsBody = "For each active (non-paused) goal, the app calculates a per-period deduction:",
-        targetDateDeductionTitle = "Target Date Goals",
-        targetDateDeductionFormula = "Deduction = (Target Amount \u2212 Saved So Far) \u00f7 Remaining Periods until Target Date",
-        fixedDeductionTitle = "Fixed Contribution Goals",
-        fixedDeductionBody = "The deduction equals the contribution per period you set when creating the goal. " +
-            "It stays constant until the goal is reached.",
+        deductionsBody = "For each active (non-paused) goal, the app subtracts a per-period deduction from your Safe Budget Amount:",
+        targetDateDeductionTitle = "Per-Period Deduction",
+        targetDateDeductionFormula = "Deduction = min(Contribution per Period, Target Amount \u2212 Saved So Far)",
+        fixedDeductionTitle = "Once the Goal Is Reached",
+        fixedDeductionBody = "When your saved amount meets or exceeds the target, the deduction stops " +
+            "automatically. The goal is marked \"Goal reached!\" and no longer affects your budget.",
         deductionNote = "These deductions are subtracted from your Safe Budget Amount to produce " +
-            "your actual Budget Amount. The \"Saved So Far\" automatically increases each " +
-            "budget period based on the deduction amount.",
+            "your actual Budget Amount. The \"Saved So Far\" automatically increases each period " +
+            "by the deduction.",
         progressTitle = "Progress Tracking",
         progressBody = "Each goal in the list shows:",
         progressName = "Name \u2014 what you're saving for",
-        progressTarget = "Target amount (and target date for date-based goals)",
-        progressDeduction = "Budget deduction or contribution per period",
+        progressTarget = "Target amount and projected payoff date",
+        progressDeduction = "Contribution per period",
         progressBar = "Progress bar \u2014 visual indicator of how close you are to the target",
         progressSaved = "Saved amount \u2014 green text showing accumulated savings vs. target",
         progressGoalReached = "\"Goal reached!\" label when fully saved",
         actionsTitle = "Actions",
-        pauseDesc = "Temporarily stop deductions for this goal. Budget returns to normal while paused.",
-        resumeDesc = "Resume deductions. The per-period amount recalculates based on remaining time and savings.",
-        deleteDesc = "Permanently remove the savings goal.",
-        editNote = "Tap any goal to edit its name, target amount, goal type, or other settings.",
+        pauseDesc = "Temporarily stop contributions for this goal. The set-aside amount stays earmarked, but no new money is added each period.",
+        resumeDesc = "Resume contributions at the same per-period rate.",
+        deleteDesc = "Permanently remove the savings goal. The earmarked amount becomes spendable budget again.",
+        editNote = "Tap any goal to edit its name, target amount, or contribution. The Calculate with Target Date helper is available inside the edit dialog if you want to recompute the contribution from a new deadline.",
         statusTitle = "Status Indicators",
         activeTitle = "Active",
-        activeBody = "Normal state \u2014 the deduction is being applied each period and savings accumulate.",
+        activeBody = "Normal state \u2014 the contribution is being applied each period and savings accumulate toward the target.",
         pausedTitle = "Paused",
-        pausedBody = "Deductions are temporarily stopped. The goal appears dimmed. Pausing is useful " +
-            "when you have a tight month and need the full budget temporarily. Savings progress " +
-            "is preserved. When you resume, the deduction recalculates with the reduced remaining " +
-            "time (for target-date goals), so it will be slightly higher.",
+        pausedBody = "Contributions are temporarily stopped. The goal appears dimmed. Already-saved cash " +
+            "stays earmarked. Pausing is useful when you have a tight month and need the full budget. " +
+            "When you resume, the contribution returns to the same per-period rate.",
         goalReachedTitle = "Goal Reached",
         goalReachedBody = "Shows \"Goal reached!\" in green when Saved So Far meets or exceeds the target. " +
             "No further deductions are taken. You can delete the goal or keep it as a record.",
         manualOverrideTitle = "Manual Budget Override",
         manualOverrideBody = "If Manual Budget Override is enabled in Budget Configuration, Savings Goal " +
             "deductions are still subtracted from your manual budget amount. You can pause " +
-            "individual goals or all goals at once if you want the full manual amount.",
+            "individual goals or all goals at once if you want the full manual amount available.",
         linkingTitle = "Linking Transactions to Goals",
         linkingBody = "When you record a transaction that represents spending toward a goal " +
-            "(for example, you finally buy the car tires you've been saving for), you can link " +
-            "the transaction to the goal in the transaction edit dialog. The amount you've already " +
-            "saved toward that goal is credited to the purchase, so it doesn't double-count against " +
+            "(for example, you finally buy the car tires you've been saving for), link " +
+            "the transaction to the goal in the transaction edit dialog. The amount already " +
+            "saved toward the goal is credited to the purchase, so it doesn't double-count against " +
             "your budget.",
-        linkingPartialNote = "If your purchase is larger than the amount you've saved, " +
-            "only the saved portion is credited \u2014 the remainder hits your budget normally. " +
-            "The transaction shows in green when fully covered, or in orange with the remaining " +
-            "amount when partially funded.",
-        linkingSuperchargeNote = "Supercharge contributions and any savings made with the bolt icon are " +
-            "automatically tracked separately so you can boost a goal at any time without affecting " +
-            "your linked-purchase calculations.",
+        linkingPartialNote = "If your purchase exceeds the saved amount, only the saved portion is " +
+            "credited \u2014 the remainder hits your budget normally. The transaction shows in green " +
+            "when fully covered, or in orange with the remaining amount when partially funded.",
+        linkingSuperchargeNote = "Supercharge contributions made via the bolt icon on the dashboard " +
+            "are tracked the same way \u2014 they boost your goal's saved amount, available for future " +
+            "linked purchases.",
         tipsTitle = "Tips",
-        tip1 = "Create target-date goals as early as possible \u2014 the more time you have, the smaller each period's deduction.",
-        tip2 = "Use fixed contribution goals for open-ended savings like emergency funds or general savings.",
-        tip3 = "Use Pause strategically during tight months, but resume promptly to avoid a spike in deductions as the target date approaches.",
-        tip4 = "Enter a starting saved amount when creating a goal if you already have money set aside.",
+        tip1 = "Set goals up early \u2014 the more time before you need the money, the smaller each period's contribution needs to be.",
+        tip2 = "Use the Calculate with Target Date helper to size your contribution from a deadline; you can always edit the resulting number afterward.",
+        tip3 = "Enter a Starting Saved Amount when creating a goal if you already have money set aside elsewhere.",
+        tip4 = "Use Pause strategically during tight months \u2014 already-saved money stays earmarked and the contribution simply waits until you resume.",
         tip5 = "Common uses: car maintenance, medical procedures, holiday gifts, vacations, electronics, furniture, annual subscriptions, emergency fund.",
-        tip6 = "Pair this with Amortization: use Savings Goals to save before a purchase, and Amortization to spread costs after an unexpected purchase."
+        tip6 = "Pair Savings Goals with Amortization \u2014 save BEFORE a planned expense, and amortize AFTER an unexpected one."
     )
 
     override val amortizationHelp = AmortizationHelpStrings(
@@ -1841,11 +1842,20 @@ object EnglishStrings : AppStrings {
             "This number defaults to a value that just keeps you above zero throughout the simulation. " +
             "If you have less money than this (in checking accounts, savings accounts, or buried in your garden) " +
             "you should consider setting up a Savings Goal to catch up. Of course increasing income or reducing expenses also helps!",
-        savedPerPeriodTitle = "Saved per Period Input",
-        savedPerPeriodBody = "The \"Saved per Period\" field simulates setting aside a fixed amount each budget period. " +
-            "Savings Goals already set up on that page are already considered. Adding a positive amount here simulates additional money saved each period beyond what's already configured. A negative " +
-            "value simulates overspending (spending more than your budget). This lets you answer questions like " +
-            "\"What if I saved \$50 per week?\" or \"What happens if I consistently overspend by \$20 per day?\"",
+        savedPerPeriodTitle = "Over/Under Budget Input",
+        savedPerPeriodBody = "The \"Over/Under Budget per Period\" field simulates spending more or less than your budget each period. " +
+            "Savings Goals already set up on that page are already considered. A positive amount simulates overspending " +
+            "(spending more than your budget). A negative amount simulates spending under budget — effectively saving " +
+            "extra each period beyond what's already configured. This lets you answer questions like " +
+            "\"What happens if I consistently overspend by \$20 per day?\" or \"What if I saved an extra \$50 per week?\"",
+        floorLineTitle = "Savings-Goal Floor (Blue Dashed Line)",
+        floorLineBody = "The blue dashed line is your Savings-Goal floor — the cash that's earmarked for your goals " +
+            "and shouldn't be spent on regular budget items. It starts at the total amount currently set aside across " +
+            "all your goals (paused goals included, since their saved cash is still earmarked). At each period boundary " +
+            "the line steps up by the contributions your active goals will accrue, leveling off when a goal hits its " +
+            "target. Your cash trajectory (the solid line) should stay above the dashed line at every point — that's " +
+            "exactly what the \"You need\" amount is sized to ensure. If the solid line dips below the dashed line, " +
+            "you'd be spending into your earmarked savings.",
         insightsTitle = "Gaining Financial Insights",
         insightsBody = "Try adjusting both inputs together to explore different scenarios. For example, enter your " +
             "actual savings balance and then experiment with different per-period savings amounts to see how " +

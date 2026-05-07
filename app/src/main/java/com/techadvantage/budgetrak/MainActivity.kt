@@ -1985,12 +1985,18 @@ class MainActivity : ComponentActivity() {
                                 toastState.show("Uploading local debug files\u2026")
                             }
                             val extraDebug = StringBuilder(diagText)
-                            for (extraName in listOf("clock_dump.txt", "fcm_debug.txt")) {
-                                val f = java.io.File(supportDir, extraName)
-                                if (f.exists()) {
-                                    extraDebug.appendLine("\n=== $extraName ===")
-                                    extraDebug.appendLine(f.readText())
-                                }
+                            // clock_dump.txt is legacy public-Download (still in supportDir);
+                            // fcm_debug.txt moved to private filesDir (immune to MediaStore EEXIST).
+                            val internalDiagDir = BackupManager.getInternalDiagDir(context)
+                            val clockFile = java.io.File(supportDir, "clock_dump.txt")
+                            if (clockFile.exists()) {
+                                extraDebug.appendLine("\n=== clock_dump.txt ===")
+                                extraDebug.appendLine(clockFile.readText())
+                            }
+                            val fcmDebugFile = java.io.File(internalDiagDir, "fcm_debug.txt")
+                            if (fcmDebugFile.exists()) {
+                                extraDebug.appendLine("\n=== fcm_debug.txt ===")
+                                extraDebug.appendLine(fcmDebugFile.readText())
                             }
                             // Logcat uploads into its own slot (see FirestoreService
                             // uploadDebugFiles `logcat` param) so the downloader
@@ -2013,7 +2019,10 @@ class MainActivity : ComponentActivity() {
                             // 4b. Send FCM push to wake up remote devices
                             try {
                                 val fcmTokens = FirestoreService.getFcmTokens(gId, vm.localDeviceId)
-                                val debugLog = java.io.File(supportDir, "fcm_debug.txt")
+                                // fcm_debug.txt lives in private filesDir to dodge the
+                                // public-Download MediaStore EEXIST trap that hits after
+                                // uninstall+reinstall (orphan paths block O_CREAT).
+                                val debugLog = java.io.File(BackupManager.getInternalDiagDir(context), "fcm_debug.txt")
                                 // Rotate to _prev at 64KB (events are rare; primary
                                 // + prev together retain many months of history).
                                 BudgeTrakApplication.rotateLogToPrev(debugLog, 64_000L)
@@ -2027,9 +2036,13 @@ class MainActivity : ComponentActivity() {
                                     debugLog.appendText("  No FCM tokens found for remote devices\n")
                                 }
                             } catch (e: Exception) {
-                                val debugLog = java.io.File(supportDir, "fcm_debug.txt")
-                                BudgeTrakApplication.rotateLogToPrev(debugLog, 64_000L)
-                                debugLog.appendText("[${java.time.LocalDateTime.now()}] FCM exception: ${e.javaClass.simpleName}: ${e.message}\n")
+                                try {
+                                    val debugLog = java.io.File(BackupManager.getInternalDiagDir(context), "fcm_debug.txt")
+                                    BudgeTrakApplication.rotateLogToPrev(debugLog, 64_000L)
+                                    debugLog.appendText("[${java.time.LocalDateTime.now()}] FCM exception: ${e.javaClass.simpleName}: ${e.message}\n")
+                                } catch (_: Exception) {
+                                    // Never let diagnostic-log failure break the dump flow.
+                                }
                             }
 
                             // 5. Poll for remote files (wait up to 90s for other devices)

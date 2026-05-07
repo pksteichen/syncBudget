@@ -44,8 +44,9 @@ deduction = roundCents(amount × (elapsed+1) / totalPeriods) - roundCents(amount
 ```
 
 ### Savings Goal Deductions
-- Target-date: `remaining / periodsUntilTarget`
-- Fixed-contribution: `min(contributionPerPeriod, remaining)`
+- Per active (`!deleted && !isPaused && totalSavedSoFar < targetAmount`) goal:
+  `min(contributionPerPeriod, remaining)` where `remaining = targetAmount − totalSavedSoFar`.
+- Legacy goals with `targetDate != null` use `remaining / periodsUntilTarget`. The add/edit UI no longer creates target-date goals (v2.10.06+); the "Calculate with Target Date" button is a one-shot calculator that fills in `contributionPerPeriod` and saves with `targetDate = null`.
 
 ### Accelerated RE Extra Deductions
 ```
