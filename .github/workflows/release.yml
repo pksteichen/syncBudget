@@ -11,14 +11,9 @@ on:
         type: boolean
         default: true
       release_track:
-        description: "Play Console track (only used if publish_to_play is true)"
-        type: choice
-        options:
-          - internal
-          - alpha
-          - beta
-          - production
-        default: internal
+        description: "Play Console track(s), comma-separated (e.g. internal,alpha). Single track also works."
+        type: string
+        default: "internal,alpha"
       release_status:
         # Default `draft` is forced while the app is still in "Draft app" state
         # in Play Console — Google's new-personal-account 12-testers/14-days
@@ -160,7 +155,10 @@ jobs:
           packageName: com.techadvantage.budgetrak
           releaseFiles: app/build/outputs/bundle/release/app-release.aab
           mappingFile: app/build/outputs/mapping/release/mapping.txt
-          track: ${{ inputs.release_track }}
+          # `tracks` (plural) accepts a comma-separated list — one upload
+          # publishes to all listed tracks. Avoids the "versionCode N already
+          # used" error from running a second dispatch with a different track.
+          tracks: ${{ inputs.release_track }}
           status: ${{ inputs.release_status }}
           # Release notes: read from `whatsNew/` directory. Each file named
           # whatsnew-<bcp47-locale> contains the localized notes for that
