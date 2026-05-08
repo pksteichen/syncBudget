@@ -13,7 +13,7 @@ Four related FirestoreDocSync hardenings also shipped in the same release:
 3. **isListening guards** — `handleCollectionChanges` and `handleSharedSettingsChange` now early-return when `!isListening`, dropping callbacks that race with `stopListeners()` so a stale callback can't advance the cursor past data we never propagated.
 4. **Failed-deserialization cursor skip** — new `failedDocIds` set in the per-batch loop; cursor advance filters these out so a transient corruption (or wrong-key) doc gets re-delivered on the next listener fire instead of being silently lost behind the cursor.
 
-Original repro (foreign inbound silently overwriting local pending edit on tablet) is the canonical test — first RE/transaction edit should now stick on the first attempt. Validation pending on Pixel emulator post-update.
+Original repro (foreign inbound silently overwriting local pending edit on tablet) is the canonical test — first RE/transaction edit should now stick on the first attempt. **Validated 2026-05-08 across 3 devices (including tablet emulator)** — first-attempt edits and deletions now apply correctly.
 
 ## Symptom
 On the non-host device:
