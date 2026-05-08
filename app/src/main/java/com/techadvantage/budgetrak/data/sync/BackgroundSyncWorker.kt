@@ -1104,21 +1104,6 @@ private suspend fun pushSyncSideEffects(
                 Log.w(SYNC_TAG, "Delete remapped category failed: ${e.message}")
             }
         }
-
-        for (txn in result.conflictedTransactionsToPushBack) {
-            try {
-                FirestoreDocService.updateFields(
-                    groupId,
-                    EncryptedDocSerializer.COLLECTION_TRANSACTIONS,
-                    txn.id.toString(),
-                    EncryptedDocSerializer.fieldUpdate(
-                        txn, setOf("isUserCategorized"), encryptionKey, deviceId
-                    )
-                )
-            } catch (e: Exception) {
-                Log.w(SYNC_TAG, "Push conflicted transaction failed: ${e.message}")
-            }
-        }
     }
 }
 

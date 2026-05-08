@@ -280,7 +280,7 @@ private fun englishSteps(): Map<QuickStartStep, StepContent> = mapOf(
     QuickStartStep.FIRST_TRANSACTION to StepContent(
         title = "Step 4: Your First Transaction",
         body = "Your daily budget is now calculated and shown on the Solari display!\n\n" +
-            "When you spend money, tap the \u2212 button at the bottom to record it. " +
+            "When you spend money, tap the Add Transaction icon (+) at the bottom to record it. " +
             "Your available cash updates instantly.\n\n" +
             "Try adding a transaction now, or tap Finish to complete setup.",
         targetScreen = "main",
@@ -338,7 +338,7 @@ private fun spanishSteps(): Map<QuickStartStep, StepContent> = mapOf(
     QuickStartStep.FIRST_TRANSACTION to StepContent(
         title = "Paso 4: Tu Primera Transacci\u00f3n",
         body = "\u00a1Tu presupuesto diario ahora est\u00e1 calculado y se muestra en el Solari!\n\n" +
-            "Cuando gastes dinero, toca el bot\u00f3n \u2212 en la parte inferior para registrarlo. " +
+            "Cuando gastes dinero, toca el icono Agregar Transacci\u00f3n (+) en la parte inferior para registrarlo. " +
             "Tu efectivo disponible se actualiza instant\u00e1neamente.\n\n" +
             "Intenta agregar una transacci\u00f3n ahora, o toca Finalizar.",
         targetScreen = "main",

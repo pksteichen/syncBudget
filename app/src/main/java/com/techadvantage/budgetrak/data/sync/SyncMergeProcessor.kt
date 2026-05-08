@@ -40,8 +40,6 @@ object SyncMergeProcessor {
         val periodLedger: List<PeriodLedgerEntry>?,
         val sharedSettings: SharedSettings?,
         val conflictDetected: Boolean,
-        /** Transactions that had conflict flags set — caller should push these back. */
-        val conflictedTransactionsToPushBack: List<Transaction>,
         /** Category IDs that were remapped (duplicates) — caller should delete from Firestore. */
         val categoriesToDeleteFromFirestore: List<Int>,
         /** Pref key→value map for SharedPreferences. Null if no settings event arrived. */
@@ -121,7 +119,6 @@ object SyncMergeProcessor {
         // Track which collections were actually modified
         val changedCollections = mutableSetOf<String>()
         var conflictDetected = false
-        val conflictedTransactionsToPushBack = mutableListOf<Transaction>()
         val categoriesToDeleteFromFirestore = mutableListOf<Int>()
         val archivedIncoming = mutableListOf<Transaction>()
         var settingsPrefsToApply: MutableMap<String, Any>? = null
@@ -134,14 +131,13 @@ object SyncMergeProcessor {
 
                 // ── TRANSACTIONS ────────────────────────────────────────
                 EncryptedDocSerializer.COLLECTION_TRANSACTIONS -> {
-                    var txn = event.record as Transaction
-
-                    // Conflict: another device edited while we had pending edits.
-                    // Mark as unverified so the user can review.
+                    // Local pending edit wins on conflict — drop the inbound.
+                    // See memory/project_sync_pending_edit_clobber.md.
                     if (event.isConflict) {
-                        txn = txn.copy(isUserCategorized = false)
                         conflictDetected = true
+                        continue
                     }
+                    val txn = event.record as Transaction
 
                     // Route pre-cutoff transactions to archive instead of active list
                     if (archiveCutoffDate != null && txn.date.isBefore(archiveCutoffDate)) {
@@ -151,15 +147,14 @@ object SyncMergeProcessor {
                         if (idx != null) transactions[idx] = txn
                         else { txnIndex[txn.id] = transactions.size; transactions.add(txn) }
                     }
-
-                    // Push conflict flag back so other devices also see unverified
-                    if (event.isConflict) {
-                        conflictedTransactionsToPushBack.add(txn)
-                    }
                 }
 
                 // ── RECURRING EXPENSES ──────────────────────────────────
                 EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES -> {
+                    if (event.isConflict) {
+                        conflictDetected = true
+                        continue
+                    }
                     val re = event.record as RecurringExpense
                     val idx = reIndex[re.id]
                     if (idx != null) recurringExpenses[idx] = re
@@ -168,6 +163,10 @@ object SyncMergeProcessor {
 
                 // ── INCOME SOURCES ──────────────────────────────────────
                 EncryptedDocSerializer.COLLECTION_INCOME_SOURCES -> {
+                    if (event.isConflict) {
+                        conflictDetected = true
+                        continue
+                    }
                     val src = event.record as IncomeSource
                     val idx = isIndex[src.id]
                     if (idx != null) incomeSources[idx] = src
@@ -176,6 +175,10 @@ object SyncMergeProcessor {
 
                 // ── SAVINGS GOALS ───────────────────────────────────────
                 EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS -> {
+                    if (event.isConflict) {
+                        conflictDetected = true
+                        continue
+                    }
                     val sg = event.record as SavingsGoal
                     val idx = sgIndex[sg.id]
                     if (idx != null) savingsGoals[idx] = sg
@@ -184,6 +187,10 @@ object SyncMergeProcessor {
 
                 // ── AMORTIZATION ENTRIES ────────────────────────────────
                 EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES -> {
+                    if (event.isConflict) {
+                        conflictDetected = true
+                        continue
+                    }
                     val ae = event.record as AmortizationEntry
                     val idx = aeIndex[ae.id]
                     if (idx != null) amortizationEntries[idx] = ae
@@ -192,6 +199,10 @@ object SyncMergeProcessor {
 
                 // ── CATEGORIES (tag-based dedup) ────────────────────────
                 EncryptedDocSerializer.COLLECTION_CATEGORIES -> {
+                    if (event.isConflict) {
+                        conflictDetected = true
+                        continue
+                    }
                     val cat = event.record as Category
 
                     // Tag-based dedup: if a local category already owns this tag,
@@ -232,6 +243,10 @@ object SyncMergeProcessor {
 
                 // ── PERIOD LEDGER ───────────────────────────────────────
                 EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER -> {
+                    if (event.isConflict) {
+                        conflictDetected = true
+                        continue
+                    }
                     val ple = event.record as PeriodLedgerEntry
                     val idx = pleIndex[ple.id]
                     if (idx != null) periodLedger[idx] = ple
@@ -294,7 +309,6 @@ object SyncMergeProcessor {
                 periodLedger.toList() else null,
             sharedSettings = mergedSettings,
             conflictDetected = conflictDetected,
-            conflictedTransactionsToPushBack = conflictedTransactionsToPushBack.toList(),
             categoriesToDeleteFromFirestore = categoriesToDeleteFromFirestore.toList(),
             settingsPrefsToApply = settingsPrefsToApply?.toMap(),
             archivedIncoming = archivedIncoming.toList()

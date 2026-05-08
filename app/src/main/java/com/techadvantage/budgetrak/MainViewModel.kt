@@ -1763,10 +1763,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 ssSnap?.let { SharedSettingsRepository.save(context, it) }
             }
 
-            // Handle side effects: push back conflicts, delete remapped categories
-            for (txn in result.conflictedTransactionsToPushBack) {
-                SyncWriteHelper.pushTransaction(txn)
-            }
             if (result.categoriesToDeleteFromFirestore.isNotEmpty()) {
                 viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                     val gId = syncGroupId ?: return@launch

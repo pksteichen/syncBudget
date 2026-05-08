@@ -112,6 +112,8 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [`spec_recurring_and_savings.md`](spec_recurring_and_savings.md) — accelerated RE mode, set-aside tracking, **single-type** SG (fixed contribution + Target-Date helper button), supercharge.
 - [`spec_receipt_photos.md`](spec_receipt_photos.md) — capture, compression, flag-clock polling, possession, pruning, snapshot archive, rotation.
 - [`spec_backup.md`](spec_backup.md) — full backup spec (retention, pre-restore snapshot, photos file, serialized prefs).
+- [`project_join_snapshot_storage_ttl.md`](project_join_snapshot_storage_ttl.md) — deferred: add Storage lifecycle rule on `joinSnapshot.enc` at ~40K groups; today reused 7 d but never deleted.
+- [`project_sync_pending_edit_clobber.md`](project_sync_pending_edit_clobber.md) — fixed in v2.10.07: drop inbound on conflict + pushRecord pendingEdits-before-I/O + cursor TOCTOU lock + isListening guards + failed-deser cursor skip.
 
 ## i18n / Translation
 - [`feedback_translation_context.md`](feedback_translation_context.md) — how to add strings.

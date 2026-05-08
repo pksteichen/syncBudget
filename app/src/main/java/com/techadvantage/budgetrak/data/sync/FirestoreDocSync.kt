@@ -167,6 +167,20 @@ class FirestoreDocSync(
             .apply()
     }
 
+    // Per-collection lock so concurrent batches in the same collection don't
+    // race to overwrite each other's cursor advance with a stale timestamp.
+    private val cursorWriteLock = ConcurrentHashMap<String, Any>()
+
+    private fun advanceCursor(collection: String, candidate: com.google.firebase.Timestamp) {
+        val lock = cursorWriteLock.computeIfAbsent(collection) { Any() }
+        synchronized(lock) {
+            val current = loadCursor(collection)
+            if (current == null || candidate > current) {
+                saveCursor(collection, candidate)
+            }
+        }
+    }
+
     init {
         // Restore persisted enc hash cache (survives process death)
         try {
@@ -596,7 +610,12 @@ class FirestoreDocSync(
         }
         val stateKey = "$collection:$docId"
 
+        // Mark pending BEFORE the I/O so a foreign change to the same doc
+        // arriving mid-push is detected as a conflict and dropped by the
+        // merge processor. See memory/project_sync_pending_edit_clobber.md.
         recentPushes[stateKey] = System.currentTimeMillis()
+        localPendingEdits[stateKey] = System.currentTimeMillis()
+        persistPendingEdits()
 
         try {
             val lastKnown = lastKnownState[stateKey]
@@ -605,6 +624,8 @@ class FirestoreDocSync(
                 val changedFields = EncryptedDocSerializer.diffFields(lastKnown, record)
                 if (changedFields.isEmpty()) {
                     recentPushes.remove(stateKey)
+                    localPendingEdits.remove(stateKey)
+                    persistPendingEdits()
                     return // nothing changed
                 }
                 val data = EncryptedDocSerializer.fieldUpdate(record, changedFields, encryptionKey, deviceId)
@@ -623,6 +644,8 @@ class FirestoreDocSync(
                 } else {
                     syncLog("Skipped $stateKey (already exists in Firestore)")
                     recentPushes.remove(stateKey)
+                    localPendingEdits.remove(stateKey)
+                    persistPendingEdits()
                     return // don't update local state — listener will deliver the correct entry
                 }
             } else {
@@ -633,8 +656,6 @@ class FirestoreDocSync(
                 syncLog("Set (new) $stateKey")
                 computeEncHash(data)?.let { lastSeenEnc[stateKey] = it; persistEncCache() }
             }
-            localPendingEdits[stateKey] = System.currentTimeMillis()
-            persistPendingEdits()
             lastKnownState[stateKey] = record
         } catch (e: Exception) {
             syncLog("Push failed: $stateKey — ${e.message}")
@@ -646,8 +667,6 @@ class FirestoreDocSync(
                     FirestoreDocService.writeDoc(groupId, collection, docId, data)
                     recentPushes[stateKey] = System.currentTimeMillis()  // refresh after write
                     lastKnownState[stateKey] = record
-                    localPendingEdits[stateKey] = System.currentTimeMillis()
-                    persistPendingEdits()
                     syncLog("Fallback set() succeeded for $stateKey")
                     computeEncHash(data)?.let { lastSeenEnc[stateKey] = it; persistEncCache() }
                 } catch (e2: Exception) {
@@ -740,6 +759,10 @@ class FirestoreDocSync(
     // ── internal: listener handlers ─────────────────────────────────────
 
     private fun handleCollectionChanges(collection: String, changes: List<DocumentChange>) {
+        // Drop late callbacks racing with stopListeners() — without this, an
+        // SDK-queued callback delivered after reg.remove() can advance the
+        // cursor past data we never propagated to onBatchChanged.
+        if (!isListening) return
         // Detect recovery from listener errors (e.g., PERMISSION_DENIED resolved)
         if (hasListenerError) {
             hasListenerError = false
@@ -783,12 +806,7 @@ class FirestoreDocSync(
             // later (e.g., background worker cold start) doesn't re-deliver
             // these docs. Echoes are server-confirmed; we already have the data.
             val echoLatest = changes.mapNotNull { it.document.getTimestamp("updatedAt") }.maxOrNull()
-            if (echoLatest != null) {
-                val currentCursor = loadCursor(collection)
-                if (currentCursor == null || echoLatest > currentCursor) {
-                    saveCursor(collection, echoLatest)
-                }
-            }
+            if (echoLatest != null) advanceCursor(collection, echoLatest)
             return
         }
 
@@ -802,6 +820,7 @@ class FirestoreDocSync(
 
             var skippedUnchanged = 0
             val events = mutableListOf<DataChangeEvent>()
+            val failedDocIds = mutableSetOf<String>()
             for (change in toProcess) {
                 val docId = change.document.id
                 val stateKey = "$collection:$docId"
@@ -858,6 +877,7 @@ class FirestoreDocSync(
                     val hint = if (e.message?.contains("Tag mismatch") == true || e.message?.contains("AEADBadTag") == true)
                         " (possible wrong encryption key)" else ""
                     syncLog("Failed to deserialize $collection/$docId: ${e.message}$hint")
+                    failedDocIds.add(docId)
                 }
             }
             if (events.isNotEmpty()) {
@@ -877,21 +897,18 @@ class FirestoreDocSync(
             // Each collection's cursor is independent, so partial delivery (app killed
             // before all collections report) only re-reads the incomplete collections.
             // Use full `changes` (not toProcess) so echoes in a mixed batch also
-            // advance the cursor past themselves — preventing re-delivery on a
-            // fresh listener (e.g., background worker cold start).
-            val latestTimestamp = changes.mapNotNull { change ->
-                change.document.getTimestamp("updatedAt")
-            }.maxOrNull()
-            if (latestTimestamp != null) {
-                val currentCursor = loadCursor(collection)
-                if (currentCursor == null || latestTimestamp > currentCursor) {
-                    saveCursor(collection, latestTimestamp)
-                }
-            }
+            // advance the cursor past themselves. Skip docs that failed to deserialize
+            // so a transient corruption gets re-delivered next time.
+            val latestTimestamp = changes
+                .filter { it.document.id !in failedDocIds }
+                .mapNotNull { it.document.getTimestamp("updatedAt") }
+                .maxOrNull()
+            if (latestTimestamp != null) advanceCursor(collection, latestTimestamp)
         }
     }
 
     private fun handleSharedSettingsChange(doc: DocumentSnapshot) {
+        if (!isListening) return
         markCollectionDelivered(EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS)
         pruneExpiredEchoKeys()
 
@@ -932,12 +949,8 @@ class FirestoreDocSync(
                 }
                 // Advance sharedSettings cursor AFTER onBatchChanged has applied the data
                 val settingsTimestamp = doc.getTimestamp("updatedAt")
-                val settingsCollection = EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS
                 if (settingsTimestamp != null) {
-                    val currentCursor = loadCursor(settingsCollection)
-                    if (currentCursor == null || settingsTimestamp > currentCursor) {
-                        saveCursor(settingsCollection, settingsTimestamp)
-                    }
+                    advanceCursor(EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS, settingsTimestamp)
                 }
             } catch (e: Exception) {
                 val hint = if (e.message?.contains("Tag mismatch") == true || e.message?.contains("AEADBadTag") == true)
