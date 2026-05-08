@@ -114,6 +114,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [`spec_backup.md`](spec_backup.md) — full backup spec (retention, pre-restore snapshot, photos file, serialized prefs).
 - [`project_join_snapshot_storage_ttl.md`](project_join_snapshot_storage_ttl.md) — deferred: add Storage lifecycle rule on `joinSnapshot.enc` at ~40K groups; today reused 7 d but never deleted.
 - [`project_sync_pending_edit_clobber.md`](project_sync_pending_edit_clobber.md) — fixed in v2.10.07: drop inbound on conflict + pushRecord pendingEdits-before-I/O + cursor TOCTOU lock + isListening guards + failed-deser cursor skip.
+- [`project_member_limit_server_rule.md`](project_member_limit_server_rule.md) — 5-member group cap enforced client-side in v2.10.08 (UI gate + joinGroup defense); deferred Firestore rule for race-free server enforcement.
 
 ## i18n / Translation
 - [`feedback_translation_context.md`](feedback_translation_context.md) — how to add strings.

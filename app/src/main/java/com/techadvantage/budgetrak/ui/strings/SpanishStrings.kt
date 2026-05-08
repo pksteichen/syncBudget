@@ -622,6 +622,7 @@ object SpanishStrings : AppStrings {
         groupDissolved = "Grupo disuelto",
         pairingCodeCopied = "C\u00f3digo copiado",
         invalidPairingCode = "C\u00f3digo inv\u00e1lido o expirado",
+        memberLimitReached = "Grupo lleno (m\u00e1ximo 5 miembros)",
         encryptionKey = "Clave de Cifrado",
         deviceName = "Nombre del Dispositivo",
         adminOnly = "Solo administrador",

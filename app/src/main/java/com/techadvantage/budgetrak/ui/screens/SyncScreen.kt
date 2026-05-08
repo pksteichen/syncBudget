@@ -635,8 +635,12 @@ fun SyncScreen(
                 if (isAdmin) {
                     item { Spacer(modifier = Modifier.height(8.dp)) }
                     item {
+                        val atMemberLimit = devices.size >= 5
                         OutlinedButton(
-                            onClick = onGeneratePairingCode,
+                            onClick = {
+                                if (atMemberLimit) toastState.show(S.sync.memberLimitReached)
+                                else onGeneratePairingCode()
+                            },
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(S.sync.generateCode)

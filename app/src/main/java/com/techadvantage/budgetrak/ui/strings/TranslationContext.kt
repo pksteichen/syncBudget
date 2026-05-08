@@ -624,6 +624,7 @@ object TranslationContext {
         "groupDissolved" to "Toast notification confirming the sync group was dissolved/deleted.",
         "pairingCodeCopied" to "Toast notification confirming the pairing code was copied to the clipboard.",
         "invalidPairingCode" to "Error message when the entered pairing code is wrong or has expired.",
+        "memberLimitReached" to "Toast shown when an admin taps Generate Pairing Code while the group already has 5 members (the maximum). Surfaces both as the button-tap toast and as the join-time rejection reason in logs.",
         "encryptionKey" to "Label for the end-to-end encryption key used to secure sync data. Technical term.",
         "deviceName" to "Form field label for naming/identifying a device in the sync group.",
         "adminOnly" to "Label indicating a feature or action is restricted to the group administrator.",

@@ -653,6 +653,7 @@ data class SyncStrings(
     val groupDissolved: String,
     val pairingCodeCopied: String,
     val invalidPairingCode: String,
+    val memberLimitReached: String,
     val encryptionKey: String,
     val deviceName: String,
     val adminOnly: String,

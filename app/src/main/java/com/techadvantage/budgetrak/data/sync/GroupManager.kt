@@ -126,11 +126,32 @@ object GroupManager {
             .putString("encryptionKey", keyBase64)
             .commit()
 
-        // Register membership FIRST (self-registration allowed by rules)
+        // Register membership FIRST (self-registration allowed by rules,
+        // and required to read the devices subcollection for the 5-member check).
         val deviceId = SyncIdGenerator.getOrCreateDeviceId(context)
         val authUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
         if (authUid != null) {
             FirestoreService.registerMembership(pairingData.groupId, authUid, deviceId)
+        }
+
+        // Defense-in-depth: block a 6th joiner even if the admin's UI gate
+        // missed (stale state, race with another joiner using the same code).
+        // Server-side rule enforcement is the proper race-free fix and is
+        // deferred to a follow-up.
+        val existingDevices = try {
+            FirestoreService.getDevices(pairingData.groupId)
+        } catch (e: Exception) {
+            android.util.Log.w("GroupManager", "Failed to read device count for limit check: ${e.message}")
+            emptyList()
+        }
+        if (existingDevices.size >= 5) {
+            android.util.Log.w("GroupManager", "Join rejected: group already has ${existingDevices.size} devices (5 max)")
+            if (authUid != null) {
+                try { FirestoreService.removeMembership(pairingData.groupId, authUid) } catch (_: Exception) {}
+            }
+            prefs.edit().remove("groupId").remove("isAdmin").apply()
+            try { SecurePrefs.get(context).edit().remove("encryptionKey").commit() } catch (_: Exception) {}
+            return false
         }
 
         // Then register device (requires membership)

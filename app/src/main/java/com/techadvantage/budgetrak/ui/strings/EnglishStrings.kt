@@ -622,6 +622,7 @@ object EnglishStrings : AppStrings {
         groupDissolved = "Group dissolved",
         pairingCodeCopied = "Pairing code copied",
         invalidPairingCode = "Invalid or expired pairing code",
+        memberLimitReached = "Group is full (5 members maximum)",
         encryptionKey = "Encryption Key",
         deviceName = "Device Name",
         adminOnly = "Admin only",
