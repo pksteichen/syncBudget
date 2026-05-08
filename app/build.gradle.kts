@@ -22,8 +22,8 @@ android {
         // versionName format: MAJOR.MINOR.PP (third segment is zero-padded
         // 00-99 to leave 100 patch slots per minor for extensive debugging
         // cycles before bumping minor).
-        versionCode = 25
-        versionName = "2.10.10"
+        versionCode = 26
+        versionName = "2.10.11"
     }
 
     signingConfigs {
@@ -147,6 +147,11 @@ dependencies {
     // Firebase
     implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
     implementation("com.google.firebase:firebase-auth")
+    // reCAPTCHA Enterprise — Firebase Auth pulls in 18.1.2 transitively, which
+    // Play Console flags as deprecated + critical-security vuln. Override to
+    // 18.4.0 (the minimum the notice accepts) without bumping the Firebase BOM
+    // (would force compose-BOM/core-ktx upgrades that break Termux compileSdk 34).
+    implementation("com.google.android.recaptcha:recaptcha:18.4.0")
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-storage")
     implementation("com.google.firebase:firebase-messaging")
