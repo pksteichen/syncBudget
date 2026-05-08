@@ -9,7 +9,7 @@ on:
       publish_to_play:
         description: "Auto-upload the built AAB to Play Console after build succeeds"
         type: boolean
-        default: false
+        default: true
       release_track:
         description: "Play Console track (only used if publish_to_play is true)"
         type: choice
