@@ -22,8 +22,8 @@ android {
         // versionName format: MAJOR.MINOR.PP (third segment is zero-padded
         // 00-99 to leave 100 patch slots per minor for extensive debugging
         // cycles before bumping minor).
-        versionCode = 23
-        versionName = "2.10.08"
+        versionCode = 24
+        versionName = "2.10.09"
     }
 
     signingConfigs {
@@ -155,6 +155,11 @@ dependencies {
     implementation("com.google.firebase:firebase-appcheck-debug")
     implementation("com.google.firebase:firebase-crashlytics")
     implementation("com.google.firebase:firebase-analytics-ktx")
+
+    // AdMob (Google Mobile Ads SDK). Uses TEST app + ad-unit IDs in
+    // AndroidManifest.xml and MainActivity respectively until production
+    // promotion — see project_ad_implementation.md for the swap checklist.
+    implementation("com.google.android.gms:play-services-ads:23.6.0")
 
     // Google AI (Gemini) — direct SDK, uses API key from local.properties
     implementation("com.google.ai.client.generativeai:generativeai:0.9.0")

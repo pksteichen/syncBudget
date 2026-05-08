@@ -127,6 +127,12 @@ class BudgeTrakApplication : Application() {
             crashlytics?.setCustomKey("versionCode", BuildConfig.VERSION_CODE)
         } catch (_: Exception) {}
 
+        // Initialize AdMob. Async; safe to call before any Activity exists.
+        // Returns to its callback on the main thread; we don't need a result.
+        try {
+            com.google.android.gms.ads.MobileAds.initialize(this) {}
+        } catch (_: Exception) {}
+
         // Install App Check provider factory early — before any Firebase service calls.
         // Must be in Application.onCreate() (not ViewModel) so it runs even when
         // the process is started by WorkManager without a foreground Activity.

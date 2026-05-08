@@ -148,7 +148,8 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [SYNC branding rules](feedback_sync_branding.md).
 - [Never rename persistence-layer fields](feedback_preserve_persistence_names.md).
 - [Keep firebase-config-reference.txt updated](feedback_update_firebase_config.md).
-- [Ad banner implementation](project_ad_implementation.md).
+- [Ad banner implementation — shipped v2.10.09](project_ad_implementation.md) — adaptive AdMob banner, cutout-aware decorative top strip, AdView bg tint, white status-bar icons, manifest-merger override, production-swap checklist.
+- [AdMob + Firebase manifest merger conflict](feedback_admob_manifest_merger.md) — `AD_SERVICES_CONFIG` resolves with `tools:replace` override.
 - [JIT extraction lambda overhead](feedback_jit_extraction.md).
 - [Compose state-seed order + LaunchedEffect cancellation](feedback_compose_state_seed_order.md) — seed VM fields before the visibility flag; hoist long work to viewModelScope.
 - [Receipt pruning design](feedback_receipt_pruning_design.md) — cloud 14-day and local prune age are independent.

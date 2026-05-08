@@ -126,9 +126,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.ui.graphics.toArgb
+import com.techadvantage.budgetrak.ui.theme.LocalSyncBudgetColors
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -228,6 +235,13 @@ class MainActivity : ComponentActivity() {
 
         isAppActive = true
         enableEdgeToEdge()
+        // Force white status bar icons regardless of OS theme — our decorative
+        // top strip behind the cutout uses headerBackground, which is dark
+        // enough in both light and dark mode that black icons (light-theme
+        // default) are unreadable. enableEdgeToEdge would otherwise pick black
+        // icons in light mode.
+        androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+            .isAppearanceLightStatusBars = false
         setContent {
             val vm: MainViewModel = viewModel()
 
@@ -263,7 +277,19 @@ class MainActivity : ComponentActivity() {
                 onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
             }
 
-            val adBannerHeight = if (!vm.isPaidUser) 50.dp else 0.dp
+            // Adaptive banner size for the current screen width — picks an
+            // ad height (typically 50–60dp on phones) that fills the device
+            // width, instead of leaving empty space beside a fixed-320dp banner.
+            val adSize: com.google.android.gms.ads.AdSize? = remember(vm.isPaidUser) {
+                if (vm.isPaidUser) null
+                else {
+                    val dm = resources.displayMetrics
+                    val widthDp = (dm.widthPixels / dm.density).toInt()
+                    com.google.android.gms.ads.AdSize
+                        .getCurrentOrientationAnchoredAdaptiveBannerAdSize(this@MainActivity, widthDp)
+                }
+            }
+            val adBannerHeight = adSize?.height?.dp ?: 0.dp
             SyncBudgetTheme(strings = vm.strings, adBannerHeight = adBannerHeight) {
               val toastState = LocalAppToast.current
               androidx.compose.runtime.CompositionLocalProvider(
@@ -308,19 +334,46 @@ class MainActivity : ComponentActivity() {
                       vm.shareOverflowToastPending = false
                   }
               }
-              Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
-                // Ad banner placeholder (320x50 standard banner)
-                if (!vm.isPaidUser) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(50.dp)
-                            .background(Color.Black)
-                            .border(1.dp, Color.Gray),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(vm.strings.dashboard.adPlaceholder, color = Color.Gray, fontSize = 12.sp)
+              val topBarColor = LocalSyncBudgetColors.current.headerBackground
+              Column(modifier = Modifier
+                  .fillMaxSize()
+                  .background(topBarColor)
+                  .windowInsetsPadding(WindowInsets.statusBars.union(WindowInsets.displayCutout))
+              ) {
+                // Ad banner — adaptive width (full device width). TEST ad-unit
+                // ID; swap for the real production unit before promoting to
+                // Production. See memory/project_ad_implementation.md.
+                if (adSize != null) {
+                    val adView = remember(adSize, topBarColor) {
+                        com.google.android.gms.ads.AdView(this@MainActivity).apply {
+                            setAdSize(adSize)
+                            adUnitId = "ca-app-pub-3940256099942544/6300978111"
+                            // Tint the AdView's own letterbox/transparent area to
+                            // match the decorative top strip so creatives that
+                            // don't fill the slot blend in instead of showing black.
+                            setBackgroundColor(topBarColor.toArgb())
+                            loadAd(com.google.android.gms.ads.AdRequest.Builder().build())
+                        }
                     }
+                    DisposableEffect(adView) {
+                        val obs = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                            when (event) {
+                                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> adView.resume()
+                                androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> adView.pause()
+                                androidx.lifecycle.Lifecycle.Event.ON_DESTROY -> adView.destroy()
+                                else -> {}
+                            }
+                        }
+                        lifecycleOwner.lifecycle.addObserver(obs)
+                        onDispose {
+                            lifecycleOwner.lifecycle.removeObserver(obs)
+                            adView.destroy()
+                        }
+                    }
+                    androidx.compose.ui.viewinterop.AndroidView(
+                        factory = { adView },
+                        modifier = Modifier.fillMaxWidth().height(adBannerHeight)
+                    )
                 }
 
                 // Screen content
