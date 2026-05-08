@@ -806,25 +806,38 @@ private fun SpendingPieChart(
                 modifier = Modifier.align(Alignment.Center)
             )
         } else if (showBarChart) {
-            // Bar chart view — max 60dp per bar, left-aligned, scrollable if >12
+            // Bar chart view — bars are 60dp when ≤6 fit naturally; shrink to
+            // fill the chart width for 7–12 bars; clamp at the 12-bar size and
+            // enable horizontal scroll past 12.
             val maxBarWidth = 60.dp
             val scrollable = wedges.size > 12
             val scrollState = rememberScrollState()
-            Row(
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(top = 28.dp, bottom = 4.dp)
-                    .then(if (scrollable) Modifier.horizontalScroll(scrollState) else Modifier),
-                horizontalArrangement = Arrangement.Start,
-                verticalAlignment = Alignment.Bottom
             ) {
+                val containerWidth = maxWidth
+                val barWidth = when {
+                    scrollable -> containerWidth / 12
+                    maxBarWidth * wedges.size <= containerWidth -> maxBarWidth
+                    wedges.size > 0 -> containerWidth / wedges.size
+                    else -> maxBarWidth
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(if (scrollable) Modifier.horizontalScroll(scrollState) else Modifier),
+                    horizontalArrangement = Arrangement.Start,
+                    verticalAlignment = Alignment.Bottom
+                ) {
                 val maxAmount = wedges.maxOfOrNull { it.amount } ?: 0.0
                 for (w in wedges) {
                     val barFraction = if (maxAmount > 0) (w.amount / maxAmount).toFloat().coerceIn(0.01f, 1f) else 0.01f
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
-                            .width(maxBarWidth)
+                            .width(barWidth)
                             .fillMaxHeight()
                     ) {
                         // Bar area
@@ -854,6 +867,7 @@ private fun SpendingPieChart(
                                 }
                         )
                     }
+                }
                 }
             }
         } else {
