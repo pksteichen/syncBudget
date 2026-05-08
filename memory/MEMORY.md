@@ -166,6 +166,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [Activity.recreate() preserves the ViewModel](feedback_recreate_preserves_viewmodel.md) — disk writes need explicit vm.reloadAllFromDisk(); recreate() rebuilds UI but keeps stale VM state. Pair with Snapshot.withMutableSnapshot + key(vm.dataReloadVersion) wrap on the screen-routing block.
 - [Compose Dialog windows stack above main window](feedback_compose_dialog_window_stacking.md) — overlays meant to cover an open Dialog must themselves be a Dialog; a plain Surface renders behind.
 - [Network-touching code must be network-aware](feedback_network_aware_code.md) — fail-fast offline (vm.isNetworkAvailable foreground, NetworkUtils.isOnline background); auto-resume drainer on onAvailable via cancelAndJoin; thread Boolean through to avoid stamping "work done" after offline-skipped runs.
+- [Commit memory edits in-session, not "next /push"](feedback_commit_memory_immediately.md) — uncommitted memory dies with the session.
 - [MediaStore ghost files from Termux rm](feedback_mediastore_ghost_files.md) — never `rm` app-owned public-Download files from Termux; leaves a MediaStore ghost that blocks app O_CREAT with EEXIST. Recover via `touch` placeholder, or delete via Files app. Default new high-frequency logs to `context.filesDir`.
 
 ## Firebase Backend
