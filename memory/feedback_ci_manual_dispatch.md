@@ -15,12 +15,12 @@ After `/push` succeeds, run:
 gh workflow run release.yml --ref dev
 ```
 
-Default inputs (set 2026-05-08, commits cd55f78 + 7225a72):
+Default inputs (set 2026-05-08, commits cd55f78 + 7225a72 + 2075a08):
 - `publish_to_play=true` — auto-uploads AAB to Play Console
 - `release_track="internal,alpha"` — comma-separated, publishes to BOTH internal and closed/alpha tracks in one upload (action's `tracks:` plural parameter)
-- `release_status=draft` — user promotes with one click in Console
+- `release_status=completed` — submits for Play's automatic review and goes live; ~5 min for internal, 1-2 h for alpha
 
-So a bare `gh workflow run release.yml --ref dev` does the full pipeline: build → sign → upload AAB once to Play Console for both internal and alpha tracks as draft. ~8 min total.
+So a bare `gh workflow run release.yml --ref dev` does the full pipeline: build → sign → upload AAB once to Play Console for both internal and alpha tracks → auto-publish. ~8 min CI + ~5 min Play review = ~13 min from `gh workflow run` to the build being live for Internal testers. No Console clicks.
 
 **Why `tracks:` plural matters:** dispatching twice with different `track:` values fails the second time with "Version code N has already been used" because each dispatch uploads independently. Plural-tracks publishes once to many destinations.
 
@@ -34,6 +34,8 @@ gh run view <id> --json status,conclusion,jobs
 - Single track: pass `-f release_track=internal` or `=alpha` or `=production` etc.
 - Custom combo: pass `-f release_track=internal,alpha,beta` (any combination, comma-separated). Note: Play Console's "Closed testing" track is `alpha` in API terms; "Open testing" is `beta`.
 - Build-only (no upload): pass `-f publish_to_play=false`
+- Manual-promote (don't auto-publish): pass `-f release_status=draft`. Useful for risky releases you want to inspect in Console before rollout.
+- Halted (uploaded but immediately paused): pass `-f release_status=halted`.
 - Don't auto-promote to production without explicit user confirmation.
 
 **Don't** assume push triggers CI. **Don't** ask the user "should I dispatch CI?" — just do it as the final step of /push.
