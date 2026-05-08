@@ -15,22 +15,22 @@ on:
         type: string
         default: "internal,alpha"
       release_status:
-        # Default `draft` is forced while the app is still in "Draft app" state
-        # in Play Console — Google's new-personal-account 12-testers/14-days
-        # closed-test gate blocks API releases with status=completed across
-        # every track. Manual UI uploads default to draft and you promote
-        # them with one click; this workflow defaults to the same so the
-        # publish step succeeds end-to-end. Once the closed-test gate is
-        # satisfied and production access is granted, switch to `completed`
-        # for fully unattended auto-publish. See project_play_store_launch.md.
-        description: "Release status (draft = upload only, you promote in Console)"
+        # Default flipped from `draft` to `completed` 2026-05-08 once the app
+        # was past Play's "Draft app" state (v2.10.07 went live on Internal).
+        # `completed` makes API uploads auto-publish to Internal/Alpha after
+        # Play's automatic review (~5 min for Internal, 1-2 h for Alpha). The
+        # 12-tester/14-day gate only blocks production-track auto-publish, not
+        # internal/alpha. Override with `-f release_status=draft` for any
+        # release you want to manually inspect before rollout, or
+        # `-f release_status=halted` to upload + immediately pause rollout.
+        description: "Release status (completed = auto-publish; draft = manual promote)"
         type: choice
         options:
           - draft
           - inProgress
           - halted
           - completed
-        default: draft
+        default: completed
 
 jobs:
   build:
