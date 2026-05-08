@@ -150,6 +150,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [Keep firebase-config-reference.txt updated](feedback_update_firebase_config.md).
 - [Ad banner implementation — shipped v2.10.09](project_ad_implementation.md) — adaptive AdMob banner, cutout-aware decorative top strip, AdView bg tint, white status-bar icons, manifest-merger override, production-swap checklist.
 - [AdMob + Firebase manifest merger conflict](feedback_admob_manifest_merger.md) — `AD_SERVICES_CONFIG` resolves with `tools:replace` override.
+- [Play Billing Layer 1 — shipped v2.10.10](project_play_billing_integration.md) — entitlement flow, 7-day TTL on cached state, debug override, integration with existing 7-day SYNC admin grace period.
 - [JIT extraction lambda overhead](feedback_jit_extraction.md).
 - [Compose state-seed order + LaunchedEffect cancellation](feedback_compose_state_seed_order.md) — seed VM fields before the visibility flag; hoist long work to viewModelScope.
 - [Receipt pruning design](feedback_receipt_pruning_design.md) — cloud 14-day and local prune age are independent.
@@ -169,6 +170,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [Compose Dialog windows stack above main window](feedback_compose_dialog_window_stacking.md) — overlays meant to cover an open Dialog must themselves be a Dialog; a plain Surface renders behind.
 - [Network-touching code must be network-aware](feedback_network_aware_code.md) — fail-fast offline (vm.isNetworkAvailable foreground, NetworkUtils.isOnline background); auto-resume drainer on onAvailable via cancelAndJoin; thread Boolean through to avoid stamping "work done" after offline-skipped runs.
 - [Commit memory edits in-session, not "next /push"](feedback_commit_memory_immediately.md) — uncommitted memory dies with the session.
+- [Don't define setX / getX functions when var x exists](feedback_kotlin_var_setter_clash.md) — Kotlin auto-generated accessors collide with hand-written ones; pick a different verb.
 - [MediaStore ghost files from Termux rm](feedback_mediastore_ghost_files.md) — never `rm` app-owned public-Download files from Termux; leaves a MediaStore ghost that blocks app O_CREAT with EEXIST. Recover via `touch` placeholder, or delete via Files app. Default new high-frequency logs to `context.filesDir`.
 
 ## Firebase Backend

@@ -4,6 +4,9 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Google Play Billing — needed for IAP purchase flow. -->
+    <uses-permission android:name="com.android.vending.BILLING" />
+
     <application
         android:name=".BudgeTrakApplication"
         android:allowBackup="false"

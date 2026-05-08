@@ -22,8 +22,8 @@ android {
         // versionName format: MAJOR.MINOR.PP (third segment is zero-padded
         // 00-99 to leave 100 patch slots per minor for extensive debugging
         // cycles before bumping minor).
-        versionCode = 24
-        versionName = "2.10.09"
+        versionCode = 25
+        versionName = "2.10.10"
     }
 
     signingConfigs {
@@ -172,4 +172,9 @@ dependencies {
 
     // SAF directory access for backup restore (scoped storage compatibility)
     implementation("androidx.documentfile:documentfile:1.0.1")
+
+    // Google Play Billing — Layer 1 client-side IAP (paid_upgrade + subscriber).
+    // 7-day TTL on cached entitlement bounds the offline-refund attack; Layer 2
+    // server-side verification deferred to post-launch.
+    implementation("com.android.billingclient:billing-ktx:7.1.1")
 }

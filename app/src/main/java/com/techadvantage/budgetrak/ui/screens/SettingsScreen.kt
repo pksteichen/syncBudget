@@ -119,6 +119,13 @@ fun SettingsScreen(
     onSubscriberChange: (Boolean) -> Unit = {},
     subscriptionExpiry: Long = System.currentTimeMillis() + 30L * 24 * 60 * 60 * 1000,
     onSubscriptionExpiryChange: (Long) -> Unit = {},
+    paidUpgradePrice: String? = null,
+    subscriberPrice: String? = null,
+    onLaunchPaidUpgrade: () -> Unit = {},
+    onLaunchSubscribe: () -> Unit = {},
+    onRestorePurchases: () -> Unit = {},
+    billingOverrideEnabled: Boolean = false,
+    onBillingOverrideChange: (Boolean) -> Unit = {},
     showWidgetLogo: Boolean = true,
     onWidgetLogoChange: (Boolean) -> Unit = {},
     autoCapitalize: Boolean = true,
@@ -662,16 +669,97 @@ fun SettingsScreen(
                 } // Box
             }
 
-            // Paid User / Subscriber test toggles — DEBUG BUILDS ONLY.
-            // In release builds these tiers are controlled by Google Play Billing,
-            // not by user-facing checkboxes.
+            // ── Subscription section — visible in all builds ──
+            item { Spacer(modifier = Modifier.height(12.dp)) }
+            item {
+                Text(
+                    text = S.settings.subscriptionSection,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+            }
+            item {
+                val tierName = when {
+                    isSubscriber -> S.settings.subscriber
+                    isPaidUser -> S.settings.paidUser
+                    else -> S.settings.tierFree
+                }
+                Text(
+                    text = "${S.settings.currentTier}: $tierName",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                )
+            }
+            if (!isPaidUser) {
+                item {
+                    OutlinedButton(
+                        onClick = onLaunchPaidUpgrade,
+                        enabled = paidUpgradePrice != null,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                    ) {
+                        val priceLabel = paidUpgradePrice ?: "…"
+                        Text("${S.settings.upgradeToPaid} ($priceLabel)")
+                    }
+                }
+            }
+            if (!isSubscriber) {
+                item {
+                    OutlinedButton(
+                        onClick = onLaunchSubscribe,
+                        enabled = subscriberPrice != null,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                    ) {
+                        val priceLabel = subscriberPrice ?: "…"
+                        Text("${S.settings.subscribeMonthly} ($priceLabel/mo)")
+                    }
+                }
+            }
+            item {
+                OutlinedButton(
+                    onClick = onRestorePurchases,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                ) {
+                    Text(S.settings.restorePurchases)
+                }
+            }
+
+            // ── Debug-only billing override + manual tier toggles ──
+            // In release builds these checkboxes don't appear; Play Billing is
+            // the only source of isPaidUser / isSubscriber. With override on,
+            // the manual checkboxes drive state and Play Billing is ignored.
             if (com.techadvantage.budgetrak.BuildConfig.DEBUG) {
-                // Paid User checkbox (debug override)
+                item { Spacer(modifier = Modifier.height(8.dp)) }
                 item {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(
+                            checked = billingOverrideEnabled,
+                            onCheckedChange = onBillingOverrideChange,
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = MaterialTheme.colorScheme.primary,
+                                uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                            )
+                        )
+                        Text(
+                            text = S.settings.billingOverrideDebug,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                }
+                val overrideAlpha = if (billingOverrideEnabled) 1f else 0.5f
+                // Paid User checkbox — only interactive when override is on.
+                item {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .padding(start = 32.dp)
+                            .alpha(overrideAlpha)
+                    ) {
+                        Checkbox(
                             checked = isPaidUser,
-                            onCheckedChange = onPaidUserChange,
+                            onCheckedChange = if (billingOverrideEnabled) onPaidUserChange else null,
+                            enabled = billingOverrideEnabled,
                             colors = CheckboxDefaults.colors(
                                 checkedColor = MaterialTheme.colorScheme.primary,
                                 uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
@@ -684,19 +772,22 @@ fun SettingsScreen(
                         )
                     }
                 }
-
-                // Subscriber checkbox + expiration date picker (debug override)
+                // Subscriber checkbox + expiry picker — only interactive when override is on.
                 item {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 32.dp)
+                            .alpha(overrideAlpha)
                     ) {
                         Checkbox(
                             checked = isSubscriber,
-                            onCheckedChange = { newValue ->
+                            onCheckedChange = if (billingOverrideEnabled) { newValue ->
                                 onSubscriberChange(newValue)
                                 if (newValue && !isPaidUser) onPaidUserChange(true)
-                            },
+                            } else null,
+                            enabled = billingOverrideEnabled,
                             colors = CheckboxDefaults.colors(
                                 checkedColor = MaterialTheme.colorScheme.primary,
                                 uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
@@ -719,7 +810,7 @@ fun SettingsScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier
-                                    .clickable { showExpiryPicker = true }
+                                    .then(if (billingOverrideEnabled) Modifier.clickable { showExpiryPicker = true } else Modifier)
                                     .padding(horizontal = 8.dp, vertical = 4.dp)
                             )
                             if (showExpiryPicker) {

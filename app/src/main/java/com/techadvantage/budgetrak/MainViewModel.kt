@@ -196,6 +196,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var subscriptionExpiry by mutableStateOf(
         prefs.getLong("subscriptionExpiry", System.currentTimeMillis() + 30L * 24 * 60 * 60 * 1000)
     )
+
+    // ── Play Billing (Layer 1) ──
+    /** Live-formatted Play price for paid_upgrade ("$9.99"). Null until queried or if catalog unavailable. */
+    var paidUpgradePrice by mutableStateOf<String?>(null)
+        private set
+    /** Live-formatted Play price for subscriber ("$4.99"). Null until queried. */
+    var subscriberPrice by mutableStateOf<String?>(null)
+        private set
+    /** Debug-only override: when true, manual paid/subscriber checkboxes drive state instead of Play Billing. */
+    var billingOverrideEnabled by mutableStateOf(prefs.getBoolean("billingOverrideEnabled", false))
+    private var paidUpgradeDetails: com.android.billingclient.api.ProductDetails? = null
+    private var subscriberDetails: com.android.billingclient.api.ProductDetails? = null
+    private var subscriberOfferToken: String? = null
+
+    private val billingService = com.techadvantage.budgetrak.data.billing.BillingService(context) { result, purchases ->
+        onBillingPurchasesUpdated(result, purchases)
+    }
+
     var showWidgetLogo by mutableStateOf(prefs.getBoolean("showWidgetLogo", true))
     var autoCapitalize by mutableStateOf(prefs.getBoolean("autoCapitalize", true))
     var aiCsvCategorizeEnabled by mutableStateOf(prefs.getBoolean("aiCsvCategorizeEnabled", false))
@@ -2411,6 +2429,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (!dataLoaded) return  // Initial async load in progress
         syncTrigger++
         android.util.Log.i("OnResume", "onResume called: dataLoaded=$dataLoaded txns=${transactions.size} pl=${periodLedger.size} availableCash=$availableCash")
+        // Refresh Play Billing — catches sub expiry / refunds / account switches
+        // that happened while the app was closed.
+        viewModelScope.launch { refreshBillingState() }
         // Reload transactions from disk on resume to pick up widget-added entries.
         //
         // Add-only merge: pull in any IDs that are on disk but not in memory.
@@ -2759,22 +2780,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     init {
         instance = java.lang.ref.WeakReference(this)
 
-        // ── Release-build subscription override ──
-        // TEMPORARY (until Google Play Billing integration ships): force every
-        // release-build user into Subscriber tier so internal/closed/open
-        // testers can exercise paid-only features without a billing flow.
-        // Debug builds keep the prefs-toggleable state so we can still
-        // exercise free / paid / subscriber UX paths in development.
-        // Remove this block once `BillingClient` flows wire `isPaidUser` /
-        // `isSubscriber` from real Play Store entitlements.
-        if (!BuildConfig.DEBUG) {
-            isPaidUser = true
-            isSubscriber = true
-            prefs.edit()
-                .putBoolean("isPaidUser", true)
-                .putBoolean("isSubscriber", true)
-                .apply()
+        // ── Play Billing entitlement gate (Layer 1 + 7-day TTL) ──
+        // If the last successful Play query is too old (no internet / device
+        // tampering), lock paid features in-memory until the next successful
+        // billing query. The cached prefs aren't touched — refreshBillingState
+        // restores them on a successful round-trip. Debug override (toggled
+        // in Settings) bypasses both the TTL and live queries so free/paid/
+        // subscriber UX can be exercised offline. Layer 2 server-side
+        // verification is post-launch — see project_prelaunch_todo.md.
+        run {
+            val isOverridden = BuildConfig.DEBUG && billingOverrideEnabled
+            if (!isOverridden) {
+                val lastCheck = prefs.getLong("lastSuccessfulBillingCheck", 0L)
+                val ttlMs = 7L * 24 * 60 * 60 * 1000
+                if (System.currentTimeMillis() - lastCheck > ttlMs) {
+                    if (isPaidUser || isSubscriber) {
+                        val daysStale = (System.currentTimeMillis() - lastCheck) / 86_400_000L
+                        android.util.Log.i("MainViewModel",
+                            "Billing TTL expired (${daysStale}d stale) — locking entitlements pending re-verify")
+                    }
+                    isPaidUser = false
+                    isSubscriber = false
+                }
+            }
         }
+
+        // Kick off async Play query — populates prices, restores entitlements,
+        // refreshes subscriptionExpiry from purchase.purchaseTime.
+        viewModelScope.launch { refreshBillingState() }
 
         // App Check is initialized in BudgeTrakApplication.onCreate() so it
         // runs even when the process is started by WorkManager without an Activity.
@@ -3293,6 +3326,110 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // ═══════════════════════════════════════════════════════════════════
     // CLEANUP
     // ═══════════════════════════════════════════════════════════════════
+
+    // ═══════════════════════════════════════════════════════════════════
+    // PLAY BILLING (Layer 1)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Query Play for current entitlements + product prices, and write the
+     * results back to in-memory state + SharedPrefs. Skipped (live state
+     * unchanged) when debug override is enabled — manual checkboxes win.
+     *
+     * Called from init, onResume, after a purchase flow completes, and from
+     * the Restore Purchases button. Idempotent and race-safe.
+     */
+    suspend fun refreshBillingState() {
+        val state = billingService.queryAll() ?: return // Network / SKU-catalog unavailable
+        paidUpgradeDetails = state.paidUpgradeDetails
+        subscriberDetails = state.subscriberDetails
+        subscriberOfferToken = state.subscriberOfferToken
+        paidUpgradePrice = state.paidUpgradePrice
+        subscriberPrice = state.subscriberPrice
+
+        val isOverridden = BuildConfig.DEBUG && billingOverrideEnabled
+        if (isOverridden) return // Manual checkboxes are authoritative — leave flags alone
+
+        val newPaid = state.paidUpgradePurchase != null
+        val newSub = state.subscriberPurchase != null
+        if (newPaid != isPaidUser) {
+            isPaidUser = newPaid
+            prefs.edit().putBoolean("isPaidUser", newPaid).apply()
+        }
+        if (newSub != isSubscriber) {
+            isSubscriber = newSub
+            prefs.edit().putBoolean("isSubscriber", newSub).apply()
+        }
+        // subscriptionExpiry tracks the latest successful sub charge + 30 days.
+        // purchase.purchaseTime advances on each auto-renewal, so the timestamp
+        // moves forward while the sub is healthy. When the sub stops renewing,
+        // Play stops returning the purchase; the cached expiry stays at the
+        // last-known value and the existing 7-day grace logic fires naturally.
+        state.subscriberPurchase?.let { sub ->
+            val expiry = sub.purchaseTime + com.techadvantage.budgetrak.data.billing.BillingProducts.SUB_PERIOD_MS
+            if (expiry != subscriptionExpiry) {
+                subscriptionExpiry = expiry
+                prefs.edit().putLong("subscriptionExpiry", expiry).apply()
+            }
+        }
+        // Acknowledge any unacknowledged purchases (Play auto-refunds after 3 days otherwise).
+        state.paidUpgradePurchase?.let { if (!it.isAcknowledged) billingService.acknowledge(it) }
+        state.subscriberPurchase?.let { if (!it.isAcknowledged) billingService.acknowledge(it) }
+
+        // Stamp the successful round-trip so the TTL gate stays open.
+        prefs.edit().putLong("lastSuccessfulBillingCheck", System.currentTimeMillis()).apply()
+    }
+
+    fun launchPaidUpgrade(activity: android.app.Activity) {
+        val details = paidUpgradeDetails
+        if (details == null) {
+            android.util.Log.w("MainViewModel", "launchPaidUpgrade: product details not loaded yet")
+            return
+        }
+        viewModelScope.launch { billingService.launchPaidUpgrade(activity, details) }
+    }
+
+    fun launchSubscribe(activity: android.app.Activity) {
+        val details = subscriberDetails
+        val offerToken = subscriberOfferToken
+        if (details == null || offerToken == null) {
+            android.util.Log.w("MainViewModel", "launchSubscribe: product details or offer token not loaded")
+            return
+        }
+        viewModelScope.launch { billingService.launchSubscribe(activity, details, offerToken) }
+    }
+
+    fun restorePurchases() {
+        viewModelScope.launch { refreshBillingState() }
+    }
+
+    fun updateBillingOverride(enabled: Boolean) {
+        billingOverrideEnabled = enabled
+        prefs.edit().putBoolean("billingOverrideEnabled", enabled).apply()
+        // Toggling OFF re-applies real Play state; ON leaves debug checkboxes in charge.
+        if (!enabled) {
+            viewModelScope.launch { refreshBillingState() }
+        }
+    }
+
+    private fun onBillingPurchasesUpdated(
+        result: com.android.billingclient.api.BillingResult,
+        purchases: List<com.android.billingclient.api.Purchase>?
+    ) {
+        when (result.responseCode) {
+            com.android.billingclient.api.BillingClient.BillingResponseCode.OK -> {
+                // Acknowledge + refresh handled in refreshBillingState below.
+                viewModelScope.launch { refreshBillingState() }
+            }
+            com.android.billingclient.api.BillingClient.BillingResponseCode.USER_CANCELED -> {
+                // Silent — user dismissed the Play sheet.
+            }
+            else -> {
+                android.util.Log.w("MainViewModel",
+                    "Billing flow failed: code=${result.responseCode} msg=${result.debugMessage}")
+            }
+        }
+    }
 
     override fun onCleared() {
         instance = null

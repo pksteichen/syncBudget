@@ -1862,6 +1862,13 @@ class MainActivity : ComponentActivity() {
                 vm.subscriptionExpiry = newValue
                 vm.prefs.edit().putLong("subscriptionExpiry", newValue).apply()
             },
+            paidUpgradePrice = vm.paidUpgradePrice,
+            subscriberPrice = vm.subscriberPrice,
+            onLaunchPaidUpgrade = { vm.launchPaidUpgrade(this@MainActivity) },
+            onLaunchSubscribe = { vm.launchSubscribe(this@MainActivity) },
+            onRestorePurchases = { vm.restorePurchases() },
+            billingOverrideEnabled = vm.billingOverrideEnabled,
+            onBillingOverrideChange = { vm.updateBillingOverride(it) },
             showWidgetLogo = vm.showWidgetLogo,
             onWidgetLogoChange = { newValue ->
                 vm.showWidgetLogo = newValue
