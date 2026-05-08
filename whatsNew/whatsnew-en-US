@@ -1,2 +1,8 @@
-BudgeTrak v2.10.05
-- Settings now shows the build number and version name alongside the build date/time, making it easier to confirm which build is running on a tester device.
+What's new in BudgeTrak:
+• SYNC reliability: edits and deletions apply on first try
+• Spending bar chart now scrolls horizontally when you have many categories
+• Savings Goal simulator math improvements and clearer chart floor line
+• 5-member maximum on SYNC groups now enforced
+• New: upgrade to Paid or Subscribe via Settings → Subscription
+• Banner ads now adapt to your screen and avoid the camera cutout area
+• Security fixes

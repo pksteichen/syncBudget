@@ -172,6 +172,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [Commit memory edits in-session, not "next /push"](feedback_commit_memory_immediately.md) — uncommitted memory dies with the session.
 - [Don't define setX / getX functions when var x exists](feedback_kotlin_var_setter_clash.md) — Kotlin auto-generated accessors collide with hand-written ones; pick a different verb.
 - [reCAPTCHA Enterprise dep override pinned to 18.4.0+](feedback_recaptcha_dep_override.md) — Play flags Firebase BOM 32.7.0's transitive 18.1.2 as deprecated + critical CVE; direct dep override avoids a BOM bump that would break Termux compileSdk 34.
+- [Update whatsNew/* before each user-facing release](feedback_update_whatsnew.md) — CI uploads them verbatim; stale files mean Play Store shows old release notes for every new version.
 - [MediaStore ghost files from Termux rm](feedback_mediastore_ghost_files.md) — never `rm` app-owned public-Download files from Termux; leaves a MediaStore ghost that blocks app O_CREAT with EEXIST. Recover via `touch` placeholder, or delete via Files app. Default new high-frequency logs to `context.filesDir`.
 
 ## Firebase Backend

@@ -1,2 +1,8 @@
-BudgeTrak v2.10.05
-- Ajustes ahora muestra el número de compilación y la versión junto a la fecha y hora, facilitando confirmar qué versión se ejecuta en cada dispositivo de prueba.
+Novedades en BudgeTrak:
+• Sincronización: ediciones y eliminaciones se aplican al primer intento
+• El gráfico de barras ahora se desplaza con muchas categorías
+• Mejoras matemáticas en el simulador de Metas y línea base más clara
+• Límite de 5 miembros en grupos SYNC ahora aplicado
+• Nuevo: actualiza a Pagado o Suscríbete en Configuración → Suscripción
+• Los anuncios ahora se adaptan a la pantalla
+• Correcciones de seguridad
