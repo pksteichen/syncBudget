@@ -11,7 +11,7 @@ type: project
 
 The placement intent from the original design carries forward:
 - **Position:** outside the `when (vm.currentScreen)` block, inside the outer `Column` in `MainActivity.setContent`. Page navigation only recomposes the `weight(1f)` Box below; the AdView never recomposes between screens — IAB MRC viewability counts continuously.
-- **Gate:** `if (adSize != null)` — `adSize` is null when `vm.isPaidUser`, so paid + subscriber tiers stay ad-free with no slot height (`adBannerHeight = 0.dp`).
+- **Gate:** `if (adSize != null)` — `adSize` is null when `vm.isPaidUser || vm.isSubscriber`, so paid + subscriber tiers stay ad-free with no slot height (`adBannerHeight = 0.dp`). The `remember` key is `(vm.isPaidUser, vm.isSubscriber)` so the slot recomputes on either tier change. **Both flags must be checked** — Subscriber is a superset of Paid; both should be ad-free. Bug fixed in v2.10.15 (was previously `remember(vm.isPaidUser)` and only `if (vm.isPaidUser) null`, which surfaced ads to Subscribers when Paid was independently false).
 - **AdAwareDialog offsetting:** unchanged. `LocalAdBannerHeight` flows the runtime banner height to dialogs that push their content below it.
 
 ## What ships
@@ -27,7 +27,7 @@ The placement intent from the original design carries forward:
 
 **4. AdView creation in `MainActivity.setContent`:**
 - `val topBarColor = LocalSyncBudgetColors.current.headerBackground` — theme-aware.
-- `val adSize = remember(vm.isPaidUser) { ... getCurrentOrientationAnchoredAdaptiveBannerAdSize(activity, widthDp) ... }` — adaptive banner sized to current device width (typically 50–60dp tall on phones). Null when paid.
+- `val adSize = remember(vm.isPaidUser, vm.isSubscriber) { if (vm.isPaidUser || vm.isSubscriber) null else getCurrentOrientationAnchoredAdaptiveBannerAdSize(activity, widthDp) }` — adaptive banner sized to current device width (typically 50–60dp tall on phones, ~90dp on tablets). Null when either tier active.
 - `val adView = remember(adSize, topBarColor) { AdView(activity).apply { setAdSize(adSize); adUnitId = "<TEST>"; setBackgroundColor(topBarColor.toArgb()); loadAd(...) } }`.
 - `DisposableEffect` wires `resume/pause/destroy` to the Activity lifecycle and calls `destroy()` on dispose.
 - `AndroidView(factory = { adView }, modifier = Modifier.fillMaxWidth().height(adBannerHeight))`.
@@ -66,3 +66,4 @@ Optional but recommended pre-production:
 - **Don't** remove `setBackgroundColor` on the AdView — the user explicitly accepted the tradeoff (a small set of edge-case themed creatives might be tinted) against the more-visible black-letterbox issue.
 - **Don't** wire `isAppearanceLightStatusBars` to follow the system theme — the override is intentionally always-white because both light- and dark-mode `headerBackground` colors are dark enough to demand light icons.
 - **Don't** add a `displayCutoutPadding()` call separately on the Column — `windowInsetsPadding(statusBars.union(displayCutout))` already does this without double-pad on devices where status bar already includes the cutout.
+- **Don't re-attempt the tablet-letterbox-elimination experiments from 2026-05-09.** Multiple approaches were tried over a full day's session and all failed — see `feedback_admob_letterbox_unfixable.md` for the full list of what was tried and why each fails. The current adaptive-only state is the working baseline. Tablet letterboxes are a fundamental AdMob limitation, not a code bug we can fix.

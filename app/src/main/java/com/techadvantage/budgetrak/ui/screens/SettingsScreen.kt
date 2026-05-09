@@ -758,7 +758,12 @@ fun SettingsScreen(
                     ) {
                         Checkbox(
                             checked = isPaidUser,
-                            onCheckedChange = if (billingOverrideEnabled) onPaidUserChange else null,
+                            onCheckedChange = if (billingOverrideEnabled) { newValue ->
+                                // Subscriber implies Paid. If Subscriber is on,
+                                // refuse to uncheck Paid — otherwise ads briefly
+                                // return between the uncheck and the user noticing.
+                                if (newValue || !isSubscriber) onPaidUserChange(newValue)
+                            } else null,
                             enabled = billingOverrideEnabled,
                             colors = CheckboxDefaults.colors(
                                 checkedColor = MaterialTheme.colorScheme.primary,
@@ -940,8 +945,8 @@ fun SettingsScreen(
                 }
             }
 
-            // Receipt photo settings (paid users only)
-            if (isPaidUser) {
+            // Receipt photo settings (Paid + Subscriber)
+            if (isPaidUser || isSubscriber) {
                 item {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     Text(
@@ -1006,8 +1011,8 @@ fun SettingsScreen(
                     Spacer(Modifier.height(8.dp))
                     OutlinedButton(
                         onClick = onSavePhotos,
-                        enabled = isPaidUser,
-                        modifier = Modifier.alpha(if (isPaidUser) 1f else 0.5f)
+                        enabled = isPaidUser || isSubscriber,
+                        modifier = Modifier.alpha(if (isPaidUser || isSubscriber) 1f else 0.5f)
                     ) {
                         Text("Save Photos")
                     }

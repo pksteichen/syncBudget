@@ -280,8 +280,10 @@ class MainActivity : ComponentActivity() {
             // Adaptive banner size for the current screen width — picks an
             // ad height (typically 50–60dp on phones) that fills the device
             // width, instead of leaving empty space beside a fixed-320dp banner.
-            val adSize: com.google.android.gms.ads.AdSize? = remember(vm.isPaidUser) {
-                if (vm.isPaidUser) null
+            // Hides for both Paid and Subscriber tiers (Subscriber is a
+            // superset of Paid; both should be ad-free).
+            val adSize: com.google.android.gms.ads.AdSize? = remember(vm.isPaidUser, vm.isSubscriber) {
+                if (vm.isPaidUser || vm.isSubscriber) null
                 else {
                     val dm = resources.displayMetrics
                     val widthDp = (dm.widthPixels / dm.density).toInt()
@@ -961,7 +963,9 @@ class MainActivity : ComponentActivity() {
                     },
                     onNavigate = { screen -> vm.currentScreen = screen },
                     isEnglish = vm.appLanguage != "es",
-                    isPaidUser = vm.isPaidUser,
+                    // QuickStart pads to clear the ad banner; subscribers have no
+                    // ad bar so OR with subscriber.
+                    isPaidUser = vm.isPaidUser || vm.isSubscriber,
                     onLanguageChange = { lang ->
                         vm.appLanguage = lang
                         vm.prefs.edit().putString("appLanguage", lang).apply()
@@ -1967,7 +1971,7 @@ class MainActivity : ComponentActivity() {
                 )
                 vm.saveSharedSettings()
             },
-            receiptCacheSize = remember(vm.isPaidUser, vm.receiptStorageRevision) {
+            receiptCacheSize = remember(vm.isPaidUser, vm.isSubscriber, vm.receiptStorageRevision) {
                 com.techadvantage.budgetrak.data.sync.ReceiptManager.getTotalStorageBytes(context)
             },
             backupsEnabled = vm.backupsEnabled,

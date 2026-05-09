@@ -182,7 +182,10 @@ class BudgetWidgetProvider : AppWidgetProvider() {
             appWidgetId: Int
         ) {
             val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-            val isPaidUser = prefs.getBoolean("isPaidUser", false)
+            // OR with isSubscriber so subscriber widgets don't show the
+            // free-user upgrade overlay.
+            val isPaidUser = prefs.getBoolean("isPaidUser", false) ||
+                prefs.getBoolean("isSubscriber", false)
             val availableCash = prefs.getDoubleCompat("availableCash")
             val currencySymbol = prefs.getString("currencySymbol", "$") ?: "$"
             val showDecimals = prefs.getBoolean("showDecimals", false)

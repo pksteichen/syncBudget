@@ -153,7 +153,10 @@ class WidgetTransactionActivity : ComponentActivity() {
                 var source by remember { mutableStateOf("") }
                 var description by remember { mutableStateOf("") }
 
-                val isPaidUser = prefs.getBoolean("isPaidUser", false)
+                // OR with isSubscriber so subscribers aren't limited to 1
+                // widget transaction per day.
+                val isPaidUser = prefs.getBoolean("isPaidUser", false) ||
+                    prefs.getBoolean("isSubscriber", false)
                 val today = LocalDate.now().toString()
                 val widgetTxDate = prefs.getString("widgetTxDate", "") ?: ""
                 val widgetTxCount = if (widgetTxDate == today) prefs.getInt("widgetTxCount", 0) else 0
