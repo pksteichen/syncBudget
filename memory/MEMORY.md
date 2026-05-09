@@ -173,6 +173,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [Don't define setX / getX functions when var x exists](feedback_kotlin_var_setter_clash.md) — Kotlin auto-generated accessors collide with hand-written ones; pick a different verb.
 - [reCAPTCHA Enterprise dep override pinned to 18.4.0+](feedback_recaptcha_dep_override.md) — Play flags Firebase BOM 32.7.0's transitive 18.1.2 as deprecated + critical CVE; direct dep override avoids a BOM bump that would break Termux compileSdk 34.
 - [Update whatsNew/* before each user-facing release](feedback_update_whatsnew.md) — CI uploads them verbatim; stale files mean Play Store shows old release notes for every new version.
+- [Don't delete google*.html in Pages repo](feedback_keep_google_verification_file.md) — `google17d827ef1b64ae6d.html` at the root verifies techadvantagesupport.github.io ownership for Google services; removing it breaks Play Console / Search Console verification.
 - [MediaStore ghost files from Termux rm](feedback_mediastore_ghost_files.md) — never `rm` app-owned public-Download files from Termux; leaves a MediaStore ghost that blocks app O_CREAT with EEXIST. Recover via `touch` placeholder, or delete via Files app. Default new high-frequency logs to `context.filesDir`.
 
 ## Firebase Backend
