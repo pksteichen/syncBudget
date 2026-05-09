@@ -266,44 +266,101 @@ class MainActivity : ComponentActivity() {
             // Lifecycle observer — registered AFTER data loads so the initial
             // ON_RESUME during Activity creation is missed (we don't need it).
             val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+            // Compose-observable mirror of isAppActive — used by the native ad
+            // refresh LaunchedEffect to pause loads while backgrounded.
+            var isAppActiveCompose by remember { mutableStateOf(true) }
             DisposableEffect(lifecycleOwner) {
                 val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
                     android.util.Log.i("Lifecycle", "Event: $event, dataLoaded=${vm.dataLoaded}, txns=${vm.transactions.size}")
-                    if (event == androidx.lifecycle.Lifecycle.Event.ON_START) isAppActive = true
-                    else if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) isAppActive = false
+                    if (event == androidx.lifecycle.Lifecycle.Event.ON_START) {
+                        isAppActive = true
+                        isAppActiveCompose = true
+                    } else if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
+                        isAppActive = false
+                        isAppActiveCompose = false
+                    }
                     if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) vm.onResume()
                 }
                 lifecycleOwner.lifecycle.addObserver(observer)
                 onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
             }
 
-            // Per-device-tier ad sizing. Tablets pin to a standard IAB size with
-            // a ratio-matched slot height so a matching served creative scales
-            // to fill the slot with no internal letterbox. Phones use anchored
-            // adaptive — the SDK picks an appropriate height for the device width.
-            //   widthDp >  550:  LEADERBOARD  (728×90, 8.1:1) — slot = w × w/8.1
-            //   widthDp >  400:  FULL_BANNER  (468×60, 7.8:1) — slot = w × w/7.8
-            //   widthDp <= 400:  anchored adaptive — slot = adaptive's native height
+            // Native ad sizing. App is portrait-locked, so widthDp doesn't
+            // change mid-session — we pick the template tier once.
+            //   widthDp <  400:  small template  — 64 dp slot, single-row card
+            //   widthDp >= 400:  medium template — 144 dp slot, horizontal card
+            //                    (text column left, 160×120 MediaView right)
             // Hides for both Paid and Subscriber tiers (Subscriber is a
-            // superset of Paid; both should be ad-free).
+            // superset of Paid; both should be ad-free). Native ads have
+            // no built-in refresh — the LaunchedEffect below ticks every
+            // 60 s while app is foregrounded.
             val widthDp = remember {
                 val dm = resources.displayMetrics
                 (dm.widthPixels / dm.density).toInt()
             }
-            val adSize: com.google.android.gms.ads.AdSize? = remember(vm.isPaidUser, vm.isSubscriber, widthDp) {
-                if (vm.isPaidUser || vm.isSubscriber) null
-                else when {
-                    widthDp > 550 -> com.google.android.gms.ads.AdSize.LEADERBOARD
-                    widthDp > 400 -> com.google.android.gms.ads.AdSize.FULL_BANNER
-                    else -> com.google.android.gms.ads.AdSize
-                        .getCurrentOrientationAnchoredAdaptiveBannerAdSize(this@MainActivity, widthDp)
+            val nativeAdEnabled = !vm.isPaidUser && !vm.isSubscriber
+            val isMediumTier = nativeAdEnabled && widthDp >= 400
+            val nativeAdLayoutId = if (isMediumTier) R.layout.native_ad_medium else R.layout.native_ad_small
+            val adBannerHeight = when {
+                !nativeAdEnabled -> 0.dp
+                isMediumTier -> 144.dp
+                else -> 64.dp
+            }
+
+            // Native ad load + 60 s refresh, paused when app is backgrounded.
+            // Each successful load destroys the previous NativeAd to avoid leaks.
+            // Video creatives start muted (explicit VideoOptions belt-and-suspenders
+            // — AdMob already defaults muted, but we set it so policy is local).
+            var nativeAd by remember { mutableStateOf<com.google.android.gms.ads.nativead.NativeAd?>(null) }
+            val nativeAdOptions = remember {
+                com.google.android.gms.ads.nativead.NativeAdOptions.Builder()
+                    .setVideoOptions(
+                        com.google.android.gms.ads.VideoOptions.Builder()
+                            .setStartMuted(true)
+                            .build()
+                    )
+                    .build()
+            }
+            LaunchedEffect(nativeAdEnabled, isMediumTier, isAppActiveCompose) {
+                if (!nativeAdEnabled || !isAppActiveCompose) return@LaunchedEffect
+                while (true) {
+                    val adLoader = com.google.android.gms.ads.AdLoader.Builder(
+                        this@MainActivity,
+                        "ca-app-pub-3940256099942544/2247696110"
+                    )
+                        .forNativeAd { ad ->
+                            nativeAd?.destroy()
+                            nativeAd = ad
+                        }
+                        .withNativeAdOptions(nativeAdOptions)
+                        .withAdListener(object : com.google.android.gms.ads.AdListener() {
+                            override fun onAdFailedToLoad(error: com.google.android.gms.ads.LoadAdError) {
+                                android.util.Log.w("NativeAd", "Load failed: ${error.message}")
+                            }
+                        })
+                        .build()
+                    adLoader.loadAd(com.google.android.gms.ads.AdRequest.Builder().build())
+                    delay(60_000)
                 }
             }
-            val adBannerHeight = when {
-                adSize == null -> 0.dp
-                widthDp > 550 -> (widthDp / 8.1f).dp
-                widthDp > 400 -> (widthDp / 7.8f).dp
-                else -> adSize.height.dp
+            DisposableEffect(Unit) {
+                onDispose {
+                    nativeAd?.destroy()
+                    nativeAd = null
+                }
+            }
+            // Re-mute video on ON_STOP so a user who unmuted before backgrounding
+            // sees the ad muted again on return. The MediaView pauses on ON_STOP
+            // and resumes on ON_START; without this, audio would resume on its
+            // own from wherever the user paused (potentially still unmuted).
+            DisposableEffect(lifecycleOwner) {
+                val obs = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                    if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
+                        nativeAd?.mediaContent?.videoController?.mute(true)
+                    }
+                }
+                lifecycleOwner.lifecycle.addObserver(obs)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
             }
             SyncBudgetTheme(strings = vm.strings, adBannerHeight = adBannerHeight) {
               val toastState = LocalAppToast.current
@@ -355,38 +412,52 @@ class MainActivity : ComponentActivity() {
                   .background(topBarColor)
                   .windowInsetsPadding(WindowInsets.statusBars.union(WindowInsets.displayCutout))
               ) {
-                // Ad banner — adaptive width (full device width). TEST ad-unit
-                // ID; swap for the real production unit before promoting to
-                // Production. See memory/project_ad_implementation.md.
-                if (adSize != null) {
-                    val adView = remember(adSize, topBarColor) {
-                        com.google.android.gms.ads.AdView(this@MainActivity).apply {
-                            setAdSize(adSize)
-                            adUnitId = "ca-app-pub-3940256099942544/6300978111"
-                            // Tint the AdView's own letterbox/transparent area to
-                            // match the decorative top strip so creatives that
-                            // don't fill the slot blend in instead of showing black.
-                            setBackgroundColor(topBarColor.toArgb())
-                            loadAd(com.google.android.gms.ads.AdRequest.Builder().build())
-                        }
-                    }
-                    DisposableEffect(adView) {
-                        val obs = androidx.lifecycle.LifecycleEventObserver { _, event ->
-                            when (event) {
-                                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> adView.resume()
-                                androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> adView.pause()
-                                androidx.lifecycle.Lifecycle.Event.ON_DESTROY -> adView.destroy()
-                                else -> {}
-                            }
-                        }
-                        lifecycleOwner.lifecycle.addObserver(obs)
-                        onDispose {
-                            lifecycleOwner.lifecycle.removeObserver(obs)
-                            adView.destroy()
-                        }
-                    }
+                // Native ad slot — TEST ad-unit ID. Production-promotion swap
+                // checklist in memory/project_ad_implementation.md.
+                if (nativeAdEnabled) {
+                    val headerTextColor = LocalSyncBudgetColors.current.headerText
+                    val ctaBgColor = MaterialTheme.colorScheme.primary
+                    val ctaTextColor = MaterialTheme.colorScheme.onPrimary
                     androidx.compose.ui.viewinterop.AndroidView(
-                        factory = { adView },
+                        factory = { ctx ->
+                            val view = android.view.LayoutInflater.from(ctx)
+                                .inflate(nativeAdLayoutId, null) as com.google.android.gms.ads.nativead.NativeAdView
+                            // Register asset views so AdMob wires click handlers.
+                            view.iconView = view.findViewById<android.widget.ImageView>(R.id.native_ad_icon)
+                            view.headlineView = view.findViewById<android.widget.TextView>(R.id.native_ad_headline)
+                            view.advertiserView = view.findViewById<android.widget.TextView>(R.id.native_ad_advertiser)
+                            view.callToActionView = view.findViewById<android.widget.Button>(R.id.native_ad_cta)
+                            view.findViewById<com.google.android.gms.ads.nativead.MediaView>(R.id.native_ad_media)
+                                ?.let { view.mediaView = it }
+                            view.findViewById<android.widget.TextView>(R.id.native_ad_body)
+                                ?.let { view.bodyView = it }
+                            view
+                        },
+                        update = { view ->
+                            val argb = headerTextColor.toArgb()
+                            val headlineView = view.findViewById<android.widget.TextView>(R.id.native_ad_headline)
+                            val advertiserView = view.findViewById<android.widget.TextView>(R.id.native_ad_advertiser)
+                            val bodyView = view.findViewById<android.widget.TextView>(R.id.native_ad_body)
+                            val ctaView = view.findViewById<android.widget.Button>(R.id.native_ad_cta)
+                            val iconView = view.findViewById<android.widget.ImageView>(R.id.native_ad_icon)
+                            headlineView.setTextColor(argb)
+                            advertiserView?.setTextColor(argb)
+                            bodyView?.setTextColor(argb)
+                            // CTA button: theme-driven primary background + onPrimary text.
+                            val density = view.resources.displayMetrics.density
+                            ctaView.background = android.graphics.drawable.GradientDrawable().apply {
+                                setColor(ctaBgColor.toArgb())
+                                cornerRadius = 6f * density
+                            }
+                            ctaView.setTextColor(ctaTextColor.toArgb())
+                            val ad = nativeAd ?: return@AndroidView
+                            headlineView.text = ad.headline ?: ""
+                            advertiserView?.text = ad.advertiser ?: ""
+                            ctaView.text = ad.callToAction ?: ""
+                            bodyView?.text = ad.body ?: ""
+                            ad.icon?.drawable?.let { iconView.setImageDrawable(it) }
+                            view.setNativeAd(ad)
+                        },
                         modifier = Modifier.fillMaxWidth().height(adBannerHeight)
                     )
                 }

@@ -1,8 +1,6 @@
 What's new in BudgeTrak:
-• SYNC reliability: edits and deletions apply on first try
-• Spending bar chart now scrolls horizontally when you have many categories
-• Savings Goal simulator math improvements and clearer chart floor line
-• 5-member maximum on SYNC groups now enforced
-• New: upgrade to Paid or Subscribe via Settings → Subscription
-• Banner ads now adapt to your screen and avoid the camera cutout area
-• Security fixes
+• Ads upgraded from banner to native — richer card-style format that pays better, with no letterboxing
+• Tablets and large phones see a bigger ad with an embedded image or muted video; small phones see a compact single-row card
+• Video ads start muted, show a clear mute/unmute icon, and re-mute automatically when you return to the app
+• Visible "Ad" label on every ad per industry policy
+• Security and stability fixes

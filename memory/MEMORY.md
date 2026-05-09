@@ -148,7 +148,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [SYNC branding rules](feedback_sync_branding.md).
 - [Never rename persistence-layer fields](feedback_preserve_persistence_names.md).
 - [Keep firebase-config-reference.txt updated](feedback_update_firebase_config.md).
-- [Ad banner implementation — shipped v2.10.09](project_ad_implementation.md) — adaptive AdMob banner, cutout-aware decorative top strip, AdView bg tint, white status-bar icons, manifest-merger override, production-swap checklist.
+- [Native ad implementation — replaced banner in v2.10.16](project_ad_implementation.md) — small/medium templates split at widthDp ≥ 400, custom layout XMLs, 60 s refresh timer, video startMuted + ON_STOP re-mute, manifest-merger override, production-swap checklist.
 - [AdMob + Firebase manifest merger conflict](feedback_admob_manifest_merger.md) — `AD_SERVICES_CONFIG` resolves with `tools:replace` override.
 - [Play Billing Layer 1 — shipped v2.10.10](project_play_billing_integration.md) — entitlement flow, 7-day TTL on cached state, debug override, integration with existing 7-day SYNC admin grace period.
 - [JIT extraction lambda overhead](feedback_jit_extraction.md).

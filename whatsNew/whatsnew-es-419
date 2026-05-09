@@ -1,8 +1,6 @@
 Novedades en BudgeTrak:
-• Sincronización: ediciones y eliminaciones se aplican al primer intento
-• El gráfico de barras ahora se desplaza con muchas categorías
-• Mejoras matemáticas en el simulador de Metas y línea base más clara
-• Límite de 5 miembros en grupos SYNC ahora aplicado
-• Nuevo: actualiza a Pagado o Suscríbete en Configuración → Suscripción
-• Los anuncios ahora se adaptan a la pantalla
-• Correcciones de seguridad
+• Anuncios renovados de banner a nativos — formato tipo tarjeta más enriquecido, mejor pagado y sin letterbox
+• En tabletas y teléfonos grandes verás un anuncio mayor con imagen o video silenciado; en teléfonos pequeños, una tarjeta compacta de una fila
+• Los anuncios de video inician silenciados, muestran un icono claro de silencio y vuelven a silenciarse al regresar a la app
+• Etiqueta "Ad" visible en cada anuncio según la política del sector
+• Correcciones de seguridad y estabilidad

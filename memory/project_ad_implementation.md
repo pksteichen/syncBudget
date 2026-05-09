@@ -1,71 +1,83 @@
 ---
-name: Ad banner implementation — shipped v2.10.09
-description: AdMob banner integration in BudgeTrak — adaptive sizing, cutout/decorative-strip handling, AdView background tinting, status-bar appearance override, manifest-merger workaround. Production-promotion swap checklist included.
+name: Native ad implementation — replaced banner in v2.10.16
+description: AdMob Native Advanced ad integration in BudgeTrak — small/medium template tier on widthDp ≥480, custom layout XMLs, 60 s refresh timer with lifecycle gating, manifest-merger workaround. Production-promotion swap checklist included. History of preceding banner iterations is in git log; this file describes the current native architecture.
 type: project
 ---
 
 ## Status
-**Shipped in v2.10.09** (2026-05-08). Replaced the placeholder `Box(Color.Black)` with a real AdMob `AdView`. Currently using Google's TEST app + ad-unit IDs — production-promotion swap checklist below.
+**Native ads in v2.10.16** (2026-05-09). Replaced the banner `AdView` with AdMob Native Advanced ads — adaptive banners couldn't deliver letterbox-free creatives at custom aspect ratios (the `AdSize` API doesn't filter delivery to fill-the-slot creatives only). Native ads sidestep the issue entirely: we render the layout, AdMob delivers asset data (headline / icon / image / CTA / advertiser / body), and there's no slot-vs-creative dimension mismatch. CPMs typically run 2-5× banner.
 
-## Architecture (still valid, augmented)
+Currently using Google's TEST native ad unit ID `ca-app-pub-3940256099942544/2247696110` — production-promotion swap checklist below.
 
-The placement intent from the original design carries forward:
-- **Position:** outside the `when (vm.currentScreen)` block, inside the outer `Column` in `MainActivity.setContent`. Page navigation only recomposes the `weight(1f)` Box below; the AdView never recomposes between screens — IAB MRC viewability counts continuously.
-- **Gate:** `if (adSize != null)` — `adSize` is null when `vm.isPaidUser || vm.isSubscriber`, so paid + subscriber tiers stay ad-free with no slot height (`adBannerHeight = 0.dp`). The `remember` key is `(vm.isPaidUser, vm.isSubscriber)` so the slot recomputes on either tier change. **Both flags must be checked** — Subscriber is a superset of Paid; both should be ad-free. Bug fixed in v2.10.15 (was previously `remember(vm.isPaidUser)` and only `if (vm.isPaidUser) null`, which surfaced ads to Subscribers when Paid was independently false).
-- **AdAwareDialog offsetting:** unchanged. `LocalAdBannerHeight` flows the runtime banner height to dialogs that push their content below it.
+## Architecture
+
+- **Position:** outside the `when (vm.currentScreen)` block, inside the outer `Column` in `MainActivity.setContent`. Page navigation only recomposes the `weight(1f)` Box below; the AdView never recomposes between screens.
+- **Tier select** (portrait-locked, so `widthDp` is fixed per session):
+  - `widthDp < 400` → `R.layout.native_ad_small` — single-row card, 64 dp slot
+  - `widthDp ≥ 400` → `R.layout.native_ad_medium` — horizontal card (text column left + 160×120 MediaView right), 144 dp slot
+- **Gate:** `nativeAdEnabled = !vm.isPaidUser && !vm.isSubscriber`. Paid + subscriber tiers stay ad-free with `adBannerHeight = 0.dp`. Both flags must be checked — Subscriber is a superset of Paid.
+- **Refresh:** native ads have no built-in auto-refresh. A `LaunchedEffect` keyed on `(nativeAdEnabled, isMediumTier, isAppActiveCompose)` runs `AdLoader.loadAd()` every 60 s. Each successful load destroys the previous `NativeAd` to avoid leaks. Refresh pauses when app is backgrounded (`isAppActiveCompose = false`) and resumes immediately on foreground (effect re-keys, runs a fresh load).
+- **Video creatives:** `NativeAdOptions` passes `VideoOptions.Builder().setStartMuted(true)` to the AdLoader — videos start muted (matches AdMob default + locks the policy locally). MediaView renders the speaker mute/unmute icon overlay automatically (AdMob policy requirement). A separate `DisposableEffect` registers an `ON_STOP` lifecycle observer that calls `nativeAd?.mediaContent?.videoController?.mute(true)` so a user who unmuted before backgrounding sees the ad re-muted on return rather than resuming with audio.
+- **AdAwareDialog offsetting:** `LocalAdBannerHeight` plumbing unchanged — flows the slot height (64 / 260 / 0) to dialogs that push their content below it.
 
 ## What ships
 
-**1. Dependency:** `com.google.android.gms:play-services-ads:23.6.0` in `app/build.gradle.kts`.
+**1. Dependency:** `com.google.android.gms:play-services-ads:23.6.0` in `app/build.gradle.kts`. **No `play-services-ads-native-templates` artifact** — Google never published this to Maven (404 on both `repo1.maven.org` and `dl.google.com/.../maven2`); their templates are GitHub-sample source code. We wrote custom layouts instead.
 
 **2. Manifest (`AndroidManifest.xml`):**
-- `xmlns:tools="http://schemas.android.com/tools"` added to `<manifest>`.
-- AdMob `APPLICATION_ID` meta-data inside `<application>` — currently the TEST app ID `ca-app-pub-3940256099942544~3347511713`.
+- `xmlns:tools="http://schemas.android.com/tools"` on `<manifest>`.
+- AdMob `APPLICATION_ID` meta-data inside `<application>` — TEST app ID `ca-app-pub-3940256099942544~3347511713`.
 - `<property android:name="android.adservices.AD_SERVICES_CONFIG" android:resource="@xml/gma_ad_services_config" tools:replace="android:resource" />` — required because both `play-services-ads-lite` and Firebase's `play-services-measurement-api` declare the same property pointing to different XML configs. AdMob's wins. See `feedback_admob_manifest_merger.md`.
 
-**3. SDK init:** `MobileAds.initialize(this) {}` near the top of `BudgeTrakApplication.onCreate` — async, safe to call before any Activity.
+**3. SDK init:** `MobileAds.initialize(this) {}` in `BudgeTrakApplication.onCreate`.
 
-**4. AdView creation in `MainActivity.setContent`:**
-- `val topBarColor = LocalSyncBudgetColors.current.headerBackground` — theme-aware.
-- **Per-device-tier sizing** (selected by `widthDp = displayMetrics.widthPixels / density`):
-  - `widthDp > 550` → `AdSize.LEADERBOARD` (728×90); slot height = `widthDp / 8.1f`
-  - `widthDp > 400` → `AdSize.FULL_BANNER` (468×60); slot height = `widthDp / 7.8f`
-  - `widthDp ≤ 400` → `getCurrentOrientationAnchoredAdaptiveBannerAdSize(activity, widthDp)`; slot height = `adSize.height.dp`
-- Tablet tiers pin to a standard IAB size and size the slot to that ratio so a matching served creative scales to fill (no internal letterbox). The phone tier uses anchored adaptive — the modern standard, validated as the right default for phones.
-- `val adView = remember(adSize, topBarColor) { AdView(activity).apply { setAdSize(adSize); adUnitId = "<TEST>"; setBackgroundColor(topBarColor.toArgb()); loadAd(...) } }`.
-- `DisposableEffect` wires `resume/pause/destroy` to the Activity lifecycle and calls `destroy()` on dispose.
-- `AndroidView(factory = { adView }, modifier = Modifier.fillMaxWidth().height(adBannerHeight))`.
+**4. Layout XMLs** (`app/src/main/res/layout/`):
+- `native_ad_small.xml` — root `NativeAdView` containing horizontal `LinearLayout`: 48 dp icon → middle column (Ad badge + headline 1-line / advertiser 1-line) → CTA button. Total wrap-content height fits in 64 dp slot.
+- `native_ad_medium.xml` — root `NativeAdView` containing vertical `LinearLayout`: header row (56 dp icon + Ad badge / advertiser / headline 2-line) → `MediaView` (`adjustViewBounds=true`, wrap_content) → body text + CTA button. Total wrap-content height fits in 260 dp slot.
+- Both layouts give every asset view a stable `R.id` so MainActivity's `update` block can `findViewById` and bind text/colors per recomposition.
 
-**5. Cutout + decorative top strip:**
-- Outer Column uses `Modifier.fillMaxSize().background(topBarColor).windowInsetsPadding(WindowInsets.statusBars.union(WindowInsets.displayCutout))` — pads for whichever of status bar / cutout is taller (no double-pad), and the background fills the inset area with the theme's header color so the cutout space looks like an intentional decorative strip rather than a naked transparent zone.
+**5. Drawables** (`app/src/main/res/drawable/`):
+- `native_ad_badge_bg.xml` — yellow `#FFCC00` rounded rectangle (3 dp corners) for the mandatory "Ad" label.
+- `native_ad_cta_bg.xml` — fallback CTA background (`LightPrimary` blue, 6 dp corners). Overridden at runtime in `MainActivity` with `MaterialTheme.colorScheme.primary` to follow theme.
 
-**6. Status bar icon appearance:** `WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = false` immediately after `enableEdgeToEdge()` in `onCreate`. Forces white status-bar icons in both light and dark mode — `headerBackground` is dark enough in both themes that the OS default (black icons in light mode) is unreadable. Without this, the icons only flip to white when a dim overlay (dialog) ever-so-slightly tips the auto-contrast.
+**6. MainActivity binding** (in `setContent`):
+- `AndroidView` factory inflates the right layout (small/medium), registers asset views with `NativeAdView` (`headlineView = ...`, `iconView = ...`, `callToActionView = ...`, `advertiserView = ...`, optional `mediaView = ...`, optional `bodyView = ...`). The setters are what wires AdMob's click-through registration.
+- `update` lambda runs each recomposition: pulls `headerTextColor = LocalSyncBudgetColors.current.headerText` for text contrast against the dark `topBarColor`, builds a runtime `GradientDrawable` for the CTA button using `MaterialTheme.colorScheme.primary` so it follows theme, then if `nativeAd != null` binds `headline / advertiser / callToAction / body / icon` and calls `view.setNativeAd(ad)`.
+- `nativeAd` is `mutableStateOf<NativeAd?>(null)`. The `forNativeAd { ad → nativeAd?.destroy(); nativeAd = ad }` callback in the `AdLoader.Builder` wires the swap-on-load path. A `DisposableEffect(Unit)` calls `nativeAd?.destroy()` on Compose disposal.
 
-**7. AdView background tint:** `setBackgroundColor(topBarColor.toArgb())` on the AdView itself. Trades the general "leave AdView transparent for themed-creative blending" best practice against the more-common case where the served creative letterboxes inside the adaptive slot or has hard borders — those leftover bars now show `topBarColor` instead of black, which blends with the decorative top strip. Themed creatives that draw their own opaque background still render normally on top; the override only affects letterbox/transparent areas.
+**7. Mandatory "Ad" badge:** the small yellow chip drawn via `native_ad_badge_bg.xml` is required by AdMob policy + FTC native-ad disclosure rules. The text is hard-coded `"Ad"` — DO NOT remove it, hide it, or make its contrast low; that fails AdMob policy review on first scan.
+
+**8. Cutout + decorative top strip:** outer Column uses `Modifier.fillMaxSize().background(topBarColor).windowInsetsPadding(WindowInsets.statusBars.union(WindowInsets.displayCutout))` — pads for whichever of status bar / cutout is taller (no double-pad), background fills the inset area with the theme's header color.
+
+**9. Status bar icon appearance:** `WindowCompat.getInsetsController(...).isAppearanceLightStatusBars = false` after `enableEdgeToEdge()` — forces white status-bar icons in both light and dark mode. `headerBackground` is dark enough in both themes that black icons would be unreadable.
 
 ## Production-promotion swap checklist
 
 When promoting from internal/closed to production, do all four:
 
-1. **AdMob Console:** create the production app + a Banner ad unit. Copy the resulting `ca-app-pub-XXXXXXXX~XXXXXXX` (app ID) and `ca-app-pub-XXXXXXXX/XXXXXXX` (ad unit ID).
-2. **`AndroidManifest.xml`:** replace the TEST `APPLICATION_ID` meta-data value with the real app ID.
-3. **`MainActivity.kt`:** replace the TEST `adUnitId` string in the `AdView.apply { }` block with the real ad unit ID.
-4. **App-ads.txt:** publish at `https://techadvantagesupport.github.io/app-ads.txt` (Pages repo) per AdMob's app-ads.txt verification flow. Without this, AdMob serves house ads only on production for ~24h until the file resolves.
+1. **AdMob Console:** create the production app + **two Native Advanced ad units** (one for the small phone template, one for the medium tablet template). Copy each `ca-app-pub-XXXXXXXX/XXXXXXX` (ad unit ID) and the production app ID `ca-app-pub-XXXXXXXX~XXXXXXX`.
+2. **`AndroidManifest.xml`:** replace the TEST `APPLICATION_ID` meta-data with the real app ID.
+3. **`MainActivity.kt`:** replace the TEST native ad unit ID string in the `AdLoader.Builder(this@MainActivity, "<TEST>")` call. Tier selection logic should branch on `isMediumTier` to choose the phone vs tablet ad unit ID.
+4. **App-ads.txt:** already published at `https://techadvantagesupport.github.io/app-ads.txt` — covers all ad units under the publisher account, no per-unit change needed.
 
 Optional but recommended pre-production:
-- Enable `MobileAds.openAdInspector(this) {}` from a debug-only menu item to verify served-creative diagnostics on real devices.
+- `MobileAds.openAdInspector(this) {}` from a debug-only menu item to verify served-creative diagnostics on real devices.
 - Add Paul + Kim deviceIDs to AdMob test devices via `RequestConfiguration.Builder().setTestDeviceIds(...)` so live debugging never accrues impressions / risks invalid-traffic flags.
 
 ## What does NOT need to change for production
 
-- Adaptive banner sizing logic — same call works against real ad units.
-- Lifecycle wiring (`DisposableEffect` + `resume/pause/destroy`) — production-grade as written.
+- Layout XMLs (`native_ad_small.xml`, `native_ad_medium.xml`) — same files work against real ad units.
+- 60 s refresh timer + lifecycle gating — production-grade as written.
 - `LocalAdBannerHeight` plumbing for `AdAwareDialog` — unchanged.
 - Manifest-merger override on `AD_SERVICES_CONFIG` — same conflict, same fix.
+- Mandatory "Ad" badge drawable + `Ad` text — required for policy compliance, do not change.
 
 ## Anti-goals (do NOT do these)
 
-- **Don't** bring back fixed `AdSize.BANNER` (320×50) — looks narrow on modern phones; adaptive is the modern standard and what the user validated.
-- **Don't** remove `setBackgroundColor` on the AdView — the user explicitly accepted the tradeoff (a small set of edge-case themed creatives might be tinted) against the more-visible black-letterbox issue.
+- **Don't** revert to AdMob `AdView` + `AdSize` banners. The 4-iteration arc through anchored adaptive / custom AdSize / fixed-size constants in May 2026 confirmed every banner approach has a letterbox or clipping failure mode in at least one device class. Native sidesteps the entire problem because we render the layout, not AdMob.
+- **Don't** remove the `Ad` badge `TextView` or replace it with a low-contrast / hidden equivalent. AdMob policy requires a clearly visible "Ad" or "Sponsored" label on every native ad. Failing this triggers automatic policy violations + ad-serving holds.
+- **Don't** auto-refresh faster than 30 s (AdMob's documented minimum) or slower than user attention spans warrant. 60 s is conservative and safe; lower values risk invalid-traffic flags.
+- **Don't** load native ads while the app is backgrounded. The `LaunchedEffect` re-keys on `isAppActiveCompose` for exactly this reason — cold loads off-screen waste impressions (no view → no impression credit) and burn battery.
+- **Don't** call `setNativeAd()` without first registering all asset views (`headlineView`, `iconView`, `callToActionView`, etc.) on the `NativeAdView`. The setters are how AdMob wires click-through; binding text + image alone won't make the ad clickable.
+- **Don't** forget to call `nativeAd.destroy()` before replacing it. Each `NativeAd` holds native memory + click handlers; abandoned instances leak.
 - **Don't** wire `isAppearanceLightStatusBars` to follow the system theme — the override is intentionally always-white because both light- and dark-mode `headerBackground` colors are dark enough to demand light icons.
-- **Don't** add a `displayCutoutPadding()` call separately on the Column — `windowInsetsPadding(statusBars.union(displayCutout))` already does this without double-pad on devices where status bar already includes the cutout.
