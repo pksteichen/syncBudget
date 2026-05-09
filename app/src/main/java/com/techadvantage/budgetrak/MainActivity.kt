@@ -277,21 +277,34 @@ class MainActivity : ComponentActivity() {
                 onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
             }
 
-            // Adaptive banner size for the current screen width — picks an
-            // ad height (typically 50–60dp on phones) that fills the device
-            // width, instead of leaving empty space beside a fixed-320dp banner.
+            // Per-device-tier ad sizing. Tablets pin to a standard IAB size with
+            // a ratio-matched slot height so a matching served creative scales
+            // to fill the slot with no internal letterbox. Phones use anchored
+            // adaptive — the SDK picks an appropriate height for the device width.
+            //   widthDp >  550:  LEADERBOARD  (728×90, 8.1:1) — slot = w × w/8.1
+            //   widthDp >  400:  FULL_BANNER  (468×60, 7.8:1) — slot = w × w/7.8
+            //   widthDp <= 400:  anchored adaptive — slot = adaptive's native height
             // Hides for both Paid and Subscriber tiers (Subscriber is a
             // superset of Paid; both should be ad-free).
-            val adSize: com.google.android.gms.ads.AdSize? = remember(vm.isPaidUser, vm.isSubscriber) {
+            val widthDp = remember {
+                val dm = resources.displayMetrics
+                (dm.widthPixels / dm.density).toInt()
+            }
+            val adSize: com.google.android.gms.ads.AdSize? = remember(vm.isPaidUser, vm.isSubscriber, widthDp) {
                 if (vm.isPaidUser || vm.isSubscriber) null
-                else {
-                    val dm = resources.displayMetrics
-                    val widthDp = (dm.widthPixels / dm.density).toInt()
-                    com.google.android.gms.ads.AdSize
+                else when {
+                    widthDp > 550 -> com.google.android.gms.ads.AdSize.LEADERBOARD
+                    widthDp > 400 -> com.google.android.gms.ads.AdSize.FULL_BANNER
+                    else -> com.google.android.gms.ads.AdSize
                         .getCurrentOrientationAnchoredAdaptiveBannerAdSize(this@MainActivity, widthDp)
                 }
             }
-            val adBannerHeight = adSize?.height?.dp ?: 0.dp
+            val adBannerHeight = when {
+                adSize == null -> 0.dp
+                widthDp > 550 -> (widthDp / 8.1f).dp
+                widthDp > 400 -> (widthDp / 7.8f).dp
+                else -> adSize.height.dp
+            }
             SyncBudgetTheme(strings = vm.strings, adBannerHeight = adBannerHeight) {
               val toastState = LocalAppToast.current
               androidx.compose.runtime.CompositionLocalProvider(

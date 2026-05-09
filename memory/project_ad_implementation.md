@@ -27,14 +27,17 @@ The placement intent from the original design carries forward:
 
 **4. AdView creation in `MainActivity.setContent`:**
 - `val topBarColor = LocalSyncBudgetColors.current.headerBackground` — theme-aware.
-- `val adSize = remember(vm.isPaidUser, vm.isSubscriber) { if (vm.isPaidUser || vm.isSubscriber) null else getCurrentOrientationAnchoredAdaptiveBannerAdSize(activity, widthDp) }` — adaptive banner sized to current device width (typically 50–60dp tall on phones, ~90dp on tablets). Null when either tier active.
+- **Per-device-tier sizing** (selected by `widthDp = displayMetrics.widthPixels / density`):
+  - `widthDp > 550` → `AdSize.LEADERBOARD` (728×90); slot height = `widthDp / 8.1f`
+  - `widthDp > 400` → `AdSize.FULL_BANNER` (468×60); slot height = `widthDp / 7.8f`
+  - `widthDp ≤ 400` → `getCurrentOrientationAnchoredAdaptiveBannerAdSize(activity, widthDp)`; slot height = `adSize.height.dp`
+- Tablet tiers pin to a standard IAB size and size the slot to that ratio so a matching served creative scales to fill (no internal letterbox). The phone tier uses anchored adaptive — the modern standard, validated as the right default for phones.
 - `val adView = remember(adSize, topBarColor) { AdView(activity).apply { setAdSize(adSize); adUnitId = "<TEST>"; setBackgroundColor(topBarColor.toArgb()); loadAd(...) } }`.
 - `DisposableEffect` wires `resume/pause/destroy` to the Activity lifecycle and calls `destroy()` on dispose.
 - `AndroidView(factory = { adView }, modifier = Modifier.fillMaxWidth().height(adBannerHeight))`.
 
 **5. Cutout + decorative top strip:**
 - Outer Column uses `Modifier.fillMaxSize().background(topBarColor).windowInsetsPadding(WindowInsets.statusBars.union(WindowInsets.displayCutout))` — pads for whichever of status bar / cutout is taller (no double-pad), and the background fills the inset area with the theme's header color so the cutout space looks like an intentional decorative strip rather than a naked transparent zone.
-- Known under-reporting OEMs (Samsung S22 Ultra confirmed): the camera punch-hole intrudes ~6px into the ad on devices that don't designate the camera area as a `DisplayCutout`. Decision (2026-05-08): leave it. AdMob viewability uses the same OS-reported insets, so the SDK reports 100% visible — no policy concern. Optional mitigation deferred: add `Modifier.padding(top = 8.dp)` after the inset modifier to absorb the under-reported few pixels at the cost of a slight breathing-room gap on properly-reporting devices.
 
 **6. Status bar icon appearance:** `WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = false` immediately after `enableEdgeToEdge()` in `onCreate`. Forces white status-bar icons in both light and dark mode — `headerBackground` is dark enough in both themes that the OS default (black icons in light mode) is unreadable. Without this, the icons only flip to white when a dim overlay (dialog) ever-so-slightly tips the auto-contrast.
 
@@ -66,4 +69,3 @@ Optional but recommended pre-production:
 - **Don't** remove `setBackgroundColor` on the AdView — the user explicitly accepted the tradeoff (a small set of edge-case themed creatives might be tinted) against the more-visible black-letterbox issue.
 - **Don't** wire `isAppearanceLightStatusBars` to follow the system theme — the override is intentionally always-white because both light- and dark-mode `headerBackground` colors are dark enough to demand light icons.
 - **Don't** add a `displayCutoutPadding()` call separately on the Column — `windowInsetsPadding(statusBars.union(displayCutout))` already does this without double-pad on devices where status bar already includes the cutout.
-- **Don't re-attempt the tablet-letterbox-elimination experiments from 2026-05-09.** Multiple approaches were tried over a full day's session and all failed — see `feedback_admob_letterbox_unfixable.md` for the full list of what was tried and why each fails. The current adaptive-only state is the working baseline. Tablet letterboxes are a fundamental AdMob limitation, not a code bug we can fix.

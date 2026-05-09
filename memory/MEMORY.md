@@ -174,7 +174,6 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [reCAPTCHA Enterprise dep override pinned to 18.4.0+](feedback_recaptcha_dep_override.md) — Play flags Firebase BOM 32.7.0's transitive 18.1.2 as deprecated + critical CVE; direct dep override avoids a BOM bump that would break Termux compileSdk 34.
 - [Update whatsNew/* before each user-facing release](feedback_update_whatsnew.md) — CI uploads them verbatim; stale files mean Play Store shows old release notes for every new version.
 - [Don't delete google*.html in Pages repo](feedback_keep_google_verification_file.md) — `google17d827ef1b64ae6d.html` at the root verifies techadvantagesupport.github.io ownership for Google services; removing it breaks Play Console / Search Console verification.
-- [AdMob tablet letterboxing is unfixable from native code](feedback_admob_letterbox_unfixable.md) — full session of experiments tried; SDK doesn't expose served creative dimensions. Don't re-iterate.
 - [Subscriber tier is a superset of Paid](feedback_subscriber_implies_paid.md) — gates checking `isPaidUser` only are bugs unless the feature is genuinely Subscriber-exclusive (AI, SYNC create/admin).
 - [MediaStore ghost files from Termux rm](feedback_mediastore_ghost_files.md) — never `rm` app-owned public-Download files from Termux; leaves a MediaStore ghost that blocks app O_CREAT with EEXIST. Recover via `touch` placeholder, or delete via Files app. Default new high-frequency logs to `context.filesDir`.
 
