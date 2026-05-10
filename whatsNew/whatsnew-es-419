@@ -1,5 +1,2 @@
 Novedades en BudgeTrak:
-• Más partes de la app se traducen al español: notificaciones de copia de seguridad, selector de fotos, estado del volcado de depuración y etiquetas de accesibilidad del calendario y la gráfica de flujo de caja
-• Marca SYNC uniforme en los encabezados de diálogo
-• «Restaurar compras» ahora reporta el resultado correcto en todos los casos
-• Refuerzos internos para que la cobertura de traducción no se degrade
+• «Restaurar compras» ahora escribe una instantánea de diagnóstico en los archivos de soporte

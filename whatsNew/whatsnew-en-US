@@ -1,5 +1,2 @@
 What's new in BudgeTrak:
-• More of the app now translates to Spanish: backup notifications, the photo picker, debug-dump status, and accessibility labels for calendar navigation and the cash-flow chart
-• Consistent SYNC branding across dialog headers
-• Restore Purchases now reports the correct outcome in all cases
-• Behind-the-scenes hardening to keep translation coverage from regressing
+• Restore Purchases now writes a diagnostic snapshot to support files

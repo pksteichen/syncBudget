@@ -161,6 +161,17 @@ class BillingService(
         return (inappList + subsList).associateBy { it.productId }
     }
 
+    /**
+     * Raw unfiltered queryPurchasesAsync results — used by the Restore Purchases
+     * diagnostic dump so testers can see purchases in any state (PENDING,
+     * UNSPECIFIED_STATE, etc.), not just the PURCHASED-filtered ones [queryAll]
+     * exposes. Null if BillingClient is disconnected.
+     */
+    suspend fun queryRawPurchases(): Pair<List<Purchase>, List<Purchase>>? {
+        if (!ensureConnected()) return null
+        return queryPurchases()
+    }
+
     private suspend fun queryPurchases(): Pair<List<Purchase>, List<Purchase>> {
         val inappParams = QueryPurchasesParams.newBuilder()
             .setProductType(BillingClient.ProductType.INAPP).build()

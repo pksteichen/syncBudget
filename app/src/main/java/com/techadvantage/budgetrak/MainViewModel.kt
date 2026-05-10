@@ -3344,9 +3344,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Outcome of a Restore Purchases call — used to drive the toast message. */
     enum class RestorePurchasesResult { QueryFailed, NoPurchases, PurchasesFound }
 
-    suspend fun refreshBillingState(): RestorePurchasesResult {
+    suspend fun refreshBillingState(): RestorePurchasesResult =
+        refreshBillingStateWithState().first
+
+    /**
+     * Same as [refreshBillingState] but also returns the [BillingState] snapshot
+     * used to compute the result. [restorePurchases] consumes the snapshot for the
+     * Download/BudgeTrak/support/billing_dump.txt diagnostic dump.
+     */
+    private suspend fun refreshBillingStateWithState(): Pair<RestorePurchasesResult, com.techadvantage.budgetrak.data.billing.BillingState?> {
         val state = billingService.queryAll()
-            ?: return RestorePurchasesResult.QueryFailed // Network / SKU-catalog unavailable
+            ?: return RestorePurchasesResult.QueryFailed to null // Network / SKU-catalog unavailable
         paidUpgradeDetails = state.paidUpgradeDetails
         subscriberDetails = state.subscriberDetails
         subscriberOfferToken = state.subscriberOfferToken
@@ -3358,11 +3366,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // Manual checkboxes are authoritative — skip flag updates but still
             // report what Play actually sees so a debug "Restore Purchases" tap
             // surfaces real state rather than a misleading QueryFailed.
-            return if (state.paidUpgradePurchase != null || state.subscriberPurchase != null) {
+            val r = if (state.paidUpgradePurchase != null || state.subscriberPurchase != null) {
                 RestorePurchasesResult.PurchasesFound
             } else {
                 RestorePurchasesResult.NoPurchases
             }
+            return r to state
         }
 
         val newPaid = state.paidUpgradePurchase != null
@@ -3394,11 +3403,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // Stamp the successful round-trip so the TTL gate stays open.
         prefs.edit().putLong("lastSuccessfulBillingCheck", System.currentTimeMillis()).apply()
 
-        return if (state.paidUpgradePurchase != null || state.subscriberPurchase != null) {
+        val r = if (state.paidUpgradePurchase != null || state.subscriberPurchase != null) {
             RestorePurchasesResult.PurchasesFound
         } else {
             RestorePurchasesResult.NoPurchases
         }
+        return r to state
     }
 
     fun launchPaidUpgrade(activity: android.app.Activity) {
@@ -3422,13 +3432,111 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun restorePurchases() {
         viewModelScope.launch {
-            val result = refreshBillingState()
+            val (result, state) = refreshBillingStateWithState()
             restoreToastMessage = when (result) {
                 RestorePurchasesResult.QueryFailed -> strings.settings.purchasesRestoreFailed
                 RestorePurchasesResult.NoPurchases -> strings.settings.purchasesRestoredEmpty
                 RestorePurchasesResult.PurchasesFound -> strings.settings.purchasesRestored
             }
+            // Diagnostic dump for license-tester verification of Play's
+            // BillingClient response — written to /Download/BudgeTrak/support/.
+            // Captures both the filtered BillingState we act on and raw
+            // queryPurchasesAsync output (including PENDING / UNSPECIFIED).
+            writeBillingDump(result, state)
         }
+    }
+
+    /** Writes a billing-state diagnostic to Download/BudgeTrak/support/billing_dump.txt. */
+    private suspend fun writeBillingDump(
+        result: RestorePurchasesResult,
+        state: com.techadvantage.budgetrak.data.billing.BillingState?
+    ) {
+        val rawPurchases = try { billingService.queryRawPurchases() } catch (_: Exception) { null }
+        val now = System.currentTimeMillis()
+        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss z", java.util.Locale.US)
+        val sb = StringBuilder()
+
+        sb.append("=== BudgeTrak Billing State Dump ===\n")
+        sb.append("Timestamp:                 ").append(fmt.format(java.util.Date(now))).append("\n")
+        sb.append("Build:                     ")
+            .append(com.techadvantage.budgetrak.BuildConfig.VERSION_NAME)
+            .append(" (").append(com.techadvantage.budgetrak.BuildConfig.VERSION_CODE).append(") ")
+            .append(if (BuildConfig.DEBUG) "DEBUG" else "RELEASE").append("\n")
+        sb.append("Package:                   ").append(context.packageName).append("\n\n")
+
+        sb.append("--- Flag state (in-memory) ---\n")
+        sb.append("isPaidUser:                ").append(isPaidUser).append("\n")
+        sb.append("isSubscriber:              ").append(isSubscriber).append("\n")
+        sb.append("billingOverrideEnabled:    ").append(billingOverrideEnabled)
+            .append(" (debug-only; ignored in release)\n")
+        val lastCheck = prefs.getLong("lastSuccessfulBillingCheck", 0L)
+        sb.append("lastSuccessfulBillingCheck: ")
+            .append(if (lastCheck == 0L) "never" else "${fmt.format(java.util.Date(lastCheck))} (${(now - lastCheck) / 1000}s ago)")
+            .append("\n")
+        sb.append("subscriptionExpiry:        ")
+            .append(if (subscriptionExpiry == 0L) "n/a" else fmt.format(java.util.Date(subscriptionExpiry)))
+            .append("\n\n")
+
+        sb.append("--- refreshBillingState outcome ---\n")
+        sb.append("Result:                    ").append(result).append("\n\n")
+
+        sb.append("--- ProductDetails (queryProductDetailsAsync) ---\n")
+        sb.append("paid_upgrade:              ")
+            .append(if (state?.paidUpgradeDetails != null) "loaded, price=${state.paidUpgradePrice}" else "NOT loaded")
+            .append("\n")
+        sb.append("subscriber:                ")
+            .append(if (state?.subscriberDetails != null) "loaded, price=${state.subscriberPrice}/mo" else "NOT loaded")
+            .append("\n\n")
+
+        sb.append("--- Raw queryPurchasesAsync results (unfiltered) ---\n")
+        if (rawPurchases == null) {
+            sb.append("(BillingClient disconnected or query failed; no raw purchase data)\n\n")
+        } else {
+            val (inappList, subsList) = rawPurchases
+            sb.append("INAPP purchases returned: ").append(inappList.size).append("\n")
+            inappList.forEachIndexed { i, p -> appendPurchaseBlock(sb, "INAPP[$i]", p, fmt) }
+            sb.append("SUBS purchases returned:  ").append(subsList.size).append("\n")
+            subsList.forEachIndexed { i, p -> appendPurchaseBlock(sb, "SUBS[$i]", p, fmt) }
+            sb.append("\n")
+        }
+
+        sb.append("--- Our PURCHASED-state filter result ---\n")
+        sb.append("paidUpgradePurchase (BillingState): ")
+            .append(if (state?.paidUpgradePurchase != null) "matched" else "no match").append("\n")
+        sb.append("subscriberPurchase (BillingState):  ")
+            .append(if (state?.subscriberPurchase != null) "matched" else "no match").append("\n")
+
+        withContext(Dispatchers.IO) {
+            try {
+                com.techadvantage.budgetrak.data.DiagDumpBuilder
+                    .writeDiagToMediaStore(context, "billing_dump.txt", sb.toString())
+            } catch (e: Exception) {
+                android.util.Log.w("MainViewModel", "writeBillingDump failed: ${e.message}")
+            }
+        }
+    }
+
+    private fun appendPurchaseBlock(
+        sb: StringBuilder,
+        label: String,
+        p: com.android.billingclient.api.Purchase,
+        fmt: java.text.SimpleDateFormat
+    ) {
+        val stateName = when (p.purchaseState) {
+            com.android.billingclient.api.Purchase.PurchaseState.PURCHASED -> "PURCHASED"
+            com.android.billingclient.api.Purchase.PurchaseState.PENDING -> "PENDING"
+            com.android.billingclient.api.Purchase.PurchaseState.UNSPECIFIED_STATE -> "UNSPECIFIED_STATE"
+            else -> "UNKNOWN"
+        }
+        sb.append("  ").append(label).append(":\n")
+        sb.append("    products:       ").append(p.products).append("\n")
+        sb.append("    purchaseState:  ").append(stateName).append(" (").append(p.purchaseState).append(")\n")
+        sb.append("    isAcknowledged: ").append(p.isAcknowledged).append("\n")
+        sb.append("    isAutoRenewing: ").append(p.isAutoRenewing).append("\n")
+        sb.append("    purchaseTime:   ").append(fmt.format(java.util.Date(p.purchaseTime))).append("\n")
+        sb.append("    orderId:        ").append(p.orderId ?: "(null)").append("\n")
+        sb.append("    quantity:       ").append(p.quantity).append("\n")
+        sb.append("    token (last 8): ...").append(p.purchaseToken.takeLast(8)).append("\n")
     }
 
     fun updateBillingOverride(enabled: Boolean) {

@@ -75,6 +75,16 @@ if (System.currentTimeMillis() - lastSuccessfulBillingCheck > 7d) {
 - Toggling OFF → re-runs `refreshBillingState` immediately to snap state back to Play.
 - Release builds compile out the entire `if (BuildConfig.DEBUG)` block — only Play drives state. The override pref (`billingOverrideEnabled`) still persists but never has UI to flip it.
 
+## Restore Purchases diagnostic dump (v2.10.18+)
+
+`restorePurchases()` writes a snapshot to `/storage/emulated/0/Download/BudgeTrak/support/billing_dump.txt` (via `DiagDumpBuilder.writeDiagToMediaStore`) on every tap, in both debug and release. Captures flag state, `refreshBillingState` result, `ProductDetails` load status, **raw** `queryPurchasesAsync` output (every purchase, unfiltered — PENDING / UNSPECIFIED visible), and our PURCHASED-state filter outcome. Origin: license testers needed visibility into what Play's BillingClient actually returned when refunds didn't immediately revoke features on release builds (acknowledged-INAPP refund propagation lag).
+
+Supporting plumbing:
+- `BillingService.queryRawPurchases()` — public, returns unfiltered `Pair<List<Purchase>, List<Purchase>>?` (INAPP, SUBS). Promoted alongside the existing private `queryPurchases()`.
+- `MainViewModel.refreshBillingStateWithState()` — private; same as `refreshBillingState` but returns `Pair<RestorePurchasesResult, BillingState?>`. `restorePurchases()` consumes both for the dump; the public `refreshBillingState()` is now a thin wrapper returning just the enum so the 4 other callers (init / onResume / onBillingPurchasesUpdated / billing-override-off) stay unchanged.
+
+**Note:** debug + release have different applicationIds (`com.techadvantage.budgetrak.debug` vs `com.techadvantage.budgetrak`) → separate Play Billing namespaces. A dump taken on debug shows zero purchases unless the debug applicationId has its own SKUs in Play Console (typically it doesn't). To diagnose a stuck release-build purchase state, the dump must be captured on the release install.
+
 ## Existing 7-day SYNC admin grace period — works unchanged
 
 `MainViewModel.kt:2165-2188` reads `groupHealth.subscriptionExpiry` from the group doc on every health check. The admin's local `subscriptionExpiry` (now Play-derived) is pushed via `FirestoreService.updateSubscriptionExpiry` when admin is online and `isSubscriber == true`.
