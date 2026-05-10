@@ -376,6 +376,13 @@ class MainActivity : ComponentActivity() {
                       vm.archiveToastMessage = null
                   }
               }
+              // Restore Purchases toast
+              LaunchedEffect(vm.restoreToastMessage) {
+                  vm.restoreToastMessage?.let { msg ->
+                      toastState.show(msg)
+                      vm.restoreToastMessage = null
+                  }
+              }
               // Consume shared-image intent(s) once data is loaded. Keyed on list size
               // so subsequent shares (cleared → refilled) retrigger. The VM's route
               // logic picks the right target based on whether a dialog is open.

@@ -144,6 +144,8 @@ object SpanishStrings : AppStrings {
         billingOverrideDebug = "Anular Google Billing (depuraci\u00f3n)",
         purchaseFailed = "La compra fall\u00f3",
         purchasesRestored = "Compras restauradas",
+        purchasesRestoredEmpty = "No se encontraron compras en esta cuenta de Google",
+        purchasesRestoreFailed = "No se pudo contactar con Google Play",
         administratorOnly = "Solo administrador",
         showWidgetLogo = "Mostrar logo en el widget",
         autoCapitalize = "Auto Capitalizar",

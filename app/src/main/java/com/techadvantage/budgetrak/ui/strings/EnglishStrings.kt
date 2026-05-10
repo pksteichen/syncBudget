@@ -144,6 +144,8 @@ object EnglishStrings : AppStrings {
         billingOverrideDebug = "Override Google Billing (debug)",
         purchaseFailed = "Purchase failed",
         purchasesRestored = "Purchases restored",
+        purchasesRestoredEmpty = "No purchases found on this Google account",
+        purchasesRestoreFailed = "Could not contact Google Play",
         administratorOnly = "Administrator only",
         showWidgetLogo = "Show logo on widget",
         autoCapitalize = "Auto Capitalize",

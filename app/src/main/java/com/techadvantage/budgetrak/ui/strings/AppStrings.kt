@@ -168,6 +168,8 @@ data class SettingsStrings(
     val billingOverrideDebug: String,
     val purchaseFailed: String,
     val purchasesRestored: String,
+    val purchasesRestoredEmpty: String,
+    val purchasesRestoreFailed: String,
     val administratorOnly: String,
     val showWidgetLogo: String,
     val autoCapitalize: String,

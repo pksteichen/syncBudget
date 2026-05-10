@@ -192,6 +192,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var dateFormatPattern by mutableStateOf(prefs.getString("dateFormatPattern", "yyyy-MM-dd") ?: "yyyy-MM-dd")
     var isPaidUser by mutableStateOf(prefs.getBoolean("isPaidUser", false))
     var isSubscriber by mutableStateOf(prefs.getBoolean("isSubscriber", false))
+    /** Toast message queued by the Restore Purchases flow; consumed + cleared by MainActivity. */
+    var restoreToastMessage: String? by mutableStateOf(null)
     var quickStartStep by mutableStateOf<QuickStartStep?>(null)
     var subscriptionExpiry by mutableStateOf(
         prefs.getLong("subscriptionExpiry", System.currentTimeMillis() + 30L * 24 * 60 * 60 * 1000)
@@ -3339,8 +3341,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * Called from init, onResume, after a purchase flow completes, and from
      * the Restore Purchases button. Idempotent and race-safe.
      */
-    suspend fun refreshBillingState() {
-        val state = billingService.queryAll() ?: return // Network / SKU-catalog unavailable
+    /** Outcome of a Restore Purchases call — used to drive the toast message. */
+    enum class RestorePurchasesResult { QueryFailed, NoPurchases, PurchasesFound }
+
+    suspend fun refreshBillingState(): RestorePurchasesResult {
+        val state = billingService.queryAll()
+            ?: return RestorePurchasesResult.QueryFailed // Network / SKU-catalog unavailable
         paidUpgradeDetails = state.paidUpgradeDetails
         subscriberDetails = state.subscriberDetails
         subscriberOfferToken = state.subscriberOfferToken
@@ -3378,6 +3384,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         // Stamp the successful round-trip so the TTL gate stays open.
         prefs.edit().putLong("lastSuccessfulBillingCheck", System.currentTimeMillis()).apply()
+
+        return if (state.paidUpgradePurchase != null || state.subscriberPurchase != null) {
+            RestorePurchasesResult.PurchasesFound
+        } else {
+            RestorePurchasesResult.NoPurchases
+        }
     }
 
     fun launchPaidUpgrade(activity: android.app.Activity) {
@@ -3400,7 +3412,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun restorePurchases() {
-        viewModelScope.launch { refreshBillingState() }
+        viewModelScope.launch {
+            val result = refreshBillingState()
+            restoreToastMessage = when (result) {
+                RestorePurchasesResult.QueryFailed -> strings.settings.purchasesRestoreFailed
+                RestorePurchasesResult.NoPurchases -> strings.settings.purchasesRestoredEmpty
+                RestorePurchasesResult.PurchasesFound -> strings.settings.purchasesRestored
+            }
+        }
     }
 
     fun updateBillingOverride(enabled: Boolean) {

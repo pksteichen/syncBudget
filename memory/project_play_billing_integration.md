@@ -11,14 +11,14 @@ type: project
 - `data/billing/BillingProducts.kt` — product ID constants (`paid_upgrade`, `subscriber`) + `SUB_PERIOD_MS` (30 d).
 - `data/billing/BillingService.kt` — wraps Billing Library 7.1.1: `ensureConnected` (10 s timeout), `queryAll` (one-call snapshot of product details + active purchases), `launchPaidUpgrade`, `launchSubscribe`, `acknowledge`. Exposes a `BillingState` data class.
 - `MainViewModel`:
-  - State: `paidUpgradePrice`, `subscriberPrice`, `billingOverrideEnabled`, internal `paidUpgradeDetails` / `subscriberDetails` / `subscriberOfferToken`.
-  - Methods: `refreshBillingState()` (the workhorse), `launchPaidUpgrade(activity)`, `launchSubscribe(activity)`, `restorePurchases()`, `setBillingOverrideEnabled(enabled)`, `onBillingPurchasesUpdated(result, purchases)`.
+  - State: `paidUpgradePrice`, `subscriberPrice`, `billingOverrideEnabled`, `restoreToastMessage` (consumed + cleared by MainActivity LaunchedEffect, mirrors `archiveToastMessage` pattern), internal `paidUpgradeDetails` / `subscriberDetails` / `subscriberOfferToken`.
+  - Methods: `refreshBillingState()` (the workhorse — returns `RestorePurchasesResult.{ QueryFailed | NoPurchases | PurchasesFound }`; init / onResume / onBillingPurchasesUpdated callers wrap in `launch { }` and silently discard the return; `restorePurchases()` is the only consumer of the result), `launchPaidUpgrade(activity)`, `launchSubscribe(activity)`, `restorePurchases()` (sets `restoreToastMessage` to `purchasesRestored` / `purchasesRestoredEmpty` / `purchasesRestoreFailed` based on result), `setBillingOverrideEnabled(enabled)`, `onBillingPurchasesUpdated(result, purchases)`.
   - Init: 7-day TTL gate replaces the v2.10.00 release-build override; kicks off async `refreshBillingState`.
   - `onResume`: re-runs `refreshBillingState` to catch sub expiry / refunds / account switches that happened while the app was closed.
 - `SettingsScreen.kt`: new Subscription section (release + debug) + debug-only override checkbox above the existing manual paid/subscriber toggles.
 - `MainActivity.kt`: passes `vm.paidUpgradePrice` / `vm.subscriberPrice` / activity-bound `onLaunch*` callbacks to `SettingsScreen`.
 - `AndroidManifest.xml`: `<uses-permission android:name="com.android.vending.BILLING" />`.
-- Strings: `subscriptionSection`, `currentTier`, `tierFree`, `upgradeToPaid`, `subscribeMonthly`, `restorePurchases`, `billingOverrideDebug`, `purchaseFailed`, `purchasesRestored` (en + es-419).
+- Strings: `subscriptionSection`, `currentTier`, `tierFree`, `upgradeToPaid`, `subscribeMonthly`, `restorePurchases`, `billingOverrideDebug`, `purchaseFailed`, `purchasesRestored`, `purchasesRestoredEmpty` ("No purchases found on this Google account"), `purchasesRestoreFailed` ("Could not contact Google Play") (en + es-419).
 
 ## Entitlement flow
 
