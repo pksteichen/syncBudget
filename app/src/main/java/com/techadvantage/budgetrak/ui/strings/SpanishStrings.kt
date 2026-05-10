@@ -71,7 +71,8 @@ object SpanishStrings : AppStrings {
         language = "Idioma",
         dateDayTooHigh = "Selecciona una fecha entre el 1 y el 28 del mes",
         descriptionFieldLabel = "Descripci\u00f3n",
-        selectDate = "Seleccionar fecha"
+        selectDate = "Seleccionar fecha",
+        rotate = "Rotar"
     )
 
     override val dashboard = DashboardStrings(
@@ -256,7 +257,24 @@ object SpanishStrings : AppStrings {
         archiveOff = "Desactivado",
         lastArchivedInfo = { date, count -> "\u00daltimo archivo: $date ($count transacciones)" },
         totalArchivedCount = { count -> "Total archivadas: %,d transacciones".format(count) },
-        archivedToast = { count -> "Se archivaron $count transacciones antiguas para mantener la app \u00e1gil" }
+        archivedToast = { count -> "Se archivaron $count transacciones antiguas para mantener la app \u00e1gil" },
+        backupCreated = "Copia de seguridad creada",
+        backupFailed = "Fall\u00f3 la copia de seguridad \u2014 int\u00e9ntalo de nuevo",
+        savePhotos = "Guardar fotos",
+        savePhotosBody = "Las fotos ya se respaldan en las copias de seguridad cifradas si las copias autom\u00e1ticas est\u00e1n habilitadas abajo. Esta opci\u00f3n guarda copias sin cifrar de todas las fotos de recibos en Download/BudgeTrak/photos/ en tu dispositivo si las necesitas para otros usos. Cada vez que se guardan se crea una nueva carpeta con marca de tiempo.",
+        savePhotosFailed = { msg -> "No se pudieron guardar las fotos: $msg" },
+        savePhotosResult = { count, path -> "Se guardaron $count fotos en $path" },
+        savePhotosResultPartial = { saved, skipped, path -> "Se guardaron $saved fotos ($skipped omitidas) en $path" },
+        dumpAndSyncDebug = "Volcado y sincronizaci\u00f3n de depuraci\u00f3n",
+        dumpUploading = "Subiendo archivos de depuraci\u00f3n locales\u2026",
+        dumpWaitingRemote = "Esperando al dispositivo remoto\u2026",
+        dumpSynced = "Archivos de depuraci\u00f3n sincronizados",
+        dumpRemoteTimeout = "Archivos locales guardados. El dispositivo remoto no respondi\u00f3 en 90 s.",
+        dumpSavedLocal = "Archivos de depuraci\u00f3n guardados localmente",
+        dumpSyncFailed = { msg -> "Fall\u00f3 la sincronizaci\u00f3n de depuraci\u00f3n: $msg" },
+        mustLeaveSync = "Debes salir de tu grupo SYNC para usar esta funci\u00f3n.",
+        mustDissolveSync = "Debes disolver tu grupo SYNC para usar esta funci\u00f3n.",
+        seeHelpPage = "Consulta la p\u00e1gina de ayuda (?) para m\u00e1s informaci\u00f3n."
     )
 
     override val budgetConfig = BudgetConfigStrings(
@@ -475,7 +493,18 @@ object SpanishStrings : AppStrings {
         newDescription = "Nueva descripci\u00f3n",
         clearDescriptionConfirm = { count -> "Esto borrar\u00e1 la descripci\u00f3n en las $count transacciones seleccionadas. \u00bfContinuar?" },
         multiCategoryAmountsInvalid = "Ingresa un monto v\u00e1lido para cada categor\u00eda seleccionada.",
-        editFailedTransactionMissing = "No se pudo guardar \u2014 esta transacci\u00f3n ya no est\u00e1 disponible."
+        editFailedTransactionMissing = "No se pudo guardar \u2014 esta transacci\u00f3n ya no est\u00e1 disponible.",
+        saveFailed = { msg -> "Fall\u00f3 el guardado: $msg" },
+        expenseReportsSaved = { count -> "Se guardaron $count informe(s) de gastos en Download/BudgeTrak/PDF" },
+        pdfGenerationFailed = { msg -> "Fall\u00f3 la generaci\u00f3n del PDF: $msg" },
+        enterTotalFirst = "Introduce un total para habilitar este modo.",
+        unableToFix = "No se puede corregir",
+        camera = "C\u00e1mara",
+        gallery = "Galer\u00eda",
+        photosPaidFeature = "Fotos (funci\u00f3n de pago)",
+        addPhoto = "Agregar foto",
+        receiptPhotoN = { n -> "Foto del recibo $n" },
+        fullSizeReceiptPhoto = "Foto del recibo en tama\u00f1o completo"
     )
 
     override val savingsGoals = SavingsGoalsStrings(
@@ -522,7 +551,9 @@ object SpanishStrings : AppStrings {
         simulationSavingsLabel = "Ahorros Actuales",
         simulationOverUnderLabel = { period -> "+/- Presupuesto por $period" },
         simulationSavingsExceedBudget = "El ahorro por per\u00edodo supera el presupuesto",
-        simulationNoData = "No hay datos de simulaci\u00f3n disponibles"
+        simulationNoData = "No hay datos de simulaci\u00f3n disponibles",
+        zoomIn = "Acercar",
+        zoomOut = "Alejar"
     )
 
     override val amortization = AmortizationStrings(
@@ -670,7 +701,8 @@ object SpanishStrings : AppStrings {
         removeDeviceConfirm = "Eliminar",
         subscriptionExpiredNotice = "La suscripci\u00f3n del admin expir\u00f3. El grupo se disolver\u00e1 pronto. Suscr\u00edbete y reclama admin para mantener el grupo activo.",
         updateRequiredNotice = "Otro dispositivo en tu grupo SYNC actualiz\u00f3 BudgeTrak. Actualiza desde Play Store para continuar sincronizando.",
-        copy = "Copiar"
+        copy = "Copiar",
+        groupLeftLocally = "Grupo abandonado localmente (servidor inaccesible)"
     )
 
     // ── Help Screen Strings ──
@@ -1873,6 +1905,8 @@ object SpanishStrings : AppStrings {
         totalIncome = { amount -> "Total ingresos: $amount" },
         totalExpenses = { amount -> "Total gastos: $amount" },
         budgetResetDay = "D\u00eda de reinicio del presupuesto",
+        previousMonth = "Mes anterior",
+        nextMonth = "Mes siguiente",
         sun = "Dom", mon = "Lun", tue = "Mar", wed = "Mié", thu = "Jue", fri = "Vie", sat = "Sáb"
     )
 

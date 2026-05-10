@@ -117,8 +117,8 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [`project_member_limit_server_rule.md`](project_member_limit_server_rule.md) — 5-member group cap enforced client-side in v2.10.08 (UI gate + joinGroup defense); deferred Firestore rule for race-free server enforcement.
 
 ## i18n / Translation
-- [`feedback_translation_context.md`](feedback_translation_context.md) — how to add strings.
-- [`reference_strings_system.md`](reference_strings_system.md) — 1,393 val fields across 22 data classes; files: AppStrings 1498, English 1896, Spanish 1882, TranslationContext 1477.
+- [`feedback_translation_context.md`](feedback_translation_context.md) — four-file ritual, misfile prevention table, parity awk one-liner + hardcoded-string grep checklist (run before /push).
+- [`reference_strings_system.md`](reference_strings_system.md) — system anatomy + drift history (2026-04-10 audit, 2026-05-09 audit fixed 33 missing/22 misfiled/8 stale + 30 hardcoded UI strings).
 
 ## Git Workflow
 - Two branches: `dev` → `main`. Default push: **dev only**.

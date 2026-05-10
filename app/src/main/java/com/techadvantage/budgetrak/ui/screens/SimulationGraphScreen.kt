@@ -661,7 +661,7 @@ fun SimulationGraphScreen(
                                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                     Icon(
                                         Icons.Filled.Remove,
-                                        contentDescription = "Zoom out",
+                                        contentDescription = S.savingsGoals.zoomOut,
                                         tint = customColors.headerText,
                                         modifier = Modifier.size(18.dp)
                                     )
@@ -678,7 +678,7 @@ fun SimulationGraphScreen(
                                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                     Icon(
                                         Icons.Filled.Add,
-                                        contentDescription = "Zoom in",
+                                        contentDescription = S.savingsGoals.zoomIn,
                                         tint = customColors.headerText,
                                         modifier = Modifier.size(18.dp)
                                     )

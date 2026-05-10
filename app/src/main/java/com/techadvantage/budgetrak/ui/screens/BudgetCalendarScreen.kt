@@ -196,7 +196,7 @@ fun BudgetCalendarScreen(
                 IconButton(onClick = { displayedMonth = displayedMonth.minusMonths(1) }) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Previous month",
+                        contentDescription = S.budgetCalendar.previousMonth,
                         tint = MaterialTheme.colorScheme.onBackground
                     )
                 }
@@ -209,7 +209,7 @@ fun BudgetCalendarScreen(
                 IconButton(onClick = { displayedMonth = displayedMonth.plusMonths(1) }) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = "Next month",
+                        contentDescription = S.budgetCalendar.nextMonth,
                         tint = MaterialTheme.colorScheme.onBackground
                     )
                 }

@@ -94,7 +94,8 @@ data class CommonStrings(
     val language: String,
     val dateDayTooHigh: String,
     val descriptionFieldLabel: String,
-    val selectDate: String
+    val selectDate: String,
+    val rotate: String
 )
 
 data class DashboardStrings(
@@ -283,7 +284,24 @@ data class SettingsStrings(
     val archiveOff: String,
     val lastArchivedInfo: (String, Int) -> String,
     val totalArchivedCount: (Int) -> String,
-    val archivedToast: (Int) -> String
+    val archivedToast: (Int) -> String,
+    val backupCreated: String,
+    val backupFailed: String,
+    val savePhotos: String,
+    val savePhotosBody: String,
+    val savePhotosFailed: (String) -> String,
+    val savePhotosResult: (Int, String) -> String,
+    val savePhotosResultPartial: (Int, Int, String) -> String,
+    val dumpAndSyncDebug: String,
+    val dumpUploading: String,
+    val dumpWaitingRemote: String,
+    val dumpSynced: String,
+    val dumpRemoteTimeout: String,
+    val dumpSavedLocal: String,
+    val dumpSyncFailed: (String) -> String,
+    val mustLeaveSync: String,
+    val mustDissolveSync: String,
+    val seeHelpPage: String
 )
 
 data class BudgetConfigStrings(
@@ -507,7 +525,18 @@ data class TransactionsStrings(
     val clearDescriptionConfirm: (Int) -> String,
     // Save-time validation toasts
     val multiCategoryAmountsInvalid: String,
-    val editFailedTransactionMissing: String
+    val editFailedTransactionMissing: String,
+    val saveFailed: (String) -> String,
+    val expenseReportsSaved: (Int) -> String,
+    val pdfGenerationFailed: (String) -> String,
+    val enterTotalFirst: String,
+    val unableToFix: String,
+    val camera: String,
+    val gallery: String,
+    val photosPaidFeature: String,
+    val addPhoto: String,
+    val receiptPhotoN: (Int) -> String,
+    val fullSizeReceiptPhoto: String
 )
 
 data class SavingsGoalsStrings(
@@ -554,7 +583,9 @@ data class SavingsGoalsStrings(
     val simulationSavingsLabel: String,
     val simulationOverUnderLabel: (String) -> String,
     val simulationSavingsExceedBudget: String,
-    val simulationNoData: String
+    val simulationNoData: String,
+    val zoomIn: String,
+    val zoomOut: String
 )
 
 data class AmortizationStrings(
@@ -707,7 +738,8 @@ data class SyncStrings(
     val removeDeviceConfirm: String,
     val subscriptionExpiredNotice: String,
     val updateRequiredNotice: String,
-    val copy: String
+    val copy: String,
+    val groupLeftLocally: String
 )
 
 // ── Help Screen Strings ──
@@ -1519,6 +1551,8 @@ data class BudgetCalendarStrings(
     val totalIncome: (String) -> String,
     val totalExpenses: (String) -> String,
     val budgetResetDay: String,
+    val previousMonth: String,
+    val nextMonth: String,
     val sun: String,
     val mon: String,
     val tue: String,

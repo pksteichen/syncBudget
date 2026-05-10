@@ -497,7 +497,7 @@ class MainActivity : ComponentActivity() {
                 if (vm.currentScreen == "main" && vm.syncEvictionMessage != null) {
                     AdAwareAlertDialog(
                         onDismissRequest = { vm.syncEvictionMessage = null },
-                        title = { DialogHeader("Sync") },
+                        title = { DialogHeader(vm.strings.sync.title) },
                         text = { Text(vm.syncEvictionMessage ?: "") },
                         confirmButton = {
                             DialogPrimaryButton(onClick = { vm.syncEvictionMessage = null }) {
@@ -512,7 +512,7 @@ class MainActivity : ComponentActivity() {
                     val claim = vm.adminClaimVoteNeeded!!
                     AdAwareAlertDialog(
                         onDismissRequest = { vm.adminClaimVoteNeeded = null },
-                        title = { DialogHeader("Sync") },
+                        title = { DialogHeader(vm.strings.sync.title) },
                         text = { Text(vm.strings.sync.claimVotePrompt(claim.claimantName)) },
                         confirmButton = {
                             DialogPrimaryButton(onClick = { vm.voteOnAdminClaim("accept") }) {
@@ -531,7 +531,7 @@ class MainActivity : ComponentActivity() {
                 if (vm.currentScreen == "main" && vm.adminClaimMessage != null) {
                     AdAwareAlertDialog(
                         onDismissRequest = { vm.adminClaimMessage = null },
-                        title = { DialogHeader("Sync") },
+                        title = { DialogHeader(vm.strings.sync.title) },
                         text = { Text(vm.adminClaimMessage ?: "") },
                         confirmButton = {
                             DialogPrimaryButton(onClick = { vm.adminClaimMessage = null }) {
@@ -1408,8 +1408,8 @@ class MainActivity : ComponentActivity() {
                                 vm.launchIO {
                                     val result = BackupManager.performBackup(context, savedPwd)
                                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                        if (result.isSuccess) toastState.show("Backup created")
-                                        else toastState.show("Backup failed — please try again", durationMs = 7000L)
+                                        if (result.isSuccess) toastState.show(vm.strings.settings.backupCreated)
+                                        else toastState.show(vm.strings.settings.backupFailed, durationMs = 7000L)
                                     }
                                 }
                             }
@@ -1472,10 +1472,10 @@ class MainActivity : ComponentActivity() {
             val context = androidx.compose.ui.platform.LocalContext.current
             AdAwareAlertDialog(
                 onDismissRequest = { vm.showSavePhotosDialog = false },
-                title = { Text("Save Photos") },
+                title = { Text(strings.settings.savePhotos) },
                 style = DialogStyle.DEFAULT,
                 text = {
-                    Text("Photos are already backed up in encrypted backups if Automatic Backups is enabled below. This will save unencrypted copies of all receipt photos to Download/BudgeTrak/photos/ on your device if you need them for other purposes. Each save creates a new timestamped folder.")
+                    Text(strings.settings.savePhotosBody)
                 },
                 confirmButton = {
                     DialogPrimaryButton(onClick = {
@@ -1525,16 +1525,17 @@ class MainActivity : ComponentActivity() {
                                 com.techadvantage.budgetrak.data.sync.ReceiptManager
                                     .cleanOrphans(context, keepIds)
                                 vm.receiptStorageRevision++ // trigger Settings cache-size refresh
+                                val path = "Download/BudgeTrak/photos/$stamp/"
                                 val msg = if (failed.isEmpty()) {
-                                    "Saved $count photos to Download/BudgeTrak/photos/$stamp/"
+                                    strings.settings.savePhotosResult(count, path)
                                 } else {
-                                    "Saved $count photos (${failed.size} skipped) to Download/BudgeTrak/photos/$stamp/"
+                                    strings.settings.savePhotosResultPartial(count, failed.size, path)
                                 }
                                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { toastState.show(msg) }
                             } catch (e: Exception) {
                                 android.util.Log.w("SavePhotos", "Failed: ${e.message}")
                                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                    toastState.show("Failed to save photos: ${e.message}")
+                                    toastState.show(strings.settings.savePhotosFailed(e.message ?: ""))
                                 }
                             }
                         }
@@ -2092,8 +2093,8 @@ class MainActivity : ComponentActivity() {
                         val result = BackupManager.performBackup(context, pwd)
                         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                             vm.lastBackupDate = vm.backupPrefs.getString("last_backup_date", null)
-                            if (result.isSuccess) toastState.show("Backup created")
-                            else toastState.show("Backup failed — please try again", durationMs = 7000L)
+                            if (result.isSuccess) toastState.show(vm.strings.settings.backupCreated)
+                            else toastState.show(vm.strings.settings.backupFailed, durationMs = 7000L)
                         }
                     }
                 }
@@ -2137,7 +2138,7 @@ class MainActivity : ComponentActivity() {
                         if (gId != null) {
                             // 3. Upload own files
                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                toastState.show("Uploading local debug files\u2026")
+                                toastState.show(vm.strings.settings.dumpUploading)
                             }
                             val extraDebug = StringBuilder(diagText)
                             // clock_dump.txt is legacy public-Download (still in supportDir);
@@ -2202,7 +2203,7 @@ class MainActivity : ComponentActivity() {
 
                             // 5. Poll for remote files (wait up to 90s for other devices)
                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                toastState.show("Waiting for remote device\u2026")
+                                toastState.show(vm.strings.settings.dumpWaitingRemote)
                             }
                             val requestTime = System.currentTimeMillis()
                             var gotFreshRemote = false
@@ -2223,20 +2224,20 @@ class MainActivity : ComponentActivity() {
                             }
                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                                 if (gotFreshRemote) {
-                                    toastState.show("Debug files synced")
+                                    toastState.show(vm.strings.settings.dumpSynced)
                                 } else {
-                                    toastState.show("Local files saved. Remote device didn\u2019t respond in 90s.")
+                                    toastState.show(vm.strings.settings.dumpRemoteTimeout)
                                 }
                             }
                         } else {
                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                toastState.show("Debug files saved locally")
+                                toastState.show(vm.strings.settings.dumpSavedLocal)
                             }
                         }
                     } catch (e: Exception) {
                         android.util.Log.e("DumpDebug", "Debug sync failed: ${e.message}", e)
                         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                            toastState.show("Debug sync failed: ${e.message?.take(60)}")
+                            toastState.show(vm.strings.settings.dumpSyncFailed(e.message?.take(60) ?: ""))
                         }
                     }
                 }
@@ -2831,7 +2832,7 @@ class MainActivity : ComponentActivity() {
                                 GroupManager.leaveGroup(context, localOnly = true)
                             } catch (_: Exception) {}
                             vm.resetSyncState()
-                            toastState.show("Group left locally (server unreachable)")
+                            toastState.show(vm.strings.sync.groupLeftLocally)
                         }
                     }
                 }

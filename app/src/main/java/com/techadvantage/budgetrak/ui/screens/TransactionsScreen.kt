@@ -480,7 +480,7 @@ fun TransactionsScreen(
             }
             toastState.show(S.transactions.savedSuccessfully(toSave.size))
         } catch (e: Exception) {
-            toastState.show("Save failed: ${e.message}")
+            toastState.show(S.transactions.saveFailed(e.message ?: ""))
         }
     }
 
@@ -498,7 +498,7 @@ fun TransactionsScreen(
             }
             toastState.show(S.transactions.savedSuccessfully(toSave.size))
         } catch (e: Exception) {
-            toastState.show("Save failed: ${e.message}")
+            toastState.show(S.transactions.saveFailed(e.message ?: ""))
         }
     }
 
@@ -514,7 +514,7 @@ fun TransactionsScreen(
             toastState.show(S.transactions.fullBackupSaved)
             includeAllData = false
         } catch (e: Exception) {
-            toastState.show("Save failed: ${e.message}")
+            toastState.show(S.transactions.saveFailed(e.message ?: ""))
         }
     }
 
@@ -1903,11 +1903,11 @@ fun TransactionsScreen(
                 try {
                     val files = ExpenseReportGenerator.generateReports(context, toSave, categories, currencySymbol)
                     withContext(Dispatchers.Main) {
-                        toastState.show("${files.size} expense report(s) saved to Download/BudgeTrak/PDF", durationMs = 7500L)
+                        toastState.show(S.transactions.expenseReportsSaved(files.size), durationMs = 7500L)
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
-                        toastState.show("PDF generation failed: ${e.message}")
+                        toastState.show(S.transactions.pdfGenerationFailed(e.message ?: ""))
                     }
                 }
             }
@@ -3721,7 +3721,7 @@ fun TransactionDialog(
                         if (!isPaidUser) {
                             Icon(
                                 imageVector = Icons.Filled.CameraAlt,
-                                contentDescription = "Photos (paid feature)",
+                                contentDescription = S.transactions.photosPaidFeature,
                                 tint = headerTxt.copy(alpha = 0.3f),
                                 modifier = Modifier.size(20.dp)
                                     .clickable { toastState.show(S.settings.upgradeForPhotos) }
@@ -3730,7 +3730,7 @@ fun TransactionDialog(
                             Box {
                                 Icon(
                                     imageVector = Icons.Filled.CameraAlt,
-                                    contentDescription = "Add photo",
+                                    contentDescription = S.transactions.addPhoto,
                                     tint = headerTxt,
                                     modifier = Modifier
                                         .size(20.dp)
@@ -3742,7 +3742,7 @@ fun TransactionDialog(
                                 ) {
                                     ScrollableDropdownContent {
                                         DropdownMenuItem(
-                                            text = { Text("Camera") },
+                                            text = { Text(S.transactions.camera) },
                                             leadingIcon = { Icon(Icons.Filled.PhotoCamera, null) },
                                             onClick = {
                                                 showDialogCameraPicker = false
@@ -3755,7 +3755,7 @@ fun TransactionDialog(
                                             }
                                         )
                                         DropdownMenuItem(
-                                            text = { Text("Gallery") },
+                                            text = { Text(S.transactions.gallery) },
                                             leadingIcon = { Icon(Icons.Filled.Collections, null) },
                                             onClick = {
                                                 showDialogCameraPicker = false
@@ -4023,7 +4023,7 @@ fun TransactionDialog(
                                     if (thumb != null) {
                                         Image(
                                             bitmap = thumb.asImageBitmap(),
-                                            contentDescription = "Receipt photo ${i + 1}",
+                                            contentDescription = S.transactions.receiptPhotoN(i + 1),
                                             contentScale = ContentScale.Crop,
                                             modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(6.dp))
                                         )
@@ -4431,7 +4431,7 @@ fun TransactionDialog(
                         // Pie chart mode
                         IconButton(onClick = {
                             if (!totalFilled) {
-                                toastState.show("Enter a total to enable this mode.", modeButtonsWindowY)
+                                toastState.show(S.transactions.enterTotalFirst, modeButtonsWindowY)
                             } else {
                                 // If activating pie from percent mode, first convert the
                                 // stored percentages to dollars so pie mode (and any later
@@ -4497,7 +4497,7 @@ fun TransactionDialog(
                         // Percentage mode
                         IconButton(onClick = {
                             if (!totalFilled) {
-                                toastState.show("Enter a total to enable this mode.", modeButtonsWindowY)
+                                toastState.show(S.transactions.enterTotalFirst, modeButtonsWindowY)
                             } else if (!usePercentage) {
                                 showPieChart = false
                                 // Convert amounts to percentages
@@ -5316,7 +5316,7 @@ fun TransactionDialog(
                             }
                             val newAmount = mismatchTotal - otherSum
                             if (newAmount < 0) {
-                                toastState.show("Unable to Fix", fixBtnYPx)
+                                toastState.show(S.transactions.unableToFix, fixBtnYPx)
                             } else {
                                 categoryAmountTexts[catId] = formatAmount(newAmount, maxDecimals)
                                 showSumMismatchDialog = false

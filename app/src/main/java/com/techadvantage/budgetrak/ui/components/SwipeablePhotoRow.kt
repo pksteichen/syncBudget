@@ -458,7 +458,7 @@ fun SwipeablePhotoRow(
                         if (thumb != null) {
                             Image(
                                 bitmap = thumb.asImageBitmap(),
-                                contentDescription = "Receipt photo ${i + 1}",
+                                contentDescription = S.transactions.receiptPhotoN(i + 1),
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -626,7 +626,7 @@ fun FullScreenPhotoViewer(
         ) {
             Image(
                 bitmap = displayBitmap.asImageBitmap(),
-                contentDescription = "Full size receipt photo",
+                contentDescription = S.transactions.fullSizeReceiptPhoto,
                 contentScale = ContentScale.Fit,
                 modifier = Modifier
                     .fillMaxSize()
@@ -667,7 +667,7 @@ fun FullScreenPhotoViewer(
             ) {
                 Icon(
                     Icons.Filled.RotateRight,
-                    contentDescription = "Rotate",
+                    contentDescription = S.common.rotate,
                     tint = Color.White,
                     modifier = Modifier.size(28.dp)
                 )

@@ -71,7 +71,8 @@ object EnglishStrings : AppStrings {
         language = "Language",
         dateDayTooHigh = "Please select a date between the 1st and 28th of the month",
         descriptionFieldLabel = "Description",
-        selectDate = "Select Date"
+        selectDate = "Select Date",
+        rotate = "Rotate"
     )
 
     override val dashboard = DashboardStrings(
@@ -256,7 +257,24 @@ object EnglishStrings : AppStrings {
         archiveOff = "Off",
         lastArchivedInfo = { date, count -> "Last archived: $date ($count transactions)" },
         totalArchivedCount = { count -> "Total archived: %,d transactions".format(count) },
-        archivedToast = { count -> "Archived $count old transactions to keep the app fast" }
+        archivedToast = { count -> "Archived $count old transactions to keep the app fast" },
+        backupCreated = "Backup created",
+        backupFailed = "Backup failed \u2014 please try again",
+        savePhotos = "Save Photos",
+        savePhotosBody = "Photos are already backed up in encrypted backups if Automatic Backups is enabled below. This will save unencrypted copies of all receipt photos to Download/BudgeTrak/photos/ on your device if you need them for other purposes. Each save creates a new timestamped folder.",
+        savePhotosFailed = { msg -> "Failed to save photos: $msg" },
+        savePhotosResult = { count, path -> "Saved $count photos to $path" },
+        savePhotosResultPartial = { saved, skipped, path -> "Saved $saved photos ($skipped skipped) to $path" },
+        dumpAndSyncDebug = "Dump & Sync Debug",
+        dumpUploading = "Uploading local debug files\u2026",
+        dumpWaitingRemote = "Waiting for remote device\u2026",
+        dumpSynced = "Debug files synced",
+        dumpRemoteTimeout = "Local files saved. Remote device didn\u2019t respond in 90s.",
+        dumpSavedLocal = "Debug files saved locally",
+        dumpSyncFailed = { msg -> "Debug sync failed: $msg" },
+        mustLeaveSync = "You must leave your SYNC group to use this feature.",
+        mustDissolveSync = "You must dissolve your SYNC group to use this feature.",
+        seeHelpPage = "See help (?) page for more information."
     )
 
     override val budgetConfig = BudgetConfigStrings(
@@ -475,7 +493,18 @@ object EnglishStrings : AppStrings {
         newDescription = "New description",
         clearDescriptionConfirm = { count -> "This will clear the description on all $count selected transactions. Continue?" },
         multiCategoryAmountsInvalid = "Please enter a valid amount for each selected category.",
-        editFailedTransactionMissing = "Couldn't save \u2014 this transaction is no longer available."
+        editFailedTransactionMissing = "Couldn't save \u2014 this transaction is no longer available.",
+        saveFailed = { msg -> "Save failed: $msg" },
+        expenseReportsSaved = { count -> "$count expense report(s) saved to Download/BudgeTrak/PDF" },
+        pdfGenerationFailed = { msg -> "PDF generation failed: $msg" },
+        enterTotalFirst = "Enter a total to enable this mode.",
+        unableToFix = "Unable to Fix",
+        camera = "Camera",
+        gallery = "Gallery",
+        photosPaidFeature = "Photos (paid feature)",
+        addPhoto = "Add photo",
+        receiptPhotoN = { n -> "Receipt photo $n" },
+        fullSizeReceiptPhoto = "Full size receipt photo"
     )
 
     override val savingsGoals = SavingsGoalsStrings(
@@ -522,7 +551,9 @@ object EnglishStrings : AppStrings {
         simulationSavingsLabel = "Current Savings",
         simulationOverUnderLabel = { period -> "+/- Budget per $period" },
         simulationSavingsExceedBudget = "Savings per period exceed the budget amount",
-        simulationNoData = "No simulation data available"
+        simulationNoData = "No simulation data available",
+        zoomIn = "Zoom in",
+        zoomOut = "Zoom out"
     )
 
     override val amortization = AmortizationStrings(
@@ -670,7 +701,8 @@ object EnglishStrings : AppStrings {
         removeDeviceConfirm = "Remove",
         subscriptionExpiredNotice = "Admin subscription expired. Group will be dissolved soon. Subscribe and claim admin to keep the group active.",
         updateRequiredNotice = "Another device in your SYNC group updated BudgeTrak. Please update from the Play Store to continue syncing.",
-        copy = "Copy"
+        copy = "Copy",
+        groupLeftLocally = "Group left locally (server unreachable)"
     )
 
     // ── Help Screen Strings ──
@@ -1890,6 +1922,8 @@ object EnglishStrings : AppStrings {
         totalIncome = { amount -> "Total income: $amount" },
         totalExpenses = { amount -> "Total expenses: $amount" },
         budgetResetDay = "Budget Reset Day",
+        previousMonth = "Previous month",
+        nextMonth = "Next month",
         sun = "Sun", mon = "Mon", tue = "Tue", wed = "Wed", thu = "Thu", fri = "Fri", sat = "Sat"
     )
 

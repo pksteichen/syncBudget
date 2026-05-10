@@ -5,11 +5,13 @@ type: reference
 ---
 
 ## File layout (`ui/strings/`)
-- **`AppStrings.kt`** (1498 lines, ~1,226 `val` fields across ~25 `*Strings` data classes) — the schema. Add new fields here first. Kotlin's data-class constructor is the compile-time contract that forces the English/Spanish implementations to stay in lockstep.
-- **`EnglishStrings.kt`** (1896 lines) — `object EnglishStrings : AppStrings` providing every English value.
-- **`SpanishStrings.kt`** (1882 lines) — same structure with Spanish values.
-- **`TranslationContext.kt`** (1477 lines) — parallel `mapOf` per data class with translator-facing context descriptions for every field. Metadata only — not compiled into the app.
+- **`AppStrings.kt`** — the schema (~1,450 `val` fields across 22 data classes). Add new fields here first. Kotlin's data-class constructor is the compile-time contract that forces the English/Spanish implementations to stay in lockstep.
+- **`EnglishStrings.kt`** — `object EnglishStrings : AppStrings` providing every English value.
+- **`SpanishStrings.kt`** — same structure with Spanish values (es-419, see below).
+- **`TranslationContext.kt`** — parallel `mapOf` per data class with translator-facing context descriptions for every field. Metadata only — **not compiled into the app**, so drift is possible. Verify with the one-liner in `feedback_translation_context.md`.
 - **`LocalStrings.kt`** — `staticCompositionLocalOf<AppStrings>`. Composables read via `val S = LocalStrings.current; Text(S.settings.title)`.
+
+Line counts shift with every change — don't memorize them. Run `wc -l` if you need an actual current count.
 
 ## Language selection
 - `appLanguage` pref: `"en"`, `"es"`, or missing (device default via `Locale.getDefault().language`).
@@ -51,4 +53,11 @@ The Spanish strings target **neutral Latin American Spanish (es-419)**, not Cast
 - "BudgeTrak" is the product name — never translated.
 
 ## Size discipline
-Lockstep between `AppStrings`, `EnglishStrings`, `SpanishStrings` is enforced by the Kotlin compiler. `TranslationContext` isn't compiled, so drift is possible there — periodic audits should check it covers every field.
+Lockstep between `AppStrings`, `EnglishStrings`, `SpanishStrings` is enforced by the Kotlin compiler. `TranslationContext` isn't compiled, so drift is possible there. **Run the parity awk one-liner in `feedback_translation_context.md` before any commit that touches the strings system** — that's the only way to catch drift early.
+
+## Drift history (what to expect / why the discipline matters)
+
+- **2026-04-10 audit**: established that `TranslationContext.kt` was production quality at that point.
+- **2026-05-09 audit + fix**: found that 27 days of feature work had introduced 33 missing context entries (mostly Settings archive + AI-OCR additions, Sync claim-vote / subscription-grace strings) plus 22 entries misfiled into the wrong `mapOf` (the `savingsGoals` ↔ `recurringExpenses` cluster) plus 8 stale orphans (target-date sub-fields removed when SG went single-type). Same audit found ~30 hardcoded UI strings in `MainActivity.kt`, `SettingsScreen.kt`, `TransactionsScreen.kt`, `BudgetCalendarScreen.kt`, `SimulationGraphScreen.kt`, `SwipeablePhotoRow.kt`, plus 3 `DialogHeader("Sync")` brand-rule violations. All fixed in the same /push.
+
+The pattern: feature waves add fields without keeping `TranslationContext` lockstep, and accessibility/edge-case strings (toasts, contentDescription, debug flows) get hardcoded because they don't feel like "UI". Use the verification commands every time, not just on big audits.

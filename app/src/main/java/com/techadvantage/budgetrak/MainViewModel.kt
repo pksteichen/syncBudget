@@ -3354,7 +3354,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         subscriberPrice = state.subscriberPrice
 
         val isOverridden = BuildConfig.DEBUG && billingOverrideEnabled
-        if (isOverridden) return // Manual checkboxes are authoritative — leave flags alone
+        if (isOverridden) {
+            // Manual checkboxes are authoritative — skip flag updates but still
+            // report what Play actually sees so a debug "Restore Purchases" tap
+            // surfaces real state rather than a misleading QueryFailed.
+            return if (state.paidUpgradePurchase != null || state.subscriberPurchase != null) {
+                RestorePurchasesResult.PurchasesFound
+            } else {
+                RestorePurchasesResult.NoPurchases
+            }
+        }
 
         val newPaid = state.paidUpgradePurchase != null
         val newSub = state.subscriberPurchase != null

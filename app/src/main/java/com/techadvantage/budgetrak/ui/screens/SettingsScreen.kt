@@ -291,7 +291,7 @@ fun SettingsScreen(
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Dump & Sync Debug")
+                        Text(S.settings.dumpAndSyncDebug)
                     }
                 }
             }
@@ -1014,7 +1014,7 @@ fun SettingsScreen(
                         enabled = isPaidUser || isSubscriber,
                         modifier = Modifier.alpha(if (isPaidUser || isSubscriber) 1f else 0.5f)
                     ) {
-                        Text("Save Photos")
+                        Text(S.settings.savePhotos)
                     }
                 }
             }
@@ -1162,8 +1162,7 @@ fun SettingsScreen(
                                     modifier = Modifier
                                         .matchParentSize()
                                         .clickable {
-                                            val action = if (isAdmin) "dissolve" else "leave"
-                                            toastState.show("You must $action your SYNC group to use this feature.")
+                                            toastState.show(if (isAdmin) S.settings.mustDissolveSync else S.settings.mustLeaveSync)
                                         }
                                 )
                             }
@@ -1176,7 +1175,7 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                         )
                         Text(
-                            "See help (?) page for more information.",
+                            S.settings.seeHelpPage,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                         )
@@ -1195,8 +1194,7 @@ fun SettingsScreen(
                                 modifier = Modifier
                                     .matchParentSize()
                                     .clickable {
-                                        val action = if (isAdmin) "dissolve" else "leave"
-                                        toastState.show("You must $action your SYNC group to use this feature.")
+                                        toastState.show(if (isAdmin) S.settings.mustDissolveSync else S.settings.mustLeaveSync)
                                     }
                             )
                         }
@@ -1208,7 +1206,7 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                         )
                         Text(
-                            "See help (?) page for more information.",
+                            S.settings.seeHelpPage,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                         )

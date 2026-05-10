@@ -85,7 +85,8 @@ object TranslationContext {
         "language" to "Settings label for the language/locale selection option. Noun meaning spoken/written language.",
         "dateDayTooHigh" to "Validation error message shown when user selects a day of month greater than 28.",
         "descriptionFieldLabel" to "Form field label for an optional text description/notes field on a transaction or entry.",
-        "selectDate" to "Date picker dialog title. Imperative phrase asking user to choose a calendar date."
+        "selectDate" to "Date picker dialog title. Imperative phrase asking user to choose a calendar date.",
+        "rotate" to "Action verb / button label for rotating something (currently used as accessibility description on the rotate-photo button in the fullscreen receipt viewer). Imperative form, not the noun 'rotation'."
     )
 
     // ── Dashboard Strings ──
@@ -261,7 +262,47 @@ object TranslationContext {
         "aiCsvCategorizeSubtitle" to "Small gray subtitle under the AI CSV categorization checkbox explaining what the toggle does.",
         "aiCsvCategorizeHelpTitle" to "Section title on the Transactions help page describing the AI CSV categorization feature.",
         "aiCsvCategorizeHelpBody" to "Help page body explaining how AI CSV categorization works, the on-device/AI hybrid, data-in-transit encryption, no-retention promise, and that the user can turn it off. Multi-paragraph with \\n\\n between paragraphs.",
-        "sharedImageProcessFailed" to "Toast shown when an image shared from another app fails to process into a receipt photo."
+        "sharedImageProcessFailed" to "Toast shown when an image shared from another app fails to process into a receipt photo.",
+        // Auto Capitalize
+        "autoCapitalize" to "Settings checkbox label for the auto-capitalize feature that reformats merchant and description text into Title Case as the user types. Verb phrase used as a setting name.",
+        // Backup browsing
+        "browseForBackup" to "Button label opening a folder picker so the user can locate a backup file when restoring. 'Browse' here means 'navigate the file system', not a casual look.",
+        // AI OCR receipt scan
+        "aiOcrHelpTitle" to "Help / info-dialog title for the AI Receipt Scan feature (subscriber-tier sparkle button in the transaction dialog).",
+        "aiOcrHelpBody" to "Long help body for AI Receipt Scan. Multi-paragraph (\\n\\n separators) covering: how to invoke, long-press to highlight which photo gets scanned, supplemental photos, reordering by drag, deleting via fullscreen view, and SYNC'd receipts still downloading. Preserve the bullet-style line breaks and don't shorten the SYNC paragraph.",
+        "aiOcrAddReceiptFirst" to "Toast shown when the user taps the AI sparkle button without having attached any receipt photo yet. Instructs them to add a photo first.",
+        "aiOcrReading" to "Status text shown while the AI is processing the receipt photo. 'Reading' here means 'parsing/scanning' — not reading text aloud. Trailing ellipsis indicates ongoing work.",
+        "aiOcrFailed" to "Toast shown when the AI receipt scan returns no usable data (network failure, unreadable image, or model error). Tells the user to enter the transaction manually instead.",
+        // Data Management / archive
+        "dataManagementSection" to "Settings section header grouping data-management controls (archive threshold, last-archived info, total archived counter). Plain header label.",
+        "activeTransactionsTally" to "Settings line showing how many active transactions exist vs. the archive threshold. Lambda: 'count' is current active count, 'threshold' is the configured archive threshold (both integers, formatted with thousands separators).",
+        "activeTransactionsCount" to "Settings line showing how many active transactions exist when archive is disabled (no threshold to compare against). Lambda: 'count' is the integer count, formatted with thousands separators.",
+        "archiveThresholdLabel" to "Settings field label for the active-transactions threshold above which old transactions are auto-archived. Noun phrase.",
+        "archiveOff" to "Dropdown option / value shown when the archive threshold is disabled. Means the auto-archive feature is turned off — not 'unavailable'.",
+        "lastArchivedInfo" to "Settings line showing when the most recent archive run happened and how many transactions it moved. Lambda: 'date' is a formatted date string, 'count' is the integer number archived in that run.",
+        "totalArchivedCount" to "Settings line showing the cumulative total of transactions ever archived on this device. Lambda: 'count' is the integer total, formatted with thousands separators.",
+        "archivedToast" to "Toast shown after an automatic archive run completes. Lambda: 'count' is the integer number of transactions just archived. Message reassures the user this was done to keep the app fast.",
+        // Backup / restore toasts
+        "backupCreated" to "Toast shown after a manual backup-now action succeeds. Past-tense state confirmation — no parameters.",
+        "backupFailed" to "Toast shown when a manual backup-now action fails. Encourages retry; no parameters.",
+        // Save Photos export feature (paid/subscriber tier)
+        "savePhotos" to "Dual-purpose label: button label in Settings AND title of the Save Photos confirmation dialog. Both render the same text — keep them in sync. Phrase is imperative ('Save these photos').",
+        "savePhotosBody" to "Body text of the Save Photos dialog. Multi-sentence: explains that encrypted backups already cover photos, that this option exports unencrypted copies for external use, and that each run creates a timestamped folder under Download/BudgeTrak/photos/. Path is literal — do not localize 'Download' or 'BudgeTrak/photos/'.",
+        "savePhotosFailed" to "Toast shown when the Save Photos export crashes mid-run. Lambda: 'msg' is a raw exception message (English, technical) — leave it as-is at the end of the localized lead-in.",
+        "savePhotosResult" to "Toast shown after a successful Save Photos run. Lambda: 'count' is the integer number of photos exported, 'path' is the absolute output path (e.g., '/storage/.../photos/2026-05-09_153045/'). Path is literal — do not localize.",
+        "savePhotosResultPartial" to "Toast shown after a partially-successful Save Photos run (some files were skipped). Lambda: 'saved' is integer files exported, 'skipped' is integer files that failed, 'path' is the absolute output folder. Phrasing should make the partial nature explicit so the user knows to investigate.",
+        // Debug dump (admin-visible debug builds)
+        "dumpAndSyncDebug" to "Button label in Settings (debug-build only) that triggers the diag-dump + cross-device sync flow. Composite phrase 'Dump & Sync' — keep the ampersand; both halves are technical terms (a 'dump' = save diagnostic files; 'sync' = exchange across devices).",
+        "dumpUploading" to "Status toast shown at the start of the debug-dump flow while local diagnostic files are being uploaded to the SYNC group. Trailing ellipsis indicates ongoing work.",
+        "dumpWaitingRemote" to "Status toast shown after upload completes, while waiting up to 90 seconds for other devices in the group to upload their own diagnostic files in response. Trailing ellipsis indicates ongoing work.",
+        "dumpSynced" to "Final-state toast shown when fresh diagnostic files were received from at least one remote device within the 90-second window.",
+        "dumpRemoteTimeout" to "Final-state toast shown when no remote device responded within 90 seconds. Reassures the user that local files were still saved, so the dump isn't a total loss.",
+        "dumpSavedLocal" to "Final-state toast shown when the user is solo (no SYNC group), so only the local diagnostic files were saved (no remote step happened).",
+        "dumpSyncFailed" to "Toast shown when the debug-dump flow throws an exception. Lambda: 'msg' is the (truncated) exception message, English/technical — leave it at the end of the localized lead-in.",
+        // SYNC-state guard for restore-from-backup
+        "mustLeaveSync" to "Toast shown to a non-admin SYNC member when they tap Restore Backup. Tells them they must leave the SYNC group before restoring (because restore replaces local data, which would conflict with the group's shared state).",
+        "mustDissolveSync" to "Toast shown to a SYNC admin when they tap Restore Backup. Tells them they must dissolve the group (since they own it) before restoring. Same constraint as mustLeaveSync but with admin-specific verb.",
+        "seeHelpPage" to "Small footnote line under the disabled Restore Backup button when the user is in a SYNC group. Points the user to the Settings help page (?) for more context. Keep the literal '(?)' character — it represents the help icon in the UI."
     )
 
     // ── Budget Configuration Strings ──
@@ -340,7 +381,6 @@ object TranslationContext {
         "total" to "Label for the sum of all displayed transaction amounts. Noun/adjective.",
         "pieChart" to "Toggle button label to switch the multi-category entry mode to an interactive pie chart. Noun phrase describing a circular graph.",
         "calculator" to "Toggle button label to switch the multi-category entry mode to entering specific dollar amounts per category, like using a calculator. Refers to the entry mode, not a math calculator app.",
-        "calculatorTitle" to "Help subsection heading: 'Calculator Mode'. Refers to the calculator entry mode for multi-category transactions (the one where the user types dollar amounts directly into each category). Not a math calculator app.",
         "percentage" to "Toggle button label to switch the multi-category entry mode to entering percentage splits per category. Noun.",
         "save" to "Header icon/button label for exporting transactions to a file. Means to write/export to a file — not rescue. Action verb.",
         "load" to "Header icon/button label for importing transactions from a file. Means to read/import from a file — not a physical load/weight. Action verb.",
@@ -475,7 +515,34 @@ object TranslationContext {
         "discard" to "Button label to confirm discarding unsaved changes in the transaction form.",
         "keepEditing" to "Button label to cancel the discard action and continue editing the transaction form.",
         "multiCategoryAmountsInvalid" to "Toast shown when the user taps Save in the transaction dialog with multi-category mode active but the total or one of the per-category amounts is missing, zero, or unparseable. Tells the user the form needs valid amounts before saving.",
-        "editFailedTransactionMissing" to "Toast shown when the user taps Save on an edit dialog but the underlying transaction has been removed from the active list (e.g., archive cutoff applied during the edit, or sync delivered a tombstone purge). Indicates the edit could not be persisted."
+        "editFailedTransactionMissing" to "Toast shown when the user taps Save on an edit dialog but the underlying transaction has been removed from the active list (e.g., archive cutoff applied during the edit, or sync delivered a tombstone purge). Indicates the edit could not be persisted.",
+        // Export-flow failure toasts
+        "saveFailed" to "Toast shown when an export action (CSV / XLSX / JSON) fails to write the output file. Lambda: 'msg' is the underlying exception message, English/technical — leave it at the end of the localized lead-in.",
+        "expenseReportsSaved" to "Toast shown after a successful PDF expense-report export. Lambda: 'count' is the integer number of report files written. Output path 'Download/BudgeTrak/PDF' is literal — do not localize.",
+        "pdfGenerationFailed" to "Toast shown when PDF expense-report generation throws an exception. Lambda: 'msg' is the underlying exception message — leave it at the end of the localized lead-in.",
+        // Multi-category mode-switch guard
+        "enterTotalFirst" to "Toast shown when the user taps the pie-chart or percentage mode toggle while the Total field is empty. Tells the user that the total has to be entered first because the other modes split that total across categories.",
+        // Sum-mismatch fix-button failure
+        "unableToFix" to "Button-style toast shown when the user taps Fix on the sum-mismatch dialog but the fix would produce a negative category amount. The fix isn't possible without manual intervention. Title-case to match the button it appears next to.",
+        // Photo picker dropdown menu
+        "camera" to "Dropdown menu item label for capturing a new photo via the device camera. Common noun — keep title-case as a menu item.",
+        "gallery" to "Dropdown menu item label for picking an existing photo from the device's photo gallery (pictures app). Common noun — keep title-case as a menu item.",
+        // Photo bar accessibility / labels
+        "photosPaidFeature" to "Accessibility content description on the disabled photo-camera icon shown to free-tier users in the transaction dialog. Tapping it shows an upgrade-prompt toast. Parenthetical clarifies the gate.",
+        "addPhoto" to "Accessibility content description on the photo-camera icon shown to paid/subscriber-tier users in the transaction dialog. Tapping it opens the camera/gallery dropdown.",
+        "receiptPhotoN" to "Accessibility content description on each receipt thumbnail in the photo bar. Lambda: 'n' is the 1-based slot index (Receipt photo 1, Receipt photo 2, …). Used by both the dialog photo bar and the swipeable photo row.",
+        "fullSizeReceiptPhoto" to "Accessibility content description on the fullscreen receipt-photo image (the zoom/pan view that opens when tapping a thumbnail). Distinguishes it from the small thumbnail in the photo bar.",
+        // Date-range filter chips on the transactions list
+        "range6mo" to "Compact chip label for a 6-month date-range filter on the transactions list. Abbreviated form of '6 months' to fit on the chip. Pair with 1yr / 2yr / All chips.",
+        "range1yr" to "Compact chip label for a 1-year date-range filter on the transactions list. Abbreviated form of '1 year' to fit on the chip.",
+        "range2yr" to "Compact chip label for a 2-year date-range filter on the transactions list. Abbreviated form of '2 years' to fit on the chip.",
+        "rangeAll" to "Compact chip label meaning 'no date range limit' on the transactions list. Distinct from DashboardStrings.rangeAll which is 'All Time' (used in spending-chart context); this one fits next to the 6mo / 1yr / 2yr chips and is shorter.",
+        // Archived-transaction edit guard
+        "archivedNotEditable" to "Toast shown when the user tries to edit an archived (auto-archived) transaction. Editing archived rows is disallowed because they no longer participate in the active calculation.",
+        // Bulk edit description (selection mode)
+        "editDescriptionAlso" to "Checkbox label in the bulk-edit toolbar that, when ticked, applies the description change in addition to whatever other field (e.g., category) is being bulk-edited. 'Also' means 'in addition to the primary edit'.",
+        "newDescription" to "Text-field label for the new description value the user is typing in the bulk-edit toolbar. Will be applied to every selected transaction.",
+        "clearDescriptionConfirm" to "Confirmation dialog body shown when the user is about to clear (empty) the description on multiple selected transactions. Lambda: 'count' is the number of selected transactions; warns this is a bulk wipe, asks to continue."
     )
 
     // ── Savings Goals Strings ──
@@ -488,11 +555,8 @@ object TranslationContext {
         "name" to "Form field label for the savings goal's description/title (e.g., 'New Tires', 'Vacation'). Label text is 'Description'.",
         "targetAmount" to "Form field label for the total monetary amount the user wants to save.",
         "startingSavedAmount" to "Form field label for money already saved toward this goal before creating it in the app.",
-        "targetDate" to "Form field label for the date by which the user wants to reach the savings target.",
-        "fixedContribution" to "Form field / goal type label for a savings goal with a fixed per-period contribution amount (no target date).",
         "contributionPerPeriod" to "Form field label for the amount to save each budget period in a fixed-contribution goal.",
-        "selectTargetDate" to "Button label to open a date picker for choosing the goal's target completion date.",
-        "targetDateLabel" to "Label showing the selected target date. Lambda: 'date' is a formatted date string.",
+        "calculateWithTargetDate" to "Helper button label that auto-fills the contribution amount from a target date the user picks. Single-type savings goal (always fixed contribution); the helper just back-solves what to contribute per period to hit the target by a given date.",
         "goalReached" to "Status label displayed when the saved amount meets or exceeds the target. Celebratory message.",
         "paused" to "Status label displayed when a savings goal's deductions have been temporarily stopped. Past participle of 'to pause'.",
         "budgetReduction" to "Label showing how much the savings goal reduces the budget per period. Lambda: 'amount' is currency, 'period' is time unit. Displayed with a minus sign.",
@@ -511,11 +575,25 @@ object TranslationContext {
         "exampleContribution" to "Placeholder text in the fixed contribution field showing an example value.",
         "mustBeLessThanTarget" to "Validation error message when the starting saved amount is greater than or equal to the target amount.",
         "payoffDate" to "Label showing the estimated date when a fixed-contribution goal will be fully saved. Lambda: 'date' is a formatted date.",
-        "calculateWithTargetDate" to "Toggle/checkbox label to switch a savings goal from fixed-contribution mode to target-date mode, where the app auto-calculates per-period deductions based on the deadline.",
-        "acceleratedMode" to "Toggle label for the accelerated set-aside feature on a savings goal. When enabled, the app front-loads larger contributions in earlier periods. Noun phrase used as a setting name.",
-        "acceleratedModeEnabled" to "Toast notification confirming accelerated set-aside mode was turned on for a savings goal.",
-        "acceleratedModeDisabled" to "Toast notification confirming accelerated set-aside mode was turned off for a savings goal.",
-        "setAsideProgress" to "Progress label showing how much has been set aside toward a savings goal. Lambda: 'saved' is the amount already set aside, 'total' is the goal target. Displayed as '[saved] / [total] set aside'."
+        "savingsRequiredMessage" to "Cash flow advisory message telling the user how much savings they need to cover budget, future expenses, and savings goals listed below. Lambda: 'amount' is the needed savings, 'period' is a phrase like 'today\\'s' or 'this week\\'s' (currently unused in EN/ES).",
+        "savingsPeriodDaily" to "Period phrase used in the savings required message for daily budgets. Means 'today\\'s' (as in today's budget).",
+        "savingsPeriodWeekly" to "Period phrase used in the savings required message for weekly budgets. Means 'this week\\'s' (as in this week's budget).",
+        "savingsPeriodMonthly" to "Period phrase used in the savings required message for monthly budgets. Means 'this month\\'s' (as in this month's budget).",
+        "savingsWhyLink" to "Tappable link text asking 'Why?' — opens an explanation of why savings are needed.",
+        "savingsWhyTitle" to "Dialog title explaining why a certain savings amount is needed.",
+        "savingsWhyBody" to "Long explanatory text about cash flow simulation: the app projects future income and expenses to find the lowest cash point and tells you how much buffer you need. Contains line breaks.",
+        "savingsLowPointToast" to "Toast notification showing the date of the projected lowest cash balance point. Lambda: 'date' is a formatted date.",
+        "linkedTransactions" to "Dialog heading shown when long-pressing a savings goal to see which transactions are linked to it.",
+        "noLinkedTransactions" to "Toast shown when long-pressing a savings goal that has no linked transactions.",
+        "viewSimulationChart" to "Button label to open the Cash Flow Simulation chart screen. Shows projected cash balance over time.",
+        "simulationGraphTitle" to "Screen title for the Cash Flow Simulation chart page.",
+        "simulationGraphDescription" to "Instructional text at the top of the simulation chart screen explaining what it shows and how to use the inputs.",
+        "simulationSavingsLabel" to "Text field label for the current savings input on the simulation chart. The amount of money the user currently has saved.",
+        "simulationOverUnderLabel" to "Text field label on the simulation chart for a per-period over/under-budget adjustment. Positive = spending over budget (bigger drain); negative = under (saving more). Lambda: 'period' is the budget period name (day/week/month).",
+        "simulationSavingsExceedBudget" to "Warning message shown when the user's per-period savings amount exceeds their budget — the savings rate is unsustainable.",
+        "simulationNoData" to "Message shown on the simulation chart when there is no data to display (no income or expenses configured).",
+        "zoomIn" to "Accessibility content description on the simulation chart's zoom-in button (plus icon). Imperative phrase. Pair with zoomOut.",
+        "zoomOut" to "Accessibility content description on the simulation chart's zoom-out button (minus icon). Imperative phrase. Pair with zoomIn."
     )
 
     // ── Amortization Strings ──
@@ -574,21 +652,10 @@ object TranslationContext {
         "twicePerMonth" to "Repeat schedule description for an expense occurring two times each month (bi-monthly).",
         "linkedTransactions" to "Section header listing transactions that have been linked/associated with this recurring expense.",
         "noLinkedTransactions" to "Empty state message when no transactions have been linked to this recurring expense.",
-        "savingsRequiredMessage" to "Cash flow advisory message telling the user how much savings they need to cover budget, future expenses, and savings goals listed below. Lambda: 'amount' is the needed savings, 'period' is a phrase like 'today\\'s' or 'this week\\'s' (currently unused in EN/ES).",
-        "savingsPeriodDaily" to "Period phrase used in the savings required message for daily budgets. Means 'today\\'s' (as in today's budget).",
-        "savingsPeriodWeekly" to "Period phrase used in the savings required message for weekly budgets. Means 'this week\\'s' (as in this week's budget).",
-        "savingsPeriodMonthly" to "Period phrase used in the savings required message for monthly budgets. Means 'this month\\'s' (as in this month's budget).",
-        "savingsWhyLink" to "Tappable link text asking 'Why?' — opens an explanation of why savings are needed.",
-        "savingsWhyTitle" to "Dialog title explaining why a certain savings amount is needed.",
-        "savingsWhyBody" to "Long explanatory text about cash flow simulation: the app projects future income and expenses to find the lowest cash point and tells you how much buffer you need. Contains line breaks.",
-        "savingsLowPointToast" to "Toast notification showing the date of the projected lowest cash balance point. Lambda: 'date' is a formatted date.",
-        "viewSimulationChart" to "Button label to open the Cash Flow Simulation chart screen. Shows projected cash balance over time.",
-        "simulationGraphTitle" to "Screen title for the Cash Flow Simulation chart page.",
-        "simulationGraphDescription" to "Instructional text at the top of the simulation chart screen explaining what it shows and how to use the inputs.",
-        "simulationSavingsLabel" to "Text field label for the current savings input on the simulation chart. The amount of money the user currently has saved.",
-        "simulationOverUnderLabel" to "Text field label on the simulation chart for a per-period over/under-budget adjustment. Positive = spending over budget (bigger drain); negative = under (saving more). Lambda: 'period' is the budget period name (day/week/month).",
-        "simulationSavingsExceedBudget" to "Warning message shown when the user's per-period savings amount exceeds their budget — the savings rate is unsustainable.",
-        "simulationNoData" to "Message shown on the simulation chart when there is no data to display (no income or expenses configured)."
+        "acceleratedMode" to "Toggle label for the accelerated set-aside feature on a recurring expense. When enabled, the app front-loads larger contributions in earlier periods so the bill amount accumulates ahead of its due date. Noun phrase used as a setting name.",
+        "acceleratedModeEnabled" to "Toast notification confirming accelerated set-aside mode was turned on for a recurring expense.",
+        "acceleratedModeDisabled" to "Toast notification confirming accelerated set-aside mode was turned off for a recurring expense.",
+        "setAsideProgress" to "Progress label showing how much has been set aside toward an upcoming recurring expense payment. Lambda: 'saved' is the amount already set aside, 'total' is the upcoming bill amount. Displayed as '[saved] / [total] set aside'."
     )
 
     // ── SYNC Strings ──
@@ -672,7 +739,20 @@ object TranslationContext {
         "removeDeviceConfirm" to "Button label to confirm removing a device from the sync group. Destructive action verb.",
         "subscriptionExpiredNotice" to "Warning banner shown to all group members when the admin's subscription has expired. Explains the group will be dissolved soon and instructs users to subscribe and claim admin to keep it active.",
         "updateRequiredNotice" to "Warning banner shown when another device in the SYNC group is running a newer version of the app. Instructs the user to update from the Play Store to continue syncing.",
-        "copy" to "Button label and accessibility description for copying a pairing code to the clipboard. Action verb meaning to duplicate text — not a physical copy."
+        "copy" to "Button label and accessibility description for copying a pairing code to the clipboard. Action verb meaning to duplicate text — not a physical copy.",
+        "groupLeftLocally" to "Toast shown in the dissolve-group flow when the server-side dissolve call fails (network or auth issue) but local cleanup still ran. The user has been removed from the group on this device, but other group members may still see the device until the server next reconciles. Parenthetical 'server unreachable' explains the partial state.",
+        // Eviction notifications (admin removed device or dissolved the group)
+        "evictionRemoved" to "Notification body shown when this device has been removed from its SYNC group by the admin. Tells the user they can rejoin via the SYNC page in Settings. Past tense passive voice — they were removed, not actively kicked.",
+        "evictionDissolved" to "Notification body shown when the SYNC group has been dissolved by its admin (whole group disbanded, not just this device). Tells the user they can create or join a new group via the SYNC page in Settings.",
+        // Group operation failures (rolled back to local-only state)
+        "createGroupFailed" to "Toast shown when a Create-Group attempt fails partway through. Message informs the user that local state was rolled back to its prior solo configuration so it's safe to retry without manual cleanup.",
+        "joinGroupFailed" to "Toast shown when a Join-Group attempt fails partway through. Message informs the user that local state was rolled back to its prior solo configuration so it's safe to retry — also hints to recheck the pairing code in case of a typo.",
+        // Subscription grace-period warning before SYNC retires
+        "subscriptionGraceWarning" to "Long warning shown to non-admin members when the admin's subscription has expired and the SYNC feature is in its grace-period countdown. Lambda: 'days' is an integer count of remaining days. Two paths offered: (a) remind the admin to renew, or (b) the user themselves subscribes and takes over admin duties via the SYNC page. Reassures that no data will be lost when SYNC retires — devices simply revert to operating independently. Note plural agreement on 'day' / 'days'.",
+        // Admin-claim vote (member requests to take over admin duties)
+        "claimVotePrompt" to "Prompt shown to other group members when one member requests to assume administrator duties. Lambda: 'name' is the requesting member's device-friendly name. Members vote Accept or Reject.",
+        "claimAccept" to "Button label to vote in favour of the admin-claim request. Verb in imperative form.",
+        "claimReject" to "Button label to vote against the admin-claim request. Verb in imperative form."
     )
 
     // ── Dashboard Help Strings ──
@@ -881,6 +961,7 @@ object TranslationContext {
         "catOther" to "Help text: description of the 'Other' default category.",
         "catRecurring" to "Help text: description of the 'Recurring Income' default category.",
         "catAmortization" to "Intentionally empty string. No content needed.",
+        "catSupercharge" to "Help text describing the 'Supercharge' built-in category: auto-assigned to transactions that are bonus contributions to a savings goal. Hidden from the user-facing category picker because it isn't user-selectable. Keep 'Supercharge' as a proper noun — it's a feature name.",
         "addCategoryTitle" to "Help section title about adding a new category.",
         "addCategoryBody" to "Help text: tap Add Category, enter a name, and choose an icon.",
         "editCategoryTitle" to "Help section title about editing an existing category.",
@@ -1009,6 +1090,7 @@ object TranslationContext {
         "multiCatTitle" to "Help section title for multi-category transaction entry.",
         "multiCatBody" to "Help text: with multiple categories, enter Total then choose an entry mode.",
         "pieChartDesc" to "Help text: drag pie chart slices to distribute the total across categories.",
+        "calculatorTitle" to "Help subsection heading: 'Calculator Mode'. Refers to the calculator entry mode for multi-category transactions (the one where the user types dollar amounts directly into each category). Not a math calculator app.",
         "calculatorDesc" to "Help text: enter specific dollar amounts per category; last field auto-fills.",
         "percentageDesc" to "Help text: enter percentages per category; auto-adjusts to total 100%.",
         "pieChartModeTitle" to "Help section title for pie chart mode details.",
@@ -1485,6 +1567,9 @@ object TranslationContext {
         "noEvents" to "Empty state message in the day-detail popup when no income or expenses are scheduled on that day.",
         "totalIncome" to "Summary line in the day-detail popup showing combined income total. Lambda: 'amount' is formatted currency.",
         "totalExpenses" to "Summary line in the day-detail popup showing combined expense total. Lambda: 'amount' is formatted currency.",
+        "budgetResetDay" to "Calendar legend / day-marker label identifying the day in the cycle when the budget period resets (e.g., the 1st of the month for a monthly period). Noun phrase used as a small badge label.",
+        "previousMonth" to "Accessibility content description on the budget calendar's left-arrow navigation button. Imperative-style label naming the destination ('go to previous month'), not the past month itself.",
+        "nextMonth" to "Accessibility content description on the budget calendar's right-arrow navigation button. Imperative-style label naming the destination ('go to next month'), not a future month name.",
         "sun" to "Three-letter weekday abbreviation for Sunday. Used as a calendar column header.",
         "mon" to "Three-letter weekday abbreviation for Monday. Used as a calendar column header.",
         "tue" to "Three-letter weekday abbreviation for Tuesday. Used as a calendar column header.",
