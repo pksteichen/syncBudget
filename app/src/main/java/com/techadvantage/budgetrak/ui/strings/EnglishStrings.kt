@@ -139,6 +139,7 @@ object EnglishStrings : AppStrings {
         subscriptionSection = "Subscription",
         currentTier = "Current tier",
         tierFree = "Free",
+        whatDoesPaidStatusDo = "What does Paid or Subscriber status do?",
         upgradeToPaid = "Upgrade to Paid",
         subscribeMonthly = "Subscribe Monthly",
         restorePurchases = "Restore Purchases",

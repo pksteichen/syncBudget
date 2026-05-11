@@ -157,6 +157,7 @@ object TranslationContext {
         "subscriptionSection" to "Section header for the Subscription / billing block in Settings, listing current tier and upgrade buttons.",
         "currentTier" to "Label preceding the user's current tier name (Free / Paid / Subscriber). Concatenated with the tier label.",
         "tierFree" to "Tier label for users who haven't purchased any upgrade. Short noun, contrasts with Paid / Subscriber.",
+        "whatDoesPaidStatusDo" to "Clickable link displayed to the right of the Subscription section header in Settings. Tapping it opens Dashboard Help scrolled to the Paid User & Subscriber tier breakdown. Phrasing should signal the question and invite a tap; can wrap across multiple lines on narrow screens.",
         "upgradeToPaid" to "Button label launching the one-time in-app purchase flow for the Paid tier. Price is appended in parentheses by the UI.",
         "subscribeMonthly" to "Button label launching the monthly subscription purchase flow. Price is appended in parentheses by the UI.",
         "restorePurchases" to "Button label that triggers a re-check against Google Play for any active purchases on the current Google account. Used when reinstalling or switching devices.",

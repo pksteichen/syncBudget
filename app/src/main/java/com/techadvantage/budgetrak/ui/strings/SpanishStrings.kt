@@ -139,6 +139,7 @@ object SpanishStrings : AppStrings {
         subscriptionSection = "Suscripci\u00f3n",
         currentTier = "Nivel actual",
         tierFree = "Gratis",
+        whatDoesPaidStatusDo = "\u00bfQu\u00e9 hace el estado Pagado o Suscriptor?",
         upgradeToPaid = "Actualizar a Pagado",
         subscribeMonthly = "Suscribirse mensualmente",
         restorePurchases = "Restaurar compras",

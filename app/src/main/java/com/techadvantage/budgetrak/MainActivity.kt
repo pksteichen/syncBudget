@@ -2003,6 +2003,10 @@ class MainActivity : ComponentActivity() {
             onLaunchPaidUpgrade = { vm.launchPaidUpgrade(this@MainActivity) },
             onLaunchSubscribe = { vm.launchSubscribe(this@MainActivity) },
             onRestorePurchases = { vm.restorePurchases() },
+            onShowUpgradesHelp = {
+                vm.dashboardHelpScrollTo = "upgrades"
+                vm.currentScreen = "dashboard_help"
+            },
             billingOverrideEnabled = vm.billingOverrideEnabled,
             onBillingOverrideChange = { vm.updateBillingOverride(it) },
             showWidgetLogo = vm.showWidgetLogo,

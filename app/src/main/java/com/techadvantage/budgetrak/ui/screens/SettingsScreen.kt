@@ -37,6 +37,7 @@ import com.techadvantage.budgetrak.ui.theme.AdAwareAlertDialog
 import com.techadvantage.budgetrak.ui.theme.DialogStyle
 import com.techadvantage.budgetrak.ui.theme.DialogPrimaryButton
 import com.techadvantage.budgetrak.ui.theme.DialogSecondaryButton
+import com.techadvantage.budgetrak.ui.theme.dialogSectionLabelColor
 import com.techadvantage.budgetrak.ui.theme.DialogDangerButton
 import com.techadvantage.budgetrak.ui.theme.DialogWarningButton
 import com.techadvantage.budgetrak.ui.theme.DialogHeader
@@ -124,6 +125,7 @@ fun SettingsScreen(
     onLaunchPaidUpgrade: () -> Unit = {},
     onLaunchSubscribe: () -> Unit = {},
     onRestorePurchases: () -> Unit = {},
+    onShowUpgradesHelp: () -> Unit = {},
     billingOverrideEnabled: Boolean = false,
     onBillingOverrideChange: (Boolean) -> Unit = {},
     showWidgetLogo: Boolean = true,
@@ -670,26 +672,42 @@ fun SettingsScreen(
             }
 
             // ── Subscription section — visible in all builds ──
+            // Two-column layout: left half holds the section header + the
+            // "Current tier: X" label stacked vertically; right half holds a
+            // tappable green link to the Dashboard Help tier breakdown
+            // (`vm.dashboardHelpScrollTo = "upgrades"` + navigate). Right
+            // text wraps freely so it fits on narrow screens.
             item { Spacer(modifier = Modifier.height(12.dp)) }
-            item {
-                Text(
-                    text = S.settings.subscriptionSection,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-            }
             item {
                 val tierName = when {
                     isSubscriber -> S.settings.subscriber
                     isPaidUser -> S.settings.paidUser
                     else -> S.settings.tierFree
                 }
-                Text(
-                    text = "${S.settings.currentTier}: $tierName",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
-                )
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = S.settings.subscriptionSection,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        Text(
+                            text = "${S.settings.currentTier}: $tierName",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                        )
+                    }
+                    Text(
+                        text = S.settings.whatDoesPaidStatusDo,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = dialogSectionLabelColor(),
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = 12.dp)
+                            .clickable { onShowUpgradesHelp() }
+                    )
+                }
             }
             if (!isPaidUser) {
                 item {

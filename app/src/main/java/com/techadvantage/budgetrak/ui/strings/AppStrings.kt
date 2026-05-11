@@ -187,6 +187,7 @@ data class SettingsStrings(
     val subscriptionSection: String,
     val currentTier: String,
     val tierFree: String,
+    val whatDoesPaidStatusDo: String,
     val upgradeToPaid: String,
     val subscribeMonthly: String,
     val restorePurchases: String,
