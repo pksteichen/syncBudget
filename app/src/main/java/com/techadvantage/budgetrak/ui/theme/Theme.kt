@@ -426,7 +426,14 @@ fun AdAwareDialog(
     onDismissRequest: () -> Unit,
     properties: DialogProperties = DialogProperties(
         usePlatformDefaultWidth = false,
-        decorFitsSystemWindows = false
+        decorFitsSystemWindows = false,
+        // Tap-outside-to-dismiss intentionally OFF for the entire app: scrim
+        // taps (including on the visible-but-behind ad bar) must not silently
+        // dismiss dialogs — that would risk lost in-progress entries and
+        // denied conscious user choices. Back-press still dismisses; explicit
+        // Close / Cancel / OK buttons still dismiss. Defensive defense: the
+        // dim overlay below also has no clickable handler.
+        dismissOnClickOutside = false
     ),
     content: @Composable () -> Unit
 ) {
@@ -456,7 +463,10 @@ fun AdAwareDialog(
         }
 
         Box(modifier = Modifier.fillMaxSize()) {
-            // Custom dim overlay below status bar + ad banner
+            // Custom dim overlay below status bar + ad banner.
+            // Clickable kept (no-op) to absorb taps so they don't leak through
+            // to anything underneath; the dismiss-on-scrim-tap behavior was
+            // intentionally removed — see DialogProperties block above.
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -466,7 +476,7 @@ fun AdAwareDialog(
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
-                    ) { onDismissRequest() }
+                    ) { /* no-op: scrim taps must not dismiss the dialog */ }
             )
 
             // Dialog content centered below ad banner

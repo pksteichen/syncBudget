@@ -601,8 +601,8 @@ fun FullScreenPhotoViewer(
                 onRotated?.invoke()
                 onDismiss()
             } else {
-                // Keep the viewer open so the user can retry or cancel by
-                // tapping outside. Toast the reason.
+                // Keep the viewer open so the user can retry the rotate gesture
+                // or close via the X button. Toast the reason.
                 appToast.show(S.settings.receiptRotationSaveFailed)
             }
         }
@@ -610,7 +610,12 @@ fun FullScreenPhotoViewer(
 
     Dialog(
         onDismissRequest = handleDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            // App-wide policy: scrim/outside taps must not dismiss. Close
+            // button (X, top-end) and back-press remain valid dismiss paths.
+            dismissOnClickOutside = false
+        )
     ) {
         Box(
             modifier = Modifier

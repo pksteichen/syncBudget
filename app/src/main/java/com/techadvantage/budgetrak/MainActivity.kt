@@ -1116,7 +1116,8 @@ class MainActivity : ComponentActivity() {
                     },
                     properties = androidx.compose.ui.window.DialogProperties(
                         usePlatformDefaultWidth = false,
-                        decorFitsSystemWindows = false
+                        decorFitsSystemWindows = false,
+                        dismissOnClickOutside = false
                     )
                 ) {
                     Surface(
@@ -1143,7 +1144,8 @@ class MainActivity : ComponentActivity() {
                     onDismissRequest = { vm.transactionsHelpOverlayShowing = false },
                     properties = androidx.compose.ui.window.DialogProperties(
                         usePlatformDefaultWidth = false,
-                        decorFitsSystemWindows = false
+                        decorFitsSystemWindows = false,
+                        dismissOnClickOutside = false
                     )
                 ) {
                     Surface(

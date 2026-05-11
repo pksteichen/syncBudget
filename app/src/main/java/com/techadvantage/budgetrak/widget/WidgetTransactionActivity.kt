@@ -686,16 +686,11 @@ class WidgetTransactionActivity : ComponentActivity() {
                 if (recurringMatches.isNotEmpty() && pendingTxn != null) {
                     val re = recurringMatches.first()
                     Dialog(
-                        onDismissRequest = {
-                            recurringMatches = emptyList()
-                            saveTransaction(context, pendingTxn!!)
-                            prefs.edit()
-                                .putString("widgetTxDate", today)
-                                .putInt("widgetTxCount", widgetTxCount + 1)
-                                .apply()
-                            pendingTxn = null
-                            finish()
-                        }
+                        // App-wide policy: outside-tap / back must not silently
+                        // dismiss — user must explicitly pick "No" (save w/o
+                        // link) or "Link". Both buttons preserve all original
+                        // behavior; the dismiss path is just the no-op here.
+                        onDismissRequest = { /* require explicit choice */ }
                     ) {
                         Surface(shape = dialogShape, color = MaterialTheme.colorScheme.surface) {
                             Column {
@@ -763,16 +758,9 @@ class WidgetTransactionActivity : ComponentActivity() {
                 if (amortizationMatches.isNotEmpty() && pendingTxn != null) {
                     val am = amortizationMatches.first()
                     Dialog(
-                        onDismissRequest = {
-                            amortizationMatches = emptyList()
-                            saveTransaction(context, pendingTxn!!)
-                            prefs.edit()
-                                .putString("widgetTxDate", today)
-                                .putInt("widgetTxCount", widgetTxCount + 1)
-                                .apply()
-                            pendingTxn = null
-                            finish()
-                        }
+                        // App-wide policy: require an explicit "No Link" or
+                        // "Link" button tap — no silent dismiss.
+                        onDismissRequest = { /* require explicit choice */ }
                     ) {
                         Surface(shape = dialogShape, color = MaterialTheme.colorScheme.surface) {
                             Column {
@@ -839,16 +827,9 @@ class WidgetTransactionActivity : ComponentActivity() {
                 if (budgetIncomeMatches.isNotEmpty() && pendingTxn != null) {
                     val inc = budgetIncomeMatches.first()
                     Dialog(
-                        onDismissRequest = {
-                            budgetIncomeMatches = emptyList()
-                            saveTransaction(context, pendingTxn!!)
-                            prefs.edit()
-                                .putString("widgetTxDate", today)
-                                .putInt("widgetTxCount", widgetTxCount + 1)
-                                .apply()
-                            pendingTxn = null
-                            finish()
-                        }
+                        // App-wide policy: require an explicit "Yes" or "No"
+                        // button tap — no silent dismiss.
+                        onDismissRequest = { /* require explicit choice */ }
                     ) {
                         Surface(shape = dialogShape, color = MaterialTheme.colorScheme.surface) {
                             Column {
