@@ -127,6 +127,14 @@ class BudgeTrakApplication : Application() {
             crashlytics?.setCustomKey("versionCode", BuildConfig.VERSION_CODE)
         } catch (_: Exception) {}
 
+        // Anti-piracy: hash the signing certificate at startup, compare to
+        // the pinned Play App Signing key. Naive repackagers re-sign with
+        // their own key and would fail this. Determined attackers strip
+        // the check by editing smali; pairs with Layer 2 server-side
+        // verification (post-launch item) to close the loophole. See
+        // verifyAppSignature() below for the pin/enforcement details.
+        verifyAppSignature(this)
+
         // Initialize AdMob. Async; safe to call before any Activity exists.
         // Returns to its callback on the main thread; we don't need a result.
         try {
@@ -205,6 +213,60 @@ class BudgeTrakApplication : Application() {
                 }
         } catch (e: Exception) {
             tokenLog("Auth listener failed: ${e.message}")
+        }
+    }
+
+    /**
+     * Pinned SHA-256 of the Play App Signing key certificate. Empty string
+     * disables enforcement — the check still runs and logs the observed
+     * hash to logcat so we can capture it from the first real release,
+     * but mismatches are tolerated. Populate from Play Console → App
+     * integrity → App signing → "App signing key certificate" → SHA-256
+     * fingerprint. Format: colon-separated hex pairs ("AB:CD:EF:...").
+     *
+     * Debug builds use the debug keystore (entirely different signature)
+     * and are gated out by BuildConfig.DEBUG inside the check, so leaving
+     * this empty during development is harmless.
+     */
+    private val expectedApkSignatureSha256: String = ""
+
+    /**
+     * Anti-piracy startup check: hash the certificate(s) the APK was
+     * signed with and match against [expectedApkSignatureSha256]. On a
+     * release build with the pin set, a mismatch records a non-fatal to
+     * Crashlytics and force-exits the process — re-signed (modified)
+     * APKs crash at launch.
+     *
+     * Bar is naive repackaging only; smali patching strips this check
+     * easily. Layer 2 server-side verification (post-launch item) closes
+     * the loophole properly. We swallow PackageManager exceptions to
+     * avoid bricking legitimate users if Android ever changes the
+     * signing-info APIs underneath us.
+     */
+    private fun verifyAppSignature(context: android.content.Context) {
+        if (BuildConfig.DEBUG) return
+        try {
+            val pm = context.packageManager
+            val info = pm.getPackageInfo(
+                context.packageName,
+                android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES
+            )
+            val signers = info.signingInfo?.apkContentsSigners ?: return
+            val md = java.security.MessageDigest.getInstance("SHA-256")
+            val observed = signers.map { sig ->
+                md.digest(sig.toByteArray()).joinToString(":") { "%02X".format(it) }
+            }
+            Log.i("AppSignature", "observed=${observed.joinToString(",")} expected=$expectedApkSignatureSha256")
+            if (expectedApkSignatureSha256.isEmpty()) return
+            if (observed.none { it.equals(expectedApkSignatureSha256, ignoreCase = true) }) {
+                recordNonFatal(
+                    "AppSignature",
+                    "APK signature mismatch — observed=${observed.joinToString(",")} expected=$expectedApkSignatureSha256"
+                )
+                kotlin.system.exitProcess(0)
+            }
+        } catch (e: Exception) {
+            Log.w("AppSignature", "Signature check failed: ${e.message}")
         }
     }
 }
