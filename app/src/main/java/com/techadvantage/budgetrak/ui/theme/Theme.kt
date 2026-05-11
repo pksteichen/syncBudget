@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -837,14 +838,18 @@ fun SyncBudgetTheme(
             Box {
                 content()
                 // In-tree dialog overlay layer. Positioned below status bar
-                // + ad banner so the ad bar above stays visible AND tappable
-                // (AdMob NativeAdView in the main window receives clicks
-                // normally). Renders one dim+content layer per active
+                // + ad banner (top) and above the navigation bar (bottom) so
+                // the ad bar above stays visible AND tappable (AdMob
+                // NativeAdView in the main window receives clicks normally)
+                // and dialog content (e.g., the category picker opened from
+                // the transaction dialog) doesn't extend behind the system
+                // nav bar. Renders one dim+content layer per active
                 // AdAwareDialog entry; stack order = registration order.
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .statusBarsPadding()
+                        .navigationBarsPadding()
                         .padding(top = adBannerHeight)
                 ) {
                     AdAwareDialogHost()
