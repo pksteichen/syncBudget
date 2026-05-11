@@ -16,6 +16,7 @@ Line counts shift with every change — don't memorize them. Run `wc -l` if you 
 ## Language selection
 - `appLanguage` pref: `"en"`, `"es"`, or missing (device default via `Locale.getDefault().language`).
 - Switches the injected singleton at the Activity-level `CompositionLocalProvider(LocalStrings provides ...)`.
+- **Per-app locale override** (v2.10.20+, 2026-05-11): `BudgeTrakApplication.applyAppLocale(context, tag)` is invoked on Application.onCreate (replays stored pref) and on each language-toggle in MainActivity. Three side effects: (1) `Locale.setDefault()` for JVM-wide date/number formatters, (2) `Resources.configuration.locale` for strings.xml + **AdMob language targeting** (AdMob queries this when loading creatives — gives us Spanish ad targeting separate from IP geo), (3) on API 33+, `LocaleManager.applicationLocales` so the app surfaces as "BudgeTrak: Español" in Android Settings → System → Languages. In-app UI text still flows through `vm.strings`; this override is for resource/widget/AdMob/Android-shell concerns only.
 
 ## Adding a new string
 1. Add the field to the relevant data class in `AppStrings.kt`.

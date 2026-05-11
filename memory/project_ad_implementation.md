@@ -66,6 +66,10 @@ Editing the cycle:
 - Add/remove/reorder ads → edit `InHouseAds: List<InHouseAd>` in `ui/components/InHouseAd.kt`. Each entry needs a unique `id`, an `ImageVector`, and a `tier`. New ids need branches in `headlineFor` / `bodyFor` plus matching strings.
 - Translation context lives in `TranslationContext.ads` — keep that synchronized when adding strings.
 
+## Spanish ad targeting (v2.10.20+)
+
+AdMob picks creative language from `Resources.configuration.locale` plus IP geo + Google-account signals. To get Spanish-targeted ads for Spanish-language users (especially US-based Spanish speakers whose IP wouldn't otherwise signal Spanish), `BudgeTrakApplication.applyAppLocale(context, tag)` sets the per-app Resources locale on Application.onCreate and on every language toggle in MainActivity. AdMob then sees Spanish in its configuration query. Doesn't override IP geo (Mexico/Spain users already got Spanish via geo); main lift is for English-IP-Spanish-language users. See `reference_strings_system.md` "Language selection" for the full mechanism.
+
 ## Production-promotion swap checklist
 
 When promoting from internal/closed to production, do all four:

@@ -1093,6 +1093,7 @@ class MainActivity : ComponentActivity() {
                     onLanguageChange = { lang ->
                         vm.appLanguage = lang
                         vm.prefs.edit().putString("appLanguage", lang).apply()
+                        BudgeTrakApplication.applyAppLocale(this@MainActivity, lang)
                     }
                 )
             }
@@ -1885,6 +1886,7 @@ class MainActivity : ComponentActivity() {
             onLanguageChange = { lang ->
                 vm.appLanguage = lang
                 vm.prefs.edit().putString("appLanguage", lang).apply()
+                BudgeTrakApplication.applyAppLocale(this@MainActivity, lang)
                 val newStrings: AppStrings = if (lang == "es") SpanishStrings else EnglishStrings
                 val changedCats = mutableListOf<Category>()
                 vm.categories.forEachIndexed { idx, cat ->

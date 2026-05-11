@@ -1,0 +1,7 @@
+<resources>
+    <!-- app_name is intentionally NOT overridden here — "BudgeTrak" is the
+         brand and should not localize. Same for the unused widget_paid_only. -->
+    <string name="widget_description">Vista del presupuesto con botones rápidos de transacción</string>
+    <string name="widget_add_income">Agregar ingreso</string>
+    <string name="widget_add_expense">Agregar gasto</string>
+</resources>

@@ -80,6 +80,52 @@ class BudgeTrakApplication : Application() {
         }
 
         /**
+         * Apply a per-app locale override. Affects three things:
+         *
+         * 1. `Locale.getDefault()` — JVM-level default. Date formatters, number
+         *    formatters, java.text.* outputs follow this.
+         * 2. `Resources.configuration.locale` — Resources lookups (`@string`,
+         *    `@string-array`, widget XML contentDescription, etc.) and notably
+         *    **AdMob's language-targeting signal**. AdMob queries the context's
+         *    configuration locale when loading ads, so this is what determines
+         *    Spanish vs English creative selection (separate from IP geo).
+         * 3. On API 33+, the system-level "per-app language" (visible in
+         *    Settings → System → Languages as "BudgeTrak: Español"). Gives
+         *    users a familiar Android-native locale picker that mirrors our
+         *    in-app language toggle.
+         *
+         * The in-app UI text uses `vm.strings` (runtime swap of
+         * EnglishStrings / SpanishStrings) and is independent of this — we
+         * call `applyAppLocale` purely for the three side effects above.
+         *
+         * Call sites: BudgeTrakApplication.onCreate (replay stored pref) and
+         * SettingsScreen's language toggle (apply on change).
+         */
+        fun applyAppLocale(context: android.content.Context, tag: String) {
+            val locale = java.util.Locale.forLanguageTag(tag)
+            java.util.Locale.setDefault(locale)
+            // Resources configuration — affects AdMob locale signal + widget
+            // strings.xml lookups. updateConfiguration is deprecated but
+            // remains the lightweight path; createConfigurationContext would
+            // require threading a new Context through every Resources access.
+            val config = android.content.res.Configuration(context.resources.configuration)
+            config.setLocale(locale)
+            @Suppress("DEPRECATION")
+            context.resources.updateConfiguration(config, context.resources.displayMetrics)
+            // System-level per-app locale (Android 13+). Surfaces in Settings
+            // → System → Languages as a per-app entry. Below 13 the system
+            // doesn't have this concept; the in-app override still works.
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                try {
+                    context.getSystemService(android.app.LocaleManager::class.java)
+                        ?.applicationLocales = android.os.LocaleList(locale)
+                } catch (e: Exception) {
+                    Log.w("AppLocale", "LocaleManager set failed: ${e.message}")
+                }
+            }
+        }
+
+        /**
          * Process-scoped CoroutineScope for fire-and-forget background work
          * that must outlive the calling thread but stay tied to process
          * lifetime. Used by `FcmService` to launch Tier 2 work
@@ -102,6 +148,14 @@ class BudgeTrakApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+
+        // Apply the stored per-app locale BEFORE any UI / AdMob / Firebase
+        // init reads Resources.configuration. AdMob queries the context locale
+        // when loading ads, so this is what determines whether we get Spanish-
+        // or English-targeted creatives served. See applyAppLocale() docstring.
+        val storedLang = getSharedPreferences("app_prefs", MODE_PRIVATE)
+            .getString("appLanguage", null)
+        if (!storedLang.isNullOrBlank()) applyAppLocale(this, storedLang)
 
         tokenLog("=== Process started ===")
 
