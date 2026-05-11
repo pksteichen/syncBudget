@@ -228,7 +228,8 @@ class BudgeTrakApplication : Application() {
      * and are gated out by BuildConfig.DEBUG inside the check, so leaving
      * this empty during development is harmless.
      */
-    private val expectedApkSignatureSha256: String = ""
+    private val expectedApkSignatureSha256: String =
+        "1D:C4:61:C7:4D:76:FF:2A:D9:38:0A:6B:B7:F3:5D:B6:22:B1:A3:2A:52:05:71:D5:6F:C9:B0:B3:EE:95:4D:0C"
 
     /**
      * Anti-piracy startup check: hash the certificate(s) the APK was
