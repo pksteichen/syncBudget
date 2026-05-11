@@ -26,6 +26,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -448,30 +450,53 @@ fun AdAwareDialog(
         shareBlockingRegistrar(true)
         onDispose { shareBlockingRegistrar(false) }
     }
+    val density = LocalDensity.current
+    val statusBarPx = WindowInsets.statusBars.getTop(density)
+    val adBarPx = with(density) { adPadding.roundToPx() }
+    val topOffsetPx = statusBarPx + adBarPx
+    val view = LocalView.current
+
     Dialog(
         onDismissRequest = onDismissRequest,
         properties = properties
     ) {
-        // Disable system dim so the ad banner stays fully visible,
-        // and prevent the dialog from sliding up when the keyboard opens.
-        (LocalView.current.parent as? DialogWindowProvider)?.window?.let { window ->
+        // Configure the dialog's Android window:
+        //  • dim = 0 → ad banner above the window stays bright
+        //  • SOFT_INPUT_ADJUST_NOTHING → window doesn't slide up on IME
+        //  • Resize window: top edge starts BELOW status bar + ad banner so
+        //    that area is no longer covered. Combined with FLAG_NOT_TOUCH_MODAL,
+        //    taps on the visible ad bar fall through to the main window's
+        //    NativeAdView and AdMob handles the click normally — restoring
+        //    ad tappability while a dialog is open. Same path also lets the
+        //    in-house fallback ad tap fire mid-dialog.
+        //  Dialogs are otherwise unaffected — their content still sits in the
+        //  (now smaller) window, and explicit Close/Cancel/OK + back press
+        //  remain the dismiss paths.
+        (view.parent as? DialogWindowProvider)?.window?.let { window ->
             SideEffect {
                 window.setDimAmount(0f)
                 @Suppress("DEPRECATION")
                 window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+                val attrs = window.attributes
+                attrs.flags = attrs.flags or
+                    android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                attrs.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+                attrs.x = 0
+                attrs.y = topOffsetPx
+                attrs.width = android.view.WindowManager.LayoutParams.MATCH_PARENT
+                val displayHeightPx = view.context.resources.displayMetrics.heightPixels
+                attrs.height = (displayHeightPx - topOffsetPx).coerceAtLeast(0)
+                window.attributes = attrs
             }
         }
 
         Box(modifier = Modifier.fillMaxSize()) {
-            // Custom dim overlay below status bar + ad banner.
-            // Clickable kept (no-op) to absorb taps so they don't leak through
-            // to anything underneath; the dismiss-on-scrim-tap behavior was
-            // intentionally removed — see DialogProperties block above.
+            // Dim overlay fills the (resized) window — already starts below
+            // status bar + ad banner, so no extra padding needed. Clickable
+            // kept as no-op to absorb taps inside the dim (won't dismiss).
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .statusBarsPadding()
-                    .padding(top = adPadding)
                     .background(Color.Black.copy(alpha = 0.6f))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
@@ -479,12 +504,9 @@ fun AdAwareDialog(
                     ) { /* no-op: scrim taps must not dismiss the dialog */ }
             )
 
-            // Dialog content centered below ad banner
+            // Dialog content centered in the (resized) window.
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .padding(top = adPadding),
+                modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
                 content()
