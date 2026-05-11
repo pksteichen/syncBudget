@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Help
@@ -36,6 +38,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,9 +60,30 @@ import com.techadvantage.budgetrak.ui.theme.LocalSyncBudgetColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DashboardHelpScreen(onBack: () -> Unit) {
+fun DashboardHelpScreen(
+    onBack: () -> Unit,
+    scrollTarget: String? = null,
+    onScrollTargetConsumed: () -> Unit = {}
+) {
     val customColors = LocalSyncBudgetColors.current
     val S = LocalStrings.current
+
+    // Anchor Y for the Paid User & Subscriber section in the scrollable
+    // column's coordinate space. Populated via onGloballyPositioned on an
+    // invisible 0-dp marker just above the section title. Matches the
+    // pattern used in TransactionsHelpScreen for the preselect-cats anchor.
+    var upgradesAnchorY by remember { mutableIntStateOf(-1) }
+    val scrollState = rememberScrollState()
+
+    // When a deep-link target arrives (e.g. tap on an offline in-house ad),
+    // wait for the anchor to be laid out, then animate-scroll to it and
+    // clear the one-shot hint so back-navigations open at the top normally.
+    LaunchedEffect(scrollTarget, upgradesAnchorY) {
+        if (scrollTarget == "upgrades" && upgradesAnchorY >= 0) {
+            scrollState.animateScrollTo(upgradesAnchorY)
+            onScrollTargetConsumed()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -87,7 +115,7 @@ fun DashboardHelpScreen(onBack: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
@@ -435,6 +463,16 @@ fun DashboardHelpScreen(onBack: () -> Unit) {
             HelpDividerLine()
 
             // ─── PAID USER & SUBSCRIBER TIERS ─── (moved from settingsHelp in v2.5.x)
+            // Invisible 0-dp anchor marker — deep-linked from in-house
+            // fallback ads (offline) and any future "view upgrade info" link.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(0.dp)
+                    .onGloballyPositioned { coords ->
+                        upgradesAnchorY = coords.positionInParent().y.toInt()
+                    }
+            )
             HelpSectionTitle(S.dashboardHelp.paidTitle)
             HelpBodyText(S.dashboardHelp.paidBody)
             Spacer(modifier = Modifier.height(4.dp))

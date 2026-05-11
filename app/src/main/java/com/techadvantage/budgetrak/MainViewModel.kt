@@ -195,6 +195,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Toast message queued by the Restore Purchases flow; consumed + cleared by MainActivity. */
     var restoreToastMessage: String? by mutableStateOf(null)
     var quickStartStep by mutableStateOf<QuickStartStep?>(null)
+    // One-shot deep-link hint for DashboardHelpScreen: when non-null on first
+    // composition the screen scrolls to the matching anchor and clears the
+    // hint via onScrollTargetConsumed. Currently used by in-house fallback
+    // ads (target = "upgrades"). Same pattern as transactionsHelpScrollTo.
+    var dashboardHelpScrollTo by mutableStateOf<String?>(null)
     var subscriptionExpiry by mutableStateOf(
         prefs.getLong("subscriptionExpiry", System.currentTimeMillis() + 30L * 24 * 60 * 60 * 1000)
     )

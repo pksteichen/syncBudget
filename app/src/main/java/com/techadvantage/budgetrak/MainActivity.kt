@@ -447,12 +447,15 @@ class MainActivity : ComponentActivity() {
                             ctaBgColor = ctaBgColor,
                             ctaTextColor = ctaTextColor,
                             onClick = {
-                                when (inHouseAd.tier) {
-                                    com.techadvantage.budgetrak.ui.components.InHouseAdTier.PAID ->
-                                        vm.launchPaidUpgrade(this@MainActivity)
-                                    com.techadvantage.budgetrak.ui.components.InHouseAdTier.SUBSCRIBER ->
-                                        vm.launchSubscribe(this@MainActivity)
-                                }
+                                // In-house ads only appear when AdMob failed to load
+                                // (almost always = offline). Trying to launch a Play
+                                // purchase flow would silently fail, so instead we
+                                // route to Dashboard Help, scrolled to the upgrade
+                                // tier breakdown. Educational + works offline; user
+                                // can read the feature list and then go to Settings
+                                // → Subscription to actually purchase if interested.
+                                vm.dashboardHelpScrollTo = "upgrades"
+                                vm.currentScreen = "dashboard_help"
                             },
                             modifier = Modifier.fillMaxWidth().height(adBannerHeight),
                         )
@@ -1012,7 +1015,9 @@ class MainActivity : ComponentActivity() {
                     )
                     "sync" -> SyncScreenBranch(vm, toastState)
                     "dashboard_help" -> DashboardHelpScreen(
-                        onBack = { vm.currentScreen = "main" }
+                        onBack = { vm.currentScreen = "main" },
+                        scrollTarget = vm.dashboardHelpScrollTo,
+                        onScrollTargetConsumed = { vm.dashboardHelpScrollTo = null }
                     )
                     "settings_help" -> SettingsHelpScreen(
                         onBack = { vm.currentScreen = "settings" }
