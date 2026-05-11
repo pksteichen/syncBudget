@@ -610,11 +610,8 @@ private fun AddEditSavingsGoalDialog(
     val S = LocalStrings.current
     val maxDecimalPlaces = CURRENCY_DECIMALS[currencySymbol] ?: 2
 
-    val shareBlockingRegistrar = com.techadvantage.budgetrak.ui.theme.LocalShareBlockingDialogRegistrar.current
-    androidx.compose.runtime.DisposableEffect(Unit) {
-        shareBlockingRegistrar(true)
-        onDispose { shareBlockingRegistrar(false) }
-    }
+    // Share-blocking is now registered centrally by AdAwareDialog —
+    // no per-dialog DisposableEffect needed.
 
     var name by remember { mutableStateOf(initialName) }
     var targetAmountText by remember { mutableStateOf(initialTargetAmount) }

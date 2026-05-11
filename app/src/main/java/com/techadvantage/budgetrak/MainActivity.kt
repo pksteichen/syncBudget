@@ -371,13 +371,20 @@ class MainActivity : ComponentActivity() {
                 lifecycleOwner.lifecycle.addObserver(obs)
                 onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
             }
+            // Provide LocalShareBlockingDialogRegistrar ABOVE SyncBudgetTheme so
+            // it's visible to the AdAwareDialogHost (which lives inside the
+            // theme's outer Box and renders dialog content at that level).
+            // If it were provided inside the theme's content lambda instead,
+            // future CompositionLocals added there would silently fall through
+            // to defaults when read from within dialog content. (Audit H1.)
+            androidx.compose.runtime.CompositionLocalProvider(
+                com.techadvantage.budgetrak.ui.theme.LocalShareBlockingDialogRegistrar provides { open: Boolean ->
+                    if (open) vm.shareBlockingDialogCount++ else vm.shareBlockingDialogCount--
+                }
+            ) {
             SyncBudgetTheme(strings = vm.strings, adBannerHeight = adBannerHeight) {
               val toastState = LocalAppToast.current
-              androidx.compose.runtime.CompositionLocalProvider(
-                  com.techadvantage.budgetrak.ui.theme.LocalShareBlockingDialogRegistrar provides { open: Boolean ->
-                      if (open) vm.shareBlockingDialogCount++ else vm.shareBlockingDialogCount--
-                  }
-              ) {
+              run {
               // Archive toast
               LaunchedEffect(vm.archiveToastMessage) {
                   vm.archiveToastMessage?.let { msg ->
@@ -1150,8 +1157,9 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-              } // CompositionLocalProvider(LocalShareBlockingDialogRegistrar)
+              } // run {} inside SyncBudgetTheme's content slot
             } // SyncBudgetTheme
+            } // CompositionLocalProvider(LocalShareBlockingDialogRegistrar)
         }
     }
 

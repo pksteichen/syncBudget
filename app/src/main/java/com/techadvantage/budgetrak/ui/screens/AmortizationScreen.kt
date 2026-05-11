@@ -461,11 +461,8 @@ internal fun AddEditAmortizationDialog(
 ) {
     val S = LocalStrings.current
 
-    val shareBlockingRegistrar = com.techadvantage.budgetrak.ui.theme.LocalShareBlockingDialogRegistrar.current
-    androidx.compose.runtime.DisposableEffect(Unit) {
-        shareBlockingRegistrar(true)
-        onDispose { shareBlockingRegistrar(false) }
-    }
+    // Share-blocking is now registered centrally by AdAwareDialog —
+    // no per-dialog DisposableEffect needed.
 
     var source by remember { mutableStateOf(initialSource) }
     var description by remember { mutableStateOf(initialDescription) }

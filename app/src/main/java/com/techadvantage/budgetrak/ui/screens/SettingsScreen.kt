@@ -1453,11 +1453,8 @@ private fun AddCategoryDialog(
     existingIds: Set<Int>
 ) {
     val S = LocalStrings.current
-    val shareBlockingRegistrar = com.techadvantage.budgetrak.ui.theme.LocalShareBlockingDialogRegistrar.current
-    androidx.compose.runtime.DisposableEffect(Unit) {
-        shareBlockingRegistrar(true)
-        onDispose { shareBlockingRegistrar(false) }
-    }
+    // Share-blocking is now registered centrally by AdAwareDialog —
+    // no per-dialog DisposableEffect needed.
     var name by remember { mutableStateOf("") }
     var selectedIcon by remember { mutableStateOf<String?>(null) }
     val iconEntries = remember { CATEGORY_ICON_MAP.entries.toList() }
@@ -1590,11 +1587,8 @@ private fun EditCategoryDialog(
     onReassignAndDelete: (toId: Int) -> Unit
 ) {
     val S = LocalStrings.current
-    val shareBlockingRegistrar = com.techadvantage.budgetrak.ui.theme.LocalShareBlockingDialogRegistrar.current
-    androidx.compose.runtime.DisposableEffect(Unit) {
-        shareBlockingRegistrar(true)
-        onDispose { shareBlockingRegistrar(false) }
-    }
+    // Share-blocking is now registered centrally by AdAwareDialog —
+    // no per-dialog DisposableEffect needed.
     var name by remember { mutableStateOf(category.name) }
     var selectedIcon by remember { mutableStateOf(category.iconName) }
     var showReassignDialog by remember { mutableStateOf(false) }

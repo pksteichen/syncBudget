@@ -51,7 +51,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -69,12 +68,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.window.DialogWindowProvider
 import com.techadvantage.budgetrak.ui.strings.AppStrings
 import com.techadvantage.budgetrak.ui.strings.EnglishStrings
 import com.techadvantage.budgetrak.ui.strings.LocalStrings
@@ -445,17 +441,31 @@ fun AdAwareDatePickerDialog(
 /** State holder for active dialog overlays. One per SyncBudgetTheme call. */
 class AdAwareDialogState {
     internal val activeDialogs = mutableStateListOf<AdAwareDialogEntry>()
+    // Monotonically increasing sequence so the host can sort entries by
+    // registration order regardless of list insertion order. Defends against
+    // future re-keying around a screen with stacked dialogs flipping Z-order.
+    internal val nextSequence = java.util.concurrent.atomic.AtomicLong(0)
 }
 
 /** Single active dialog entry. Identity-based equality (each call site
- *  creates a fresh instance), used as composition key in the host. */
+ *  creates a fresh instance), used as composition key in the host.
+ *  [sequence] determines Z-order — higher = drawn later = on top. */
 class AdAwareDialogEntry internal constructor(
+    val sequence: Long,
     val onDismissRequest: () -> Unit,
     val content: @Composable () -> Unit,
 )
 
+// Defensive default: callers outside SyncBudgetTheme (e.g., WidgetTransactionActivity
+// uses its own MaterialTheme) get a no-op fallback state instead of a crash. The
+// fallback's entries are never rendered because there's no AdAwareDialogHost in those
+// trees — AdAwareDialog calls become silent no-ops, with a logcat warning on first use.
+private val FallbackAdAwareDialogState = AdAwareDialogState()
 val LocalAdAwareDialogState = staticCompositionLocalOf<AdAwareDialogState> {
-    error("LocalAdAwareDialogState not provided — wrap your tree in SyncBudgetTheme")
+    android.util.Log.w("AdAwareDialog",
+        "LocalAdAwareDialogState not provided — AdAwareDialog calls outside SyncBudgetTheme " +
+        "will not render. Wrap your tree in SyncBudgetTheme or provide the local manually.")
+    FallbackAdAwareDialogState
 }
 
 /**
@@ -496,6 +506,7 @@ fun AdAwareDialog(
     val latestContent = rememberUpdatedState(content)
     DisposableEffect(Unit) {
         val entry = AdAwareDialogEntry(
+            sequence = state.nextSequence.getAndIncrement(),
             onDismissRequest = { latestDismiss.value() },
             content = { latestContent.value() },
         )
@@ -522,7 +533,10 @@ fun AdAwareDialog(
 @Composable
 fun AdAwareDialogHost() {
     val state = LocalAdAwareDialogState.current
-    state.activeDialogs.forEach { entry ->
+    // Sort by sequence (registration order) — defends Z-order from any
+    // future composition re-keying that might re-insert entries in source
+    // order rather than original-creation order.
+    state.activeDialogs.sortedBy { it.sequence }.forEach { entry ->
         // `key(entry)` so each entry gets its own composition slot —
         // BackHandler/remember calls inside scope to that entry's
         // lifecycle, not collapsed when the list reorders.

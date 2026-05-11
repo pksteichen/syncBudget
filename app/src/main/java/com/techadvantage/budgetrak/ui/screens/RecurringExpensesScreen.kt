@@ -601,11 +601,8 @@ private fun AddEditExpenseDialog(
     val title = if (isEdit) S.recurringExpenses.editExpense else S.recurringExpenses.addExpense
     val maxDecimalPlaces = CURRENCY_DECIMALS[currencySymbol] ?: 2
 
-    val shareBlockingRegistrar = com.techadvantage.budgetrak.ui.theme.LocalShareBlockingDialogRegistrar.current
-    androidx.compose.runtime.DisposableEffect(Unit) {
-        shareBlockingRegistrar(true)
-        onDispose { shareBlockingRegistrar(false) }
-    }
+    // Share-blocking is now registered centrally by AdAwareDialog —
+    // no per-dialog DisposableEffect needed.
 
     var sourceName by remember { mutableStateOf(existingExpense?.source ?: "") }
     var description by remember { mutableStateOf(existingExpense?.description ?: "") }
