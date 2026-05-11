@@ -46,16 +46,21 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment.Companion.CenterVertically
@@ -416,82 +421,135 @@ fun AdAwareDatePickerDialog(
     }
 }
 
+// ── In-tree dialog overlay system ───────────────────────────────────────
+//
+// Replaces the per-dialog `androidx.compose.ui.window.Dialog` (separate
+// Android window) with an in-tree overlay rendered inside the main Activity
+// window. Eliminates the Compose-Dialog window-stacking issue that absorbed
+// taps on the visible-but-behind ad bar — AdMob's `NativeAdView` in the
+// main window now receives ad clicks normally even while a dialog is open.
+//
+// Architecture:
+//   • AdAwareDialogState holds a list of active dialog entries.
+//   • Provided as LocalAdAwareDialogState at SyncBudgetTheme level.
+//   • AdAwareDialog (call-site, unchanged signature) registers/unregisters
+//     an entry via DisposableEffect — renders no UI of its own.
+//   • AdAwareDialogHost (placed once inside SyncBudgetTheme just below the
+//     ad bar) iterates the state and draws each entry as a dim layer +
+//     centered content. Last entry = top of stack.
+//   • Back press handled by per-entry BackHandler in the host (Compose's
+//     stack semantics close the topmost dialog first).
+//   • Scrim taps absorbed by a no-op clickable (no accidental dismiss).
+//   • IME push-up via `.imePadding()` on the content wrapper.
+
+/** State holder for active dialog overlays. One per SyncBudgetTheme call. */
+class AdAwareDialogState {
+    internal val activeDialogs = mutableStateListOf<AdAwareDialogEntry>()
+}
+
+/** Single active dialog entry. Identity-based equality (each call site
+ *  creates a fresh instance), used as composition key in the host. */
+class AdAwareDialogEntry internal constructor(
+    val onDismissRequest: () -> Unit,
+    val content: @Composable () -> Unit,
+)
+
+val LocalAdAwareDialogState = staticCompositionLocalOf<AdAwareDialogState> {
+    error("LocalAdAwareDialogState not provided — wrap your tree in SyncBudgetTheme")
+}
+
 /**
- * Drop-in replacement for Dialog that avoids overlapping the ad banner.
- * Disables system dim so the ad stays bright, and adds a custom dim
- * overlay only below the status-bar + ad-banner area.
+ * Drop-in replacement for `androidx.compose.ui.window.Dialog` that renders
+ * as an in-tree overlay inside the main Activity window — no separate
+ * Android window means no window-stacking issues that absorb taps on the
+ * visible-but-behind ad bar. AdMob's `NativeAdView` in the main window
+ * receives ad clicks normally while this dialog is open.
+ *
+ * Existing signature is preserved so the ~13 call sites need no change.
+ * `properties` is retained for API compatibility but ignored — the few
+ * relevant bits (dismissOnBackPress / dismissOnClickOutside) are
+ * reimplemented in [AdAwareDialogHost].
+ *
+ * Behavior preserved from the previous Compose-Dialog implementation:
+ *   • Scrim-tap does NOT dismiss (no clickable scrim handler).
+ *   • Back-press DOES dismiss (via BackHandler in the host).
+ *   • IME push-up via `.imePadding()` in the host's content wrapper.
+ *   • Share-intent blocking via LocalShareBlockingDialogRegistrar.
+ *
+ * Caller invokes conditionally: `if (showDialog) AdAwareDialog(...)`.
+ * Disappearance is automatic when the conditional flips and the
+ * composable leaves composition — DisposableEffect's onDispose unregisters.
  */
 @Composable
 fun AdAwareDialog(
     onDismissRequest: () -> Unit,
-    properties: DialogProperties = DialogProperties(
-        usePlatformDefaultWidth = false,
-        decorFitsSystemWindows = false,
-        // Tap-outside-to-dismiss intentionally OFF for the entire app: scrim
-        // taps (including on the visible-but-behind ad bar) must not silently
-        // dismiss dialogs — that would risk lost in-progress entries and
-        // denied conscious user choices. Back-press still dismisses; explicit
-        // Close / Cancel / OK buttons still dismiss. Defensive defense: the
-        // dim overlay below also has no clickable handler.
-        dismissOnClickOutside = false
-    ),
+    @Suppress("UNUSED_PARAMETER")
+    properties: DialogProperties = DialogProperties(),
     content: @Composable () -> Unit
 ) {
-    val adPadding = LocalAdBannerHeight.current
-    val appToast = LocalAppToast.current
-    // Register with the blocking-dialog counter so incoming share intents
-    // don't wipe the user's in-progress interaction with this dialog.
-    // Every dialog in the app uses this wrapper, so a single hook here
-    // covers Add/Edit forms, confirmations, pickers, info popups — all of it.
+    val state = LocalAdAwareDialogState.current
     val shareBlockingRegistrar = LocalShareBlockingDialogRegistrar.current
-    androidx.compose.runtime.DisposableEffect(Unit) {
+    // Keep latest callbacks live across recompositions — DisposableEffect's
+    // captured `entry` would otherwise hold the FIRST onDismissRequest /
+    // content, missing any updates the caller pushes via recomposition.
+    val latestDismiss = rememberUpdatedState(onDismissRequest)
+    val latestContent = rememberUpdatedState(content)
+    DisposableEffect(Unit) {
+        val entry = AdAwareDialogEntry(
+            onDismissRequest = { latestDismiss.value() },
+            content = { latestContent.value() },
+        )
+        state.activeDialogs.add(entry)
         shareBlockingRegistrar(true)
-        onDispose { shareBlockingRegistrar(false) }
-    }
-    Dialog(
-        onDismissRequest = onDismissRequest,
-        properties = properties
-    ) {
-        // Disable system dim so the ad banner stays fully visible,
-        // and prevent the dialog from sliding up when the keyboard opens.
-        (LocalView.current.parent as? DialogWindowProvider)?.window?.let { window ->
-            SideEffect {
-                window.setDimAmount(0f)
-                @Suppress("DEPRECATION")
-                window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
-            }
+        onDispose {
+            state.activeDialogs.remove(entry)
+            shareBlockingRegistrar(false)
         }
+    }
+}
 
-        Box(modifier = Modifier.fillMaxSize()) {
-            // Custom dim overlay below status bar + ad banner.
-            // Clickable kept (no-op) to absorb taps so they don't leak through
-            // to anything underneath; the dismiss-on-scrim-tap behavior was
-            // intentionally removed — see DialogProperties block above.
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .padding(top = adPadding)
-                    .background(Color.Black.copy(alpha = 0.6f))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) { /* no-op: scrim taps must not dismiss the dialog */ }
-            )
-
-            // Dialog content centered below ad banner
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .padding(top = adPadding),
-                contentAlignment = Alignment.Center
-            ) {
-                content()
+/**
+ * Renders every active AdAwareDialog entry as a dim overlay + centered
+ * content layer. Place once in the layout below the ad bar so dialogs
+ * draw above screen content while the ad bar above stays visible and
+ * tappable. SyncBudgetTheme places this automatically; manual use
+ * isn't required.
+ *
+ * Stacked dialogs render in registration order — last added is on top.
+ * Back press closes the topmost only (Compose BackHandler stack
+ * semantics).
+ */
+@Composable
+fun AdAwareDialogHost() {
+    val state = LocalAdAwareDialogState.current
+    state.activeDialogs.forEach { entry ->
+        // `key(entry)` so each entry gets its own composition slot —
+        // BackHandler/remember calls inside scope to that entry's
+        // lifecycle, not collapsed when the list reorders.
+        key(entry) {
+            BackHandler(enabled = true) { entry.onDismissRequest() }
+            Box(modifier = Modifier.fillMaxSize()) {
+                // Dim layer; clickable-no-op absorbs taps so they don't
+                // leak to anything underneath, but doesn't dismiss.
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.6f))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { /* no-op: scrim taps must not dismiss the dialog */ }
+                )
+                // Content centered, IME-aware.
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .imePadding(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    entry.content()
+                }
             }
-
-            // Toast overlay inside dialog window
-            AppToast(appToast)
         }
     }
 }
@@ -749,12 +807,14 @@ fun SyncBudgetTheme(
     }
 
     val appToastState = remember { AppToastState() }
+    val adAwareDialogState = remember { AdAwareDialogState() }
 
     CompositionLocalProvider(
         LocalSyncBudgetColors provides customColors,
         LocalStrings provides strings,
         LocalAppToast provides appToastState,
-        LocalAdBannerHeight provides adBannerHeight
+        LocalAdBannerHeight provides adBannerHeight,
+        LocalAdAwareDialogState provides adAwareDialogState,
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
@@ -762,6 +822,19 @@ fun SyncBudgetTheme(
         ) {
             Box {
                 content()
+                // In-tree dialog overlay layer. Positioned below status bar
+                // + ad banner so the ad bar above stays visible AND tappable
+                // (AdMob NativeAdView in the main window receives clicks
+                // normally). Renders one dim+content layer per active
+                // AdAwareDialog entry; stack order = registration order.
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                        .padding(top = adBannerHeight)
+                ) {
+                    AdAwareDialogHost()
+                }
                 AppToast(appToastState)
             }
         }

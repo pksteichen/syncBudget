@@ -1106,19 +1106,14 @@ class MainActivity : ComponentActivity() {
             // Upgrades help overlay — covers whatever screen / dialog the user is
             // on so back/close returns them exactly where they were. Triggered
             // by in-house fallback ad taps and the Settings "What does Paid or
-            // Subscriber status do?" link. Same Compose Dialog pattern as the
-            // preselect-help overlay below.
+            // Subscriber status do?" link. Goes through AdAwareDialog so it
+            // shares the in-tree overlay system with every other dialog.
             if (vm.upgradesHelpOverlayShowing) {
-                androidx.compose.ui.window.Dialog(
+                AdAwareDialog(
                     onDismissRequest = {
                         vm.upgradesHelpOverlayShowing = false
                         vm.dashboardHelpScrollTo = null
-                    },
-                    properties = androidx.compose.ui.window.DialogProperties(
-                        usePlatformDefaultWidth = false,
-                        decorFitsSystemWindows = false,
-                        dismissOnClickOutside = false
-                    )
+                    }
                 ) {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
@@ -1137,16 +1132,11 @@ class MainActivity : ComponentActivity() {
             }
 
             // Help overlay shown ON TOP of an open transaction dialog (preselect-help
-            // banner tap). Rendered at top level so it covers the dialog while the
-            // dialog stays mounted underneath, preserving in-progress entries/photos.
+            // banner tap). The transaction dialog stays mounted underneath, preserving
+            // in-progress entries/photos — stack semantics handled by AdAwareDialogHost.
             if (vm.transactionsHelpOverlayShowing) {
-                androidx.compose.ui.window.Dialog(
-                    onDismissRequest = { vm.transactionsHelpOverlayShowing = false },
-                    properties = androidx.compose.ui.window.DialogProperties(
-                        usePlatformDefaultWidth = false,
-                        decorFitsSystemWindows = false,
-                        dismissOnClickOutside = false
-                    )
+                AdAwareDialog(
+                    onDismissRequest = { vm.transactionsHelpOverlayShowing = false }
                 ) {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
