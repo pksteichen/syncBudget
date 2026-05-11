@@ -312,6 +312,12 @@ class MainActivity : ComponentActivity() {
             // Video creatives start muted (explicit VideoOptions belt-and-suspenders
             // — AdMob already defaults muted, but we set it so policy is local).
             var nativeAd by remember { mutableStateOf<com.google.android.gms.ads.nativead.NativeAd?>(null) }
+            // In-house fallback: when AdMob fails to load, swap in one of 5
+            // upgrade promos and advance to the next on each subsequent
+            // failure. Index resumes (not resets) across AdMob recoveries so
+            // a free user sees variety over a session.
+            var adMobFailed by remember { mutableStateOf(false) }
+            var inHouseAdIndex by remember { mutableStateOf(0) }
             val nativeAdOptions = remember {
                 com.google.android.gms.ads.nativead.NativeAdOptions.Builder()
                     .setVideoOptions(
@@ -331,11 +337,14 @@ class MainActivity : ComponentActivity() {
                         .forNativeAd { ad ->
                             nativeAd?.destroy()
                             nativeAd = ad
+                            adMobFailed = false
                         }
                         .withNativeAdOptions(nativeAdOptions)
                         .withAdListener(object : com.google.android.gms.ads.AdListener() {
                             override fun onAdFailedToLoad(error: com.google.android.gms.ads.LoadAdError) {
                                 android.util.Log.w("NativeAd", "Load failed: ${error.message}")
+                                inHouseAdIndex = (inHouseAdIndex + 1) % com.techadvantage.budgetrak.ui.components.InHouseAds.size
+                                adMobFailed = true
                             }
                         })
                         .build()
@@ -421,52 +430,76 @@ class MainActivity : ComponentActivity() {
               ) {
                 // Native ad slot — TEST ad-unit ID. Production-promotion swap
                 // checklist in memory/project_ad_implementation.md.
+                // When AdMob fails to load (offline / no fill), swaps to one
+                // of 5 cycling in-house upgrade promos. Slot dimensions match
+                // either way so no layout shift on swap.
                 if (nativeAdEnabled) {
                     val headerTextColor = LocalSyncBudgetColors.current.headerText
                     val ctaBgColor = MaterialTheme.colorScheme.primary
                     val ctaTextColor = MaterialTheme.colorScheme.onPrimary
-                    androidx.compose.ui.viewinterop.AndroidView(
-                        factory = { ctx ->
-                            val view = android.view.LayoutInflater.from(ctx)
-                                .inflate(nativeAdLayoutId, null) as com.google.android.gms.ads.nativead.NativeAdView
-                            // Register asset views so AdMob wires click handlers.
-                            view.iconView = view.findViewById<android.widget.ImageView>(R.id.native_ad_icon)
-                            view.headlineView = view.findViewById<android.widget.TextView>(R.id.native_ad_headline)
-                            view.advertiserView = view.findViewById<android.widget.TextView>(R.id.native_ad_advertiser)
-                            view.callToActionView = view.findViewById<android.widget.Button>(R.id.native_ad_cta)
-                            view.findViewById<com.google.android.gms.ads.nativead.MediaView>(R.id.native_ad_media)
-                                ?.let { view.mediaView = it }
-                            view.findViewById<android.widget.TextView>(R.id.native_ad_body)
-                                ?.let { view.bodyView = it }
-                            view
-                        },
-                        update = { view ->
-                            val argb = headerTextColor.toArgb()
-                            val headlineView = view.findViewById<android.widget.TextView>(R.id.native_ad_headline)
-                            val advertiserView = view.findViewById<android.widget.TextView>(R.id.native_ad_advertiser)
-                            val bodyView = view.findViewById<android.widget.TextView>(R.id.native_ad_body)
-                            val ctaView = view.findViewById<android.widget.Button>(R.id.native_ad_cta)
-                            val iconView = view.findViewById<android.widget.ImageView>(R.id.native_ad_icon)
-                            headlineView.setTextColor(argb)
-                            advertiserView?.setTextColor(argb)
-                            bodyView?.setTextColor(argb)
-                            // CTA button: theme-driven primary background + onPrimary text.
-                            val density = view.resources.displayMetrics.density
-                            ctaView.background = android.graphics.drawable.GradientDrawable().apply {
-                                setColor(ctaBgColor.toArgb())
-                                cornerRadius = 6f * density
-                            }
-                            ctaView.setTextColor(ctaTextColor.toArgb())
-                            val ad = nativeAd ?: return@AndroidView
-                            headlineView.text = ad.headline ?: ""
-                            advertiserView?.text = ad.advertiser ?: ""
-                            ctaView.text = ad.callToAction ?: ""
-                            bodyView?.text = ad.body ?: ""
-                            ad.icon?.drawable?.let { iconView.setImageDrawable(it) }
-                            view.setNativeAd(ad)
-                        },
-                        modifier = Modifier.fillMaxWidth().height(adBannerHeight)
-                    )
+                    if (adMobFailed) {
+                        val inHouseAd = com.techadvantage.budgetrak.ui.components.InHouseAds[inHouseAdIndex]
+                        com.techadvantage.budgetrak.ui.components.InHouseAdSlot(
+                            ad = inHouseAd,
+                            strings = vm.strings,
+                            isMediumTier = isMediumTier,
+                            headerTextColor = headerTextColor,
+                            ctaBgColor = ctaBgColor,
+                            ctaTextColor = ctaTextColor,
+                            onClick = {
+                                when (inHouseAd.tier) {
+                                    com.techadvantage.budgetrak.ui.components.InHouseAdTier.PAID ->
+                                        vm.launchPaidUpgrade(this@MainActivity)
+                                    com.techadvantage.budgetrak.ui.components.InHouseAdTier.SUBSCRIBER ->
+                                        vm.launchSubscribe(this@MainActivity)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().height(adBannerHeight),
+                        )
+                    } else {
+                        androidx.compose.ui.viewinterop.AndroidView(
+                            factory = { ctx ->
+                                val view = android.view.LayoutInflater.from(ctx)
+                                    .inflate(nativeAdLayoutId, null) as com.google.android.gms.ads.nativead.NativeAdView
+                                // Register asset views so AdMob wires click handlers.
+                                view.iconView = view.findViewById<android.widget.ImageView>(R.id.native_ad_icon)
+                                view.headlineView = view.findViewById<android.widget.TextView>(R.id.native_ad_headline)
+                                view.advertiserView = view.findViewById<android.widget.TextView>(R.id.native_ad_advertiser)
+                                view.callToActionView = view.findViewById<android.widget.Button>(R.id.native_ad_cta)
+                                view.findViewById<com.google.android.gms.ads.nativead.MediaView>(R.id.native_ad_media)
+                                    ?.let { view.mediaView = it }
+                                view.findViewById<android.widget.TextView>(R.id.native_ad_body)
+                                    ?.let { view.bodyView = it }
+                                view
+                            },
+                            update = { view ->
+                                val argb = headerTextColor.toArgb()
+                                val headlineView = view.findViewById<android.widget.TextView>(R.id.native_ad_headline)
+                                val advertiserView = view.findViewById<android.widget.TextView>(R.id.native_ad_advertiser)
+                                val bodyView = view.findViewById<android.widget.TextView>(R.id.native_ad_body)
+                                val ctaView = view.findViewById<android.widget.Button>(R.id.native_ad_cta)
+                                val iconView = view.findViewById<android.widget.ImageView>(R.id.native_ad_icon)
+                                headlineView.setTextColor(argb)
+                                advertiserView?.setTextColor(argb)
+                                bodyView?.setTextColor(argb)
+                                // CTA button: theme-driven primary background + onPrimary text.
+                                val density = view.resources.displayMetrics.density
+                                ctaView.background = android.graphics.drawable.GradientDrawable().apply {
+                                    setColor(ctaBgColor.toArgb())
+                                    cornerRadius = 6f * density
+                                }
+                                ctaView.setTextColor(ctaTextColor.toArgb())
+                                val ad = nativeAd ?: return@AndroidView
+                                headlineView.text = ad.headline ?: ""
+                                advertiserView?.text = ad.advertiser ?: ""
+                                ctaView.text = ad.callToAction ?: ""
+                                bodyView?.text = ad.body ?: ""
+                                ad.icon?.drawable?.let { iconView.setImageDrawable(it) }
+                                view.setNativeAd(ad)
+                            },
+                            modifier = Modifier.fillMaxWidth().height(adBannerHeight)
+                        )
+                    }
                 }
 
                 // Screen content

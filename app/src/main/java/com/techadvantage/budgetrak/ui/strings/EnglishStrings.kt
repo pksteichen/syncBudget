@@ -1983,4 +1983,20 @@ object EnglishStrings : AppStrings {
         budgetIncomeLink = "Yes",
         budgetIncomeNoLink = "No"
     )
+
+    override val ads = InHouseAdStrings(
+        upgradeBadge = "Upgrade",
+        upgradeCta = "Upgrade",
+        subscribeCta = "Subscribe",
+        receiptsHeadline = "Capture every receipt",
+        receiptsBody = "Photo + cloud sync — built in",
+        exportsHeadline = "Take your data anywhere",
+        exportsBody = "CSV, XLSX, and PDF reports",
+        syncHeadline = "Budget together",
+        syncBody = "Real-time sync across up to 5 devices",
+        simulationHeadline = "See months ahead",
+        simulationBody = "18-month projection and what-if simulator",
+        ocrHeadline = "From receipt to budget in one tap",
+        ocrBody = "Smart scan + auto-categorize",
+    )
 }

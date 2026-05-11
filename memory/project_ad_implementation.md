@@ -51,6 +51,21 @@ Currently using Google's TEST native ad unit ID `ca-app-pub-3940256099942544/224
 
 **9. Status bar icon appearance:** `WindowCompat.getInsetsController(...).isAppearanceLightStatusBars = false` after `enableEdgeToEdge()` — forces white status-bar icons in both light and dark mode. `headerBackground` is dark enough in both themes that black icons would be unreadable.
 
+## In-house fallback ad (v2.10.20+, 2026-05-11)
+
+When `AdLoader.onAdFailedToLoad` fires (offline, no fill, etc.), the AdMob `AndroidView` is replaced by a pure-Compose in-house promo. Five fixed-order ads cycle on each subsequent failure; `inHouseAdIndex` resumes (not resets) across AdMob recoveries so a free user sees variety over a session. Layout dimensions match the AdMob templates (same `adBannerHeight`) so the slot doesn't visually jump on swap.
+
+- **Five ad themes** (in order): Receipts (Paid), Exports (Paid), SYNC (Subscriber), Simulation (Paid), OCR (Subscriber). Three Paid + two Subscriber.
+- **Visual continuity**: yellow rounded chip mirrors AdMob's "Ad" badge, but text is "Upgrade" / "Mejora" because this is 1st-party promotional content (FTC "Ad" label doesn't apply to own promotional content).
+- **Medium template difference from AdMob**: AdMob's 160×120 `MediaView` is replaced by a 160×120 box rendering `R.mipmap.ic_launcher_round` at 120dp centered — gives the in-house ad a visible "this is BudgeTrak" anchor.
+- **Click handling**: whole banner is clickable; tier on the ad dictates whether `vm.launchPaidUpgrade(activity)` or `vm.launchSubscribe(activity)` is invoked.
+- **Anti-piracy benefit**: a free user who blocks app internet to dodge AdMob still sees our upgrade promo cycling through.
+
+Editing the cycle:
+- Copy changes → edit `EnglishStrings.ads` + `SpanishStrings.ads` (`InHouseAdStrings` data class in `AppStrings.kt`).
+- Add/remove/reorder ads → edit `InHouseAds: List<InHouseAd>` in `ui/components/InHouseAd.kt`. Each entry needs a unique `id`, an `ImageVector`, and a `tier`. New ids need branches in `headlineFor` / `bodyFor` plus matching strings.
+- Translation context lives in `TranslationContext.ads` — keep that synchronized when adding strings.
+
 ## Production-promotion swap checklist
 
 When promoting from internal/closed to production, do all four:

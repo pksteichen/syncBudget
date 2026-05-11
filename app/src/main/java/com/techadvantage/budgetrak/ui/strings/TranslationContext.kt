@@ -1599,4 +1599,22 @@ object TranslationContext {
         "tip1" to "Help tip: use the calendar to spot heavy expense days and plan spending around them.",
         "tip2" to "Help tip: if many red days are clustered, consider adjusting payment schedules."
     )
+
+    // ── In-House Promotional Ads (shown in banner slot when AdMob fails to load) ──
+
+    val ads = mapOf(
+        "upgradeBadge" to "Yellow chip label that visually replaces AdMob's 'Ad' badge on our own promotional banners. Distinguishes our promo content from third-party ads. Single word, very short.",
+        "upgradeCta" to "Button label on the promo banner that opens the one-time Paid upgrade purchase flow. Verb, action-style — short imperative or infinitive.",
+        "subscribeCta" to "Button label on the promo banner that opens the monthly Subscriber subscription flow. Verb, action-style — short imperative or infinitive.",
+        "receiptsHeadline" to "Banner headline for the receipt-photos feature promo. Brief, punchy. Conveys 'capture every receipt'. Free tier doesn't get photo capture; Paid + Subscriber do.",
+        "receiptsBody" to "Banner subheadline for receipt-photos. Mentions photo capture and cloud sync. Deliberately does NOT mention OCR (that's a Subscriber-only feature; this banner routes to Paid upgrade).",
+        "exportsHeadline" to "Banner headline for data export feature promo. Conveys 'take your data out of the app'.",
+        "exportsBody" to "Banner subheadline listing the export formats (CSV, XLSX, PDF). These are paid features.",
+        "syncHeadline" to "Banner headline for BudgeTrak SYNC (multi-device shared budget). Conveys 'budget as a family/household'. Routes to Subscribe.",
+        "syncBody" to "Banner subheadline for SYNC. Mentions real-time sync and the 5-device cap.",
+        "simulationHeadline" to "Banner headline for cash-flow simulation feature. Conveys 'plan ahead'.",
+        "simulationBody" to "Banner subheadline for simulation. Mentions the 18-month projection horizon and what-if scenarios.",
+        "ocrHeadline" to "Banner headline for AI-powered receipt OCR feature. Conveys 'instant capture → categorized transaction'. Subscriber-only.",
+        "ocrBody" to "Banner subheadline for OCR. Mentions smart scanning and automatic categorization."
+    )
 }

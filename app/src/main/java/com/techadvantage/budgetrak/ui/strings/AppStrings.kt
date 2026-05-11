@@ -36,7 +36,31 @@ interface AppStrings {
     val budgetCalendar: BudgetCalendarStrings
     val budgetCalendarHelp: BudgetCalendarHelpStrings
     val widgetTransaction: WidgetTransactionStrings
+    val ads: InHouseAdStrings
 }
+
+/**
+ * Copy for the in-house promotional ads shown in the banner slot when AdMob
+ * fails to load (offline, no fill, etc.). Five fixed-order ads cycle on each
+ * subsequent load failure; the cycle index resumes (not resets) across AdMob
+ * recoveries. Headline + body are paired per ad. Two CTAs cover the two
+ * upgrade flows; `upgradeBadge` replaces AdMob's yellow "Ad" chip.
+ */
+data class InHouseAdStrings(
+    val upgradeBadge: String,
+    val upgradeCta: String,
+    val subscribeCta: String,
+    val receiptsHeadline: String,
+    val receiptsBody: String,
+    val exportsHeadline: String,
+    val exportsBody: String,
+    val syncHeadline: String,
+    val syncBody: String,
+    val simulationHeadline: String,
+    val simulationBody: String,
+    val ocrHeadline: String,
+    val ocrBody: String,
+)
 
 data class CommonStrings(
     val ok: String,
