@@ -7,21 +7,20 @@
 - Privacy policy: `https://techadvantagesupport.github.io/privacy`. Pages repo clone at `/storage/emulated/0/Download/Tech Advantage Pages` (legacy `budgetrak-legal` repo still serves v2.7 fallback URL).
 - Working dir: `/data/data/com.termux/files/home/dailyBudget`. ~51.5 k lines, ~100 Kotlin files.
 
-## Build Environment — Bifurcated (CI vs Termux)
-**Committed state:** `compileSdk = 35`, `targetSdk = 35` in `app/build.gradle.kts` — CI uses these for Play release AABs (since 2026-05-01, commit 433029d).
+## Build Environment — Bifurcated (CI vs Termux) — auto-switched v2.10.19+
 
-**Termux local debug builds need compileSdk = 34** because Termux's aapt2 v2.19 (`/usr/bin/aapt2`, package `aapt2 13.0.0.6-23`) cannot parse android-35 resources. Workflow:
+**Single conditional, no edit-build-revert.** `app/build.gradle.kts` reads `project.hasProperty("localTermux")`: present → `compileSdk = targetSdk = 34`, absent → `35`. CI (GitHub Actions) doesn't have the property set, so it transparently builds at 35 for Play release AABs. Termux has `localTermux=true` in `~/.gradle/gradle.properties` (user-scoped, NOT in repo), so every `./gradlew assembleDebug` in Termux auto-uses 34.
+
+**Termux workflow:**
 1. `export JAVA_HOME=/data/data/com.termux/files/usr` (Android SDK at `~/android-sdk` via `local.properties`).
-2. Edit `app/build.gradle.kts`: temporarily set `compileSdk = 34` and `targetSdk = 34`.
-3. `./gradlew assembleDebug --no-daemon` — ~2 min.
-4. `cp app/build/outputs/apk/debug/app-debug.apk /storage/emulated/0/Download/BudgeTrak.apk` (always `BudgeTrak.apk`, overwritten — see `feedback_apk_naming.md`).
-5. **Revert `compileSdk` and `targetSdk` to 35** before any commit. CI must see 35.
+2. `./gradlew assembleDebug --no-daemon` — ~2 min. No manual edits.
+3. `cp app/build/outputs/apk/debug/app-debug.apk /storage/emulated/0/Download/BudgeTrak.apk` (always `BudgeTrak.apk`, overwritten — see `feedback_apk_naming.md`).
 
-The swap works because deps stay 34-compatible (`core-ktx 1.13.1`, Compose BOM `2024.09.03`). Do NOT bump `core-ktx ≥ 1.15` or `Compose BOM ≥ 2024.12.01` — those require compileSdk 35 and would break Termux builds permanently.
+**Why 34 in Termux:** aapt2 v2.19 (`/usr/bin/aapt2`, package `aapt2 13.0.0.6-23`) cannot parse android-35 resources. The swap works because deps stay 34-compatible (`core-ktx 1.13.1`, Compose BOM `2024.09.03`). Do NOT bump `core-ktx ≥ 1.15` or `Compose BOM ≥ 2024.12.01` — those require compileSdk 35 and would break Termux builds permanently.
 
-**aapt2 override:** `~/.gradle/gradle.properties` (user-scoped, NOT in repo) sets `android.aapt2FromMavenOverride=~/android-sdk/build-tools/34.0.0/aapt2`. The 34.0.0 binary is a symlink to Termux's native ARM aapt2; the SDK manager's `build-tools/35.0.1/aapt2` is x86_64 and won't run on aarch64. Don't repoint to 35.0.1.
+**aapt2 override:** `~/.gradle/gradle.properties` (same user-scoped file as `localTermux`) sets `android.aapt2FromMavenOverride=~/android-sdk/build-tools/34.0.0/aapt2`. The 34.0.0 binary is a symlink to Termux's native ARM aapt2; the SDK manager's `build-tools/35.0.1/aapt2` is x86_64 and won't run on aarch64. Don't repoint to 35.0.1.
 
-**Cleaner long-term option (not yet implemented):** conditional in `app/build.gradle.kts` like `compileSdk = if (project.hasProperty("localTermux")) 34 else 35`, then build with `-PlocalTermux=true` from Termux. Eliminates the manual edit-build-revert cycle.
+**Caveat:** the check is `project.hasProperty("localTermux")` — presence-based, value-agnostic. `-PlocalTermux=false` still selects 34 (property exists). To force 35 from Termux for one build, temporarily comment out the `localTermux=true` line in `~/.gradle/gradle.properties`. `-PlocalTermux=true` on a non-Termux host forces 34 for parity testing.
 
 ## Dependencies (committed = compileSdk 35; Termux works at 34)
 - AGP 8.7.3, Gradle 8.9, Kotlin 2.0.21, Compose BOM 2024.09.03, core-ktx 1.13.1, lifecycle 2.8.6, Firebase BOM 32.7.0, work-runtime-ktx 2.9.1, documentfile 1.0.1.

@@ -11,14 +11,21 @@ plugins {
     id("com.google.firebase.crashlytics")
 }
 
+// Termux's aapt2 v2.19 can't parse android-35 resources; pass
+// -PlocalTermux=true (or set localTermux=true in ~/.gradle/gradle.properties)
+// to drop compileSdk + targetSdk to 34 for local debug builds. CI / release
+// AABs leave the flag unset and build against 35.
+val localTermux = project.hasProperty("localTermux")
+val sdkVersion = if (localTermux) 34 else 35
+
 android {
     namespace = "com.techadvantage.budgetrak"
-    compileSdk = 35
+    compileSdk = sdkVersion
 
     defaultConfig {
         applicationId = "com.techadvantage.budgetrak"
         minSdk = 28
-        targetSdk = 35
+        targetSdk = sdkVersion
         // versionName format: MAJOR.MINOR.PP (third segment is zero-padded
         // 00-99 to leave 100 patch slots per minor for extensive debugging
         // cycles before bumping minor).
