@@ -450,12 +450,13 @@ class MainActivity : ComponentActivity() {
                                 // In-house ads only appear when AdMob failed to load
                                 // (almost always = offline). Trying to launch a Play
                                 // purchase flow would silently fail, so instead we
-                                // route to Dashboard Help, scrolled to the upgrade
-                                // tier breakdown. Educational + works offline; user
-                                // can read the feature list and then go to Settings
-                                // → Subscription to actually purchase if interested.
+                                // overlay the Dashboard Help scrolled to the tier
+                                // breakdown. Overlay-mode (not screen change) so
+                                // back returns to wherever the user was — Settings,
+                                // Transactions, an open dialog, etc. — preserving
+                                // their state intact.
                                 vm.dashboardHelpScrollTo = "upgrades"
-                                vm.currentScreen = "dashboard_help"
+                                vm.upgradesHelpOverlayShowing = true
                             },
                             modifier = Modifier.fillMaxWidth().height(adBannerHeight),
                         )
@@ -1102,6 +1103,38 @@ class MainActivity : ComponentActivity() {
                     }
                 )
             }
+            // Upgrades help overlay — covers whatever screen / dialog the user is
+            // on so back/close returns them exactly where they were. Triggered
+            // by in-house fallback ad taps and the Settings "What does Paid or
+            // Subscriber status do?" link. Same Compose Dialog pattern as the
+            // preselect-help overlay below.
+            if (vm.upgradesHelpOverlayShowing) {
+                androidx.compose.ui.window.Dialog(
+                    onDismissRequest = {
+                        vm.upgradesHelpOverlayShowing = false
+                        vm.dashboardHelpScrollTo = null
+                    },
+                    properties = androidx.compose.ui.window.DialogProperties(
+                        usePlatformDefaultWidth = false,
+                        decorFitsSystemWindows = false
+                    )
+                ) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        DashboardHelpScreen(
+                            onBack = {
+                                vm.upgradesHelpOverlayShowing = false
+                                vm.dashboardHelpScrollTo = null
+                            },
+                            scrollTarget = vm.dashboardHelpScrollTo,
+                            onScrollTargetConsumed = { vm.dashboardHelpScrollTo = null }
+                        )
+                    }
+                }
+            }
+
             // Help overlay shown ON TOP of an open transaction dialog (preselect-help
             // banner tap). Rendered at top level so it covers the dialog while the
             // dialog stays mounted underneath, preserving in-progress entries/photos.
@@ -2005,7 +2038,7 @@ class MainActivity : ComponentActivity() {
             onRestorePurchases = { vm.restorePurchases() },
             onShowUpgradesHelp = {
                 vm.dashboardHelpScrollTo = "upgrades"
-                vm.currentScreen = "dashboard_help"
+                vm.upgradesHelpOverlayShowing = true
             },
             billingOverrideEnabled = vm.billingOverrideEnabled,
             onBillingOverrideChange = { vm.updateBillingOverride(it) },

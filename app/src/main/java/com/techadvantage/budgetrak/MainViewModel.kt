@@ -200,6 +200,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // hint via onScrollTargetConsumed. Currently used by in-house fallback
     // ads (target = "upgrades"). Same pattern as transactionsHelpScrollTo.
     var dashboardHelpScrollTo by mutableStateOf<String?>(null)
+
+    // Overlay-mode toggle for DashboardHelpScreen — rendered as a Compose
+    // Dialog on top of whatever the user is currently on (any screen + any
+    // dialog), so back/close restores the previous state exactly. Used by
+    // the in-house fallback ad tap and the Settings "What does Paid or
+    // Subscriber status do?" link. Mirrors transactionsHelpOverlayShowing.
+    var upgradesHelpOverlayShowing by mutableStateOf(false)
     var subscriptionExpiry by mutableStateOf(
         prefs.getLong("subscriptionExpiry", System.currentTimeMillis() + 30L * 24 * 60 * 60 * 1000)
     )
