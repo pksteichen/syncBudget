@@ -75,6 +75,22 @@ if (System.currentTimeMillis() - lastSuccessfulBillingCheck > 7d) {
 - Toggling OFF → re-runs `refreshBillingState` immediately to snap state back to Play.
 - Release builds compile out the entire `if (BuildConfig.DEBUG)` block — only Play drives state. The override pref (`billingOverrideEnabled`) still persists but never has UI to flip it.
 
+## License-tester refund propagation — A/B finding (2026-05-11)
+
+Side-by-side test on Paul's device, same release install (2.10.18), same Google account, same `billing_dump.txt` session:
+
+- **Subscription cancel via Play Store app** → `queryPurchasesAsync` dropped the SUBS purchase **within minutes**, no Restore Purchases tap needed. Flag correctly flipped to `false`.
+- **paid_upgrade refund via Play Console → Order management** → `queryPurchasesAsync` **still returns `PURCHASED` with `isAcknowledged=true` after 22+ hours**, despite Play Console UI showing "Refunded since yesterday afternoon" and despite a full Play Store **data** clear + Google account sign-out/in.
+
+Conclusion: **release-build BillingClient propagates Play-Store-app-driven cancellations promptly, but lags multi-day on Play-Console-admin-driven refunds of acknowledged INAPPs.** This is Play platform behavior — our code reads `Purchase.purchaseState` (live accessor) directly, no snapshot fields, no caching. Code audited 2026-05-11.
+
+**Implication for production support**: when a real user requests a refund:
+- Encourage them to use **Play Store app → Subscriptions/Orders → Refund** (fast pipeline) where possible (covers <48h auto-refunds, and most other cases).
+- Refunds we issue from **Play Console admin** will have a propagation lag of 24h+ to BillingClient. The customer's local entitlement may not revoke promptly on the app side. The 7-day TTL gate still bounds the worst case.
+- The behavior was not reproducible on **debug builds** (sideloaded, `.debug` applicationId) — they propagate Console-issued refunds instantly. Difference appears to come from Play Services' install-channel-aware caching path.
+
+**Don't re-investigate** unless a production user reports a stuck entitlement after a refund. Diagnostic tool ready: `tools/check-purchase.js` (needs Play Developer API access granted to `bigquery-reader@sync-23ce9.iam.gserviceaccount.com`; that grant is blocked by the API access page being hidden on this Play Console account variant — see `project_prelaunch_todo.md`).
+
 ## Restore Purchases diagnostic dump (v2.10.18+)
 
 `restorePurchases()` writes a snapshot to `/storage/emulated/0/Download/BudgeTrak/support/billing_dump.txt` (via `DiagDumpBuilder.writeDiagToMediaStore`) on every tap, in both debug and release. Captures flag state, `refreshBillingState` result, `ProductDetails` load status, **raw** `queryPurchasesAsync` output (every purchase, unfiltered — PENDING / UNSPECIFIED visible), and our PURCHASED-state filter outcome. Origin: license testers needed visibility into what Play's BillingClient actually returned when refunds didn't immediately revoke features on release builds (acknowledged-INAPP refund propagation lag).

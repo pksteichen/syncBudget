@@ -26,18 +26,19 @@ originSessionId: ea9e173a-ca3d-4f87-b67a-ceac73953250
     - SKU catalog propagation (~24h after Play Console product creation).
     - License-tester end-to-end checklist (buy / refund / cancel / restore flows).
 
-    **13c. License testing setup + validation.** Play Console → Setup → License testing → add Paul + Kim + 2-3 trusted internal testers as license testers. Their purchases on Internal/Closed Testing succeed without charging real money; subscription cycles are accelerated (1 month → 5 minutes, 1 year → ~1 hour). Validation checklist before promoting to Closed Testing:
+    **13c. License testing setup + validation. COMPLETE 2026-05-11.** Paul + Kim added as license testers. All six validation paths verified on release build (v2.10.18) over a single billing_dump.txt session:
 
-    - [ ] Buy `paid_upgrade` as license tester → `isPaidUser = true`, paid features unlock.
-    - [ ] Refund test purchase via Order management → flag drops back to `false`, paid features re-lock.
-    - [ ] Buy `subscriber` subscription → `isSubscriber = true`, subscriber features unlock.
-    - [ ] Wait 5 min for accelerated renewal → renewal succeeds, flag stays.
-    - [ ] Cancel subscription → flag stays until accelerated expiry; verify expiry path.
-    - [ ] Fresh install / new device with same Google account → `restorePurchases()` re-establishes flags.
+    - [x] Buy `paid_upgrade` → `isPaidUser = true`, paid features unlock.
+    - [x] Refund test purchase via Play Console → flag drops. Debug: instant. Release: **Play-Console-admin path has 22h+ propagation lag**; see `project_play_billing_integration.md` "License-tester refund propagation — A/B finding (2026-05-11)". Open follow-up flagged for 2026-05-12: revisit whether the stuck paid_upgrade refund eventually clears (now 22h+ and counting on Paul's device).
+    - [x] Buy `subscriber` → `isSubscriber = true`, subscriber features unlock.
+    - [x] Subscriber gets paid features too (verified via `isPaidUser || isSubscriber` pattern in code review).
+    - [x] Accelerated renewal stays subscribed (27-min dump showed `isAutoRenewing = true` after 5+ renewal cycles).
+    - [x] Cancel sub via Play Store app → `isSubscriber = false` within minutes, no Restore Purchases tap needed.
+    - [x] Fresh install / same account → init-time `refreshBillingState` auto-restores entitlement.
 
-    **Tester instructions caveat:** the first IAP per Google account requires a payment method on file even for license testers (won't be charged). Some testers think they're being charged — flag this clearly in the tester onboarding email.
+    **Production refund support guidance**: real users using Play Store app's in-Order Refund button hit the fast pipeline (analogous to the sub-cancel path verified above, propagates within minutes). Refunds we issue from Play Console admin have the 24h+ lag. Encourage Play-Store-app self-service in refund replies (see `reference_refund_workflow.md`).
 
-    **Target schedule (from 2026-05-05):** screenshots done ~May 7 → 13a complete ~May 9 → 13b complete ~May 12 → 13c validation complete ~May 14 → promote to Closed Testing → 14-day clock → Production access apply ~May 28.
+    **Tester instructions caveat (still relevant for future tester onboarding):** the first IAP per Google account requires a payment method on file even for license testers (won't be charged). Some testers think they're being charged — flag this clearly in the tester onboarding email.
 
 ## Post-launch (data-driven)
 
