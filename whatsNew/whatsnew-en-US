@@ -1,2 +1,2 @@
 What's new in BudgeTrak:
-• Restore Purchases now writes a diagnostic snapshot to support files
+• Behind-the-scenes anti-tamper check at launch
