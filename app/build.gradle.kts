@@ -29,8 +29,8 @@ android {
         // versionName format: MAJOR.MINOR.PP (third segment is zero-padded
         // 00-99 to leave 100 patch slots per minor for extensive debugging
         // cycles before bumping minor).
-        versionCode = 36
-        versionName = "2.10.20"
+        versionCode = 37
+        versionName = "2.10.21"
     }
 
     signingConfigs {
