@@ -41,7 +41,7 @@ class BudgeTrakApplication : Application() {
             } catch (_: Exception) {}
         }
 
-        private const val TOKEN_LOG_MAX_BYTES = 128_000L   // ~3 days typical
+        private const val TOKEN_LOG_MAX_BYTES = 512_000L   // ~12 days typical; rotation = 24 days max
         private const val FCM_DEBUG_MAX_BYTES = 64_000L    // events are rare; cap for safety
 
         /** Log to Crashlytics custom log (attached to next crash/non-fatal).

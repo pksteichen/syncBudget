@@ -1,5 +1,5 @@
 What's new in BudgeTrak:
-• Ads tappable while dialogs are open
-• Tapping outside a dialog no longer dismisses it (no more lost work)
-• Spanish ad targeting via per-app locale
-• Dashboard Help now lists AI features under the right tier
+• Refunds and subscription changes now reflect within minutes
+• Dashboard Help rewritten — clearer Paid vs Subscriber feature lists
+• Receipt attachments now mention PDFs (already supported)
+• Background diagnostics improvements for faster support response
