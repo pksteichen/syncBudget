@@ -89,6 +89,7 @@ object DiagDumpBuilder {
         val dump = StringBuilder()
         dump.appendLine("=== State Dump ${LocalDateTime.now()} ===")
         dump.appendLine("DeviceId: $deviceId")
+        dump.appendLine("appInstanceId: ${com.techadvantage.budgetrak.BudgeTrakApplication.appInstanceId ?: "(not yet resolved or opted out)"}")
         dump.appendLine("isAdmin: $isAdmin")
         dump.appendLine("isSyncConfigured: $isSyncConfigured")
         dump.appendLine()

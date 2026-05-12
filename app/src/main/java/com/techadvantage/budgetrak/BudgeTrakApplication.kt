@@ -10,6 +10,16 @@ class BudgeTrakApplication : Application() {
         private val crashlytics: FirebaseCrashlytics? get() = try { FirebaseCrashlytics.getInstance() } catch (_: Exception) { null }
 
         /**
+         * Firebase Analytics user_pseudo_id (a.k.a. App Instance ID). Cached at
+         * Application.onCreate so DiagDumpBuilder can surface it synchronously.
+         * Null until the async fetch resolves (typically a few ms), or if the
+         * user has opted out of Analytics. Lets BigQuery <-> sync_diag dump
+         * correlation work without a per-device guess.
+         */
+        @Volatile var appInstanceId: String? = null
+            internal set
+
+        /**
          * Rotate a debug log file when it exceeds `maxBytes`: current file
          * becomes `<name>_prev.<ext>`, previous `_prev` is discarded. Preserves
          * ~2× the cap worth of history with no in-band "wipe" that loses
@@ -170,6 +180,13 @@ class BudgeTrakApplication : Application() {
             FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(crashlyticsEnabled)
             com.google.firebase.analytics.FirebaseAnalytics.getInstance(this)
                 .setAnalyticsCollectionEnabled(crashlyticsEnabled)
+            // Cache appInstanceId (Firebase Analytics user_pseudo_id) for the
+            // diag dump. Async fetch; the value lands a few ms later but the
+            // dump button is always tapped well after this, so it's reliably
+            // populated. Null until the SDK resolves, or if opted out.
+            com.google.firebase.analytics.FirebaseAnalytics.getInstance(this)
+                .appInstanceId
+                .addOnSuccessListener { id -> appInstanceId = id }
         } catch (_: Exception) {}
 
         // Stamp build identity on every future crash/non-fatal so BigQuery
