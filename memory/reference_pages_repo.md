@@ -23,6 +23,7 @@ git config --global --add safe.directory '/storage/emulated/0/Download/Tech Adva
 - `README.md` — visible on github.com when viewing the repo.
 - `privacy.md` — privacy policy, served at https://techadvantagesupport.github.io/privacy. Includes the "AI-Assisted Features" section (receipt OCR + CSV categorization).
 - `budgetrak_logo.png`, `ic_app_icon.png` — branding assets used by the Play Store listing.
+- `es/index.md`, `es/README.md`, `es/privacy.md` — Spanish (es-419) translations added 2026-05-11. English pages link to them via an `Español` button top-right; Spanish pages link back via `English`. **Keep in sync: any edit to `index.md`/`README.md`/`privacy.md` needs a matching edit to `es/*.md`.** The Spanish privacy page carries a disclaimer that the English original prevails on discrepancy. Logo refs in `es/` use absolute path `/budgetrak_logo.png`; Play badge in `es/index.md` uses the `es-419_badge_web_generic.png` variant.
 
 **When to touch this repo**:
 - Any new user-visible data practice (new analytics, new AI feature, new third-party integration) needs a matching privacy.md update before the build ships.
