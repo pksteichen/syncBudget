@@ -150,6 +150,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [Native ad implementation — replaced banner in v2.10.16](project_ad_implementation.md) — small/medium templates split at widthDp ≥ 400, custom layout XMLs, 60 s refresh timer, video startMuted + ON_STOP re-mute, manifest-merger override, production-swap checklist.
 - [AdMob + Firebase manifest merger conflict](feedback_admob_manifest_merger.md) — `AD_SERVICES_CONFIG` resolves with `tools:replace` override.
 - [Play Billing Layers 1+2 — L1 v2.10.10, L2 2026-05-11](project_play_billing_integration.md) — entitlement flow, 7-day TTL cache, Gen 2 `verifyPurchase` callable for server-authoritative refund detection; L2.5 (Firestore entitlement doc, anti-forge) still pending.
+- [Play Billing Layer 2.5 — deferred anti-forge design](project_play_billing_layer_2_5.md) — App-Check-gated `entitlements/{uid}` doc to make `isPaidUser` server-authoritative; defer until evidence of piracy.
 - [JIT extraction lambda overhead](feedback_jit_extraction.md).
 - [Compose state-seed order + LaunchedEffect cancellation](feedback_compose_state_seed_order.md) — seed VM fields before the visibility flag; hoist long work to viewModelScope.
 - [Receipt pruning design](feedback_receipt_pruning_design.md) — cloud 14-day and local prune age are independent.
