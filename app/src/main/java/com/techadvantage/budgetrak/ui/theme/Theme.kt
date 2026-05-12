@@ -729,13 +729,22 @@ fun AdAwareAlertDialog(
                             }
                         }
                     }
-                    // Body — scrollable so content is accessible when keyboard is open
+                    // Body — scrollable so content is accessible when keyboard is open.
+                    // When the caller manages its own scroll (scrollable = false,
+                    // bodyScrollState = null), vertical padding here would sit
+                    // OUTSIDE the caller's scrollable region, wasting visible
+                    // space at the top and bottom of long lists. Apply horizontal-
+                    // only padding in that case; the caller is expected to add
+                    // its own top/bottom spacing inside the inner scroll.
                     if (text != null) {
                         Box(
                             modifier = Modifier
                                 .weight(1f, fill = false)
                                 .then(if (bodyScrollState != null) Modifier.verticalScroll(bodyScrollState) else Modifier)
-                                .padding(20.dp)
+                                .padding(
+                                    horizontal = 20.dp,
+                                    vertical = if (bodyScrollState != null) 20.dp else 0.dp,
+                                )
                         ) {
                             text()
                         }

@@ -366,8 +366,15 @@ fun BudgetCalendarScreen(
     }
 
     // Day detail popup
-    if (selectedDate != null) {
-        val events = dayEventsMap[selectedDate] ?: emptyList()
+    // Capture selectedDate into a non-null `val` BEFORE composing the dialog,
+    // so the dialog's content lambdas hold a stable closure reference rather
+    // than reading the mutable state (which goes null on dismiss — and the
+    // in-tree overlay host can re-invoke the lambda one more time after
+    // state changes but before the entry-removal Apply phase, causing NPE
+    // crashes on selectedDate!!). See ui/theme/Theme.kt AdAwareDialog.
+    val activeDate = selectedDate
+    if (activeDate != null) {
+        val events = dayEventsMap[activeDate] ?: emptyList()
         val incomes = events.filter { it.isIncome }
         val expenses = events.filter { !it.isIncome }
 
@@ -376,8 +383,8 @@ fun BudgetCalendarScreen(
             title = {
                 Text(
                     S.budgetCalendar.dayDetails + " \u2014 " +
-                        selectedDate!!.month.getDisplayName(TextStyle.SHORT, Locale.getDefault()) +
-                        " " + selectedDate!!.dayOfMonth,
+                        activeDate.month.getDisplayName(TextStyle.SHORT, Locale.getDefault()) +
+                        " " + activeDate.dayOfMonth,
                     fontWeight = FontWeight.Bold
                 )
             },
@@ -444,7 +451,7 @@ fun BudgetCalendarScreen(
                             )
                         }
                     }
-                    if (selectedDate != null && selectedDate!!.dayOfMonth in resetDays) {
+                    if (activeDate.dayOfMonth in resetDays) {
                         if (incomes.isNotEmpty() || expenses.isNotEmpty()) {
                             HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
                         }
@@ -454,7 +461,7 @@ fun BudgetCalendarScreen(
                             color = Color(0xFF2196F3)
                         )
                     }
-                    if (incomes.isEmpty() && expenses.isEmpty() && (selectedDate == null || selectedDate!!.dayOfMonth !in resetDays)) {
+                    if (incomes.isEmpty() && expenses.isEmpty() && activeDate.dayOfMonth !in resetDays) {
                         Text(S.budgetCalendar.noEvents)
                     }
                 }

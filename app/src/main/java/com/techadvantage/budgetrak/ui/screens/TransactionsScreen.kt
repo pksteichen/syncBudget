@@ -2368,9 +2368,14 @@ fun MatchDialogCard(
                     )
                 }
 
-                // Body
+                // Body — weight(1f, fill=false) + verticalScroll so long match
+                // lists (rare but possible) don't push the footer off-screen
+                // by extending the Surface past its host overlay bounds.
                 Column(
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
                     content = content
                 )
 
