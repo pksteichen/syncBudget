@@ -703,8 +703,7 @@ fun AdAwareAlertDialog(
     AdAwareDialog(onDismissRequest = onDismissRequest) {
         Surface(
             modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .imePadding(),
+                .fillMaxWidth(0.92f),
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp

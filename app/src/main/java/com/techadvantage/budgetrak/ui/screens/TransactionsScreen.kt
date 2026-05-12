@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.height
@@ -1730,7 +1729,7 @@ fun TransactionsScreen(
             onDismissRequest = { showBulkMerchantEdit = false },
         ) {
             Surface(
-                modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
+                modifier = Modifier.fillMaxWidth(0.92f),
                 shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 6.dp
@@ -3601,8 +3600,7 @@ fun TransactionDialog(
     ) {
         Surface(
             modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .imePadding(),
+                .fillMaxWidth(0.92f),
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
@@ -5665,7 +5663,7 @@ private fun TextSearchDialog(
         onDismissRequest = onDismiss,
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
+            modifier = Modifier.fillMaxWidth(0.92f),
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
@@ -5728,7 +5726,7 @@ private fun AmountSearchDialog(
         onDismissRequest = onDismiss,
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
+            modifier = Modifier.fillMaxWidth(0.92f),
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
@@ -5859,7 +5857,7 @@ private fun SaveFormatDialog(
         onDismissRequest = onDismiss,
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
+            modifier = Modifier.fillMaxWidth(0.92f),
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
@@ -6016,7 +6014,7 @@ private fun ImportFormatSelectionDialog(
         onDismissRequest = onDismiss,
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
+            modifier = Modifier.fillMaxWidth(0.92f),
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp

@@ -37,7 +37,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -1040,7 +1039,7 @@ private fun SavingsSuperchargeDialog(
         onDismissRequest = onDismiss,
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
+            modifier = Modifier.fillMaxWidth(0.92f),
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp

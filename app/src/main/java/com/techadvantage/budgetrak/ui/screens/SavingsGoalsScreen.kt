@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -641,7 +640,7 @@ private fun AddEditSavingsGoalDialog(
         onDismissRequest = onDismiss,
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
+            modifier = Modifier.fillMaxWidth(0.92f),
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
