@@ -786,7 +786,7 @@ fun TransactionsScreen(
                     val canSaveLoad = isPaidUser || isSubscriber
                     IconButton(onClick = {
                         if (canSaveLoad) showSaveDialog = true
-                        else toastState.show(S.settings.subscribeToAccess)
+                        else toastState.show(S.settings.upgradeToAccess)
                     }) {
                         Icon(
                             imageVector = Icons.Filled.Save,
@@ -797,7 +797,7 @@ fun TransactionsScreen(
                     }
                     IconButton(onClick = {
                         if (canSaveLoad) showImportFormatDialog = true
-                        else toastState.show(S.settings.subscribeToAccess)
+                        else toastState.show(S.settings.upgradeToAccess)
                     }) {
                         Icon(
                             imageVector = Icons.Filled.MoveToInbox,
