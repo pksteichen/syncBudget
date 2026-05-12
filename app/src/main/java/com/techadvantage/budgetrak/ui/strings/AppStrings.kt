@@ -892,6 +892,7 @@ data class DashboardHelpStrings(
     // debug-only; Google Play Billing controls these in production.)
     val paidTitle: String,
     val paidBody: String,
+    val paidSubHeader: String,    // Paid User subsection heading (parallels paidAdFree for the Subscriber subsection); rendered as HelpSubSectionTitle
     val paidSave: String,         // Paid User bullet: ad-free
     val paidPhotos: String,       // Paid User bullet: receipt photos (new in v2.5.x)
     val paidWidget: String,       // Paid User bullet: unlimited widget transactions + clean display
