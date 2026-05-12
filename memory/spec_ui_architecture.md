@@ -53,6 +53,12 @@ Never use raw `AlertDialog` / `Dialog`. Use:
 - `AdAwareDialog` — custom form layouts; wrap with `Surface + DialogHeader + DialogFooter`; manually add `.imePadding()`, `.verticalScroll()`.
 - `AdAwareDatePickerDialog` — date pickers.
 
+**Architecture (v2.10.20+, 2026-05-11):** `AdAwareDialog` is an **in-tree overlay**, not a separate Compose `Dialog` window. `AdAwareDialogState` (one per `SyncBudgetTheme`) holds a `mutableStateListOf<AdAwareDialogEntry>`; `AdAwareDialog` registers/unregisters an entry via `DisposableEffect`; `AdAwareDialogHost` (placed once inside `SyncBudgetTheme`'s outer Box, padded below status + ad bar and above the navigation bar) iterates entries (sorted by `sequence: Long` for stable Z-order) and renders dim + centered content for each. Back press handled per-entry by `BackHandler`. The ad bar above the host stays in the main window and is **tappable while dialogs are open** — clicking an AdMob ad opens the destination normally without dismissing the dialog. Two intentional holdouts still use raw Compose `Dialog`: the SwipeablePhotoRow photo viewer (fullscreen immersive) and `WidgetTransactionActivity` match dialogs (separate activity, no SyncBudgetTheme wrapper).
+
+**Dismiss policy:** scrim/outside taps **never** dismiss a dialog — `dismissOnClickOutside = false` everywhere AND the dim layer's clickable is a no-op. Back press, explicit Close/Cancel/OK buttons, and system back gesture remain valid dismiss paths. Prevents data loss on in-progress entries.
+
+**Dialog content lambdas:** prefer `state?.let { value -> AdAwareDialog(...) }` over `if (state != null) { ... state!! }`. The host can re-invoke the content lambda one frame after dismiss but before the entry is removed; reading the gating state via `!!` then crashes. See `feedback_dialog_safety_patterns.md`.
+
 Styles: `DialogStyle.DEFAULT` (green `#2E7D32`/`#1B5E20`), `DANGER` (red `#B71C1C`), `WARNING` (orange `#E65100`). Buttons: `DialogPrimaryButton / SecondaryButton / DangerButton / WarningButton` (500 ms debounce). Bidirectional `PulsingScrollArrows` (BoxScope extension) show up+down arrows when content overflows — standard in every dialog. `DropdownMenu` / `ExposedDropdownMenu` use `ScrollableDropdownContent { … }` wrapper (own `ScrollState`, 280dp height cap, 32dp content left-indent to clear the arrow column).
 
 Full guide: `feedback_dialog_design_guide.md`.

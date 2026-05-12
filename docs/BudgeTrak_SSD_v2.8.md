@@ -956,6 +956,16 @@ Many fields are lambdas accepting parameters, e.g. `val budgetLabel: (String, St
 
 SharedPreferences key `"appLanguage"` (default `"en"`). On change: prefs updated → `AppStrings` reference swapped → `CompositionLocalProvider` re-provides → Composables recompose. No Activity restart.
 
+### 15.6 Per-app Locale Override (v2.10.20+, 2026-05-11)
+
+In addition to the in-app `vm.strings` swap (which only affects Composables reading via `LocalStrings`), `BudgeTrakApplication.applyAppLocale(context, tag)` is invoked on `Application.onCreate` (replays stored `appLanguage` pref) and on every language toggle in `MainActivity`. Three side effects beyond the Compose layer:
+
+1. `Locale.setDefault()` — JVM date / number formatters follow the user's language.
+2. `Resources.configuration.locale` — controls `strings.xml` lookup (widget XML uses these) AND is **AdMob's language-targeting signal** when loading native ads. Drives Spanish creative selection separately from IP geo (helps Spanish-language users in non-Spanish IP regions get Spanish ads).
+3. On API 33+ (`Build.VERSION_CODES.TIRAMISU`), `LocaleManager.applicationLocales` is set so the app surfaces as "BudgeTrak: Español" in Android Settings → System → Languages — gives users a familiar Android-native locale picker that mirrors the in-app toggle.
+
+The companion `res/values-es/strings.xml` provides Spanish for the three user-affecting widget strings (`widget_description`, `widget_add_income`, `widget_add_expense`). `app_name = "BudgeTrak"` is intentionally NOT overridden — brand name doesn't localize.
+
 ## 16. Theme System
 
 ### 16.1 SyncBudgetColors (Theme.kt, Color.kt)
@@ -994,10 +1004,29 @@ Static composition local `LocalSyncBudgetColors` + `LocalAdBannerHeight`.
 
 `{ DEFAULT, DANGER, WARNING }` drives header color: green, dark red (#B71C1C), orange (#E65100) with appropriate text tint.
 
-### 16.5 AdAware Dialogs
+### 16.5 AdAware Dialogs (rewritten v2.10.20, 2026-05-11 — in-tree overlays)
 
-- `AdAwareDialog`: custom-positioned `Dialog()` avoiding ad banner overlap; applies `SOFT_INPUT_ADJUST_NOTHING` so keyboard does not shift dialog
-- `AdAwareAlertDialog`: drop-in Material3 AlertDialog replacement on top of AdAwareDialog; optional `scrollState` for the pulsing scroll-arrow affordance
+`AdAwareDialog` / `AdAwareAlertDialog` are rendered as in-tree overlays inside the main Activity window — NOT as separate Compose `Dialog` windows. State-driven host pattern:
+
+- `AdAwareDialogState` (one instance per `SyncBudgetTheme`) holds a `mutableStateListOf<AdAwareDialogEntry>` of active dialogs.
+- `LocalAdAwareDialogState` is provided by `SyncBudgetTheme` and visible to all descendants.
+- `AdAwareDialog(onDismissRequest, content)` registers/unregisters an entry via `DisposableEffect`; renders no UI of its own. `properties: DialogProperties` retained for API compat but ignored.
+- `AdAwareDialogHost` is placed once inside `SyncBudgetTheme`'s outer Box (below status bar + ad banner, above the navigation bar — `Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(top = adBannerHeight)`). Iterates entries sorted by `sequence: Long` (stable Z-order) and renders dim layer + content centered for each entry.
+- Per-entry `BackHandler(enabled = true)` — Compose's stack semantics close the topmost dialog first.
+- Each entry's `sequence` is assigned from an `AtomicLong` so registration order is preserved even under composition re-keying.
+- `rememberUpdatedState` on both `onDismissRequest` and `content` so caller recompositions propagate through the captured entry.
+
+**Reason for the rewrite:** the previous separate-Window approach absorbed all taps in its window bounds, including the visible-but-behind ad bar — AdMob `NativeAdView` clicks didn't register while a dialog was open. With the in-tree overlay, the ad bar lives in the main window outside the host's bounds and receives clicks normally during open dialogs.
+
+**Dismiss policy (universal):** scrim/outside taps **never** dismiss a dialog. `DialogProperties(dismissOnClickOutside = false)` everywhere AND the host's dim-layer clickable is a no-op. Back press, explicit Close/Cancel/OK buttons, and the system back gesture remain valid dismiss paths. Prevents data loss on in-progress entries.
+
+**Exceptions (still raw `androidx.compose.ui.window.Dialog`):**
+- `SwipeablePhotoRow` photo viewer — fullscreen immersive view that intentionally covers the ad bar.
+- `WidgetTransactionActivity` match dialogs — separate Activity not wrapped in `SyncBudgetTheme`, so no `AdAwareDialogState` is available.
+
+**Activity manifest companion change:** `MainActivity` declares `android:windowSoftInputMode="adjustResize"` so opening the IME shrinks the content area cleanly (the in-tree dialog content's own `.imePadding()` pushes the dialog above the keyboard) without panning the ad bar behind the status bar.
+
+**Content-lambda safety:** dialog content should be invoked via `state?.let { value -> AdAwareDialog(...) }` rather than `if (state != null) { ... state!! ... }` — the host may re-invoke the lambda one frame after the gating state is set to null but before the `DisposableEffect.onDispose` apply phase removes the entry. See `feedback_dialog_safety_patterns.md`.
 
 ### 16.6 Scroll Affordance (bidirectional)
 
@@ -1911,7 +1940,7 @@ Only `INTERNET` is declared in the manifest. CAMERA and media access are handled
 
 | Component | Purpose |
 |-----------|---------|
-| MainActivity | Launcher activity (portrait, singleTask, exported) |
+| MainActivity | Launcher activity (portrait, singleTask, exported, `windowSoftInputMode="adjustResize"` so IME shrinks content area without panning the ad bar — required after the in-tree dialog overlay refactor; see §16.5) |
 | widget.WidgetTransactionActivity | Widget quick-add (singleInstance, excludeFromRecents) |
 | widget.BudgetWidgetProvider | AppWidgetProvider receiver (APPWIDGET_UPDATE) |
 | data.sync.FcmService | Firebase Cloud Messaging handler (MESSAGING_EVENT) |
@@ -1984,9 +2013,9 @@ Only `INTERNET` is declared in the manifest. CAMERA and media access are handled
 | namespace | com.techadvantage.budgetrak |
 | applicationId (release) | com.techadvantage.budgetrak |
 | applicationId (debug, v2.10.04+) | com.techadvantage.budgetrak**`.debug`** (via `applicationIdSuffix = ".debug"` on the `debug` buildType) |
-| compileSdk | 35 (canonical / CI); flipped to 34 locally for Termux compiles since Termux's bundled aapt2 v2.19 can't load android-35 platform jar |
+| compileSdk | 35 in CI / release; **auto-flipped to 34 in Termux via `project.hasProperty("localTermux")` conditional** (v2.10.19+, 2026-05-11). `localTermux=true` lives in user-scoped `~/.gradle/gradle.properties` alongside the existing `aapt2FromMavenOverride`. No more manual edit-build-revert ritual; `./gradlew assembleDebug` just works in Termux while CI builds against 35 transparently. |
 | minSdk | 28 |
-| targetSdk | 35 (canonical / CI); 34 in Termux compiles |
+| targetSdk | 35 in CI / release; 34 in Termux via the same `localTermux` conditional |
 | versionCode / versionName | 19 / 2.10.04 (dev), 15 / 2.10.00 in Internal Testing |
 | versionNameSuffix (debug) | `-debug` (debug builds render as e.g. `2.10.04-debug` in Settings + Crashlytics) |
 | source/target / jvmTarget | Java 17 |
@@ -1998,6 +2027,12 @@ Only `INTERNET` is declared in the manifest. CAMERA and media access are handled
 BuildConfig emits a UTC `BUILD_TIME` stamp; `BudgeTrakApplication.onCreate` re-publishes it as a Crashlytics custom key so BigQuery queries can isolate the latest build's events post-publish (see §28.9.1).
 
 **Debug `applicationIdSuffix` rationale (added v2.10.04, 2026-05-03):** debug builds use a different keystore (the AGP-auto-generated `~/.android/debug.keystore`) than release builds (the Play upload keystore), so Android refuses install-over conflicts on the same package name. Suffixing the debug applicationId to `com.techadvantage.budgetrak.debug` makes them two separate Android packages — both can coexist on the same device, each with its own data sandbox, Firebase Anonymous Auth UID, FCM token, App Check provider, Firestore group membership, and SecurePrefs-backed sync key. Setup requires a corresponding second Android app entry (`com.techadvantage.budgetrak.debug`) registered in the Firebase project; `app/google-services.json` then carries entries for both applicationIds. The pinned debug-token UUID is registered under both Firebase app entries' "Manage debug tokens" lists so either applicationId authenticates against the same Console-registered token. Full setup steps: `firebase-config-reference.txt` §5b.
+
+### 27.2a Anti-piracy: APK signature pinning (v2.10.19+, 2026-05-11)
+
+`BudgeTrakApplication.verifyAppSignature()` is invoked early in `onCreate` (right after the Crashlytics build-identity stamp, before AdMob / App Check / Auth init). It hashes the APK's signing certificate(s) at runtime and matches against `expectedApkSignatureSha256` — pinned to the Play App Signing key SHA-256 from Play Console → App integrity → Play app signing (currently `1D:C4:61:C7:4D:76:FF:2A:D9:38:0A:6B:B7:F3:5D:B6:22:B1:A3:2A:52:05:71:D5:6F:C9:B0:B3:EE:95:4D:0C`). Mismatch → `recordNonFatal` to Crashlytics + `kotlin.system.exitProcess(0)`. Skipped in `BuildConfig.DEBUG` (debug keystore is a different signature by design). Multi-signer aware so v3-scheme rotation works without immediate redeploy.
+
+Bar is naive repackaging only — smali patching strips the check easily. Layer 2 server-side purchase verification (post-launch item in `project_prelaunch_todo.md`) is the durable anti-piracy fix; pinning is the cheap layer 1.
 
 ### 27.3 Dependencies
 

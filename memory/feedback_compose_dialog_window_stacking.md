@@ -1,14 +1,35 @@
 ---
-name: Compose Dialog windows stack above the main composition window
-description: Overlays meant to render above an open Compose Dialog must themselves be wrapped in a Dialog. A plain Surface or Box at the top level of setContent renders in the activity's main window, which Android Window Manager always draws *under* any Dialog window.
+name: Dialog window stacking — obsolete after 2026-05-11 in-tree overlay refactor
+description: The pre-2026-05-11 Compose-Dialog (separate Android window) implementation suffered from window-stacking issues where the ad bar wasn't tappable during open dialogs. AdAwareDialog is now an in-tree overlay rendered inside the main Activity window. Window-stacking concerns no longer apply.
 type: feedback
 ---
-A `Surface` (or any normal Composable) added at the top level of `setContent` lives in the activity's main window. A `Dialog` (e.g. `AdAwareDialog`, used by `TransactionDialog`) creates its own platform window via Compose's `androidx.compose.ui.window.Dialog`. Window Manager always renders Dialog windows above the main window, so any "overlay" Composable that needs to appear above an open dialog must itself be a `Dialog`.
 
-**Why:** First attempt at the help-from-dialog overlay used a top-level `Surface(modifier = Modifier.fillMaxSize(), ...) { TransactionsHelpScreen(...) }`. The dashboard's `AdAwareDialog` (transaction dialog) kept rendering on top because its window was z-ordered above the main composition window. Wrapping the help screen in `androidx.compose.ui.window.Dialog(properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false))` made it stack as a sibling Dialog window — newest Dialog window wins z-order — and rendered as expected.
+## Current state (v2.10.20+, 2026-05-11)
 
-**How to apply:**
-- If a feature opens a UI element from inside an open `Dialog` and the new element should *cover* the dialog: wrap the new element in a `Dialog` (or `AdAwareDialog`), not a plain `Surface`/`Box`.
-- If the new element should appear *behind* the dialog (e.g. a faded backdrop tint): a plain Composable in the main window is correct — that's where backdrop dim lives anyway.
-- For fullscreen Dialog overlays, set `DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)` so the Dialog isn't constrained to the default ~280dp width and can draw under system bars.
-- BackHandler is unnecessary inside a Dialog overlay — `Dialog.onDismissRequest` already fires on system back. Wire `onBack` callbacks (e.g. a top-bar back arrow) to call the same close handler.
+`AdAwareDialog` and `AdAwareAlertDialog` no longer create separate Android windows via `androidx.compose.ui.window.Dialog`. They are state-driven in-tree overlays:
+
+- `AdAwareDialogState` holds a `mutableStateListOf<AdAwareDialogEntry>` of active entries.
+- `AdAwareDialog` registers/unregisters an entry via `DisposableEffect`; renders no UI of its own.
+- `AdAwareDialogHost` is placed once inside `SyncBudgetTheme`'s outer `Box` (below status bar + ad banner, above the navigation bar). It iterates entries — sorted by a stable `sequence: Long` for predictable Z-order — and renders dim + centered content for each.
+- Back press handled per-entry by `BackHandler` (Compose's stack semantics close the topmost first).
+- Scrim-tap is intentionally not a dismiss path (no-op clickable on the dim layer + `dismissOnClickOutside = false` on the surrounding `DialogProperties`).
+- IME push-up handled by `Modifier.imePadding()` on the content wrapper inside the host.
+
+**Consequence:** the ad bar above the host's overlay area is no longer covered by a separate dialog window, so AdMob's `NativeAdView` in the main window receives clicks normally — even while a dialog is open. This is the whole reason for the refactor.
+
+## Exceptions still using raw Compose Dialog
+
+Two intentional holdouts:
+
+- **`SwipeablePhotoRow` photo viewer** — wants a fullscreen black canvas that intentionally covers the ad bar (immersive photo viewing). Stays as `androidx.compose.ui.window.Dialog`.
+- **`WidgetTransactionActivity` match dialogs** (4 sites) — that activity uses its own `MaterialTheme` wrapper, not `SyncBudgetTheme`, so it doesn't host `AdAwareDialogState`. The Dialogs in that activity stay raw.
+
+## What changed since the original feedback entry
+
+The original feedback (now-obsolete) advised: *"overlays meant to appear above an open Dialog must themselves be wrapped in a Dialog."* That advice applied to the old separate-window setup. With the in-tree host, there is no separate dialog window to outrank — stacking is composition-order / `sequence` driven inside a single window. Just call `AdAwareDialog` from anywhere within `SyncBudgetTheme`'s scope and the host renders it correctly.
+
+## Related
+
+- `feedback_dialog_safety_patterns.md` — `state?.let { value -> ... }` over `if (state != null) { state!! }` to avoid a crash class introduced by the host pattern.
+- `project_ad_implementation.md` — overlay refactor details + Spanish ad targeting via per-app locale.
+- `spec_ui_architecture.md` — the AdAware system at a glance.

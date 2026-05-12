@@ -33,7 +33,7 @@ Total: ~51,500 lines across ~100 Kotlin source files.
 - `SwipeablePhotoRow.kt` (669) — receipt photo swipe panel + full-screen viewer with rotation.
 
 ## `ui/theme/`
-- `Theme.kt` (~760) — `AdAwareDialog/AlertDialog/DatePickerDialog`, dialog styles/buttons, `PulsingScrollArrows` + `ScrollableDropdownContent`, `LocalAppToast`, `LocalAdBannerHeight`, `LocalSyncBudgetColors`, `FlipFontFamily`.
+- `Theme.kt` (~860) — In-tree dialog overlay system (v2.10.20+): `AdAwareDialogState` + `AdAwareDialogEntry` + `LocalAdAwareDialogState` + `AdAwareDialog` (registers/unregisters via DisposableEffect) + `AdAwareDialogHost` (placed inside `SyncBudgetTheme`'s outer Box, padded below status+ad bar and above nav bar). `AdAwareAlertDialog` / `AdAwareDatePickerDialog` wrap `AdAwareDialog`. `SwipeablePhotoRow` photo viewer + `WidgetTransactionActivity` match dialogs still use raw Compose `Dialog` (intentional). Plus dialog styles/buttons, `PulsingScrollArrows`, `ScrollableDropdownContent`, `LocalAppToast`, `LocalAdBannerHeight`, `LocalSyncBudgetColors`, `FlipFontFamily`.
 - `Color.kt`, `Type.kt`.
 
 ## `ui/strings/`

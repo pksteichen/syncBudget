@@ -51,6 +51,14 @@ Currently using Google's TEST native ad unit ID `ca-app-pub-3940256099942544/224
 
 **9. Status bar icon appearance:** `WindowCompat.getInsetsController(...).isAppearanceLightStatusBars = false` after `enableEdgeToEdge()` — forces white status-bar icons in both light and dark mode. `headerBackground` is dark enough in both themes that black icons would be unreadable.
 
+## Ad tappability while dialogs are open (v2.10.20+, 2026-05-11)
+
+`AdAwareDialog` was rewritten from a separate-Compose-Dialog-window implementation to an **in-tree overlay** rendered inside the main Activity window. Reason: the old separate-window approach absorbed taps in its window bounds, including on the visible-but-behind ad bar — so `NativeAdView.callToActionView` clicks didn't register while any dialog was open. The in-tree overlay keeps the ad bar outside the dialog's bounds; AdMob clicks pass through normally during open dialogs.
+
+Companion change: `MainActivity` manifest now declares `android:windowSoftInputMode="adjustResize"` so the IME shrinks content cleanly (instead of panning, which would push the ad bar behind the status bar). Dialog content's own `.imePadding()` lifts the dialog above the keyboard within the shrunk area.
+
+Full architecture in `spec_ui_architecture.md` "Dialog system" section and `docs/BudgeTrak_LLD_v2.8.md` §8.1.
+
 ## In-house fallback ad (v2.10.20+, 2026-05-11)
 
 When `AdLoader.onAdFailedToLoad` fires (offline, no fill, etc.), the AdMob `AndroidView` is replaced by a pure-Compose in-house promo. Five fixed-order ads cycle on each subsequent failure; `inHouseAdIndex` resumes (not resets) across AdMob recoveries so a free user sees variety over a session. Layout dimensions match the AdMob templates (same `adBannerHeight`) so the slot doesn't visually jump on swap.

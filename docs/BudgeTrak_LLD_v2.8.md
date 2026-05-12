@@ -106,10 +106,14 @@ Kotlin 2.0.21, JVM 17, Gradle 8.9, AGP 8.7.3, compileSdk/targetSdk 34, minSdk 28
 
 `onCreate` runs before any Activity, even when WorkManager starts the process. Order:
 
-1. Honors `crashlyticsEnabled` pref before any Firebase call (opt-out is immediate).
-2. Installs App Check provider (`DebugAppCheckProviderFactory` in debug, `PlayIntegrityAppCheckProviderFactory` in release) + `addAppCheckListener` for token-expiry logging.
-3. Debug builds: scrapes the debug App Check token from logcat and writes it to `token_log.txt`.
-4. Attaches a Firebase `AuthStateListener` that sets Crashlytics `userId` and `authAnonymous`.
+1. **`applyAppLocale(context, storedLang)`** (v2.10.20+) — sets JVM `Locale.setDefault`, `Resources.configuration.locale`, and (API 33+) the system `LocaleManager.applicationLocales`. Runs FIRST so AdMob and Firebase see the right locale at init. Skipped when `appLanguage` pref is blank.
+2. Honors `crashlyticsEnabled` pref before any Firebase call (opt-out is immediate).
+3. Stamps `buildTime` + `versionCode` as Crashlytics custom keys.
+4. **`verifyAppSignature(this)`** (v2.10.19+) — hashes the APK's signing certificate(s) SHA-256 and matches against `expectedApkSignatureSha256` (the Play App Signing key fingerprint). Mismatch → `recordNonFatal` to Crashlytics + `kotlin.system.exitProcess(0)`. Skipped in `BuildConfig.DEBUG`. Multi-signer aware. Runs BEFORE AdMob / App Check / Auth init so anti-tamper exits happen early.
+5. Initializes AdMob (`MobileAds.initialize`).
+6. Installs App Check provider (`DebugAppCheckProviderFactory` in debug, `PlayIntegrityAppCheckProviderFactory` in release) + `addAppCheckListener` for token-expiry logging.
+7. Debug builds: scrapes the debug App Check token from logcat and writes it to `token_log.txt`.
+8. Attaches a Firebase `AuthStateListener` that sets Crashlytics `userId` and `authAnonymous`.
 
 **Companion helpers (static-style):**
 
@@ -120,6 +124,8 @@ Kotlin 2.0.21, JVM 17, Gradle 8.9, AGP 8.7.3, compileSdk/targetSdk 34, minSdk 28
 | `syncEvent(msg)` | Crashlytics `log()` + logcat for key sync lifecycle breadcrumbs. Debug builds also append to `token_log.txt`, so sync events (FCM arrivals, RTDB pings, WakeReceiver fires, worker-tier transitions) are visible in dumps. |
 | `updateDiagKeys(keys)` | Batch-sets Crashlytics custom keys (attached to every future crash/non-fatal). |
 | `processScope: CoroutineScope` | Process-lifetime `SupervisorJob() + Dispatchers.Default`. Used by `FcmService` to launch Tier 2 work asynchronously when VM is alive — FCM thread returns immediately, ViewModel keeps the process alive until the work completes naturally (no time budget). Cancelled implicitly when Android kills the process. |
+| `applyAppLocale(context, tag)` (v2.10.20+) | Sets `Locale.setDefault`, `Resources.configuration.locale`, and (API 33+) `LocaleManager.applicationLocales`. Called from `onCreate` (replays stored pref) and on every language toggle in `MainActivity` (so AdMob's locale-targeting signal flips alongside the in-app `vm.strings` swap). |
+| `verifyAppSignature(context)` (v2.10.19+) | Anti-piracy. Hashes signing cert SHA-256, matches against the pinned Play App Signing key. Mismatch → Crashlytics non-fatal + `exitProcess(0)`. Skipped in `BuildConfig.DEBUG`. |
 
 ### 2.2 MainActivity
 
@@ -1584,13 +1590,23 @@ Owns the app theme, color composition locals, the ad-aware dialog stack, and sha
 - `LocalAdBannerHeight` — `0.dp` paid users, `50.dp` free users (drives dialog bottom padding).
 - `LocalAppToast` — global `AppToastState` instance for in-dialog toasts.
 
-**Dialogs:**
-- `AdAwareDialog` — base dialog that shifts content above the ad banner and mounts `AppToast` overlay.
-- `AdAwareAlertDialog` — header/body/footer alert wrapper with `DialogStyle` + `PulsingScrollArrow`.
+**Dialogs (rewritten v2.10.20, 2026-05-11 — in-tree overlay system):**
+- `AdAwareDialogState` — holds `mutableStateListOf<AdAwareDialogEntry>` and an `AtomicLong nextSequence`. One instance per `SyncBudgetTheme` call.
+- `AdAwareDialogEntry(sequence, onDismissRequest, content)` — single active dialog entry; identity-based equality.
+- `LocalAdAwareDialogState` — `staticCompositionLocalOf<AdAwareDialogState>` with a no-op fallback (so calls outside `SyncBudgetTheme` log a warning instead of crashing).
+- `AdAwareDialog(onDismissRequest, properties=ignored, content)` — registers/unregisters an entry via `DisposableEffect`; renders no UI itself. `properties` parameter retained for source compat but ignored. Uses `rememberUpdatedState` so caller recompositions propagate through the captured entry. Also wires `LocalShareBlockingDialogRegistrar` (which is now provided ABOVE `SyncBudgetTheme` so the host can see it).
+- `AdAwareDialogHost` — placed once inside `SyncBudgetTheme`'s outer Box (padded for status bar + ad banner + nav bar). Iterates entries sorted by `sequence` and renders per-entry: `BackHandler(enabled = true) { entry.onDismissRequest() }` + dim layer (no-op clickable, dismissOnClickOutside = false) + content centered with `.imePadding()`.
+- `AdAwareAlertDialog` — header/body/footer alert wrapper on top of `AdAwareDialog`. Body uses `weight(1f, fill = false)` with conditional padding: vertical padding only when `bodyScrollState != null` (otherwise the caller's inner scroll would have wasted padding outside it). Includes `PulsingScrollArrow` and a sticky footer.
 - `AdAwareDatePickerDialog` — Material3 date picker wrapped in `AdAwareDialog`.
 - `DialogStyle` enum — `DEFAULT` (green) / `DANGER` (red) / `WARNING` (orange); drives header + footer colors.
 - `DialogHeader(title, style)` / `DialogFooter(content)` — composables for custom form dialogs that use `AdAwareDialog` directly.
 - `DialogPrimaryButton` (green) / `DialogSecondaryButton` (gray) / `DialogDangerButton` (red) / `DialogWarningButton` (orange) — 500 ms click debounce on primary/danger/warning buttons.
+
+**Why the rewrite:** the old `androidx.compose.ui.window.Dialog`-based system created a separate Android window per dialog; the window's bounds absorbed all taps including those on the visible-but-behind ad bar. AdMob `NativeAdView` couldn't receive clicks during open dialogs. The in-tree overlay places dialog content inside the main Activity window — ad bar lives outside the host's bounds and receives clicks normally. Two intentional holdouts still use raw Compose `Dialog`: `SwipeablePhotoRow` (fullscreen photo viewer) and `WidgetTransactionActivity` (separate Activity without `SyncBudgetTheme`).
+
+**Universal dismiss policy:** scrim/outside taps never dismiss. `DialogProperties(dismissOnClickOutside = false)` + dim-layer no-op clickable. Back-press, explicit Close/Cancel/OK buttons, system back gesture remain valid dismiss paths.
+
+**Caller pattern (safety):** prefer `state?.let { value -> AdAwareDialog(...) }` over `if (state != null) { ... state!! ... }`. The host can re-invoke the content lambda one frame post-dismiss (before the `DisposableEffect.onDispose` apply phase removes the entry); reading the gating state via `!!` then NPEs. See `feedback_dialog_safety_patterns.md`.
 
 **Scroll / toast:**
 - `PulsingScrollArrow(scrollState)` — animated chevron appears when content scrolls.
@@ -1659,6 +1675,19 @@ val LocalStrings = staticCompositionLocalOf<AppStrings> { EnglishStrings }
 ```
 
 `MainActivity` wraps the content tree in `CompositionLocalProvider(LocalStrings provides languageStrings)` where `languageStrings` is derived from `vm.appLanguage`.
+
+### 9.7 Per-app locale override (v2.10.20+, 2026-05-11)
+
+In addition to the in-app `vm.strings` swap, `BudgeTrakApplication.applyAppLocale(context, tag)` is invoked from:
+- `Application.onCreate` — replays the stored `appLanguage` pref before any UI / AdMob / Firebase init reads `Resources.configuration`.
+- `MainActivity` language-toggle handlers (Settings + QuickStart) — after writing the new `appLanguage` pref.
+
+Effects beyond the Compose layer:
+1. `Locale.setDefault(Locale.forLanguageTag(tag))` — JVM-wide; affects `java.text.*` formatters.
+2. `context.resources.updateConfiguration(...)` with the locale set — drives `strings.xml` lookups (widget XML uses these) AND **AdMob's `Resources.configuration.locale` language-targeting signal**.
+3. On API 33+: `context.getSystemService(LocaleManager::class.java)?.applicationLocales = LocaleList(locale)` — surfaces as a per-app locale entry in Android Settings → System → Languages.
+
+`res/values-es/strings.xml` provides Spanish for `widget_description`, `widget_add_income`, `widget_add_expense` (the three user-affecting widget strings). `app_name` and the unused `widget_paid_only` are intentionally not overridden in `values-es/` — brand name doesn't localize, stale string isn't referenced.
 
 ---
 
