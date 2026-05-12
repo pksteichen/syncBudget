@@ -903,14 +903,16 @@ object SpanishStrings : AppStrings {
             "no sirven para este prop\u00f3sito, ya que Restaurar est\u00e1 bloqueado para todos los dispositivos activos " +
             "de un grupo (consulta la p\u00e1gina de Ayuda de Ajustes para m\u00e1s detalles).",
         paidTitle = "Usuario de Pago y Suscriptor",
-        paidBody = "BudgeTrak tiene dos niveles de mejora. Usuario de Pago (compra \u00fanica de \$10) desbloquea:",
+        paidBody = "BudgeTrak tiene dos niveles de mejora. Usuario de Pago (compra \u00fanica de \$9.99) desbloquea:",
         paidSave = "Experiencia sin anuncios \u2014 el banner en la parte superior de todas las pantallas se oculta",
         paidPhotos = "Fotos de transacciones \u2014 adjunta hasta 5 fotos a cada transacci\u00f3n (recibos o lo que quieras)",
         paidWidget = "Acceso completo al widget \u2014 transacciones ilimitadas desde el widget por d\u00eda y una pantalla Solari limpia, sin el mensaje de actualizaci\u00f3n",
         paidLoad = "Guardar/Cargar transacciones \u2014 exportar a CSV, Excel o PDF, e importar desde extractos bancarios",
-        paidAdFree = "Suscriptor (suscripci\u00f3n mensual de \$5) agrega funciones avanzadas:",
-        subBulletSync = "Crear y administrar grupos SYNC \u2014 la funci\u00f3n m\u00e1s poderosa de BudgeTrak, que te permite compartir un presupuesto con otros miembros de tu familia, peque\u00f1o negocio, club, etc. Nuestra cuota de suscripci\u00f3n cuesta alrededor de la mitad que la competencia y cubre el costo de mantener el servicio en la nube. Solo un miembro del grupo necesita una suscripci\u00f3n; los dem\u00e1s dispositivos pueden ser versiones gratuitas o pagar la compra \u00fanica de Usuario de Pago anterior para quitar los anuncios y desbloquear las funciones de pago.",
+        paidAiCsv = "Categorizaci\u00f3n CSV con IA \u2014 categorizaci\u00f3n autom\u00e1tica con Gemini para importaciones bancarias cuyos comercios no coincidan con ninguno aprendido a\u00fan",
         paidSimulation = "Gr\u00e1fico de simulaci\u00f3n de flujo de efectivo \u2014 un gr\u00e1fico interactivo que muestra exactamente c\u00f3mo calculamos el efectivo que necesitas tener disponible en la p\u00e1gina de Metas de Ahorro, y te permite experimentar con diferentes tasas de ahorro y gasto.",
+        paidAdFree = "Suscriptor (suscripci\u00f3n mensual de \$4.99) agrega funciones avanzadas:",
+        subBulletOcr = "Escaneo de recibos con IA \u2014 toca el icono de chispa para autocompletar comercio, fecha, monto y divisi\u00f3n por categor\u00edas a partir de una foto del recibo (Gemini 2.5 Flash-Lite).",
+        subBulletSync = "Crear y administrar grupos SYNC \u2014 la funci\u00f3n m\u00e1s poderosa de BudgeTrak, que te permite compartir un presupuesto con otros miembros de tu familia, peque\u00f1o negocio, club, etc. Nuestra cuota de suscripci\u00f3n cuesta alrededor de la mitad que la competencia y cubre el costo de mantener el servicio en la nube. Solo un miembro del grupo necesita una suscripci\u00f3n; los dem\u00e1s dispositivos pueden ser versiones gratuitas o pagar la compra \u00fanica de Usuario de Pago anterior para quitar los anuncios y desbloquear las funciones de pago.",
         subFooterNote = "Los usuarios gratuitos pueden unirse a grupos SYNC existentes sin suscripci\u00f3n. El estado de Suscriptor incluye autom\u00e1ticamente todos los beneficios de Usuario de Pago."
     )
 

@@ -882,7 +882,9 @@ object TranslationContext {
         "paidWidget" to "Paid User tier bullet: unlimited widget transactions and a clean Solari widget display without the upgrade overlay.",
         "paidLoad" to "Paid User tier bullet: Save/Load transactions (CSV / Excel / PDF export, CSV import). Moved from Subscriber tier to Paid User tier in v2.5.x.",
         "paidSimulation" to "Paid User tier bullet: cash flow simulation chart on the Savings Goals page, interactive, lets users experiment with different savings and spending rates. Moved from Subscriber tier to Paid User tier (both Paid Users and Subscribers have access).",
-        "paidAdFree" to "Subscriber tier subsection heading: 'Subscriber (\$5 monthly subscription) adds advanced features:'. This is a subsection title, NOT a bullet. The field key is historical (was originally the ad-free bullet); the value has been repurposed.",
+        "paidAiCsv" to "Paid User tier bullet: AI CSV Categorization \u2014 optional Gemini-powered auto-categorization for bank-statement imports whose merchants haven't been learned yet. Falls back to silent on-device heuristic if Gemini is unavailable. Available to both Paid Users and Subscribers.",
+        "paidAdFree" to "Subscriber tier subsection heading: 'Subscriber (\$4.99 monthly subscription) adds advanced features:'. This is a subsection title, NOT a bullet. The field key is historical (was originally the ad-free bullet); the value has been repurposed.",
+        "subBulletOcr" to "Subscriber tier bullet: AI Receipt Scanning. User taps a sparkle icon to auto-fill merchant, date, amount, and category splits from a receipt photo using Gemini 2.5 Flash-Lite. Subscriber-only.",
         "subBulletSync" to "Subscriber tier bullet: create and administer SYNC groups. Long explanation emphasizing it is BudgeTrak's most powerful feature, the subscription fee supports cloud costs, only one member needs a subscription, others can be free or Paid User.",
         "subFooterNote" to "Standalone footer note below the Subscriber bullets: free users can join existing SYNC groups without a subscription; Subscriber status automatically includes all Paid User benefits."
     )

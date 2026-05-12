@@ -1,2 +1,5 @@
 What's new in BudgeTrak:
-• Behind-the-scenes anti-tamper check at launch
+• Ads tappable while dialogs are open
+• Tapping outside a dialog no longer dismisses it (no more lost work)
+• Spanish ad targeting via per-app locale
+• Dashboard Help now lists AI features under the right tier

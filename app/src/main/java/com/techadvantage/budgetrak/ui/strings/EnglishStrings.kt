@@ -917,14 +917,16 @@ object EnglishStrings : AppStrings {
             "as Restore is blocked for all active group devices (See the Settings Help page for details on " +
             "using Restore in a group situation).",
         paidTitle = "Paid User & Subscriber",
-        paidBody = "BudgeTrak has two upgrade tiers. Paid User (\$10 one-time purchase) unlocks:",
+        paidBody = "BudgeTrak has two upgrade tiers. Paid User (\$9.99 one-time purchase) unlocks:",
         paidSave = "Ad-free experience \u2014 the banner at the top of all screens is hidden",
         paidPhotos = "Transaction Photos \u2014 attach up to 5 photos to each transaction (receipts or whatever you want)",
         paidWidget = "Full widget access \u2014 unlimited widget transactions per day and a clean Solari display without the upgrade overlay",
         paidLoad = "Save/Load transactions \u2014 export to CSV, Excel, or PDF, and import from bank statements",
-        paidAdFree = "Subscriber (\$5 monthly subscription) adds advanced features:",
-        subBulletSync = "Create and administer SYNC groups \u2014 BudgeTrak's most powerful feature, letting you share a budget with other members of your family, small business, club, etc. Our subscription fee is about half the cost of our competitors and covers the cost of maintaining the cloud service. Only one group member needs a subscription; other devices in the group can be free versions or can pay the one-time Paid User purchase above to remove ads and unlock the Paid User features.",
+        paidAiCsv = "AI CSV Categorization \u2014 Gemini-powered auto-categorization for bank imports whose merchants don't match anything we've learned yet",
         paidSimulation = "Cash flow simulation chart \u2014 an interactive chart that shows exactly how we calculate your required cash-on-hand on the Savings Goals page, and lets you experiment with different savings and spending rates.",
+        paidAdFree = "Subscriber (\$4.99 monthly subscription) adds advanced features:",
+        subBulletOcr = "AI Receipt Scanning \u2014 tap the sparkle icon to auto-fill merchant, date, amount, and category splits from a receipt photo (Gemini 2.5 Flash-Lite).",
+        subBulletSync = "Create and administer SYNC groups \u2014 BudgeTrak's most powerful feature, letting you share a budget with other members of your family, small business, club, etc. Our subscription fee is about half the cost of our competitors and covers the cost of maintaining the cloud service. Only one group member needs a subscription; other devices in the group can be free versions or can pay the one-time Paid User purchase above to remove ads and unlock the Paid User features.",
         subFooterNote = "Free users can join existing SYNC groups without a subscription. Subscriber status automatically includes all Paid User benefits."
     )
 
