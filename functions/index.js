@@ -1,5 +1,7 @@
 const functions = require('firebase-functions');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { google } = require('googleapis');
 admin.initializeApp();
 
 const db = () => admin.firestore();
@@ -345,3 +347,151 @@ async function sendFcm(tokens, data, label) {
     }
   }
 }
+
+// ─── 5. verifyPurchase — server-authoritative entitlement check ──────
+//
+// Gen 2 callable. Runs as `play-publisher@sync-23ce9.iam.gserviceaccount.com`
+// (granted "View financial data" in Play Console), so it can hit the Play
+// Developer API with ADC — no key file, no Secret Manager lookup.
+//
+// Why this exists: the device's local BillingClient.queryPurchasesAsync()
+// reads the Play Store app's per-device cache, which lags refunds by 24h+
+// for Console-admin refunds (real users on the in-app refund path
+// propagate within minutes — different pipeline). The Play Developer API
+// reads Google's authoritative purchase ledger, which reflects refunds
+// far faster. The Android client calls this function after every Layer 1
+// query and treats the response as authoritative, falling back to its
+// last cached server result only when the function call itself fails.
+//
+// Closes the refund-lag bug. Does NOT close the decompile-and-forge bug
+// (attacker could just skip the function call) — that needs an
+// App-Check-gated Firestore entitlement doc as a follow-up.
+//
+// App Check is enforced; a fresh debug install must have a registered
+// debug token in Firebase Console → App Check → Apps.
+
+const PACKAGE_NAME = 'com.techadvantage.budgetrak';
+
+// Subscription states where the user is currently entitled. CANCELED means
+// the user turned off auto-renew but the current paid period is still
+// running — we honor that until expiryTime passes.
+const SUB_ENTITLED_STATES = new Set([
+  'SUBSCRIPTION_STATE_ACTIVE',
+  'SUBSCRIPTION_STATE_IN_GRACE_PERIOD',
+  'SUBSCRIPTION_STATE_CANCELED',
+]);
+
+// Lazy-init: keeps cold-start cost off non-billing function invocations.
+let _androidpublisher = null;
+function androidpublisher() {
+  if (_androidpublisher) return _androidpublisher;
+  const auth = new google.auth.GoogleAuth({
+    scopes: ['https://www.googleapis.com/auth/androidpublisher'],
+  });
+  _androidpublisher = google.androidpublisher({ version: 'v3', auth });
+  return _androidpublisher;
+}
+
+exports.verifyPurchase = onCall(
+  {
+    region: 'us-central1',
+    enforceAppCheck: true,
+    serviceAccount: 'play-publisher@sync-23ce9.iam.gserviceaccount.com',
+  },
+  async (request) => {
+    const { purchaseToken, productId, productType } = request.data || {};
+
+    if (typeof purchaseToken !== 'string' || purchaseToken.length === 0) {
+      throw new HttpsError('invalid-argument', 'purchaseToken required');
+    }
+    if (typeof productId !== 'string' || productId.length === 0) {
+      throw new HttpsError('invalid-argument', 'productId required');
+    }
+    if (productType !== 'inapp' && productType !== 'subs') {
+      throw new HttpsError('invalid-argument', "productType must be 'inapp' or 'subs'");
+    }
+
+    const ap = androidpublisher();
+
+    try {
+      if (productType === 'inapp') {
+        const res = await ap.purchases.products.get({
+          packageName: PACKAGE_NAME,
+          productId,
+          token: purchaseToken,
+        });
+        const d = res.data || {};
+        // purchaseState: 0=Purchased, 1=Canceled, 2=Pending
+        const verified = d.purchaseState === 0;
+        return {
+          verified,
+          productType: 'inapp',
+          purchaseState: d.purchaseState ?? null,
+          acknowledgementState: d.acknowledgementState ?? null,
+          purchaseTimeMillis: d.purchaseTimeMillis
+            ? Number(d.purchaseTimeMillis)
+            : null,
+          orderId: d.orderId ?? null,
+        };
+      }
+
+      // SUBS — use subscriptionsv2 (current API; v1 is deprecated).
+      const res = await ap.purchases.subscriptionsv2.get({
+        packageName: PACKAGE_NAME,
+        token: purchaseToken,
+      });
+      const d = res.data || {};
+      const state = d.subscriptionState || null;
+      const lineItem = Array.isArray(d.lineItems) && d.lineItems.length > 0
+        ? d.lineItems[0]
+        : null;
+      // expiryTime is ISO-8601 (e.g. "2026-06-10T15:49:30Z")
+      const expiryTimeStr = lineItem ? lineItem.expiryTime : null;
+      const expiryTimeMillis = expiryTimeStr
+        ? Date.parse(expiryTimeStr)
+        : null;
+
+      const stateValid = state && SUB_ENTITLED_STATES.has(state);
+      const notExpired = expiryTimeMillis
+        ? expiryTimeMillis > Date.now()
+        : false;
+      const verified = stateValid && notExpired;
+
+      return {
+        verified,
+        productType: 'subs',
+        subscriptionState: state,
+        expiryTimeMillis,
+        orderId: d.latestOrderId ?? null,
+      };
+    } catch (e) {
+      // Play returns 410 GONE for tokens that have been refunded/canceled
+      // and garbage-collected from the active store. Definitive
+      // "not entitled" — return verified:false rather than throwing.
+      const status = (e.response && e.response.status) || e.code || null;
+      if (status === 410) {
+        return {
+          verified: false,
+          productType,
+          purchaseState: null,
+          reason: 'GONE',
+        };
+      }
+      // 404 NOT FOUND can occur if the package/product/token is invalid for
+      // this Play Console account. Surface as not-entitled rather than 5xx
+      // — protects against a fake token attempt.
+      if (status === 404) {
+        return {
+          verified: false,
+          productType,
+          purchaseState: null,
+          reason: 'NOT_FOUND',
+        };
+      }
+      console.error(
+        `verifyPurchase failed (productType=${productType}, productId=${productId}): ${e.message} status=${status}`
+      );
+      throw new HttpsError('internal', `Play API error: ${e.message}`);
+    }
+  }
+);

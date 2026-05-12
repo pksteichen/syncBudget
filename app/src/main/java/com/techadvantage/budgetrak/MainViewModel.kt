@@ -228,6 +228,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         onBillingPurchasesUpdated(result, purchases)
     }
 
+    /**
+     * Layer 2 server-side entitlement check. Wrapped Cloud Function call;
+     * see EntitlementVerifier and functions/index.js#verifyPurchase.
+     * Used to override the local BillingClient cache when it has lagged a
+     * refund (observed: 30h+ on Play Console admin refunds).
+     */
+    private val entitlementVerifier = com.techadvantage.budgetrak.data.billing.EntitlementVerifier(context)
+
+    /**
+     * Surfaces the most recent Layer 2 verification outcome to the billing
+     * dump. Null until the first refresh has run.
+     */
+    private var lastVerificationSummary: String? = null
+
     var showWidgetLogo by mutableStateOf(prefs.getBoolean("showWidgetLogo", true))
     var autoCapitalize by mutableStateOf(prefs.getBoolean("autoCapitalize", true))
     var aiCsvCategorizeEnabled by mutableStateOf(prefs.getBoolean("aiCsvCategorizeEnabled", false))
@@ -3386,8 +3400,44 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return r to state
         }
 
-        val newPaid = state.paidUpgradePurchase != null
-        val newSub = state.subscriberPurchase != null
+        // Layer 1 (local BillingClient) result. The Play Store app's local
+        // purchase cache lags refunds by 24h+ on the Console-admin path, so
+        // these are tentative. Layer 2 (verifyPurchase Cloud Function) is the
+        // authoritative override.
+        val localPaid = state.paidUpgradePurchase != null
+        val localSub = state.subscriberPurchase != null
+
+        // Layer 2: call verifyPurchase for each PURCHASED-state purchase the
+        // local client reported. The Cloud Function reads Google's
+        // authoritative purchase ledger via the Play Developer API.
+        val paidVerify = state.paidUpgradePurchase?.let { p ->
+            entitlementVerifier.verify(
+                purchaseToken = p.purchaseToken,
+                productId = com.techadvantage.budgetrak.data.billing.BillingProducts.PAID_UPGRADE,
+                productType = com.techadvantage.budgetrak.data.billing.EntitlementVerifier.ProductType.INAPP
+            )
+        }
+        val subVerify = state.subscriberPurchase?.let { p ->
+            entitlementVerifier.verify(
+                purchaseToken = p.purchaseToken,
+                productId = com.techadvantage.budgetrak.data.billing.BillingProducts.SUBSCRIBER,
+                productType = com.techadvantage.budgetrak.data.billing.EntitlementVerifier.ProductType.SUBS
+            )
+        }
+
+        val newPaid = reconcileEntitlement(
+            local = localPaid,
+            verify = paidVerify,
+            purchaseToken = state.paidUpgradePurchase?.purchaseToken
+        )
+        val newSub = reconcileEntitlement(
+            local = localSub,
+            verify = subVerify,
+            purchaseToken = state.subscriberPurchase?.purchaseToken
+        )
+
+        lastVerificationSummary = buildVerificationSummary(paidVerify, subVerify)
+
         if (newPaid != isPaidUser) {
             isPaidUser = newPaid
             prefs.edit().putBoolean("isPaidUser", newPaid).apply()
@@ -3396,16 +3446,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             isSubscriber = newSub
             prefs.edit().putBoolean("isSubscriber", newSub).apply()
         }
-        // subscriptionExpiry tracks the latest successful sub charge + 30 days.
-        // purchase.purchaseTime advances on each auto-renewal, so the timestamp
-        // moves forward while the sub is healthy. When the sub stops renewing,
+        // subscriptionExpiry: when Layer 2 verified the sub, prefer its
+        // expiryTimeMillis (Play Developer API authoritative). Otherwise fall
+        // back to purchaseTime + 30 d as before. When the sub stops renewing,
         // Play stops returning the purchase; the cached expiry stays at the
         // last-known value and the existing 7-day grace logic fires naturally.
-        state.subscriberPurchase?.let { sub ->
-            val expiry = sub.purchaseTime + com.techadvantage.budgetrak.data.billing.BillingProducts.SUB_PERIOD_MS
-            if (expiry != subscriptionExpiry) {
-                subscriptionExpiry = expiry
-                prefs.edit().putLong("subscriptionExpiry", expiry).apply()
+        val verifiedSubExpiry = (subVerify as? com.techadvantage.budgetrak.data.billing.VerifyResult.Verified)?.expiryTimeMillis
+        if (verifiedSubExpiry != null && verifiedSubExpiry != subscriptionExpiry) {
+            subscriptionExpiry = verifiedSubExpiry
+            prefs.edit().putLong("subscriptionExpiry", verifiedSubExpiry).apply()
+        } else if (verifiedSubExpiry == null) {
+            state.subscriberPurchase?.let { sub ->
+                val expiry = sub.purchaseTime + com.techadvantage.budgetrak.data.billing.BillingProducts.SUB_PERIOD_MS
+                if (expiry != subscriptionExpiry) {
+                    subscriptionExpiry = expiry
+                    prefs.edit().putLong("subscriptionExpiry", expiry).apply()
+                }
             }
         }
         // Acknowledge any unacknowledged purchases (Play auto-refunds after 3 days otherwise).
@@ -3440,6 +3496,54 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         viewModelScope.launch { billingService.launchSubscribe(activity, details, offerToken) }
+    }
+
+    /**
+     * Combine Layer 1 (local BillingClient) and Layer 2 (server verification)
+     * into a single entitlement decision.
+     *
+     *  - Verified                  → entitled, period. (Server says yes.)
+     *  - Refunded                  → NOT entitled, even if local says yes.
+     *    Closes the refund-lag window — this is the whole point of Layer 2.
+     *  - Unreachable               → fall back to the cached server result
+     *    if it's still fresh (<24h). If no cache, fall back to local — better
+     *    to leave a paying user briefly entitled during a network blip than
+     *    to revoke entitlement on the basis of a network failure.
+     *  - null (no local purchase)  → not entitled. (Nothing to verify.)
+     */
+    private fun reconcileEntitlement(
+        local: Boolean,
+        verify: com.techadvantage.budgetrak.data.billing.VerifyResult?,
+        purchaseToken: String?
+    ): Boolean {
+        return when (verify) {
+            is com.techadvantage.budgetrak.data.billing.VerifyResult.Verified -> true
+            is com.techadvantage.budgetrak.data.billing.VerifyResult.Refunded -> false
+            is com.techadvantage.budgetrak.data.billing.VerifyResult.Unreachable -> {
+                val cached = purchaseToken?.let { entitlementVerifier.lastServerVerification(it) }
+                when {
+                    cached != null -> cached.verified
+                    else -> local
+                }
+            }
+            null -> false
+        }
+    }
+
+    private fun buildVerificationSummary(
+        paid: com.techadvantage.budgetrak.data.billing.VerifyResult?,
+        sub: com.techadvantage.budgetrak.data.billing.VerifyResult?
+    ): String {
+        fun label(v: com.techadvantage.budgetrak.data.billing.VerifyResult?): String = when (v) {
+            null -> "(no local purchase to verify)"
+            is com.techadvantage.budgetrak.data.billing.VerifyResult.Verified ->
+                "VERIFIED" + (v.expiryTimeMillis?.let { " expiry=${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss z", java.util.Locale.US).format(java.util.Date(it))}" } ?: "")
+            is com.techadvantage.budgetrak.data.billing.VerifyResult.Refunded ->
+                "REFUNDED (${v.reason})"
+            is com.techadvantage.budgetrak.data.billing.VerifyResult.Unreachable ->
+                "UNREACHABLE (${v.cause})"
+        }
+        return "paid_upgrade: ${label(paid)} | subscriber: ${label(sub)}"
     }
 
     fun restorePurchases() {
@@ -3516,7 +3620,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         sb.append("paidUpgradePurchase (BillingState): ")
             .append(if (state?.paidUpgradePurchase != null) "matched" else "no match").append("\n")
         sb.append("subscriberPurchase (BillingState):  ")
-            .append(if (state?.subscriberPurchase != null) "matched" else "no match").append("\n")
+            .append(if (state?.subscriberPurchase != null) "matched" else "no match").append("\n\n")
+
+        sb.append("--- Layer 2 server verification (verifyPurchase) ---\n")
+        sb.append(lastVerificationSummary ?: "(not yet run)").append("\n")
 
         withContext(Dispatchers.IO) {
             try {

@@ -65,7 +65,7 @@ if (System.currentTimeMillis() - lastSuccessfulBillingCheck > 7d) {
 - Attacker offline + refunded: locked at 7 d, max attack window = one billing cycle.
 - Recovery: any successful Play round-trip restores correct state.
 
-**Layer 2 (post-launch item #3)** closes the loophole entirely via App Check + Cloud Function token verification + server-authoritative entitlement flag in Firestore.
+**Layer 2 (refund-lag fix) — LANDED 2026-05-11.** Gen 2 callable `verifyPurchase` in `functions/index.js` runs as `play-publisher@sync-23ce9.iam.gserviceaccount.com` (granted Play Console "View financial data"), enforces App Check, and calls Play Developer API `purchases.products.get` (INAPP) / `purchases.subscriptionsv2.get` (SUBS). `data/billing/EntitlementVerifier.kt` invokes it for every PURCHASED-state purchase Layer 1 returns; `MainViewModel.reconcileEntitlement` overrides the local flag with the server result. Closes the Console-admin refund-lag window (queryPurchasesAsync stuck on PURCHASED for 24h+ — Developer API reflects refunds in minutes). For SUBS, `subscriptionExpiry` is overwritten with the Developer-API `expiryTimeMillis` when verified. 24h server-result cache in `entitlement_verifier` prefs covers offline / App-Check-degraded windows. **Does NOT yet close decompile-and-forge** — an attacker who patches out the verifier call still gets local-flag forgery. Layer 2.5 (App-Check-gated `entitlements/{anonymousUid}` Firestore doc, treat local as cache only) is the follow-up that fully closes it.
 
 ## Debug override
 
@@ -122,7 +122,7 @@ Before Production: nothing in code changes — same `BillingProducts.PAID_UPGRAD
 ## Anti-goals (do NOT do these)
 
 - **Don't reintroduce** the v2.10.00 release-build override (`if (!BuildConfig.DEBUG) { isPaidUser = true; isSubscriber = true }`). It's permanently removed because Play Billing now drives state.
-- **Don't bypass the TTL** for "convenience" — the 7-day window is the only Layer-1 protection until Layer 2 ships. Tightening to a shorter TTL is fine; loosening is not.
+- **Don't bypass the TTL** for "convenience" — the 7-day window is the Layer-1 offline safety net; Layer 2 now also covers refund propagation, but TTL still matters when the server call is Unreachable. Tightening to a shorter TTL is fine; loosening is not.
 - **Don't write `subscriptionExpiry` from anywhere except** `refreshBillingState` (Play-derived) and the debug DatePicker (manual). Avoid race conditions with the existing SYNC group-doc push.
 - **Don't conflate** `Purchase.purchaseState == PURCHASED` with "fully active." Pending purchases (delayed payment, e.g., cash-at-convenience-store in some markets) have state `PENDING` and we correctly ignore them.
 - **Don't acknowledge in `onPurchasesUpdated`** before refreshing state — we acknowledge inside `refreshBillingState` so the queryAll snapshot is the source of truth and we don't double-ack.
