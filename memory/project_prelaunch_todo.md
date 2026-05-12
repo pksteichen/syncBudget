@@ -15,11 +15,20 @@ originSessionId: ea9e173a-ca3d-4f87-b67a-ceac73953250
    - **Optional pre-production:** `MobileAds.openAdInspector(this) {}` from a debug menu to verify served-creative diagnostics on real devices; add tester device IDs to `RequestConfiguration.Builder().setTestDeviceIds(...)` so live debugging doesn't accrue impressions / risk invalid-traffic flags.
    - Full details: `project_ad_implementation.md` "Production-promotion swap checklist".
 
-2. **Period-boundary scheduling — verification window + optional full Phase 4.** Phase 1 (inline FCM dispatch), Phase 3 (solo users → boundary one-shot), and Phase 4-alt (sync users keep periodic but slim Tier 3 fast-exit) all shipped 2026-04-25. **Remaining work:**
-   - **Verification:** one week on Samsung S22 + Pixel comparing "Worker Tier 3 SLIM" vs "Worker Tier 3" log frequency. Success criterion: ≥95% of overnight FCM wakes complete inline reliably (i.e., the slim path is hit on most periodic fires because FCM already covered the sync).
-   - **Optional full Phase 4:** if verification ≥95%, upgrade sync users from the slim periodic to the boundary one-shot architecture solo users have (drops sync-user worker runs from ~96/day to ~4/day). If <95% on either device, stay on Phase 4-alt as the insurance layer.
-   - **Optional Tier 3 snapshot-builder gating:** defer snapshot building to foreground/Tier 2 unless 24h stale or sole photo-capable device; promote to `FOREGROUND_SERVICE_TYPE_DATA_SYNC` when escalated. Current 2h staleness gate covers most failure modes — low priority.
-   - Full plan: `project_period_boundary_scheduling.md`.
+2. **Period-boundary scheduling — Phase 4-alt verification (interim data 2026-05-12 = inconclusive but informative; full study deferred to ~2-week window after 2.10.24).** Phase 1 (inline FCM dispatch), Phase 3 (solo users → boundary one-shot), and Phase 4-alt (sync users keep periodic but slim Tier 3 fast-exit) all shipped 2026-04-25.
+
+   **2026-05-12 interim finding (one device / ~24h, Paul's S22):** 0 of 10 overnight Tier 3 fires took the slim path. The slim-gate code is correct (`BackgroundSyncWorker.kt:280-287, 539-546`): it requires `lastInlineSyncCompletedAt < 30 min ago`, written only by FCM-prefixed successful runs. **The miss is by design, not a bug.** Pattern observed: from ~02:00 to ~10:00 Samsung's Doze killed the VM and serialized FCM heartbeats behind a running Worker (saw 7+ `FCM-heartbeat: skipped (another run already in progress)` log lines). When Tier 3 next fired periodically, `lastInlineSyncCompletedAt` was ~5h stale → full sync correctly required (skipping would risk 8h of undetected peer changes). **Slim path only delivers savings when FCM stays alive concurrently with the Worker periodic.** On Samsung overnight that condition does not hold; the "wasted" full Tier 3 fires are real insurance, not optimization gaps.
+
+   **Implications:**
+   - **The verification target (≥95% overnight FCM-inline reliability) is unlikely to be met on Samsung devices in deep Doze.** Phase 4 full upgrade (boundary one-shots for sync users) would replace the 15-min periodic insurance with one-per-period — losing the very coverage that today's full Tier 3 fires provide.
+   - **Recommendation: stay on Phase 4-alt indefinitely for sync users.** Solo users keep their already-shipped boundary one-shot path (Phase 3). Don't pursue Phase 4 full.
+   - **Battery accounting:** Phase 4-alt's slim path is a best-effort gain that arrives when FCM and Worker concur. When they don't (overnight Doze), full Tier 3 every 15 min is correct behavior. Move the design framing from "should deliver consistent slim-path savings" to "delivers savings opportunistically, full path is the default + insurance."
+
+   **Still pending:** the 2-week window of structured data to validate this interpretation across more devices and conditions. **2026-05-12 enabling change:** bumped `TOKEN_LOG_MAX_BYTES` from 128 KB to 512 KB in `BudgeTrakApplication.kt` (shipped 2.10.24), expanding rolling token-log retention from ~6 days to ~24 days. Tap a dump on each test device ~weekly until ~2026-05-26, then analyze the SLIM vs full-Tier-3 ratio on each. If the data confirms the Samsung-Doze pattern is universal across the tester fleet, formally close out Phase 4 full as not-pursuing and update `project_period_boundary_scheduling.md` accordingly. If a subset of devices show high slim-path hit rates (e.g., Pixel may behave better than Samsung), consider conditional Phase 4 enablement by `Build.MANUFACTURER`.
+
+   **Optional follow-on (low priority):** Tier 3 snapshot-builder gating — defer snapshot building to foreground/Tier 2 unless 24h stale or sole photo-capable device; promote to `FOREGROUND_SERVICE_TYPE_DATA_SYNC` when escalated. Current 2h staleness gate covers most failure modes.
+
+   Full plan + sequencing: `project_period_boundary_scheduling.md`.
 
 ## Post-launch (data-driven)
 
