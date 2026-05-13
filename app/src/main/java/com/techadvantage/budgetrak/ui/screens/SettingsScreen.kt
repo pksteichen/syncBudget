@@ -480,16 +480,23 @@ fun SettingsScreen(
                 ) {
                     // Colors button (replaces the old Chart Palette dropdown — palette is
                     // now part of the ThemeProfile selected in the dedicated Colors screen).
-                    OutlinedTextField(
-                        value = "Edit…",
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Colors") },
-                        colors = textFieldColors,
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable { onNavigateToColors() }
-                    )
+                    // OutlinedTextField swallows clicks internally even when readOnly, so
+                    // overlay a transparent Box on top to capture taps.
+                    Box(modifier = Modifier.weight(1f)) {
+                        OutlinedTextField(
+                            value = "Edit…",
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Colors") },
+                            colors = textFieldColors,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .clickable { onNavigateToColors() }
+                        )
+                    }
 
                     // Language dropdown
                     var languageExpanded by remember { mutableStateOf(false) }
