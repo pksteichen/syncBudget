@@ -246,7 +246,7 @@ private fun MediumInHouseAd(
             contentAlignment = Alignment.Center,
         ) {
             androidx.compose.foundation.Image(
-                painter = painterResource(R.mipmap.ic_launcher_round),
+                painter = painterResource(R.drawable.budgetrak_logo),
                 contentDescription = null,
                 modifier = Modifier.size(120.dp),
             )
