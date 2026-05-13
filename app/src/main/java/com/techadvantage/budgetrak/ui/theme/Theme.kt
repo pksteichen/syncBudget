@@ -84,7 +84,9 @@ data class SyncBudgetColors(
     val displayBackground: Color,
     val displayBorder: Color,
     val userCategoryIconTint: Color,
-    val accentTint: Color
+    val accentTint: Color,
+    val incomeGreen: Color,
+    val expenseRed: Color
 )
 
 val LocalSyncBudgetColors = staticCompositionLocalOf {
@@ -96,7 +98,9 @@ val LocalSyncBudgetColors = staticCompositionLocalOf {
         displayBackground = DarkDisplayBackground,
         displayBorder = DarkDisplayBorder,
         userCategoryIconTint = LightCardBackground,
-        accentTint = DarkCardText
+        accentTint = DarkCardText,
+        incomeGreen = IncomeGreen,
+        expenseRed = ExpenseRed
     )
 }
 
@@ -802,32 +806,43 @@ fun SyncBudgetTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     strings: AppStrings = EnglishStrings,
     adBannerHeight: Dp = 0.dp,
+    profile: ThemeProfile = BuiltInThemes.DEFAULT,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
-    val customColors = if (darkTheme) {
-        SyncBudgetColors(
-            headerBackground = DarkCardBackground,
-            headerText = DarkCardText,
-            cardBackground = DarkCardBackground,
-            cardText = DarkCardText,
-            displayBackground = DarkDisplayBackground,
-            displayBorder = DarkDisplayBorder,
-            userCategoryIconTint = LightCardBackground,
-            accentTint = DarkCardText
+    val cs = if (darkTheme) profile.dark else profile.light
+    val colorScheme = if (darkTheme) {
+        darkColorScheme(
+            primary = cs.primary,
+            onPrimary = DarkOnPrimary,
+            background = cs.background,
+            surface = cs.surface,
+            onBackground = cs.onSurface,
+            onSurface = cs.onSurface
         )
     } else {
-        SyncBudgetColors(
-            headerBackground = LightCardBackground,
-            headerText = LightCardText,
-            cardBackground = LightCardBackground,
-            cardText = LightCardText,
-            displayBackground = LightDisplayBackground,
-            displayBorder = LightDisplayBorder,
-            userCategoryIconTint = LightCardBackground,
-            accentTint = LightCardBackground
+        lightColorScheme(
+            primary = cs.primary,
+            onPrimary = LightOnPrimary,
+            primaryContainer = Color(0xFF4A3270),
+            onPrimaryContainer = Color(0xFFE8DEF8),
+            background = cs.background,
+            surface = cs.surface,
+            onBackground = cs.onSurface,
+            onSurface = cs.onSurface
         )
     }
+    val customColors = SyncBudgetColors(
+        headerBackground = cs.cardBackground,
+        headerText = cs.cardText,
+        cardBackground = cs.cardBackground,
+        cardText = cs.cardText,
+        displayBackground = cs.displayBackground,
+        displayBorder = cs.displayBorder,
+        userCategoryIconTint = LightCardBackground,
+        accentTint = if (darkTheme) cs.cardText else cs.cardBackground,
+        incomeGreen = cs.incomeGreen,
+        expenseRed = cs.expenseRed
+    )
 
     val appToastState = remember { AppToastState() }
     val adAwareDialogState = remember { AdAwareDialogState() }

@@ -381,7 +381,7 @@ class MainActivity : ComponentActivity() {
                     if (open) vm.shareBlockingDialogCount++ else vm.shareBlockingDialogCount--
                 }
             ) {
-            SyncBudgetTheme(strings = vm.strings, adBannerHeight = adBannerHeight) {
+            SyncBudgetTheme(strings = vm.strings, adBannerHeight = adBannerHeight, profile = vm.activeTheme) {
               val toastState = LocalAppToast.current
               run {
               // Archive toast
@@ -530,6 +530,7 @@ class MainActivity : ComponentActivity() {
                             "budget_config" -> "settings"
                             "budget_calendar_help" -> "budget_calendar"
                             "sync" -> "settings"
+                            "colors" -> "settings"
                             "sync_help" -> "sync"
                             else -> "main"
                         }
@@ -685,6 +686,11 @@ class MainActivity : ComponentActivity() {
                         }
                     )
                     "settings" -> SettingsScreenBranch(vm, toastState)
+                    "colors" -> com.techadvantage.budgetrak.ui.screens.ColorsScreen(
+                        activeTheme = vm.activeTheme,
+                        onActiveThemeChange = { vm.activeTheme = it },
+                        onBack = { vm.currentScreen = "settings" },
+                    )
                     "transactions" -> TransactionsScreenBranch(vm, toastState)
                     "savings_goals" -> SavingsGoalsScreen(
                         isPaidUser = vm.isPaidUser,
@@ -1942,6 +1948,7 @@ class MainActivity : ComponentActivity() {
             },
             onNavigateToBudgetConfig = { vm.currentScreen = "budget_config" },
             onNavigateToSync = { vm.currentScreen = "sync" },
+            onNavigateToColors = { vm.currentScreen = "colors" },
             onNavigateToQuickStart = {
                 vm.quickStartStep = QuickStartStep.WELCOME
                 vm.currentScreen = "main"

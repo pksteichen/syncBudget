@@ -265,6 +265,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var weekStartSunday by mutableStateOf(prefs.getBoolean("weekStartSunday", true))
     var chartPalette by mutableStateOf(prefs.getString("chartPalette", "Sunset") ?: "Sunset")
 
+    // ── Custom Themes ──
+    var activeTheme by mutableStateOf(
+        com.techadvantage.budgetrak.data.ThemesRepository.getSelected(getApplication())
+    )
+
     // ── Language / Strings ──
     // Default to device language if we support it, otherwise English
     private val deviceLang = java.util.Locale.getDefault().language

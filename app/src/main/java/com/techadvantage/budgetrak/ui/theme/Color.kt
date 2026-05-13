@@ -27,3 +27,10 @@ val LightCardBackground = Color(0xFF305880)      // Lighter blue cards
 val LightCardText = Color(0xFFFFFFFF)            // White text
 val LightDisplayBackground = Color(0xFFD6E5DE)   // Light greenish Solari frame
 val LightDisplayBorder = Color(0xFFB8CCC2)
+
+// Semantic income/expense (shared light + dark today; themable via SyncBudgetColors).
+// NOTE: the same hexes also appear as raw literals in sync-indicator state code
+// (online green / offline red) — those usages are intentionally LOCKED and must
+// not be migrated to these constants.
+val IncomeGreen = Color(0xFF4CAF50)
+val ExpenseRed = Color(0xFFF44336)

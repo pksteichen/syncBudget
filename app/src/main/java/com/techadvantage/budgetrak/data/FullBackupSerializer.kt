@@ -81,7 +81,12 @@ object FullBackupSerializer {
             localPrefs.put("incomeMode", prefs.getString("incomeMode", "FIXED"))
             localPrefs.put("autoCapitalize", prefs.getBoolean("autoCapitalize", true))
             localPrefs.put("showWidgetLogo", prefs.getBoolean("showWidgetLogo", true))
+            localPrefs.put("selectedThemeName", prefs.getString("selectedThemeName", "Default"))
             json.put("localPrefs", localPrefs)
+
+            // Custom color themes — backup only (not joinSnapshot, so themes
+            // stay local-only and survive group-join unchanged).
+            readFileArray("themes.json")?.let { json.put("themes", it) }
         }
 
         return json.toString()
@@ -237,6 +242,7 @@ object FullBackupSerializer {
         writeArray("savingsGoals", "future_expenditures.json")
         writeArray("periodLedger", "period_ledger.json")
         writeArray("archivedTransactions", "archived_transactions.json")
+        writeArray("themes", "themes.json")
 
         // Restore shared settings
         if (json.has("sharedSettings")) {
@@ -283,6 +289,7 @@ object FullBackupSerializer {
                 putString("incomeMode", lp.optString("incomeMode", "FIXED"))
                 putBoolean("autoCapitalize", lp.optBoolean("autoCapitalize", true))
                 putBoolean("showWidgetLogo", lp.optBoolean("showWidgetLogo", true))
+                putString("selectedThemeName", lp.optString("selectedThemeName", "Default"))
                 apply()
             }
         }

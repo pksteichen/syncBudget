@@ -158,6 +158,7 @@ fun SettingsScreen(
     budgetPeriod: String = "DAILY",
     onNavigateToBudgetConfig: () -> Unit = {},
     onNavigateToSync: () -> Unit = {},
+    onNavigateToColors: () -> Unit = {},
     onNavigateToQuickStart: () -> Unit = {},
     isSyncConfigured: Boolean = false,
     isAdmin: Boolean = true,
@@ -477,46 +478,18 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Chart Palette dropdown
-                    var paletteExpanded by remember { mutableStateOf(false) }
-                    ExposedDropdownMenuBox(
-                        expanded = paletteExpanded,
-                        onExpandedChange = { paletteExpanded = it },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        OutlinedTextField(
-                            value = when (chartPalette) {
-                                "Bright" -> S.settings.bright
-                                "Pastel" -> S.settings.pastel
-                                "Sunset" -> S.settings.sunset
-                                else -> chartPalette
-                            },
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text(S.settings.chartPalette) },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = paletteExpanded) },
-                            colors = textFieldColors,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .menuAnchor()
-                        )
-                        ExposedDropdownMenu(
-                            expanded = paletteExpanded,
-                            onDismissRequest = { paletteExpanded = false }
-                        ) {
-                            ScrollableDropdownContent {
-                                listOf("Bright" to S.settings.bright, "Pastel" to S.settings.pastel, "Sunset" to S.settings.sunset).forEach { (value, label) ->
-                                    DropdownMenuItem(
-                                        text = { Text(label) },
-                                        onClick = {
-                                            onChartPaletteChange(value)
-                                            paletteExpanded = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
+                    // Colors button (replaces the old Chart Palette dropdown — palette is
+                    // now part of the ThemeProfile selected in the dedicated Colors screen).
+                    OutlinedTextField(
+                        value = "Edit…",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Colors") },
+                        colors = textFieldColors,
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onNavigateToColors() }
+                    )
 
                     // Language dropdown
                     var languageExpanded by remember { mutableStateOf(false) }
