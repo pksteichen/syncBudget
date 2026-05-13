@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -128,12 +129,20 @@ private fun UpgradeBadge(label: String) {
 }
 
 @Composable
-private fun CtaButton(text: String, bg: Color, fg: Color, paddingH: Int = 16, paddingV: Int = 6) {
+private fun CtaButton(
+    text: String,
+    bg: Color,
+    fg: Color,
+    paddingH: Int = 16,
+    paddingV: Int = 6,
+    modifier: Modifier = Modifier,
+) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .clip(RoundedCornerShape(6.dp))
             .background(bg)
-            .padding(horizontal = paddingH.dp, vertical = paddingV.dp)
+            .padding(horizontal = paddingH.dp, vertical = paddingV.dp),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             text = text,
@@ -195,61 +204,66 @@ private fun MediumInHouseAd(
     ctaTextColor: Color,
     ctaText: String,
 ) {
-    // Matches native_ad_medium.xml: horizontal split — left text column,
-    // right 160×120 media area showing the BudgeTrak app icon (replacing
-    // AdMob's MediaView). Text column has 40 dp feature icon + badge +
-    // 2-line headline + 1-line body + CTA.
+    // Mirrors native_ad_medium.xml: 120 dp tall row, no outer padding.
+    // Left column (weight 1, vertically centered) — 2-line headline,
+    // 2-line body, full-width 40 dp CTA. Right Box 214×120 dp shows the
+    // BudgeTrak app icon with the "Upgrade" badge overlaid top-end
+    // (mirroring the "Ad" badge that overlays the real MediaView).
     Row(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 12.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxSize(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = ad.icon,
-                    contentDescription = null,
-                    tint = headerTextColor,
-                    modifier = Modifier.size(40.dp),
-                )
-                Spacer(Modifier.width(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    UpgradeBadge(strings.ads.upgradeBadge)
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = headlineFor(ad.id, strings),
-                        color = headerTextColor,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            Spacer(Modifier.height(6.dp))
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .padding(end = 8.dp),
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(
+                text = headlineFor(ad.id, strings),
+                color = headerTextColor,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(2.dp))
             Text(
                 text = bodyFor(ad.id, strings),
                 color = headerTextColor,
                 fontSize = 12.sp,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.height(6.dp))
-            CtaButton(ctaText, ctaBgColor, ctaTextColor)
+            CtaButton(
+                ctaText,
+                ctaBgColor,
+                ctaTextColor,
+                paddingV = 12,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
-        Spacer(Modifier.width(10.dp))
         Box(
             modifier = Modifier
-                .width(160.dp)
+                .width(214.dp)
                 .height(120.dp),
-            contentAlignment = Alignment.Center,
         ) {
             androidx.compose.foundation.Image(
-                painter = painterResource(R.drawable.budgetrak_logo),
+                painter = painterResource(R.drawable.ic_app_icon),
                 contentDescription = null,
-                modifier = Modifier.size(120.dp),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(100.dp),
             )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(4.dp)
+            ) {
+                UpgradeBadge(strings.ads.upgradeBadge)
+            }
         }
     }
 }

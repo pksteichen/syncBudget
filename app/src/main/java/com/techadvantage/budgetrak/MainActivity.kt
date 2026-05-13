@@ -302,7 +302,7 @@ class MainActivity : ComponentActivity() {
             val nativeAdLayoutId = if (isMediumTier) R.layout.native_ad_medium else R.layout.native_ad_small
             val adBannerHeight = when {
                 !nativeAdEnabled -> 0.dp
-                isMediumTier -> 144.dp
+                isMediumTier -> 120.dp
                 else -> 64.dp
             }
 
@@ -323,6 +323,9 @@ class MainActivity : ComponentActivity() {
                         com.google.android.gms.ads.VideoOptions.Builder()
                             .setStartMuted(true)
                             .build()
+                    )
+                    .setAdChoicesPlacement(
+                        com.google.android.gms.ads.nativead.NativeAdOptions.ADCHOICES_TOP_LEFT
                     )
                     .build()
             }
