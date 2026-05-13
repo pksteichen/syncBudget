@@ -507,7 +507,7 @@ class MainActivity : ComponentActivity() {
                                 advertiserView?.text = ad.advertiser ?: ""
                                 ctaView.text = ad.callToAction ?: ""
                                 bodyView?.text = ad.body ?: ""
-                                ad.icon?.drawable?.let { iconView.setImageDrawable(it) }
+                                ad.icon?.drawable?.let { iconView?.setImageDrawable(it) }
                                 view.setNativeAd(ad)
                             },
                             modifier = Modifier.fillMaxWidth().height(adBannerHeight)
