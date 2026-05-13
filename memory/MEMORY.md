@@ -121,7 +121,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 
 ## Git Workflow
 - Two branches: `dev` → `main`. Default push: **dev only**.
-- **Release pipeline:** `/push` → `gh workflow run release.yml --ref dev` (proven path, 5+ runs). Workflow is dispatch-only and defaults to publish_to_play=true / track=internal / status=draft so a bare dispatch does build → sign → upload AAB to Play Console internal as draft. Always end /push with the dispatch — don't ask, just do it. See [`feedback_ci_manual_dispatch.md`](feedback_ci_manual_dispatch.md).
+- **Release pipeline (2026-05-13+):** dev = active development, main = release source. `/push` lands work on dev but does NOT auto-dispatch CI. To ship: user explicitly promotes dev → main (fast-forward merge + push origin main) and asks to dispatch `gh workflow run release.yml --ref main`. Defaults publish_to_play=true / track=internal,alpha / status=completed. See [`feedback_ci_manual_dispatch.md`](feedback_ci_manual_dispatch.md).
 - Tags: v2.1–v2.6 (see `project_firestore_native_sync.md`).
 - Post-commit hook copies repo → `Download/BudgeTrak Dev Project Files/` (one-way). See `feedback_git_hook_direction.md`.
 - `gh` CLI has both `pksteichen` and `techadvantagesupport` accounts logged in; active account is `techadvantagesupport`. `gh auth switch -u <user>` toggles (affects all terminals). Git push/pull uses `~/.git-credentials` (techadvantagesupport PAT), independent of `gh` active account.
