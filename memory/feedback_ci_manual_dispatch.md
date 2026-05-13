@@ -4,9 +4,14 @@ description: BudgeTrak's CI is workflow_dispatch only. As of 2026-05-13 (post-v2
 type: feedback
 ---
 
-**Rule.** Tracks-bound CI dispatches use `--ref main` only. `dev` is the active development branch — `/push` lands work there but does NOT auto-dispatch CI. When the user is ready to ship to internal/alpha, they will explicitly ask to promote dev → main (fast-forward merge) and dispatch CI from main.
+**Branch roles (refined 2026-05-13):**
+- **`main`** — release source. Only branch CI dispatches from.
+- **`dev`** — bug-fix testing / staging branch. Work merges here from feature branches when ready for integration verification; bug fixes land here first to soak before promotion to main.
+- **`feature/*`** — active feature development (themes, ad polish, etc.). Branches off dev. Merge back to dev when the feature is integration-ready.
 
-**Why this changed (2026-05-13):** through v2.10.27 the pipeline was `/push to dev → dispatch from dev`. After v2.10.27 stabilized the ad layer, the user moved to a `main = release source` model so all production-bound builds come from a vetted branch. Dev-side experimentation no longer auto-ships to testers. This holds until production launch is complete.
+**Rule.** Tracks-bound CI dispatches use `--ref main` only. Feature work happens on `feature/*` branches; integration testing happens on `dev`; releases come from `main`. The user will explicitly ask to promote dev → main (fast-forward merge) and dispatch CI from main when ready to ship to internal/alpha.
+
+**Why this changed (2026-05-13):** through v2.10.27 the pipeline was `/push to dev → dispatch from dev`. After v2.10.27 stabilized the ad layer, the user moved to a `main = release source` model so all production-bound builds come from a vetted branch. Dev becomes the bug-fix soak zone before promotion. Feature branches keep parallel work isolated. This holds until production launch is complete.
 
 **Why:** the workflow is `on: workflow_dispatch:` only (no push or tag trigger). The header comment in `.github/workflows/release.yml` calls it "manual-dispatch only for now" but the user has been running this exact pipeline routinely. Forgetting means the user has to remind me, which has happened repeatedly.
 
