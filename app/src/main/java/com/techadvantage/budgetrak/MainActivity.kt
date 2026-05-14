@@ -802,6 +802,8 @@ class MainActivity : ComponentActivity() {
                     "colors" -> com.techadvantage.budgetrak.ui.screens.ColorsScreen(
                         activeTheme = vm.activeTheme,
                         onActiveThemeChange = { vm.activeTheme = it },
+                        activeChartPalette = vm.activeChartPalette,
+                        onActiveChartPaletteChange = { vm.activeChartPalette = it },
                         onBack = { vm.currentScreen = "settings" },
                     )
                     "transactions" -> TransactionsScreenBranch(vm, toastState)

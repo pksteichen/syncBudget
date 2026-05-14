@@ -82,11 +82,13 @@ object FullBackupSerializer {
             localPrefs.put("autoCapitalize", prefs.getBoolean("autoCapitalize", true))
             localPrefs.put("showWidgetLogo", prefs.getBoolean("showWidgetLogo", true))
             localPrefs.put("selectedThemeName", prefs.getString("selectedThemeName", "Default"))
+            localPrefs.put("selectedChartPaletteName", prefs.getString("selectedChartPaletteName", "Bright"))
             json.put("localPrefs", localPrefs)
 
-            // Custom color themes — backup only (not joinSnapshot, so themes
-            // stay local-only and survive group-join unchanged).
+            // Custom color themes + chart palettes — backup only (not joinSnapshot,
+            // so they stay local-only and survive group-join unchanged).
             readFileArray("themes.json")?.let { json.put("themes", it) }
+            readFileArray("chart_palettes.json")?.let { json.put("chartPalettes", it) }
         }
 
         return json.toString()
@@ -243,6 +245,7 @@ object FullBackupSerializer {
         writeArray("periodLedger", "period_ledger.json")
         writeArray("archivedTransactions", "archived_transactions.json")
         writeArray("themes", "themes.json")
+        writeArray("chartPalettes", "chart_palettes.json")
 
         // Restore shared settings
         if (json.has("sharedSettings")) {
@@ -290,6 +293,7 @@ object FullBackupSerializer {
                 putBoolean("autoCapitalize", lp.optBoolean("autoCapitalize", true))
                 putBoolean("showWidgetLogo", lp.optBoolean("showWidgetLogo", true))
                 putString("selectedThemeName", lp.optString("selectedThemeName", "Default"))
+                putString("selectedChartPaletteName", lp.optString("selectedChartPaletteName", "Bright"))
                 apply()
             }
         }

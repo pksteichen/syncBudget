@@ -3,7 +3,9 @@ package com.techadvantage.budgetrak.data
 import android.content.Context
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import com.techadvantage.budgetrak.ui.theme.BuiltInChartPalettes
 import com.techadvantage.budgetrak.ui.theme.BuiltInThemes
+import com.techadvantage.budgetrak.ui.theme.ChartPalette
 import com.techadvantage.budgetrak.ui.theme.ThemeColorSet
 import com.techadvantage.budgetrak.ui.theme.ThemeProfile
 import org.json.JSONArray
@@ -11,8 +13,8 @@ import org.json.JSONObject
 
 /**
  * Persists user-created custom color themes to `themes.json`. The built-in
- * Default profile lives in code (`DefaultThemeProfile.DEFAULT`) so it can
- * never be corrupted or deleted; only user-created profiles are written.
+ * Default profile lives in code (`BuiltInThemes.DEFAULT`) so it can never be
+ * corrupted or deleted; only user-created profiles are written.
  *
  * Storage: JSONArray of profile objects. Backup mode of FullBackupSerializer
  * picks this up; joinSnapshot deliberately does not, so themes survive
@@ -25,7 +27,6 @@ object ThemesRepository {
     private const val PREFS = "app_prefs"
     private const val KEY_SELECTED = "selectedThemeName"
 
-    /** All available profiles — built-ins first, then user-created in saved order. */
     fun load(context: Context): List<ThemeProfile> {
         return BuiltInThemes.ALL + loadUserProfiles(context)
     }
@@ -42,7 +43,6 @@ object ThemesRepository {
             .putString(KEY_SELECTED, name).apply()
     }
 
-    /** Replace the full user-profile list (Default is implicit and excluded). */
     fun saveUserProfiles(context: Context, profiles: List<ThemeProfile>) {
         val arr = JSONArray()
         profiles.filter { !it.isBuiltIn }.forEach { arr.put(toJson(it)) }
@@ -68,35 +68,15 @@ object ThemesRepository {
         o.put("name", p.name)
         o.put("light", colorSetToJson(p.light))
         o.put("dark", colorSetToJson(p.dark))
-        o.put("chartLight", chartToJson(p.chartLight))
-        o.put("chartDark", chartToJson(p.chartDark))
         return o
     }
 
     private fun fromJson(o: JSONObject): ThemeProfile? {
         val name = o.optString("name").takeIf { it.isNotBlank() } ?: return null
-        // Reject any user profile that collides with a built-in name.
         if (BuiltInThemes.ALL.any { it.name.equals(name, ignoreCase = true) }) return null
         val light = colorSetFromJson(o.optJSONObject("light") ?: return null) ?: return null
         val dark = colorSetFromJson(o.optJSONObject("dark") ?: return null) ?: return null
-        val chartLight = chartFromJson(o.optJSONArray("chartLight")) ?: return null
-        val chartDark = chartFromJson(o.optJSONArray("chartDark")) ?: return null
-        return ThemeProfile(
-            name = name, isBuiltIn = false,
-            light = light, dark = dark,
-            chartLight = chartLight, chartDark = chartDark,
-        )
-    }
-
-    private fun chartToJson(c: List<Color>): JSONArray {
-        val arr = JSONArray()
-        c.forEach { arr.put(colorToHex(it)) }
-        return arr
-    }
-
-    private fun chartFromJson(arr: JSONArray?): List<Color>? {
-        if (arr == null || arr.length() != 12) return null
-        return (0 until 12).map { parseHex(arr.optString(it)) ?: return null }
+        return ThemeProfile(name = name, isBuiltIn = false, light = light, dark = dark)
     }
 
     private fun colorSetToJson(c: ThemeColorSet): JSONObject {
@@ -129,10 +109,10 @@ object ThemesRepository {
         )
     }
 
-    private fun colorToHex(c: Color): String =
+    internal fun colorToHex(c: Color): String =
         String.format("#%08X", c.toArgb())
 
-    private fun parseHex(s: String?): Color? {
+    internal fun parseHex(s: String?): Color? {
         if (s.isNullOrBlank()) return null
         val hex = s.removePrefix("#")
         return try {
@@ -142,5 +122,83 @@ object ThemesRepository {
                 else -> null
             }
         } catch (_: Exception) { null }
+    }
+}
+
+/**
+ * Persists user-created chart palettes to `chart_palettes.json`. Built-ins
+ * (Bright/Pastel/Sunset) live in code so they can never be corrupted/deleted.
+ *
+ * Backup-bundled (not in joinSnapshot) so palettes are local-only and survive
+ * group-join — same pattern as ThemesRepository.
+ *
+ * Selection lives in `app_prefs` under `selectedChartPaletteName`.
+ */
+object ChartPalettesRepository {
+    private const val FILE_NAME = "chart_palettes.json"
+    private const val PREFS = "app_prefs"
+    private const val KEY_SELECTED = "selectedChartPaletteName"
+
+    fun load(context: Context): List<ChartPalette> {
+        return BuiltInChartPalettes.ALL + loadUserPalettes(context)
+    }
+
+    fun getSelected(context: Context): ChartPalette {
+        val name = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(KEY_SELECTED, BuiltInChartPalettes.DEFAULT.name)
+            ?: BuiltInChartPalettes.DEFAULT.name
+        return load(context).firstOrNull { it.name == name } ?: BuiltInChartPalettes.DEFAULT
+    }
+
+    fun setSelected(context: Context, name: String) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(KEY_SELECTED, name).apply()
+    }
+
+    fun saveUserPalettes(context: Context, palettes: List<ChartPalette>) {
+        val arr = JSONArray()
+        palettes.filter { !it.isBuiltIn }.forEach { arr.put(toJson(it)) }
+        SafeIO.atomicWriteJson(context, FILE_NAME, arr)
+    }
+
+    private fun loadUserPalettes(context: Context): List<ChartPalette> {
+        val file = context.getFileStreamPath(FILE_NAME)
+        if (!file.exists()) return emptyList()
+        val text = try { file.readText() } catch (_: Exception) { return emptyList() }
+        if (text.isBlank()) return emptyList()
+        val arr = try { JSONArray(text) } catch (_: Exception) { return emptyList() }
+        val out = mutableListOf<ChartPalette>()
+        for (i in 0 until arr.length()) {
+            val obj = arr.optJSONObject(i) ?: continue
+            fromJson(obj)?.let { out.add(it) }
+        }
+        return out
+    }
+
+    private fun toJson(p: ChartPalette): JSONObject {
+        val o = JSONObject()
+        o.put("name", p.name)
+        o.put("chartLight", chartToJson(p.chartLight))
+        o.put("chartDark", chartToJson(p.chartDark))
+        return o
+    }
+
+    private fun fromJson(o: JSONObject): ChartPalette? {
+        val name = o.optString("name").takeIf { it.isNotBlank() } ?: return null
+        if (BuiltInChartPalettes.ALL.any { it.name.equals(name, ignoreCase = true) }) return null
+        val chartLight = chartFromJson(o.optJSONArray("chartLight")) ?: return null
+        val chartDark = chartFromJson(o.optJSONArray("chartDark")) ?: return null
+        return ChartPalette(name = name, isBuiltIn = false, chartLight = chartLight, chartDark = chartDark)
+    }
+
+    private fun chartToJson(c: List<Color>): JSONArray {
+        val arr = JSONArray()
+        c.forEach { arr.put(ThemesRepository.colorToHex(it)) }
+        return arr
+    }
+
+    private fun chartFromJson(arr: JSONArray?): List<Color>? {
+        if (arr == null || arr.length() != 12) return null
+        return (0 until 12).map { ThemesRepository.parseHex(arr.optString(it)) ?: return null }
     }
 }

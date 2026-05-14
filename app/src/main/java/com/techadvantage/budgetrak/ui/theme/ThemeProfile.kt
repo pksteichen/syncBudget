@@ -27,22 +27,28 @@ data class ThemeColorSet(
     val expenseRed: Color,
 )
 
+/** Base theme: light + dark color sets. Independent of chart palette. */
 data class ThemeProfile(
     val name: String,
     val isBuiltIn: Boolean,
     val light: ThemeColorSet,
     val dark: ThemeColorSet,
+)
+
+/** Chart palette: 12 light + 12 dark colors. Independent of base theme. */
+data class ChartPalette(
+    val name: String,
+    val isBuiltIn: Boolean,
     val chartLight: List<Color>,
     val chartDark: List<Color>,
 ) {
     init {
-        require(chartLight.size == 12) { "ThemeProfile.chartLight must contain exactly 12 colors" }
-        require(chartDark.size == 12) { "ThemeProfile.chartDark must contain exactly 12 colors" }
+        require(chartLight.size == 12) { "ChartPalette.chartLight must contain exactly 12 colors" }
+        require(chartDark.size == 12) { "ChartPalette.chartDark must contain exactly 12 colors" }
     }
 }
 
 object BuiltInThemes {
-    // Default light/dark base — shared across all built-in profiles.
     private val DEFAULT_LIGHT = ThemeColorSet(
         primary = LightPrimary,
         cardBackground = LightCardBackground,
@@ -68,6 +74,17 @@ object BuiltInThemes {
         expenseRed = ExpenseRed,
     )
 
+    val DEFAULT = ThemeProfile(
+        name = "Default",
+        isBuiltIn = true,
+        light = DEFAULT_LIGHT,
+        dark = DEFAULT_DARK,
+    )
+
+    val ALL = listOf(DEFAULT)
+}
+
+object BuiltInChartPalettes {
     private val BRIGHT_LIGHT = listOf(
         Color(0xFF4CAF50), Color(0xFF2196F3), Color(0xFFF44336), Color(0xFFFF9800),
         Color(0xFF9C27B0), Color(0xFF00BCD4), Color(0xFFFFEB3B), Color(0xFF795548),
@@ -99,34 +116,12 @@ object BuiltInThemes {
         Color(0xFF7A5540), Color(0xFF1A4040), Color(0xFF4A3622), Color(0xFF524968),
     )
 
-    val DEFAULT = ThemeProfile(
-        name = "Default",
-        isBuiltIn = true,
-        light = DEFAULT_LIGHT,
-        dark = DEFAULT_DARK,
-        chartLight = BRIGHT_LIGHT,
-        chartDark = BRIGHT_DARK,
-    )
+    val BRIGHT = ChartPalette("Bright", isBuiltIn = true, chartLight = BRIGHT_LIGHT, chartDark = BRIGHT_DARK)
+    val PASTEL = ChartPalette("Pastel", isBuiltIn = true, chartLight = PASTEL_LIGHT, chartDark = PASTEL_DARK)
+    val SUNSET = ChartPalette("Sunset", isBuiltIn = true, chartLight = SUNSET_LIGHT, chartDark = SUNSET_DARK)
 
-    val PASTEL = ThemeProfile(
-        name = "Pastel",
-        isBuiltIn = true,
-        light = DEFAULT_LIGHT,
-        dark = DEFAULT_DARK,
-        chartLight = PASTEL_LIGHT,
-        chartDark = PASTEL_DARK,
-    )
-
-    val SUNSET = ThemeProfile(
-        name = "Sunset",
-        isBuiltIn = true,
-        light = DEFAULT_LIGHT,
-        dark = DEFAULT_DARK,
-        chartLight = SUNSET_LIGHT,
-        chartDark = SUNSET_DARK,
-    )
-
-    val ALL = listOf(DEFAULT, PASTEL, SUNSET)
+    val ALL = listOf(BRIGHT, PASTEL, SUNSET)
+    val DEFAULT = BRIGHT
 }
 
 /** Kept for backwards-compat with earlier checkpoint code; resolves to BuiltInThemes.DEFAULT. */

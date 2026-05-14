@@ -265,9 +265,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var weekStartSunday by mutableStateOf(prefs.getBoolean("weekStartSunday", true))
     var chartPalette by mutableStateOf(prefs.getString("chartPalette", "Sunset") ?: "Sunset")
 
-    // ── Custom Themes ──
+    // ── Custom Themes + Chart Palette (decoupled) ──
     var activeTheme by mutableStateOf(
         com.techadvantage.budgetrak.data.ThemesRepository.getSelected(getApplication())
+    )
+    var activeChartPalette by mutableStateOf(
+        com.techadvantage.budgetrak.data.ChartPalettesRepository.getSelected(getApplication())
     )
 
     // ── Language / Strings ──
