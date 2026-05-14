@@ -67,6 +67,7 @@ import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -810,10 +811,15 @@ fun SyncBudgetTheme(
     content: @Composable () -> Unit
 ) {
     val cs = if (darkTheme) profile.dark else profile.light
+    // Auto-derive onPrimary from primary luminance — keeps CTA/pill text legible
+    // on user-chosen Primary colors (the ad redesign in v2.10.28 made CTA text
+    // and price/store/star pill text use MaterialTheme.colorScheme.onPrimary,
+    // which previously was a fixed Black/White and could contrast badly).
+    val derivedOnPrimary = if (cs.primary.luminance() > 0.5f) Color.Black else Color.White
     val colorScheme = if (darkTheme) {
         darkColorScheme(
             primary = cs.primary,
-            onPrimary = DarkOnPrimary,
+            onPrimary = derivedOnPrimary,
             background = cs.background,
             surface = cs.surface,
             onBackground = cs.onSurface,
@@ -822,7 +828,7 @@ fun SyncBudgetTheme(
     } else {
         lightColorScheme(
             primary = cs.primary,
-            onPrimary = LightOnPrimary,
+            onPrimary = derivedOnPrimary,
             primaryContainer = Color(0xFF4A3270),
             onPrimaryContainer = Color(0xFFE8DEF8),
             background = cs.background,

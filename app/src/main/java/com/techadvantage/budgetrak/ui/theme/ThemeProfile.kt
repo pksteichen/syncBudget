@@ -3,9 +3,16 @@ package com.techadvantage.budgetrak.ui.theme
 import androidx.compose.ui.graphics.Color
 
 /**
- * One of the ten themable color roles per light/dark mode. Sync-indicator
- * states and dialog Danger/Warning hexes are intentionally NOT here — those
- * are semantically locked.
+ * One of the ten themable color roles per light/dark mode. The following are
+ * intentionally NOT here — semantically or policy-locked:
+ *   • Sync-indicator state colors (green/blue/yellow/red/grey) — convention
+ *   • Dialog Danger (red) / Warning (orange) — convention
+ *   • AdMob "Ad" badge yellow (#FFCC00) + black stroke — AdMob policy
+ *   • Native-ad overlay backdrop (#B3000000) — readability backstop
+ *   • UpgradeBadge yellow/black in InHouseAd — mirrors Ad badge convention
+ *
+ * onPrimary (text/icons on Primary buttons + CTA + price pills) is auto-derived
+ * from Primary's luminance inside SyncBudgetTheme — no slot needed.
  */
 data class ThemeColorSet(
     val primary: Color,
