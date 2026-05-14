@@ -7,23 +7,52 @@
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="120dp"
+        android:layout_height="@dimen/ad_slot_height"
         android:orientation="horizontal">
 
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:layout_marginEnd="8dp"
-            android:orientation="vertical"
-            android:gravity="center_vertical">
+            android:layout_marginEnd="@dimen/ad_left_col_margin_end"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <ImageView
+                    android:id="@+id/native_ad_icon"
+                    android:layout_width="@dimen/ad_icon_size"
+                    android:layout_height="@dimen/ad_icon_size"
+                    android:layout_marginTop="@dimen/ad_icon_margin"
+                    android:layout_marginStart="@dimen/ad_icon_margin"
+                    android:layout_marginEnd="@dimen/ad_icon_margin"
+                    android:layout_marginBottom="@dimen/ad_icon_margin_bottom"
+                    android:scaleType="fitCenter"
+                    android:contentDescription="@null" />
+
+                <TextView
+                    android:id="@+id/native_ad_advertiser"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:textSize="@dimen/ad_advertiser_text_size"
+                    android:textStyle="bold"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/native_ad_headline"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textSize="14sp"
+                android:textSize="@dimen/ad_headline_text_size"
                 android:textStyle="bold"
+                android:gravity="center"
+                android:includeFontPadding="false"
                 android:maxLines="2"
                 android:ellipsize="end" />
 
@@ -31,31 +60,41 @@
                 android:id="@+id/native_ad_body"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textSize="12sp"
-                android:maxLines="2"
-                android:ellipsize="end"
-                android:layout_marginTop="2dp" />
+                android:layout_marginTop="@dimen/ad_body_margin_top"
+                android:textSize="@dimen/ad_body_text_size"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:maxLines="3"
+                android:ellipsize="end" />
+
+            <Space
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
 
             <Button
                 android:id="@+id/native_ad_cta"
-                android:layout_width="match_parent"
-                android:layout_height="40dp"
-                android:layout_marginTop="6dp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginBottom="@dimen/ad_cta_margin_bottom"
                 android:minWidth="0dp"
                 android:minHeight="0dp"
-                android:paddingHorizontal="16dp"
-                android:paddingVertical="0dp"
-                android:textSize="12sp"
+                android:paddingHorizontal="@dimen/ad_cta_padding_h"
+                android:paddingVertical="@dimen/ad_cta_padding_v"
+                android:textSize="@dimen/ad_cta_text_size"
                 android:textStyle="bold"
                 android:textAllCaps="false"
                 android:textColor="#FFFFFF"
                 android:background="@drawable/native_ad_cta_bg"
-                android:stateListAnimator="@null" />
+                android:stateListAnimator="@null"
+                android:gravity="center"
+                android:includeFontPadding="false" />
         </LinearLayout>
 
         <FrameLayout
-            android:layout_width="214dp"
-            android:layout_height="120dp">
+            android:layout_width="@dimen/ad_media_width"
+            android:layout_height="@dimen/ad_slot_height">
 
             <com.google.android.gms.ads.nativead.MediaView
                 android:id="@+id/native_ad_media"
@@ -67,14 +106,72 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="top|end"
-                android:layout_margin="4dp"
+                android:layout_margin="@dimen/ad_pill_margin"
                 android:text="Ad"
-                android:textSize="10sp"
+                android:textSize="@dimen/ad_badge_text_size"
                 android:textStyle="bold"
                 android:textColor="#000000"
                 android:background="@drawable/native_ad_badge_bg"
-                android:paddingHorizontal="5dp"
-                android:paddingVertical="1dp" />
+                android:paddingHorizontal="@dimen/ad_badge_padding_h"
+                android:paddingVertical="@dimen/ad_badge_padding_v" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top|start"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/native_ad_store"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="@dimen/ad_pill_margin"
+                    android:textSize="@dimen/ad_pill_text_size"
+                    android:textColor="#FFFFFF"
+                    android:background="@drawable/native_ad_overlay_bg"
+                    android:paddingHorizontal="@dimen/ad_pill_padding_h"
+                    android:paddingVertical="@dimen/ad_pill_padding_v"
+                    android:visibility="gone" />
+
+                <com.google.android.gms.ads.nativead.AdChoicesView
+                    android:id="@+id/native_ad_choices"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="@dimen/ad_pill_margin" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|start"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/native_ad_star"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="@dimen/ad_pill_margin"
+                    android:textSize="@dimen/ad_pill_text_size"
+                    android:textStyle="bold"
+                    android:textColor="#FFFFFF"
+                    android:background="@drawable/native_ad_overlay_bg"
+                    android:paddingHorizontal="@dimen/ad_pill_padding_h"
+                    android:paddingVertical="@dimen/ad_pill_padding_v"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/native_ad_price"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="@dimen/ad_pill_margin"
+                    android:textSize="@dimen/ad_pill_text_size"
+                    android:textStyle="bold"
+                    android:textColor="#FFFFFF"
+                    android:background="@drawable/native_ad_overlay_bg"
+                    android:paddingHorizontal="@dimen/ad_pill_padding_h"
+                    android:paddingVertical="@dimen/ad_pill_padding_v"
+                    android:visibility="gone" />
+            </LinearLayout>
         </FrameLayout>
     </LinearLayout>
 

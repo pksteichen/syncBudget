@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Native ad medium-template dimensions. Values here are the base size
+        (screen width >= 400 dp). Override in values-w600dp/ and values-w800dp/
+        to scale up on tablets, foldables, and large displays. Layout XML and
+        Compose mirror both reference these names so a single layout drives
+        all sizes.
+    -->
+
+    <!-- Slot + MediaView (MediaView width = slot height * 16/9 for clean
+         video aspect-fit at the policy minimum). -->
+    <dimen name="ad_slot_height">120dp</dimen>
+    <dimen name="ad_media_width">214dp</dimen>
+
+    <!-- Left-column icon + advertiser. -->
+    <dimen name="ad_icon_size">20dp</dimen>
+    <dimen name="ad_icon_margin">4dp</dimen>
+    <dimen name="ad_icon_margin_bottom">0dp</dimen>
+    <dimen name="ad_advertiser_text_size">11sp</dimen>
+
+    <!-- Headline + body. body_margin_top is 0 at base because the 120 dp slot
+         is tight; w600+ adds breathing room. -->
+    <dimen name="ad_headline_text_size">14sp</dimen>
+    <dimen name="ad_body_text_size">12sp</dimen>
+    <dimen name="ad_body_margin_top">0dp</dimen>
+
+    <!-- CTA pill at bottom of left column. padding_v 0 + includeFontPadding
+         false in the XML keeps the button compact at base; w600+ adds height. -->
+    <dimen name="ad_cta_text_size">11sp</dimen>
+    <dimen name="ad_cta_padding_h">14dp</dimen>
+    <dimen name="ad_cta_padding_v">0dp</dimen>
+    <dimen name="ad_cta_margin_bottom">3dp</dimen>
+
+    <!-- MediaView overlay pills (store / price / star). -->
+    <dimen name="ad_pill_text_size">10sp</dimen>
+    <dimen name="ad_pill_padding_h">6dp</dimen>
+    <dimen name="ad_pill_padding_v">2dp</dimen>
+    <dimen name="ad_pill_margin">4dp</dimen>
+
+    <!-- "Ad" disclosure badge top-end. -->
+    <dimen name="ad_badge_text_size">10sp</dimen>
+    <dimen name="ad_badge_padding_h">5dp</dimen>
+    <dimen name="ad_badge_padding_v">1dp</dimen>
+
+    <!-- In-house ad's centered BudgeTrak app icon (Compose mirror only). -->
+    <dimen name="ad_inhouse_app_icon_size">100dp</dimen>
+
+    <!-- Gap between left column and MediaView. Kept tight at base width to
+         maximize body char capacity (a 90-char body needs ~198dp; the column
+         is 178dp at 400dp screen, so every dp of margin matters here). -->
+    <dimen name="ad_left_col_margin_end">4dp</dimen>
+</resources>

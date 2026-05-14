@@ -1609,15 +1609,15 @@ object TranslationContext {
         "upgradeBadge" to "Yellow chip label that visually replaces AdMob's 'Ad' badge on our own promotional banners. Distinguishes our promo content from third-party ads. Single word, very short.",
         "upgradeCta" to "Button label on the promo banner that opens the one-time Paid upgrade purchase flow. Verb, action-style — short imperative or infinitive.",
         "subscribeCta" to "Button label on the promo banner that opens the monthly Subscriber subscription flow. Verb, action-style — short imperative or infinitive.",
-        "receiptsHeadline" to "Banner headline for the receipt-photos feature promo. Brief, punchy. Conveys 'capture every receipt'. Free tier doesn't get photo capture; Paid + Subscriber do.",
-        "receiptsBody" to "Banner subheadline for receipt-photos. Mentions photo capture and cloud sync. Deliberately does NOT mention OCR (that's a Subscriber-only feature; this banner routes to Paid upgrade).",
-        "exportsHeadline" to "Banner headline for data export feature promo. Conveys 'take your data out of the app'.",
-        "exportsBody" to "Banner subheadline listing the export formats (CSV, XLSX, PDF). These are paid features.",
-        "syncHeadline" to "Banner headline for BudgeTrak SYNC (multi-device shared budget). Conveys 'budget as a family/household'. Routes to Subscribe.",
-        "syncBody" to "Banner subheadline for SYNC. Mentions real-time sync and the 5-device cap.",
-        "simulationHeadline" to "Banner headline for cash-flow simulation feature. Conveys 'plan ahead'.",
-        "simulationBody" to "Banner subheadline for simulation. Mentions the 18-month projection horizon and what-if scenarios.",
-        "ocrHeadline" to "Banner headline for AI-powered receipt OCR feature. Conveys 'instant capture → categorized transaction'. Subscriber-only.",
-        "ocrBody" to "Banner subheadline for OCR. Mentions smart scanning and automatic categorization."
+        "receiptsHeadline" to "Banner headline for the receipt-photos feature promo. Brief, punchy, 1 line ≤25 chars. Conveys 'capture every receipt'. Free tier doesn't get photo capture; Paid + Subscriber do.",
+        "receiptsBody" to "Banner body for receipt-photos (up to 3 lines, target ~80 chars). Covers photo capture and cloud sync. Deliberately does NOT mention OCR (that's a Subscriber-only feature; this banner routes to Paid upgrade).",
+        "exportsHeadline" to "Banner headline for data export feature promo, 1 line ≤25 chars. Conveys 'take your data out of the app'.",
+        "exportsBody" to "Banner body listing export formats (CSV, XLSX, PDF) and use cases (taxes, accountants, spreadsheets). Up to 3 lines, target ~80 chars. Paid feature.",
+        "syncHeadline" to "Banner headline for BudgeTrak SYNC (multi-device shared budget), 1 line ≤25 chars. Conveys 'budget as a family/household'. Routes to Subscribe.",
+        "syncBody" to "Banner body for SYNC: household budget, 5-device cap, real-time encrypted sync. Up to 3 lines, target ~80 chars.",
+        "simulationHeadline" to "Banner headline for cash-flow simulation feature, 1 line ≤25 chars. Conveys 'plan ahead'.",
+        "simulationBody" to "Banner body for simulation: 18-month projection horizon + what-if scenarios. Up to 3 lines, target ~80 chars.",
+        "ocrHeadline" to "Banner headline for AI-powered receipt OCR feature, 1 line ≤25 chars. Conveys the scan action. Subscriber-only.",
+        "ocrBody" to "Banner body for OCR: AI reads each receipt and fills in date/merchant/amount/category. Up to 3 lines, target ~80 chars."
     )
 }
