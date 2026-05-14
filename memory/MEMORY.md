@@ -121,7 +121,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 
 ## Git Workflow
 - Two branches: `dev` → `main`. Default push: **dev only**.
-- **Release pipeline:** `/push` → `gh workflow run release.yml --ref dev` (proven path, 5+ runs). Workflow is dispatch-only and defaults to publish_to_play=true / track=internal / status=draft so a bare dispatch does build → sign → upload AAB to Play Console internal as draft. Always end /push with the dispatch — don't ask, just do it. See [`feedback_ci_manual_dispatch.md`](feedback_ci_manual_dispatch.md).
+- **Release pipeline (2026-05-13+):** dev = active development, main = release source. `/push` lands work on dev but does NOT auto-dispatch CI. To ship: user explicitly promotes dev → main (fast-forward merge + push origin main) and asks to dispatch `gh workflow run release.yml --ref main`. Defaults publish_to_play=true / track=internal,alpha / status=completed. See [`feedback_ci_manual_dispatch.md`](feedback_ci_manual_dispatch.md).
 - Tags: v2.1–v2.6 (see `project_firestore_native_sync.md`).
 - Post-commit hook copies repo → `Download/BudgeTrak Dev Project Files/` (one-way). See `feedback_git_hook_direction.md`.
 - `gh` CLI has both `pksteichen` and `techadvantagesupport` accounts logged in; active account is `techadvantagesupport`. `gh auth switch -u <user>` toggles (affects all terminals). Git push/pull uses `~/.git-credentials` (techadvantagesupport PAT), independent of `gh` active account.
@@ -148,8 +148,9 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [Never rename persistence-layer fields](feedback_preserve_persistence_names.md).
 - [Keep firebase-config-reference.txt updated](feedback_update_firebase_config.md).
 - [Always update release notes before CI dispatch](feedback_update_release_notes.md) — `whatsNew/whatsnew-en-US` + `whatsnew-es-419` ship verbatim via the workflow; stale notes mean testers see wrong info about their build. Both under 500 chars; Spanish runs ~20% longer.
-- [Native ad implementation — replaced banner in v2.10.16](project_ad_implementation.md) — small/medium templates split at widthDp ≥ 400, custom layout XMLs, 60 s refresh timer, video startMuted + ON_STOP re-mute, manifest-merger override, production-swap checklist.
+- [Native ad implementation — banner→native v2.10.16, polished on feature/ad-polish](project_ad_implementation.md) — 3-col small/medium templates, dimens-based 400/600/800dp tier scaling, 5-pill MediaView overlays, theme-aware text, tier-flip robustness (LocalConfiguration + key + DisposableEffect), in-house ad mirror with Play Billing price pill, production-swap checklist.
 - [AdMob + Firebase manifest merger conflict](feedback_admob_manifest_merger.md) — `AD_SERVICES_CONFIG` resolves with `tools:replace` override.
+- [AdMob validator "too small" persists on low→high dp tier flip](feedback_admob_validator_dp_transition.md) — validator-UI session cache, not an app bug; app-side state is correct. Restart validator or app to clear.
 - [Play Billing Layers 1+2 — L1 v2.10.10, L2 2026-05-11](project_play_billing_integration.md) — entitlement flow, 7-day TTL cache, Gen 2 `verifyPurchase` callable for server-authoritative refund detection; L2.5 (Firestore entitlement doc, anti-forge) still pending.
 - [Play Billing Layer 2.5 — deferred anti-forge design](project_play_billing_layer_2_5.md) — App-Check-gated `entitlements/{uid}` doc to make `isPaidUser` server-authoritative; defer until evidence of piracy.
 - [JIT extraction lambda overhead](feedback_jit_extraction.md).

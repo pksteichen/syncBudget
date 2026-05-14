@@ -147,6 +147,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.techadvantage.budgetrak.ui.theme.AppToastState
@@ -234,11 +235,9 @@ class MainActivity : ComponentActivity() {
 
         isAppActive = true
         enableEdgeToEdge()
-        // Force white status bar icons regardless of OS theme — our decorative
-        // top strip behind the cutout uses headerBackground, which is dark
-        // enough in both light and dark mode that black icons (light-theme
-        // default) are unreadable. enableEdgeToEdge would otherwise pick black
-        // icons in light mode.
+        // Force white status-bar icons: the inset-padding strip uses the
+        // header background color which is dark in both light and dark
+        // themes, so black icons (light-theme default) would be unreadable.
         androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
             .isAppearanceLightStatusBars = false
         setContent {
@@ -293,17 +292,27 @@ class MainActivity : ComponentActivity() {
             // superset of Paid; both should be ad-free). Native ads have
             // no built-in refresh — the LaunchedEffect below ticks every
             // 60 s while app is foregrounded.
-            val widthDp = remember {
-                val dm = resources.displayMetrics
-                (dm.widthPixels / dm.density).toInt()
-            }
+            // Read widthDp from LocalConfiguration so a runtime config change
+            // (orientation, dev-tools dp swap, foldable hinge, etc.) re-keys
+            // every downstream piece — tier, slot height, AdLoader load loop,
+            // and the AndroidView itself (via the key() wrapper below). The
+            // earlier `remember {}` cached the original width forever, so a
+            // dp swap from 384 → 400 kept the small-template AndroidView with
+            // its old (no-MediaView) layout but began reporting medium-tier
+            // dimensions, which is what tripped the AdMob validator into its
+            // "MediaView too small" warning that survived until app restart.
+            val widthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
             val nativeAdEnabled = !vm.isPaidUser && !vm.isSubscriber
             val isMediumTier = nativeAdEnabled && widthDp >= 400
             val nativeAdLayoutId = if (isMediumTier) R.layout.native_ad_medium else R.layout.native_ad_small
+            // Slot height for the medium tier is resource-driven via
+            // res/values{-w600dp,-w800dp}/dimens.xml so the slot scales up on
+            // tablets / foldables without per-device branching here.
+            val mediumSlotHeight = dimensionResource(R.dimen.ad_slot_height)
             val adBannerHeight = when {
                 !nativeAdEnabled -> 0.dp
-                isMediumTier -> 120.dp
-                else -> 64.dp
+                isMediumTier -> mediumSlotHeight
+                else -> 70.dp
             }
 
             // Native ad load + 60 s refresh, paused when app is backgrounded.
@@ -358,6 +367,23 @@ class MainActivity : ComponentActivity() {
                 onDispose {
                     nativeAd?.destroy()
                     nativeAd = null
+                }
+            }
+            // Tier-flip ad reset (foldable hinge, Settings → display-size
+            // slider, dev-tools dp swap). The cached NativeAd was loaded
+            // against the previous MediaView dimensions; binding it to the
+            // new tier's NativeAdView confuses the AdMob validator (it
+            // caches "MediaView too small" against the stale binding). By
+            // destroying the ad immediately on tier change, the new
+            // AndroidView gets a null nativeAd, the AdLoader LaunchedEffect
+            // (re-keyed on isMediumTier) reloads from scratch with the
+            // correct MediaView size, and the validator sees only the
+            // post-flip state.
+            DisposableEffect(isMediumTier) {
+                onDispose {
+                    nativeAd?.destroy()
+                    nativeAd = null
+                    adMobFailed = false
                 }
             }
             // Re-mute video on ON_STOP so a user who unmuted before backgrounding
@@ -431,6 +457,9 @@ class MainActivity : ComponentActivity() {
                       vm.shareOverflowToastPending = false
                   }
               }
+              // Status bar inset uses page header color (always-dark
+              // headerBackground) with always-light icons — consistent
+              // across themes and across pages with/without ads.
               val topBarColor = LocalSyncBudgetColors.current.headerBackground
               Column(modifier = Modifier
                   .fillMaxSize()
@@ -443,7 +472,15 @@ class MainActivity : ComponentActivity() {
                 // of 5 cycling in-house upgrade promos. Slot dimensions match
                 // either way so no layout shift on swap.
                 if (nativeAdEnabled) {
-                    val headerTextColor = LocalSyncBudgetColors.current.headerText
+                    // pageTextColor: theme-conditional for the left column of
+                    // the ad (which sits on the page bg). In light mode use
+                    // the page header color (dark grey) — matches the header
+                    // strip visually. In dark mode use Material's onBackground
+                    // (light) so text reads on dark page bg.
+                    val darkTheme = androidx.compose.foundation.isSystemInDarkTheme()
+                    val pageTextColor =
+                        if (darkTheme) MaterialTheme.colorScheme.onBackground
+                        else LocalSyncBudgetColors.current.headerBackground
                     val ctaBgColor = MaterialTheme.colorScheme.primary
                     val ctaTextColor = MaterialTheme.colorScheme.onPrimary
                     if (adMobFailed) {
@@ -452,9 +489,14 @@ class MainActivity : ComponentActivity() {
                             ad = inHouseAd,
                             strings = vm.strings,
                             isMediumTier = isMediumTier,
-                            headerTextColor = headerTextColor,
+                            // In-house ad text + icon sit on the page-bg ad bar, so
+                            // use page text color (theme-aware) — dark in light
+                            // theme, light in dark theme. Parameter name is legacy.
+                            headerTextColor = pageTextColor,
                             ctaBgColor = ctaBgColor,
                             ctaTextColor = ctaTextColor,
+                            paidUpgradePrice = vm.paidUpgradePrice,
+                            subscriberPrice = vm.subscriberPrice,
                             onClick = {
                                 // In-house ads only appear when AdMob failed to load
                                 // (almost always = offline). Trying to launch a Play
@@ -467,9 +509,17 @@ class MainActivity : ComponentActivity() {
                                 vm.dashboardHelpScrollTo = "upgrades"
                                 vm.upgradesHelpOverlayShowing = true
                             },
-                            modifier = Modifier.fillMaxWidth().height(adBannerHeight),
+                            modifier = Modifier.fillMaxWidth().height(adBannerHeight).background(MaterialTheme.colorScheme.background),
                         )
                     } else {
+                        // key(isMediumTier): AndroidView's factory only runs on
+                        // first composition, so without this, a runtime tier
+                        // flip (small ↔ medium via dp config change) would keep
+                        // the old inflated NativeAdView. Re-keying forces a
+                        // fresh inflation with the matching layout XML and
+                        // re-binds the AdLoader, clearing the stale MediaView
+                        // dimensions that the AdMob validator caches.
+                        androidx.compose.runtime.key(isMediumTier) {
                         androidx.compose.ui.viewinterop.AndroidView(
                             factory = { ctx ->
                                 val view = android.view.LayoutInflater.from(ctx)
@@ -483,18 +533,38 @@ class MainActivity : ComponentActivity() {
                                     ?.let { view.mediaView = it }
                                 view.findViewById<android.widget.TextView>(R.id.native_ad_body)
                                     ?.let { view.bodyView = it }
+                                view.findViewById<android.widget.TextView>(R.id.native_ad_price)
+                                    ?.let { view.priceView = it }
+                                view.findViewById<android.widget.TextView>(R.id.native_ad_store)
+                                    ?.let { view.storeView = it }
+                                view.findViewById<android.widget.TextView>(R.id.native_ad_star)
+                                    ?.let { view.starRatingView = it }
+                                view.findViewById<com.google.android.gms.ads.nativead.AdChoicesView>(R.id.native_ad_choices)
+                                    ?.let { view.adChoicesView = it }
                                 view
                             },
                             update = { view ->
-                                val argb = headerTextColor.toArgb()
+                                // Left column text sits on the page-bg ad bar — use page
+                                // text color (theme-aware) for contrast. Pills (in
+                                // MediaView area) reuse the CTA's primary/onPrimary
+                                // theme colors for visual consistency with the CTA pill.
+                                val leftColArgb = pageTextColor.toArgb()
+                                val pillBgArgb = ctaBgColor.toArgb()
+                                val pillTextArgb = ctaTextColor.toArgb()
                                 val headlineView = view.findViewById<android.widget.TextView>(R.id.native_ad_headline)
                                 val advertiserView = view.findViewById<android.widget.TextView>(R.id.native_ad_advertiser)
                                 val bodyView = view.findViewById<android.widget.TextView>(R.id.native_ad_body)
                                 val ctaView = view.findViewById<android.widget.Button>(R.id.native_ad_cta)
                                 val iconView = view.findViewById<android.widget.ImageView>(R.id.native_ad_icon)
-                                headlineView.setTextColor(argb)
-                                advertiserView?.setTextColor(argb)
-                                bodyView?.setTextColor(argb)
+                                val priceView = view.findViewById<android.widget.TextView>(R.id.native_ad_price)
+                                val storeView = view.findViewById<android.widget.TextView>(R.id.native_ad_store)
+                                val starView = view.findViewById<android.widget.TextView>(R.id.native_ad_star)
+                                headlineView.setTextColor(leftColArgb)
+                                advertiserView?.setTextColor(leftColArgb)
+                                advertiserView?.paintFlags =
+                                    (advertiserView?.paintFlags ?: 0) or
+                                        android.graphics.Paint.UNDERLINE_TEXT_FLAG
+                                bodyView?.setTextColor(leftColArgb)
                                 // CTA button: theme-driven primary background + onPrimary text.
                                 val density = view.resources.displayMetrics.density
                                 ctaView.background = android.graphics.drawable.GradientDrawable().apply {
@@ -502,16 +572,56 @@ class MainActivity : ComponentActivity() {
                                     cornerRadius = 6f * density
                                 }
                                 ctaView.setTextColor(ctaTextColor.toArgb())
+                                // CTA-colored pills for bottom-start overlays. "Ad"
+                                // badge keeps its yellow + black-border XML look
+                                // (handled in native_ad_badge_bg.xml).
+                                fun pillBg() = android.graphics.drawable.GradientDrawable().apply {
+                                    setColor(pillBgArgb)
+                                    cornerRadius = 3f * density
+                                }
+                                priceView?.background = pillBg()
+                                priceView?.setTextColor(pillTextArgb)
+                                storeView?.background = pillBg()
+                                storeView?.setTextColor(pillTextArgb)
+                                starView?.background = pillBg()
+                                starView?.setTextColor(pillTextArgb)
                                 val ad = nativeAd ?: return@AndroidView
+                                if (com.techadvantage.budgetrak.BuildConfig.DEBUG) {
+                                    com.techadvantage.budgetrak.BudgeTrakApplication.tokenLog(
+                                        "Ad load: tier=${if (isMediumTier) "medium" else "small"} adChoicesInfo=${ad.adChoicesInfo != null} advertiser=${ad.advertiser} icon=${ad.icon != null} price=${ad.price} store=${ad.store} star=${ad.starRating} body=${ad.body?.take(40)}"
+                                    )
+                                }
                                 headlineView.text = ad.headline ?: ""
                                 advertiserView?.text = ad.advertiser ?: ""
                                 ctaView.text = ad.callToAction ?: ""
                                 bodyView?.text = ad.body ?: ""
                                 ad.icon?.drawable?.let { iconView?.setImageDrawable(it) }
+                                // Shopping/app-install overlays — bind text and toggle
+                                // visibility per asset availability. AdMob delivers each
+                                // independently, so each overlay is conditional.
+                                priceView?.let {
+                                    val p = ad.price
+                                    if (p.isNullOrBlank()) it.visibility = android.view.View.GONE
+                                    else { it.text = p; it.visibility = android.view.View.VISIBLE }
+                                }
+                                storeView?.let {
+                                    val s = ad.store
+                                    if (s.isNullOrBlank()) it.visibility = android.view.View.GONE
+                                    else { it.text = s; it.visibility = android.view.View.VISIBLE }
+                                }
+                                starView?.let {
+                                    val r = ad.starRating
+                                    if (r == null) it.visibility = android.view.View.GONE
+                                    else {
+                                        it.text = "★ %.1f".format(r)
+                                        it.visibility = android.view.View.VISIBLE
+                                    }
+                                }
                                 view.setNativeAd(ad)
                             },
-                            modifier = Modifier.fillMaxWidth().height(adBannerHeight)
+                            modifier = Modifier.fillMaxWidth().height(adBannerHeight).background(MaterialTheme.colorScheme.background)
                         )
+                        }
                     }
                 }
 

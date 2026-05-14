@@ -1,5 +1,5 @@
 What's new in BudgeTrak:
-• Fixed crash on wide phones when an in-house upgrade promo was shown in place of an ad
-• Reworked ad layout to qualify for video ad creatives
-• Refunds and subscription changes now reflect within minutes
-• Dashboard Help rewritten — clearer Paid vs Subscriber feature lists
+• Refreshed ad layout shows price and ratings when the advertiser provides them
+• Ad layout now scales nicely on tablets and foldables
+• Tighter text rendering with up to 3 lines of body copy
+• Fix for ads briefly showing the wrong layout when the device display size changes
