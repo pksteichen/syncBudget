@@ -68,6 +68,7 @@ object ThemesRepository {
         o.put("name", p.name)
         o.put("light", colorSetToJson(p.light))
         o.put("dark", colorSetToJson(p.dark))
+        p.forkedFrom?.let { o.put("forkedFrom", it) }
         return o
     }
 
@@ -76,7 +77,8 @@ object ThemesRepository {
         if (BuiltInThemes.ALL.any { it.name.equals(name, ignoreCase = true) }) return null
         val light = colorSetFromJson(o.optJSONObject("light") ?: return null) ?: return null
         val dark = colorSetFromJson(o.optJSONObject("dark") ?: return null) ?: return null
-        return ThemeProfile(name = name, isBuiltIn = false, light = light, dark = dark)
+        val forkedFrom = o.optString("forkedFrom").takeIf { it.isNotBlank() }
+        return ThemeProfile(name = name, isBuiltIn = false, light = light, dark = dark, forkedFrom = forkedFrom)
     }
 
     private fun colorSetToJson(c: ThemeColorSet): JSONObject {
@@ -180,6 +182,7 @@ object ChartPalettesRepository {
         o.put("name", p.name)
         o.put("chartLight", chartToJson(p.chartLight))
         o.put("chartDark", chartToJson(p.chartDark))
+        p.forkedFrom?.let { o.put("forkedFrom", it) }
         return o
     }
 
@@ -188,7 +191,8 @@ object ChartPalettesRepository {
         if (BuiltInChartPalettes.ALL.any { it.name.equals(name, ignoreCase = true) }) return null
         val chartLight = chartFromJson(o.optJSONArray("chartLight")) ?: return null
         val chartDark = chartFromJson(o.optJSONArray("chartDark")) ?: return null
-        return ChartPalette(name = name, isBuiltIn = false, chartLight = chartLight, chartDark = chartDark)
+        val forkedFrom = o.optString("forkedFrom").takeIf { it.isNotBlank() }
+        return ChartPalette(name = name, isBuiltIn = false, chartLight = chartLight, chartDark = chartDark, forkedFrom = forkedFrom)
     }
 
     private fun chartToJson(c: List<Color>): JSONArray {

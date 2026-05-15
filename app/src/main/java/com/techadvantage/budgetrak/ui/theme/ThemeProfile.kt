@@ -27,20 +27,28 @@ data class ThemeColorSet(
     val expenseRed: Color,
 )
 
-/** Base theme: light + dark color sets. Independent of chart palette. */
+/**
+ * Base theme: light + dark color sets. Independent of chart palette.
+ * [forkedFrom] is the name of the built-in this custom was derived from
+ * (null for built-ins and from-scratch customs); drives the "restore default"
+ * undo icon in the Colors editor — undo reverts to that built-in's value at
+ * the slot, so a Sunset-forked custom undoes to Sunset, not Default.
+ */
 data class ThemeProfile(
     val name: String,
     val isBuiltIn: Boolean,
     val light: ThemeColorSet,
     val dark: ThemeColorSet,
+    val forkedFrom: String? = null,
 )
 
-/** Chart palette: 12 light + 12 dark colors. Independent of base theme. */
+/** Chart palette: 12 light + 12 dark colors. Independent of base theme. [forkedFrom] same semantics as ThemeProfile.forkedFrom. */
 data class ChartPalette(
     val name: String,
     val isBuiltIn: Boolean,
     val chartLight: List<Color>,
     val chartDark: List<Color>,
+    val forkedFrom: String? = null,
 ) {
     init {
         require(chartLight.size == 12) { "ChartPalette.chartLight must contain exactly 12 colors" }

@@ -6,7 +6,7 @@ type: project
 
 # feature/custom-themes branch
 
-## Status (2026-05-14)
+## Status (2026-05-15)
 Working APK in `Download/BudgeTrak.apk`. Not pushed for release — branch is exploratory, no release dispatch.
 
 ## Architecture decisions
@@ -36,6 +36,7 @@ primary, cardBackground, cardText, background, surface, onSurface, displayBackgr
 - Bundled into full backup, NOT joinSnapshot — local-only, survives group-join unchanged.
 - Built-ins live in code (`BuiltInThemes.ALL`, `BuiltInChartPalettes.ALL`) — never corruptible, never deletable. Only user-created profiles are written.
 - Edit-a-built-in auto-forks to `"<name> (Custom)"`.
+- **Lineage tracking** via optional `forkedFrom: String?` on `ThemeProfile` + `ChartPalette` — names the source built-in. Drives the undo icon's "restore default" target so a Pastel-forked custom undoes to Pastel, not Bright. JSON field is optional (back-compat: missing → null → falls back to Default/Bright).
 
 ## Pieces in place
 - `ui/theme/ThemeProfile.kt` — data classes + built-ins.
@@ -43,6 +44,14 @@ primary, cardBackground, cardText, background, surface, onSurface, displayBackgr
 - `ui/theme/ColorWheelPicker.kt` — HSV wheel + brightness slider + hex input, wrapped in `AdAwareDialog`.
 - `ui/screens/ColorsScreen.kt` — 3-dropdown editor; theme/palette dropdown is context-sensitive per Mode.
 - Settings → Colors button replaces the old Chart Palette dropdown.
+
+## ColorsScreen design quirks
+- Matches the standard screen chrome (`CenterAlignedTopAppBar` + Scaffold + LazyColumn, 24dp outer padding, 16dp item spacing) — same pattern as SyncScreen/BudgetConfigScreen.
+- **In-page preview wrapper**: the page body wraps its Scaffold in a nested `MaterialTheme` + `CompositionLocalProvider(LocalSyncBudgetColors provides …)` using `currentTheme` + `previewDark` (driven by Mode, not system theme). This makes the page render in the theme being edited — even if device is in light mode and user is editing Dark. Tool dialogs (picker / new / delete) intentionally stay in the OUTER theme — they spawn through `AdAwareDialog`/`AdAwareDialogHost` whose content composes against the outer's `LocalSyncBudgetColors`, so they remain readable while you're mid-edit.
+- **Edit/undo controls**: pencil icon (`Icons.Filled.Edit`) opens the picker; undo icon (`Icons.Filled.Undo`) appears only when `currentSlotColor != defaultSlotColor` (lineage-aware via `forkedFrom`).
+- **Sample previews** at the bottom of the page:
+  - Base modes → inline mock dialog (Surface w/ DialogHeader/DialogFooter — looks like a real dialog but is composed in-place so it re-renders in the preview theme).
+  - Chart modes → 12-wedge pie. Strict "20%/5%/linear/sum=100" is impossible for 12 wedges (arithmetic series of 20→5 sums to 150); compromise was linear 20→5 weights normalized to 100% (largest ≈13.3%, smallest ≈3.3% — ratios preserved). If you ever want the math exact, drop to 8 wedges.
 
 ## Deferred (not blocking; do after feature proves out)
 - **Migrate ~50 hardcoded `0xFF4CAF50`/`0xFFF44336` literals** to `LocalSyncBudgetColors.current.incomeGreen/expenseRed` — many are sync-indicator/dialog uses that must stay locked, so per-site review needed.

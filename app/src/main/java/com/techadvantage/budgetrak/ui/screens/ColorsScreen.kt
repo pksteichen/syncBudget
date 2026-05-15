@@ -14,17 +14,25 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Undo
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,11 +41,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.techadvantage.budgetrak.data.ChartPalettesRepository
 import com.techadvantage.budgetrak.data.ThemesRepository
+import com.techadvantage.budgetrak.ui.strings.LocalStrings
 import com.techadvantage.budgetrak.ui.theme.AdAwareAlertDialog
 import com.techadvantage.budgetrak.ui.theme.AdAwareDialog
 import com.techadvantage.budgetrak.ui.theme.BuiltInChartPalettes
@@ -50,6 +59,7 @@ import com.techadvantage.budgetrak.ui.theme.DialogHeader
 import com.techadvantage.budgetrak.ui.theme.DialogPrimaryButton
 import com.techadvantage.budgetrak.ui.theme.DialogSecondaryButton
 import com.techadvantage.budgetrak.ui.theme.DialogStyle
+import com.techadvantage.budgetrak.ui.theme.LocalSyncBudgetColors
 import com.techadvantage.budgetrak.ui.theme.ScrollableDropdownContent
 import com.techadvantage.budgetrak.ui.theme.ThemeColorSet
 import com.techadvantage.budgetrak.ui.theme.ThemeProfile
@@ -114,8 +124,8 @@ fun ColorsScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    val S = LocalStrings.current
 
-    // Two independent lists: themes (base colors) and chart palettes.
     var allThemes by remember { mutableStateOf(ThemesRepository.load(context)) }
     var allPalettes by remember { mutableStateOf(ChartPalettesRepository.load(context)) }
     var currentTheme by remember { mutableStateOf(activeTheme) }
@@ -165,13 +175,25 @@ fun ColorsScreen(
     fun forkThemeIfBuiltIn(): ThemeProfile {
         if (!currentTheme.isBuiltIn) return currentTheme
         val name = uniqueName("${currentTheme.name} (Custom)", allThemes.map { it.name }.toSet())
-        return currentTheme.copy(name = name, isBuiltIn = false)
+        return currentTheme.copy(name = name, isBuiltIn = false, forkedFrom = currentTheme.name)
     }
 
     fun forkPaletteIfBuiltIn(): ChartPalette {
         if (!currentPalette.isBuiltIn) return currentPalette
         val name = uniqueName("${currentPalette.name} (Custom)", allPalettes.map { it.name }.toSet())
-        return currentPalette.copy(name = name, isBuiltIn = false)
+        return currentPalette.copy(name = name, isBuiltIn = false, forkedFrom = currentPalette.name)
+    }
+
+    /** Built-in theme that a custom theme's "default" should restore from. */
+    fun lineageBuiltInTheme(): ThemeProfile {
+        val ref = if (currentTheme.isBuiltIn) currentTheme.name else currentTheme.forkedFrom
+        return BuiltInThemes.ALL.firstOrNull { it.name == ref } ?: BuiltInThemes.DEFAULT
+    }
+
+    /** Built-in palette that a custom palette's "default" should restore from. */
+    fun lineageBuiltInPalette(): ChartPalette {
+        val ref = if (currentPalette.isBuiltIn) currentPalette.name else currentPalette.forkedFrom
+        return BuiltInChartPalettes.ALL.firstOrNull { it.name == ref } ?: BuiltInChartPalettes.DEFAULT
     }
 
     val currentChartList: List<Color> = when (mode) {
@@ -185,8 +207,38 @@ fun ColorsScreen(
         EditMode.CHART_LIGHT, EditMode.CHART_DARK ->
             currentChartList.getOrElse(chartIndex) { Color.Black }
     }
+    // "Default" value for the active slot — used by the undo icon. Lineage-aware:
+    // a custom theme/palette undoes to its source built-in, not always Default/Bright.
+    // E.g. a Sunset-forked custom undoes to Sunset's value at that slot.
+    val defaultSlotColor: Color = when (mode) {
+        EditMode.LIGHT -> lineageBuiltInTheme().light.get(BASE_SLOTS[slotIndex].key)
+        EditMode.DARK -> lineageBuiltInTheme().dark.get(BASE_SLOTS[slotIndex].key)
+        EditMode.CHART_LIGHT -> lineageBuiltInPalette().chartLight.getOrElse(chartIndex) { Color.Black }
+        EditMode.CHART_DARK -> lineageBuiltInPalette().chartDark.getOrElse(chartIndex) { Color.Black }
+    }
+    val canUndo = currentSlotColor != defaultSlotColor
 
-    // Dropdown context — themes vs chart palettes.
+    fun applyColor(picked: Color) {
+        when (mode) {
+            EditMode.LIGHT -> {
+                val t = forkThemeIfBuiltIn()
+                persistTheme(t.copy(light = t.light.set(BASE_SLOTS[slotIndex].key, picked)))
+            }
+            EditMode.DARK -> {
+                val t = forkThemeIfBuiltIn()
+                persistTheme(t.copy(dark = t.dark.set(BASE_SLOTS[slotIndex].key, picked)))
+            }
+            EditMode.CHART_LIGHT -> {
+                val p = forkPaletteIfBuiltIn()
+                persistPalette(p.copy(chartLight = p.chartLight.toMutableList().also { it[chartIndex] = picked }))
+            }
+            EditMode.CHART_DARK -> {
+                val p = forkPaletteIfBuiltIn()
+                persistPalette(p.copy(chartDark = p.chartDark.toMutableList().also { it[chartIndex] = picked }))
+            }
+        }
+    }
+
     val dropdownLabel = if (mode.isChart) "Chart Palette" else "Theme"
     val dropdownName = if (mode.isChart) {
         currentPalette.name + if (currentPalette.isBuiltIn) " (Built-in)" else ""
@@ -194,179 +246,287 @@ fun ColorsScreen(
         currentTheme.name + if (currentTheme.isBuiltIn) " (Built-in)" else ""
     }
 
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-        ) {
-            Text("Colors", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(12.dp))
+    // Preview: page renders in the theme/mode being edited so user sees their
+    // changes live. Light/Chart_Light → light cs; Dark/Chart_Dark → dark cs.
+    val previewDark = mode == EditMode.DARK || mode == EditMode.CHART_DARK
+    val previewCs = if (previewDark) currentTheme.dark else currentTheme.light
+    val previewOnPrimary = if (previewCs.primary.luminance() > 0.5f) Color.Black else Color.White
+    val previewColorScheme = if (previewDark) {
+        androidx.compose.material3.darkColorScheme(
+            primary = previewCs.primary,
+            onPrimary = previewOnPrimary,
+            background = previewCs.background,
+            surface = previewCs.surface,
+            onBackground = previewCs.onSurface,
+            onSurface = previewCs.onSurface,
+        )
+    } else {
+        androidx.compose.material3.lightColorScheme(
+            primary = previewCs.primary,
+            onPrimary = previewOnPrimary,
+            background = previewCs.background,
+            surface = previewCs.surface,
+            onBackground = previewCs.onSurface,
+            onSurface = previewCs.onSurface,
+        )
+    }
+    val previewSyncColors = com.techadvantage.budgetrak.ui.theme.SyncBudgetColors(
+        headerBackground = previewCs.cardBackground,
+        headerText = previewCs.cardText,
+        cardBackground = previewCs.cardBackground,
+        cardText = previewCs.cardText,
+        displayBackground = previewCs.displayBackground,
+        displayBorder = previewCs.displayBorder,
+        userCategoryIconTint = previewCs.cardBackground,
+        accentTint = if (previewDark) previewCs.cardText else previewCs.cardBackground,
+        incomeGreen = previewCs.incomeGreen,
+        expenseRed = previewCs.expenseRed,
+    )
+    val customColors = previewSyncColors
 
-            // Mode dropdown
-            ExposedDropdownMenuBox(
-                expanded = modeExpanded,
-                onExpandedChange = { modeExpanded = it },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                OutlinedTextField(
-                    value = mode.label,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Mode") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(modeExpanded) },
-                    modifier = Modifier.fillMaxWidth().menuAnchor(),
-                )
-                ExposedDropdownMenu(
-                    expanded = modeExpanded,
-                    onDismissRequest = { modeExpanded = false },
-                ) {
-                    EditMode.values().forEach { m ->
-                        DropdownMenuItem(
-                            text = { Text(m.label) },
-                            onClick = { mode = m; modeExpanded = false },
+    androidx.compose.runtime.CompositionLocalProvider(
+        LocalSyncBudgetColors provides previewSyncColors,
+    ) {
+    androidx.compose.material3.MaterialTheme(colorScheme = previewColorScheme) {
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = {
+                    Text(
+                        text = "Colors",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = customColors.headerText
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = S.common.back,
+                            tint = customColors.headerText
                         )
                     }
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-            // Theme/ChartPalette dropdown (context-sensitive)
-            ExposedDropdownMenuBox(
-                expanded = themeExpanded,
-                onExpandedChange = { themeExpanded = it },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                OutlinedTextField(
-                    value = dropdownName,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text(dropdownLabel) },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(themeExpanded) },
-                    modifier = Modifier.fillMaxWidth().menuAnchor(),
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = customColors.headerBackground
                 )
-                ExposedDropdownMenu(
-                    expanded = themeExpanded,
-                    onDismissRequest = { themeExpanded = false },
-                ) {
-                    ScrollableDropdownContent {
-                        if (mode.isChart) {
-                            allPalettes.forEach { p ->
-                                DropdownMenuItem(
-                                    text = { Text(p.name + if (p.isBuiltIn) " (Built-in)" else "") },
-                                    onClick = {
-                                        currentPalette = p
-                                        onActiveChartPaletteChange(p)
-                                        ChartPalettesRepository.setSelected(context, p.name)
-                                        themeExpanded = false
-                                    },
-                                )
-                            }
-                        } else {
-                            allThemes.forEach { p ->
-                                DropdownMenuItem(
-                                    text = { Text(p.name + if (p.isBuiltIn) " (Built-in)" else "") },
-                                    onClick = {
-                                        currentTheme = p
-                                        onActiveThemeChange(p)
-                                        ThemesRepository.setSelected(context, p.name)
-                                        themeExpanded = false
-                                    },
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-            // Slot dropdown (base modes) OR 12-swatch grid (chart modes)
-            if (!mode.isChart) {
+            )
+        },
+        containerColor = MaterialTheme.colorScheme.background
+    ) { paddingValues ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(horizontal = 24.dp, vertical = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Mode dropdown
+            item {
                 ExposedDropdownMenuBox(
-                    expanded = slotExpanded,
-                    onExpandedChange = { slotExpanded = it },
+                    expanded = modeExpanded,
+                    onExpandedChange = { modeExpanded = it },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     OutlinedTextField(
-                        value = BASE_SLOTS[slotIndex].label,
+                        value = mode.label,
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Color Setting") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(slotExpanded) },
+                        label = { Text("Mode") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(modeExpanded) },
                         modifier = Modifier.fillMaxWidth().menuAnchor(),
                     )
                     ExposedDropdownMenu(
-                        expanded = slotExpanded,
-                        onDismissRequest = { slotExpanded = false },
+                        expanded = modeExpanded,
+                        onDismissRequest = { modeExpanded = false },
+                    ) {
+                        EditMode.values().forEach { m ->
+                            DropdownMenuItem(
+                                text = { Text(m.label) },
+                                onClick = { mode = m; modeExpanded = false },
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Theme / Chart Palette dropdown (context-sensitive)
+            item {
+                ExposedDropdownMenuBox(
+                    expanded = themeExpanded,
+                    onExpandedChange = { themeExpanded = it },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    OutlinedTextField(
+                        value = dropdownName,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text(dropdownLabel) },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(themeExpanded) },
+                        modifier = Modifier.fillMaxWidth().menuAnchor(),
+                    )
+                    ExposedDropdownMenu(
+                        expanded = themeExpanded,
+                        onDismissRequest = { themeExpanded = false },
                     ) {
                         ScrollableDropdownContent {
-                            BASE_SLOTS.forEachIndexed { i, slot ->
-                                DropdownMenuItem(
-                                    text = { Text(slot.label) },
-                                    onClick = { slotIndex = i; slotExpanded = false },
+                            if (mode.isChart) {
+                                allPalettes.forEach { p ->
+                                    DropdownMenuItem(
+                                        text = { Text(p.name + if (p.isBuiltIn) " (Built-in)" else "") },
+                                        onClick = {
+                                            currentPalette = p
+                                            onActiveChartPaletteChange(p)
+                                            ChartPalettesRepository.setSelected(context, p.name)
+                                            themeExpanded = false
+                                        },
+                                    )
+                                }
+                            } else {
+                                allThemes.forEach { p ->
+                                    DropdownMenuItem(
+                                        text = { Text(p.name + if (p.isBuiltIn) " (Built-in)" else "") },
+                                        onClick = {
+                                            currentTheme = p
+                                            onActiveThemeChange(p)
+                                            ThemesRepository.setSelected(context, p.name)
+                                            themeExpanded = false
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Slot selector — base modes: dropdown; chart modes: 12-swatch row.
+            item {
+                if (!mode.isChart) {
+                    ExposedDropdownMenuBox(
+                        expanded = slotExpanded,
+                        onExpandedChange = { slotExpanded = it },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        OutlinedTextField(
+                            value = BASE_SLOTS[slotIndex].label,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Color Setting") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(slotExpanded) },
+                            modifier = Modifier.fillMaxWidth().menuAnchor(),
+                        )
+                        ExposedDropdownMenu(
+                            expanded = slotExpanded,
+                            onDismissRequest = { slotExpanded = false },
+                        ) {
+                            ScrollableDropdownContent {
+                                BASE_SLOTS.forEachIndexed { i, slot ->
+                                    DropdownMenuItem(
+                                        text = { Text(slot.label) },
+                                        onClick = { slotIndex = i; slotExpanded = false },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Column {
+                        Text("Chart slot", style = MaterialTheme.typography.labelLarge)
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            currentChartList.forEachIndexed { i, c ->
+                                Box(
+                                    modifier = Modifier
+                                        .size(width = 24.dp, height = 36.dp)
+                                        .background(c, RoundedCornerShape(4.dp))
+                                        .border(
+                                            width = if (i == chartIndex) 3.dp else 1.dp,
+                                            color = if (i == chartIndex) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                                            shape = RoundedCornerShape(4.dp),
+                                        )
+                                        .clickable { chartIndex = i },
                                 )
                             }
                         }
                     }
                 }
-            } else {
-                Text("Chart slot", style = MaterialTheme.typography.labelMedium)
-                Spacer(Modifier.height(4.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    currentChartList.forEachIndexed { i, c ->
-                        Box(
-                            modifier = Modifier
-                                .size(width = 24.dp, height = 36.dp)
-                                .background(c, RoundedCornerShape(4.dp))
-                                .border(
-                                    width = if (i == chartIndex) 3.dp else 1.dp,
-                                    color = if (i == chartIndex) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                                    shape = RoundedCornerShape(4.dp),
-                                )
-                                .clickable { chartIndex = i },
+            }
+
+            // Current color row: swatch + pencil icon + undo icon (only when modified).
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .background(currentSlotColor, RoundedCornerShape(8.dp))
+                            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
+                            .clickable { pickerOpen = true },
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    IconButton(onClick = { pickerOpen = true }) {
+                        Icon(
+                            imageVector = Icons.Filled.Edit,
+                            contentDescription = "Edit color",
+                            tint = MaterialTheme.colorScheme.onBackground,
                         )
+                    }
+                    if (canUndo) {
+                        IconButton(onClick = { applyColor(defaultSlotColor) }) {
+                            Icon(
+                                imageVector = Icons.Filled.Undo,
+                                contentDescription = "Restore default",
+                                tint = MaterialTheme.colorScheme.onBackground,
+                            )
+                        }
                     }
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .background(currentSlotColor, RoundedCornerShape(8.dp))
-                        .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
-                        .clickable { pickerOpen = true },
+            // Theme / palette management buttons.
+            item {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DialogPrimaryButton(onClick = { newName = ""; newDialog = true }) {
+                        Text(if (mode.isChart) "New palette" else "New theme")
+                    }
+                    val canDelete = if (mode.isChart) !currentPalette.isBuiltIn else !currentTheme.isBuiltIn
+                    if (canDelete) {
+                        DialogDangerButton(onClick = { deleteConfirm = true }) { Text("Delete") }
+                    }
+                }
+            }
+
+            item {
+                Text(
+                    "Tip: editing a built-in theme or palette creates a custom copy automatically. " +
+                        "Built-ins can never be modified or deleted. Tap the undo icon to restore a " +
+                        "color to its Default value.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.width(12.dp))
-                DialogPrimaryButton(onClick = { pickerOpen = true }) { Text("Edit color") }
             }
 
-            Spacer(Modifier.height(24.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DialogPrimaryButton(onClick = { newName = ""; newDialog = true }) {
-                    Text(if (mode.isChart) "New palette" else "New theme")
-                }
-                val canDelete = if (mode.isChart) !currentPalette.isBuiltIn else !currentTheme.isBuiltIn
-                if (canDelete) {
-                    DialogDangerButton(onClick = { deleteConfirm = true }) { Text("Delete") }
+            // Live preview: sample dialog (base modes) or pie chart (chart modes).
+            item {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    if (mode.isChart) "Sample Pie Chart" else "Sample Dialog",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                Spacer(Modifier.height(8.dp))
+                if (mode.isChart) {
+                    SamplePieChart(colors = currentChartList)
+                } else {
+                    SampleDialog()
                 }
             }
-
-            Spacer(Modifier.height(16.dp))
-            DialogSecondaryButton(onClick = onBack) { Text("Back to Settings") }
-
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "Tip: editing a built-in theme or palette creates a custom copy automatically. " +
-                    "Built-ins can never be modified or deleted.",
-                style = MaterialTheme.typography.bodySmall,
-            )
         }
+    }
+    }
     }
 
     if (pickerOpen) {
@@ -376,24 +536,7 @@ fun ColorsScreen(
             onDismiss = { pickerOpen = false },
             onSave = { picked ->
                 pickerOpen = false
-                when (mode) {
-                    EditMode.LIGHT -> {
-                        val t = forkThemeIfBuiltIn()
-                        persistTheme(t.copy(light = t.light.set(BASE_SLOTS[slotIndex].key, picked)))
-                    }
-                    EditMode.DARK -> {
-                        val t = forkThemeIfBuiltIn()
-                        persistTheme(t.copy(dark = t.dark.set(BASE_SLOTS[slotIndex].key, picked)))
-                    }
-                    EditMode.CHART_LIGHT -> {
-                        val p = forkPaletteIfBuiltIn()
-                        persistPalette(p.copy(chartLight = p.chartLight.toMutableList().also { it[chartIndex] = picked }))
-                    }
-                    EditMode.CHART_DARK -> {
-                        val p = forkPaletteIfBuiltIn()
-                        persistPalette(p.copy(chartDark = p.chartDark.toMutableList().also { it[chartIndex] = picked }))
-                    }
-                }
+                applyColor(picked)
             },
         )
     }
@@ -430,9 +573,23 @@ fun ColorsScreen(
                                     existingNames.none { it.equals(newName.trim(), ignoreCase = true) },
                                 onClick = {
                                     if (mode.isChart) {
-                                        persistPalette(currentPalette.copy(name = newName.trim(), isBuiltIn = false))
+                                        // If cloning a built-in, lineage = that built-in.
+                                        // If cloning a custom, inherit its lineage.
+                                        val lineage = if (currentPalette.isBuiltIn) currentPalette.name
+                                                      else currentPalette.forkedFrom
+                                        persistPalette(currentPalette.copy(
+                                            name = newName.trim(),
+                                            isBuiltIn = false,
+                                            forkedFrom = lineage,
+                                        ))
                                     } else {
-                                        persistTheme(currentTheme.copy(name = newName.trim(), isBuiltIn = false))
+                                        val lineage = if (currentTheme.isBuiltIn) currentTheme.name
+                                                      else currentTheme.forkedFrom
+                                        persistTheme(currentTheme.copy(
+                                            name = newName.trim(),
+                                            isBuiltIn = false,
+                                            forkedFrom = lineage,
+                                        ))
                                     }
                                     newDialog = false
                                 },
@@ -475,5 +632,82 @@ fun ColorsScreen(
                 DialogSecondaryButton(onClick = { deleteConfirm = false }) { Text("Cancel") }
             },
         )
+    }
+}
+
+/**
+ * Inline mock dialog rendered into the Colors page so the user sees how their
+ * edits affect dialog chrome. Reuses DialogHeader/DialogFooter so the green
+ * header/footer + button colors match the real AdAwareAlertDialog.
+ */
+@Composable
+private fun SampleDialog() {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 6.dp,
+    ) {
+        Column {
+            DialogHeader(title = "Sample Dialog")
+            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+                Text(
+                    "Body text on the dialog surface. " +
+                        "Income " + "+$1,234.56 " + "and expense " + "-$78.90 " +
+                        "show in the income/expense colors above.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            DialogFooter {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    DialogSecondaryButton(onClick = {}) { Text("Cancel") }
+                    Spacer(Modifier.width(8.dp))
+                    DialogPrimaryButton(onClick = {}) { Text("OK") }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 12-wedge pie preview. Wedges follow a linear progression from 20% → 5% in
+ * raw weights then normalize to sum=100% (strict 20/5/100 with 12 wedges is
+ * over-determined). The largest wedge uses palette[0], smallest uses palette[11].
+ */
+@Composable
+private fun SamplePieChart(colors: List<Color>) {
+    val rawWeights = (0 until 12).map { i -> 20f - (15f * i / 11f) }
+    val totalRaw = rawWeights.sum()
+    val weights = rawWeights.map { it / totalRaw }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(220.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        androidx.compose.foundation.Canvas(
+            modifier = Modifier.size(200.dp)
+        ) {
+            val radius = size.minDimension / 2f
+            val topLeft = androidx.compose.ui.geometry.Offset(
+                (size.width - radius * 2f) / 2f,
+                (size.height - radius * 2f) / 2f,
+            )
+            val arcSize = androidx.compose.ui.geometry.Size(radius * 2f, radius * 2f)
+            var startAngle = -90f
+            weights.forEachIndexed { i, w ->
+                val sweep = 360f * w
+                drawArc(
+                    color = colors.getOrElse(i) { Color.Gray },
+                    startAngle = startAngle,
+                    sweepAngle = sweep,
+                    useCenter = true,
+                    topLeft = topLeft,
+                    size = arcSize,
+                )
+                startAngle += sweep
+            }
+        }
     }
 }
