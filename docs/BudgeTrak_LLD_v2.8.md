@@ -513,6 +513,76 @@ Supporting declarations:
 - `val LocalAdBannerHeight = compositionLocalOf { 0.dp }` — 50.dp (free tier) or 0.dp (paid).
 - `val LocalAppToast = staticCompositionLocalOf { AppToastState() }` + class `AppToastState` — Y-anchored toast positioned above the ad banner.
 
+### 3.7 InHouseAd
+
+**File:** `ui/components/InHouseAd.kt` (~700 lines)  |  **Package:** `com.techadvantage.budgetrak.ui.components`
+
+Hosts the shared rendering for the medium-tier native ad slot (AdMob + in-house) plus the small-tier in-house promo. See SSD §16a for architecture.
+
+**Top-level types & rendering helpers:**
+
+| Symbol | Purpose |
+|---|---|
+| `data class AdMediumDims(...)` | All medium-tier sizes. Float fields suffixed `Dp` or `Sp` indicate unit. Fields: `slotHeightDp, mediaWidthDp, iconSizeDp, iconMarginDp, iconMarginBottomDp, advertiserSp, headlineSp, bodySp, bodyMarginTopDp, ctaSp, ctaPaddingHDp, ctaPaddingVDp, ctaMarginBottomDp, pillSp, pillPaddingHDp, pillPaddingVDp, pillMarginDp, badgeSp, badgePaddingHDp, badgePaddingVDp, inhouseAppIconDp, leftColMarginEndDp`. |
+| `fun computeAdMediumDims(widthDp: Int): AdMediumDims` | Scale `s = (widthDp / 400f).coerceAtLeast(1.0f)`; multiplies every base value by `s` and returns a fresh instance. No upper clamp. Base values match `res/values/dimens.xml` so initial XML inflation and runtime override agree at 400 dp. |
+| `sealed class AdMediumContent` | `AdMob(nativeAd: NativeAd)` and `InHouse(advertiser, headline, body, ctaText, featureIcon: Bitmap?, price: String?, onClick: () -> Unit)`. |
+| `fun applyMediumAdDimsAndColors(view: NativeAdView, dims, pageTextArgb, ctaBgArgb, ctaTextArgb)` | Walks the inflated view tree and applies every scaled dim + theme color. Outer LinearLayout via `view.getChildAt(0)`, left col via `outerLL.getChildAt(0)`, MediaView FrameLayout via `outerLL.getChildAt(1)`. Re-assigns `layoutParams` (mutating in place doesn't trigger `requestLayout`). Ends with `view.requestLayout()`. Debug builds emit one `applyDims:` line per call to `token_log.txt`. |
+| `fun bindMediumAdContent(view: NativeAdView, content: AdMediumContent, pageTextArgb: Int)` | Toggles visibility on AdMob-only views (`MediaView`, Ad badge, `AdChoicesView`, store, star) vs the in-house BudgeTrak app icon. AdMob branch sets each asset from `nativeAd.headline/body/advertiser/callToAction/icon/price/store/starRating`, then `view.setNativeAd(ad)`. In-house branch sets text/icon from the content fields, applies icon tint via `iconView.setColorFilter(pageTextArgb)`, wires `view.setOnClickListener`. |
+| `@Composable fun rememberImageVectorBitmap(vector, sizeDp, tint): Bitmap` | Rasterizes a Compose `ImageVector` via `rememberVectorPainter` → `Bitmap.createBitmap` → `CanvasDrawScope.draw` with `ColorFilter.tint`. Cached via `remember` keyed on vector / size / tint / density / layoutDirection. Used by the in-house path to put a Material icon on the inflated `ImageView`. |
+
+**In-house catalog + composables:**
+
+| Symbol | Purpose |
+|---|---|
+| `enum class InHouseAdTier { PAID, SUBSCRIBER }` | Drives CTA text + Play Billing price selection. |
+| `data class InHouseAd(id: String, icon: ImageVector, tier: InHouseAdTier)` | One entry in the cycle. |
+| `val InHouseAds: List<InHouseAd>` | Fixed-order list of 5: receipts (PAID) → exports (PAID) → sync (SUBSCRIBER) → simulation (PAID) → ocr (SUBSCRIBER). |
+| `private fun headlineFor(id, strings) / bodyFor(id, strings)` | Branch tables routing `id` to the matching `AppStrings.ads.*` field. Add a branch when adding a new ad. |
+| `@Composable fun InHouseAdSlot(...)` | Public entry point. Routes to `MediumInHouseAdView` (`isMediumTier && mediumDims != null`) or wraps `SmallInHouseAd` in `Box.clickable(onClick)`. Medium tier delegates click to `bindMediumAdContent`. |
+| `@Composable private fun MediumInHouseAdView(ad, strings, dims, ..., onClick)` | Thin `AndroidView` wrapper that inflates `R.layout.native_ad_medium` in factory, routes through `applyMediumAdDimsAndColors` + `bindMediumAdContent(AdMediumContent.InHouse(...))` in update. Rasterizes the feature icon via `rememberImageVectorBitmap` keyed on `dims.iconSizeDp`. |
+| `@Composable private fun SmallInHouseAd(ad, strings, ...)` | Pure-Compose 3-column layout mirroring `native_ad_small.xml`. Uses hardcoded dp values (58 dp side columns, 40 dp icon, 15 dp CTA, etc.) — not `AdMediumDims`. |
+| `@Composable private fun PriceBadge(price, fontSize=12sp, paddingH=6dp, paddingV=4dp)` | Theme-aware (`MaterialTheme.colorScheme.primary` / `onPrimary`). Used only by `SmallInHouseAd` — fills the otherwise-empty 3rd column. |
+| `@Composable private fun UpgradeBadge(label, fontSize=10sp, paddingH=5dp, paddingV=1dp)` | Yellow `#FFCC00` + 1 dp black border, mirrors the AdMob "Ad" pill style. Fallback when Play Billing prices haven't loaded yet. |
+| `@Composable private fun CtaButton(text, bg, fg, ...)` | Pill-shaped button used by `SmallInHouseAd` only. `text.uppercase()` always (AdMob CTAs use server-provided casing). |
+| `@Composable private fun tightTextStyle()` | `LocalTextStyle.current.copy(platformStyle = PlatformTextStyle(includeFontPadding = false), lineHeightStyle = LineHeightStyle(Center, Both))`. Compose mirror of XML's `includeFontPadding="false"` rendering, used by `SmallInHouseAd`. |
+| `@Composable private fun textSizeResource(@DimenRes id): TextUnit` | Reads an sp dimension via `Resources.getValue` and returns a Compose `TextUnit` preserving `fontScale`. Now only used by `SmallInHouseAd` (medium path reads sizes from `AdMediumDims` directly). |
+
+**Click attribution:**
+- AdMob mode: clicks flow through the registered asset views (`view.callToActionView`, etc.). SDK records the impression and routes the click.
+- In-house mode: `view.setOnClickListener` (medium) or `Modifier.clickable` (small) routes to `vm.launchPaidUpgrade(activity)` (PAID tier) or `vm.launchSubscribe(activity)` (SUBSCRIBER tier).
+
+**Lifecycle gotchas:**
+- `layoutParams` mutation: every dim assignment in `applyMediumAdDimsAndColors` re-assigns (`view.layoutParams = (... as MarginLayoutParams).apply { ... }`). Mutating in place doesn't fire `View.setLayoutParams` → no `requestLayout`. The final `view.requestLayout()` is belt-and-suspenders.
+- `view.callToActionView = null` in the in-house branch — disables AdMob's CTA click attribution since there's no NativeAd to attribute to.
+- `iconView.clearColorFilter()` in the AdMob branch — undoes the in-house tint in case the same NativeAdView was just used for an in-house render (defensive; in practice the two paths are separate `AndroidView` instances).
+- Debug log line at the end of `applyMediumAdDimsAndColors` writes to `token_log.txt` for offline diagnostics — invaluable when ad-bar visuals don't match expectations.
+
+**Editing the in-house cycle:**
+1. Copy changes → edit `EnglishStrings.ads` + `SpanishStrings.ads` (`InHouseAdStrings` in `AppStrings.kt`). Body budget ~80 chars EN / ~85 chars ES; headline ~25 chars / 1 line.
+2. Add / remove / reorder ads → edit `InHouseAds: List<InHouseAd>`. New ids need branches in `headlineFor` / `bodyFor` plus matching strings.
+3. Translation context: `TranslationContext.ads` — keep synchronized.
+
+### 3.8 Native Ad XML layouts + drawables
+
+Four XML resources back the ad slot. None of these contain logic — they provide the initial inflation values which `applyMediumAdDimsAndColors` overrides at runtime for the medium template.
+
+**Layouts (`res/layout/`):**
+
+| File | Slot | Structure |
+|---|---|---|
+| `native_ad_small.xml` | 70 dp fixed (small tier) | Horizontal LinearLayout. Left col 58 dp (5 dp padding + 25 dp icon + 5 dp gap + 15 dp CTA). Center col `weight=1`, gravity centered, 5 stacked TextViews (advertiser 8 sp / headline 9 sp / body 8 sp). Right col 58 dp FrameLayout (Ad badge top-start + `AdChoicesView` top-end + LinearLayout bottom-center stacking store / price / star pills at 7 sp). All `includeFontPadding=false`. Dimensions hardcoded — small tier does NOT use `AdMediumDims`. |
+| `native_ad_medium.xml` | `@dimen/ad_slot_height` (overridden at runtime) | Horizontal LinearLayout. Left col (vertical, `weight=1`) holds a top section (horizontal: 30 dp icon + vertical column with advertiser + headline left-justified) → body (`gravity=center`, `maxLines=3`) → `Space weight=1` → CTA Button. Right col FrameLayout (`@dimen/ad_media_width × @dimen/ad_slot_height`) holds: `MediaView match_parent` (AdMob mode only); `native_ad_inhouse_icon` ImageView centered (`@drawable/ic_app_icon`, default `gone`, in-house mode only); Ad badge TextView top-end (AdMob only); top-start vertical LinearLayout with store pill + `AdChoicesView` (AdMob only); bottom-start vertical LinearLayout with star pill + price pill. All asset views have stable `R.id` for `findViewById` + asset registration. |
+
+**Drawables (`res/drawable/`):**
+
+| File | Style | Use |
+|---|---|---|
+| `native_ad_badge_bg.xml` | Yellow `#FFCC00` rounded rect, 3 dp corners, **2 px black stroke**. | Mandatory "Ad" disclosure label. Stroke distinguishes it from CTA-colored pills. Never tinted at runtime (policy requires high contrast). |
+| `native_ad_cta_bg.xml` | `LightPrimary` blue rounded rect, 6 dp corners. | Initial CTA background; overridden at runtime with `GradientDrawable(MaterialTheme.colorScheme.primary)` so it follows theme. |
+| `native_ad_overlay_bg.xml` | Translucent `#B3000000` rounded rect, 3 dp corners. | Initial bg for price / store / star pills; overridden at runtime to the CTA color via `GradientDrawable`. |
+
+**`res/values/dimens.xml`** holds the `ad_*` base values referenced by `native_ad_medium.xml`. The runtime override (`applyMediumAdDimsAndColors`) replaces each one based on `AdMediumDims`. Don't delete entries from `dimens.xml` — XML inflation fails without them. The `values-w600dp/` and `values-w800dp/` qualifiers were deleted 2026-05-15 (continuous scaling replaces step-function tiers).
+
 ## 4. Sound Classes
 
 ### 4.1 FlipSoundPlayer
@@ -1882,8 +1952,8 @@ Sync engine: `EncryptedDocSerializer`, `FirestoreDocService`, `FirestoreDocSync`
 ### `sound/` — 1 file
 `FlipSoundPlayer` (procedural flip audio). §4.
 
-### `ui/components/` — 5 files
-`FlipChar`, `FlipDigit`, `FlipDisplay`, `PieChartEditor`, `SwipeablePhotoRow`. §3.
+### `ui/components/` — 6 files
+`FlipChar`, `FlipDigit`, `FlipDisplay`, `PieChartEditor`, `SwipeablePhotoRow`, `InHouseAd` (native ad rendering + in-house fallback; AdMediumDims + applyMediumAdDimsAndColors + bindMediumAdContent + InHouseAds catalog). §3.
 
 ### `ui/screens/` — 22 files
 11 main: `MainScreen`, `TransactionsScreen`, `RecurringExpensesScreen`, `AmortizationScreen`, `SavingsGoalsScreen`, `BudgetConfigScreen`, `BudgetCalendarScreen`, `SimulationGraphScreen`, `SyncScreen`, `SettingsScreen`, `QuickStartGuide`. 10 help screens (one per main, except BudgetCalendar/Sync/Simulation share the pattern). 1 shared: `HelpComponents`. §2.4–2.14, §10.
@@ -1913,6 +1983,7 @@ Sync engine: `EncryptedDocSerializer`, `FirestoreDocService`, `FirestoreDocSync`
 | 2.10.04 | May 3 2026 | **Restore-list merge + side-by-side debug install + first end-to-end CI publish.** Restore dialog `LaunchedEffect` always loads the persisted SAF tree URI when present (was short-circuiting whenever `BackupManager.listAvailableBackups()` returned anything), and `availableBackups` now merges both lists deduplicated by `date` so orphan `.enc` files from prior installs stay visible after the user creates their first own auto-backup. Debug buildType gets `applicationIdSuffix = ".debug"` + `versionNameSuffix = "-debug"` so debug-keystore-signed sideloads (`com.techadvantage.budgetrak.debug`) coexist with the Play-Store-signed release (`com.techadvantage.budgetrak`) on the same device — separate Firebase app entries, separate sandboxes, separate sync groups. CI workflow `release_status` input added (default `draft`); first end-to-end CI publish to Internal testing track (run 25269576441) succeeded after the upstream Play Integrity setup gap was closed (Play app signing key SHA-256 added to Firebase Project settings — see SSD §28.6.5). |
 | 2.10.10–2.10.23 | May 9–12 2026 | **Play Billing Layers 1+2 + Help-page rewrite + appInstanceId in diag dump + Gemini API key restriction.** Play Billing Layer 1 (v2.10.10): new `data/billing/` package — `BillingService.kt` (Play Billing Library 7+ wrapper), `BillingProducts.kt` (`paid_upgrade`, `subscriber`, `SUB_PERIOD_MS`). `MainViewModel.refreshBillingStateWithState` derives `isPaidUser`/`isSubscriber`/`subscriptionExpiry` from `BillingClient.queryPurchasesAsync` with 7-day TTL on stale; `restorePurchases` button writes diagnostic dump to `/Download/BudgeTrak/support/billing_dump.txt`. Dashboard Help dialog overlay parity (v2.10.20). Help-page Paid/Subscriber rewrite — `paidPhotos` mentions PDFs, parallel `HelpSubSectionTitle` for both subsections (v2.10.21; EN + ES). Play Billing Layer 2 server-side verification (v2.10.22): new `data/billing/EntitlementVerifier.kt` (Cloud Functions callable wrapper, 24h SharedPreferences cache); `MainViewModel.reconcileEntitlement(local, verify, token)` returns Verified→true, Refunded→false (override local PURCHASED), Unreachable→cached-server-or-local; `subscriptionExpiry` prefers Developer-API `expiryTimeMillis` when verified; billing dump gains "Layer 2 server verification" block. **appInstanceId in DiagDumpBuilder** (v2.10.22; §6.15): `BudgeTrakApplication.appInstanceId` cached async from `FirebaseAnalytics.appInstanceId` on `onCreate`; surfaced under `DeviceId:` in every dump so per-device dumps correlate to GA4 BigQuery rows. **Firebase Functions SDK** added to `app/build.gradle.kts` (`com.google.firebase:firebase-functions-ktx`, BOM-managed). Gemini API key restriction applied at Google Cloud API gateway 2026-05-12 (no code change — server-side enforcement). v2.10.23 (vc 39): doc + memory sync. |
 | 2.10.07–2.10.09 | May 7–8 2026 | **SYNC pending-edit clobber fix + sync hardenings + 5-member group cap + AdMob real integration.** v2.10.07: foreign inbound now drops on conflict — every collection branch in `SyncMergeProcessor.processBatch` early-returns `if (event.isConflict) { conflictDetected = true; continue }`. The old transaction-only `isUserCategorized=false` workaround + `conflictedTransactionsToPushBack` plumbing in `MainViewModel`/`BackgroundSyncWorker` removed. Plus four `FirestoreDocSync` hardenings: `pushRecord` sets `localPendingEdits` BEFORE the Firestore I/O (closes the smaller same-shape race during the push duration); per-collection `cursorWriteLock` + `advanceCursor` helper makes load-compare-save atomic; `isListening` guards in both listener handlers drop late callbacks racing with `stopListeners()`; cursor advance skips failed-deserialization docs. v2.10.08: `SyncScreen` Generate Pairing Code button toasts `memberLimitReached` when `devices.size >= 5` instead of generating; `GroupManager.joinGroup`, after registering membership (required to read the devices subcollection), fetches device count and rolls back membership + local prefs if `>= 5` (server-side rule deferred — see `memory/project_member_limit_server_rule.md`). v2.10.09: real AdMob banner (TEST IDs) replaces the placeholder — adaptive sizing via `getCurrentOrientationAnchoredAdaptiveBannerAdSize`, `windowInsetsPadding(statusBars.union(displayCutout))` + `Modifier.background(headerBackground)` for the decorative top strip behind the cutout, AdView `setBackgroundColor(topBarColor.toArgb())` so letterbox areas blend with the strip, `WindowCompat.getInsetsController(...).isAppearanceLightStatusBars = false` for white status-bar icons in both themes, `tools:replace="android:resource"` on `<property AD_SERVICES_CONFIG>` to resolve the `play-services-ads` ↔ `play-services-measurement-api` manifest-merger conflict. Production-swap checklist in `memory/project_ad_implementation.md`. |
+| 2.10.28-dev | May 15 2026 | **§3.7 InHouseAd + §3.8 native-ad XML/drawables added.** Documents the medium-tier native ad system that landed on dev today: `AdMediumDims` data class + `computeAdMediumDims(widthDp)` continuous-scale formula (`s = widthDp/400`, no upper clamp; replaces deleted `values-w600dp/` + `values-w800dp/` qualifiers); shared rendering via `applyMediumAdDimsAndColors` + `bindMediumAdContent` + sealed `AdMediumContent.AdMob/InHouse` so the AdMob path and the in-house Compose mirror both inflate the same `native_ad_medium.xml`; `rememberImageVectorBitmap` rasterizer for Material `ImageVector` → `Bitmap`. `ui/components/` count corrected 5 → 6 (`InHouseAd.kt` was previously absent from the inventory). Companion SSD §16a chapter added. |
 
 ---
 
