@@ -14,7 +14,7 @@
     <dimen name="ad_media_width">214dp</dimen>
 
     <!-- Left-column icon + advertiser. -->
-    <dimen name="ad_icon_size">20dp</dimen>
+    <dimen name="ad_icon_size">30dp</dimen>
     <dimen name="ad_icon_margin">4dp</dimen>
     <dimen name="ad_icon_margin_bottom">0dp</dimen>
     <dimen name="ad_advertiser_text_size">11sp</dimen>
@@ -27,9 +27,9 @@
 
     <!-- CTA pill at bottom of left column. padding_v 0 + includeFontPadding
          false in the XML keeps the button compact at base; w600+ adds height. -->
-    <dimen name="ad_cta_text_size">11sp</dimen>
+    <dimen name="ad_cta_text_size">13sp</dimen>
     <dimen name="ad_cta_padding_h">14dp</dimen>
-    <dimen name="ad_cta_padding_v">0dp</dimen>
+    <dimen name="ad_cta_padding_v">5dp</dimen>
     <dimen name="ad_cta_margin_bottom">3dp</dimen>
 
     <!-- MediaView overlay pills (store / price / star). -->

@@ -94,6 +94,66 @@ data class InHouseAd(
     val tier: InHouseAdTier
 )
 
+/** Continuously-scaled medium ad dimensions, derived linearly from the
+ *  400dp base values. Scale = `widthDp / 400`, clamped at 1.0 floor. So
+ *  600dp → 1.5×, 800dp → 2.0×, foldable open at 1080dp → 2.7×. Replaces
+ *  the old step-function `values{-w600dp,-w800dp}/dimens.xml` so ad
+ *  elements grow smoothly with screen width like the rest of the app.
+ *  Both the AdMob template (applied at runtime in MainActivity's
+ *  AndroidView.update) and the in-house Compose mirror read from this. */
+data class AdMediumDims(
+    val slotHeightDp: Float,
+    val mediaWidthDp: Float,
+    val iconSizeDp: Float,
+    val iconMarginDp: Float,
+    val iconMarginBottomDp: Float,
+    val advertiserSp: Float,
+    val headlineSp: Float,
+    val bodySp: Float,
+    val bodyMarginTopDp: Float,
+    val ctaSp: Float,
+    val ctaPaddingHDp: Float,
+    val ctaPaddingVDp: Float,
+    val ctaMarginBottomDp: Float,
+    val pillSp: Float,
+    val pillPaddingHDp: Float,
+    val pillPaddingVDp: Float,
+    val pillMarginDp: Float,
+    val badgeSp: Float,
+    val badgePaddingHDp: Float,
+    val badgePaddingVDp: Float,
+    val inhouseAppIconDp: Float,
+    val leftColMarginEndDp: Float,
+)
+
+fun computeAdMediumDims(widthDp: Int): AdMediumDims {
+    val s = (widthDp / 400f).coerceAtLeast(1.0f)
+    return AdMediumDims(
+        slotHeightDp = 120f * s,
+        mediaWidthDp = 214f * s,
+        iconSizeDp = 30f * s,
+        iconMarginDp = 4f * s,
+        iconMarginBottomDp = 0f,
+        advertiserSp = 11f * s,
+        headlineSp = 14f * s,
+        bodySp = 12f * s,
+        bodyMarginTopDp = 0f,
+        ctaSp = 13f * s,
+        ctaPaddingHDp = 14f * s,
+        ctaPaddingVDp = 5f * s,
+        ctaMarginBottomDp = 3f * s,
+        pillSp = 10f * s,
+        pillPaddingHDp = 6f * s,
+        pillPaddingVDp = 2f * s,
+        pillMarginDp = 4f * s,
+        badgeSp = 10f * s,
+        badgePaddingHDp = 5f * s,
+        badgePaddingVDp = 1f * s,
+        inhouseAppIconDp = 100f * s,
+        leftColMarginEndDp = 4f * s,
+    )
+}
+
 /** Fixed display order; we advance through this on each AdMob load failure. */
 val InHouseAds: List<InHouseAd> = listOf(
     InHouseAd("receipts",   Icons.Filled.CameraAlt,    InHouseAdTier.PAID),
@@ -132,13 +192,14 @@ fun InHouseAdSlot(
     onClick: () -> Unit,
     paidUpgradePrice: String?,
     subscriberPrice: String?,
+    mediumDims: AdMediumDims? = null,
     modifier: Modifier = Modifier
 ) {
     val ctaText = if (ad.tier == InHouseAdTier.PAID) strings.ads.upgradeCta else strings.ads.subscribeCta
     val price = if (ad.tier == InHouseAdTier.PAID) paidUpgradePrice else subscriberPrice
     Box(modifier = modifier.clickable(onClick = onClick)) {
-        if (isMediumTier) {
-            MediumInHouseAd(ad, strings, headerTextColor, ctaBgColor, ctaTextColor, ctaText, price)
+        if (isMediumTier && mediumDims != null) {
+            MediumInHouseAd(ad, strings, mediumDims, headerTextColor, ctaBgColor, ctaTextColor, ctaText, price)
         } else {
             SmallInHouseAd(ad, strings, headerTextColor, ctaBgColor, ctaTextColor, ctaText, price)
         }
@@ -342,19 +403,19 @@ private fun SmallInHouseAd(
 private fun MediumInHouseAd(
     ad: InHouseAd,
     strings: AppStrings,
+    dims: AdMediumDims,
     headerTextColor: Color,
     ctaBgColor: Color,
     ctaTextColor: Color,
     ctaText: String,
     price: String?,
 ) {
-    // Mirrors native_ad_medium.xml. All sizes (slot height, MediaView width,
-    // icon size, padding, text sizes) are resource-driven via
-    // res/values{,-w600dp,-w800dp}/dimens.xml so the layout scales up on
-    // tablets / foldables / large displays without per-tier branching here.
-    val iconMargin = dimensionResource(R.dimen.ad_icon_margin)
-    val iconMarginBottom = dimensionResource(R.dimen.ad_icon_margin_bottom)
-    val pillMargin = dimensionResource(R.dimen.ad_pill_margin)
+    // Mirrors native_ad_medium.xml. All sizes scale continuously with screen
+    // width via computeAdMediumDims(widthDp) — 400dp base × (widthDp/400)
+    // so the layout grows smoothly with display size rather than stepping
+    // at w600dp / w800dp breakpoints.
+    val iconMargin = dims.iconMarginDp.dp
+    val pillMargin = dims.pillMarginDp.dp
     Row(
         modifier = Modifier.fillMaxSize(),
     ) {
@@ -362,54 +423,55 @@ private fun MediumInHouseAd(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
-                .padding(end = dimensionResource(R.dimen.ad_left_col_margin_end)),
+                .padding(end = dims.leftColMarginEndDp.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.Top) {
                 Box(
                     modifier = Modifier.padding(
                         start = iconMargin,
                         top = iconMargin,
                         end = iconMargin,
-                        bottom = iconMarginBottom,
+                        bottom = dims.iconMarginBottomDp.dp,
                     )
                 ) {
                     Icon(
                         imageVector = ad.icon,
                         contentDescription = null,
                         tint = headerTextColor,
-                        modifier = Modifier.size(dimensionResource(R.dimen.ad_icon_size)),
+                        modifier = Modifier.size(dims.iconSizeDp.dp),
                     )
                 }
-                val advertiserSp = textSizeResource(R.dimen.ad_advertiser_text_size)
-                Text(
-                    text = "BudgeTrak",
-                    color = headerTextColor,
-                    fontSize = advertiserSp,
-                    lineHeight = advertiserSp * 1.15f,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = tightTextStyle(),
-                    modifier = Modifier
-                        .padding(start = pillMargin)
-                        .weight(1f),
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    val advertiserSp = dims.advertiserSp.sp
+                    Text(
+                        text = "BudgeTrak",
+                        color = headerTextColor,
+                        fontSize = advertiserSp,
+                        lineHeight = advertiserSp * 1.15f,
+                        fontWeight = FontWeight.Bold,
+                        textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = tightTextStyle(),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    val headlineSp = dims.headlineSp.sp
+                    Text(
+                        text = headlineFor(ad.id, strings),
+                        color = headerTextColor,
+                        fontSize = headlineSp,
+                        lineHeight = headlineSp * 1.15f,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Start,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        style = tightTextStyle(),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
-            val headlineSp = textSizeResource(R.dimen.ad_headline_text_size)
-            Text(
-                text = headlineFor(ad.id, strings),
-                color = headerTextColor,
-                fontSize = headlineSp,
-                lineHeight = headlineSp * 1.15f,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                style = tightTextStyle(),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(dimensionResource(R.dimen.ad_body_margin_top)))
-            val bodySp = textSizeResource(R.dimen.ad_body_text_size)
+            Spacer(Modifier.height(dims.bodyMarginTopDp.dp))
+            val bodySp = dims.bodySp.sp
             Text(
                 text = bodyFor(ad.id, strings),
                 color = headerTextColor,
@@ -426,25 +488,25 @@ private fun MediumInHouseAd(
                 ctaText,
                 ctaBgColor,
                 ctaTextColor,
-                paddingH = dimensionResource(R.dimen.ad_cta_padding_h).value.toInt(),
-                paddingV = dimensionResource(R.dimen.ad_cta_padding_v).value.toInt(),
-                ctaSpOverride = textSizeResource(R.dimen.ad_cta_text_size),
+                paddingH = dims.ctaPaddingHDp.toInt(),
+                paddingV = dims.ctaPaddingVDp.toInt(),
+                ctaSpOverride = dims.ctaSp.sp,
                 modifier = Modifier
                     .align(Alignment.CenterHorizontally)
-                    .padding(bottom = dimensionResource(R.dimen.ad_cta_margin_bottom)),
+                    .padding(bottom = dims.ctaMarginBottomDp.dp),
             )
         }
         Box(
             modifier = Modifier
-                .width(dimensionResource(R.dimen.ad_media_width))
-                .height(dimensionResource(R.dimen.ad_slot_height)),
+                .width(dims.mediaWidthDp.dp)
+                .height(dims.slotHeightDp.dp),
         ) {
             androidx.compose.foundation.Image(
                 painter = painterResource(R.drawable.ic_app_icon),
                 contentDescription = null,
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .size(dimensionResource(R.dimen.ad_inhouse_app_icon_size)),
+                    .size(dims.inhouseAppIconDp.dp),
             )
             // Price overlay bottom-start, mirroring AdMob's price pill location.
             if (price != null) {

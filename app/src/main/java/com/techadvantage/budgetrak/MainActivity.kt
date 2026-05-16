@@ -305,13 +305,17 @@ class MainActivity : ComponentActivity() {
             val nativeAdEnabled = !vm.isPaidUser && !vm.isSubscriber
             val isMediumTier = nativeAdEnabled && widthDp >= 400
             val nativeAdLayoutId = if (isMediumTier) R.layout.native_ad_medium else R.layout.native_ad_small
-            // Slot height for the medium tier is resource-driven via
-            // res/values{-w600dp,-w800dp}/dimens.xml so the slot scales up on
-            // tablets / foldables without per-device branching here.
-            val mediumSlotHeight = dimensionResource(R.dimen.ad_slot_height)
+            // Medium-tier dimensions scale continuously with screen width
+            // (400dp base × widthDp/400, floor 1.0×) — applied at runtime in
+            // the AndroidView.update lambda and to the in-house Compose
+            // mirror so the layout grows smoothly with display size rather
+            // than stepping at old w600dp / w800dp breakpoints.
+            val adMediumDims = if (isMediumTier)
+                com.techadvantage.budgetrak.ui.components.computeAdMediumDims(widthDp)
+            else null
             val adBannerHeight = when {
                 !nativeAdEnabled -> 0.dp
-                isMediumTier -> mediumSlotHeight
+                adMediumDims != null -> adMediumDims.slotHeightDp.dp
                 else -> 70.dp
             }
 
@@ -489,6 +493,7 @@ class MainActivity : ComponentActivity() {
                             ad = inHouseAd,
                             strings = vm.strings,
                             isMediumTier = isMediumTier,
+                            mediumDims = adMediumDims,
                             // In-house ad text + icon sit on the page-bg ad bar, so
                             // use page text color (theme-aware) — dark in light
                             // theme, light in dark theme. Parameter name is legacy.
@@ -559,6 +564,84 @@ class MainActivity : ComponentActivity() {
                                 val priceView = view.findViewById<android.widget.TextView>(R.id.native_ad_price)
                                 val storeView = view.findViewById<android.widget.TextView>(R.id.native_ad_store)
                                 val starView = view.findViewById<android.widget.TextView>(R.id.native_ad_star)
+                                // Continuous scaling: override every dimension that
+                                // the XML pulls from @dimen/ad_*. Runs on every
+                                // dp/density change since `widthDp` is captured
+                                // through Compose state.
+                                if (adMediumDims != null) {
+                                    val density = view.resources.displayMetrics.density
+                                    fun Float.toPx(): Int = (this * density).toInt()
+                                    val slotPx = adMediumDims.slotHeightDp.toPx()
+                                    val outerLL = view.getChildAt(0) as android.view.ViewGroup
+                                    outerLL.layoutParams = outerLL.layoutParams.apply { height = slotPx }
+                                    val leftCol = outerLL.getChildAt(0)
+                                    leftCol.layoutParams = (leftCol.layoutParams as android.view.ViewGroup.MarginLayoutParams).apply {
+                                        marginEnd = adMediumDims.leftColMarginEndDp.toPx()
+                                    }
+                                    val mediaFrame = outerLL.getChildAt(1)
+                                    mediaFrame.layoutParams = mediaFrame.layoutParams.apply {
+                                        width = adMediumDims.mediaWidthDp.toPx()
+                                        height = slotPx
+                                    }
+                                    iconView?.let { iv ->
+                                        iv.layoutParams = (iv.layoutParams as android.view.ViewGroup.MarginLayoutParams).apply {
+                                            width = adMediumDims.iconSizeDp.toPx()
+                                            height = adMediumDims.iconSizeDp.toPx()
+                                            marginStart = adMediumDims.iconMarginDp.toPx()
+                                            topMargin = adMediumDims.iconMarginDp.toPx()
+                                            marginEnd = adMediumDims.iconMarginDp.toPx()
+                                            bottomMargin = adMediumDims.iconMarginBottomDp.toPx()
+                                        }
+                                    }
+                                    advertiserView?.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, adMediumDims.advertiserSp)
+                                    headlineView.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, adMediumDims.headlineSp)
+                                    bodyView?.let { bv ->
+                                        bv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, adMediumDims.bodySp)
+                                        bv.layoutParams = (bv.layoutParams as android.view.ViewGroup.MarginLayoutParams).apply {
+                                            topMargin = adMediumDims.bodyMarginTopDp.toPx()
+                                        }
+                                    }
+                                    ctaView.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, adMediumDims.ctaSp)
+                                    ctaView.setPadding(
+                                        adMediumDims.ctaPaddingHDp.toPx(),
+                                        adMediumDims.ctaPaddingVDp.toPx(),
+                                        adMediumDims.ctaPaddingHDp.toPx(),
+                                        adMediumDims.ctaPaddingVDp.toPx(),
+                                    )
+                                    ctaView.layoutParams = (ctaView.layoutParams as android.view.ViewGroup.MarginLayoutParams).apply {
+                                        bottomMargin = adMediumDims.ctaMarginBottomDp.toPx()
+                                    }
+                                    val pillMarginPx = adMediumDims.pillMarginDp.toPx()
+                                    listOf(priceView, storeView, starView).forEach { pill ->
+                                        pill?.let { p ->
+                                            p.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, adMediumDims.pillSp)
+                                            p.setPadding(
+                                                adMediumDims.pillPaddingHDp.toPx(),
+                                                adMediumDims.pillPaddingVDp.toPx(),
+                                                adMediumDims.pillPaddingHDp.toPx(),
+                                                adMediumDims.pillPaddingVDp.toPx(),
+                                            )
+                                            (p.layoutParams as? android.view.ViewGroup.MarginLayoutParams)?.let { mp ->
+                                                mp.setMargins(pillMarginPx, pillMarginPx, pillMarginPx, pillMarginPx)
+                                                p.layoutParams = mp
+                                            }
+                                        }
+                                    }
+                                    val badgeView = view.findViewById<android.widget.TextView>(R.id.native_ad_badge)
+                                    badgeView?.let { bv ->
+                                        bv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, adMediumDims.badgeSp)
+                                        bv.setPadding(
+                                            adMediumDims.badgePaddingHDp.toPx(),
+                                            adMediumDims.badgePaddingVDp.toPx(),
+                                            adMediumDims.badgePaddingHDp.toPx(),
+                                            adMediumDims.badgePaddingVDp.toPx(),
+                                        )
+                                        (bv.layoutParams as? android.view.ViewGroup.MarginLayoutParams)?.let { mp ->
+                                            mp.setMargins(pillMarginPx, pillMarginPx, pillMarginPx, pillMarginPx)
+                                            bv.layoutParams = mp
+                                        }
+                                    }
+                                }
                                 headlineView.setTextColor(leftColArgb)
                                 advertiserView?.setTextColor(leftColArgb)
                                 advertiserView?.paintFlags =
