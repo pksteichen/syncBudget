@@ -549,158 +549,100 @@ class MainActivity : ComponentActivity() {
                                 view
                             },
                             update = { view ->
-                                // Left column text sits on the page-bg ad bar — use page
-                                // text color (theme-aware) for contrast. Pills (in
-                                // MediaView area) reuse the CTA's primary/onPrimary
-                                // theme colors for visual consistency with the CTA pill.
-                                val leftColArgb = pageTextColor.toArgb()
-                                val pillBgArgb = ctaBgColor.toArgb()
-                                val pillTextArgb = ctaTextColor.toArgb()
-                                val headlineView = view.findViewById<android.widget.TextView>(R.id.native_ad_headline)
-                                val advertiserView = view.findViewById<android.widget.TextView>(R.id.native_ad_advertiser)
-                                val bodyView = view.findViewById<android.widget.TextView>(R.id.native_ad_body)
-                                val ctaView = view.findViewById<android.widget.Button>(R.id.native_ad_cta)
-                                val iconView = view.findViewById<android.widget.ImageView>(R.id.native_ad_icon)
-                                val priceView = view.findViewById<android.widget.TextView>(R.id.native_ad_price)
-                                val storeView = view.findViewById<android.widget.TextView>(R.id.native_ad_store)
-                                val starView = view.findViewById<android.widget.TextView>(R.id.native_ad_star)
-                                // Continuous scaling: override every dimension that
-                                // the XML pulls from @dimen/ad_*. Runs on every
-                                // dp/density change since `widthDp` is captured
-                                // through Compose state.
+                                // Apply continuous-scale dims + theme colors (shared
+                                // with the in-house path so visual scaling stays
+                                // identical when the slot swaps between AdMob and
+                                // in-house content). Medium tier only — small tier
+                                // uses the dim-fixed `native_ad_small.xml`.
                                 if (adMediumDims != null) {
-                                    val density = view.resources.displayMetrics.density
-                                    fun Float.toPx(): Int = (this * density).toInt()
-                                    val slotPx = adMediumDims.slotHeightDp.toPx()
-                                    val outerLL = view.getChildAt(0) as android.view.ViewGroup
-                                    outerLL.layoutParams = outerLL.layoutParams.apply { height = slotPx }
-                                    val leftCol = outerLL.getChildAt(0)
-                                    leftCol.layoutParams = (leftCol.layoutParams as android.view.ViewGroup.MarginLayoutParams).apply {
-                                        marginEnd = adMediumDims.leftColMarginEndDp.toPx()
-                                    }
-                                    val mediaFrame = outerLL.getChildAt(1)
-                                    mediaFrame.layoutParams = mediaFrame.layoutParams.apply {
-                                        width = adMediumDims.mediaWidthDp.toPx()
-                                        height = slotPx
-                                    }
-                                    iconView?.let { iv ->
-                                        iv.layoutParams = (iv.layoutParams as android.view.ViewGroup.MarginLayoutParams).apply {
-                                            width = adMediumDims.iconSizeDp.toPx()
-                                            height = adMediumDims.iconSizeDp.toPx()
-                                            marginStart = adMediumDims.iconMarginDp.toPx()
-                                            topMargin = adMediumDims.iconMarginDp.toPx()
-                                            marginEnd = adMediumDims.iconMarginDp.toPx()
-                                            bottomMargin = adMediumDims.iconMarginBottomDp.toPx()
-                                        }
-                                    }
-                                    advertiserView?.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, adMediumDims.advertiserSp)
-                                    headlineView.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, adMediumDims.headlineSp)
-                                    bodyView?.let { bv ->
-                                        bv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, adMediumDims.bodySp)
-                                        bv.layoutParams = (bv.layoutParams as android.view.ViewGroup.MarginLayoutParams).apply {
-                                            topMargin = adMediumDims.bodyMarginTopDp.toPx()
-                                        }
-                                    }
-                                    ctaView.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, adMediumDims.ctaSp)
-                                    ctaView.setPadding(
-                                        adMediumDims.ctaPaddingHDp.toPx(),
-                                        adMediumDims.ctaPaddingVDp.toPx(),
-                                        adMediumDims.ctaPaddingHDp.toPx(),
-                                        adMediumDims.ctaPaddingVDp.toPx(),
+                                    com.techadvantage.budgetrak.ui.components.applyMediumAdDimsAndColors(
+                                        view,
+                                        adMediumDims,
+                                        pageTextColor.toArgb(),
+                                        ctaBgColor.toArgb(),
+                                        ctaTextColor.toArgb(),
                                     )
-                                    ctaView.layoutParams = (ctaView.layoutParams as android.view.ViewGroup.MarginLayoutParams).apply {
-                                        bottomMargin = adMediumDims.ctaMarginBottomDp.toPx()
-                                    }
-                                    val pillMarginPx = adMediumDims.pillMarginDp.toPx()
-                                    listOf(priceView, storeView, starView).forEach { pill ->
-                                        pill?.let { p ->
-                                            p.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, adMediumDims.pillSp)
-                                            p.setPadding(
-                                                adMediumDims.pillPaddingHDp.toPx(),
-                                                adMediumDims.pillPaddingVDp.toPx(),
-                                                adMediumDims.pillPaddingHDp.toPx(),
-                                                adMediumDims.pillPaddingVDp.toPx(),
+                                    val ad = nativeAd
+                                    if (ad != null) {
+                                        if (com.techadvantage.budgetrak.BuildConfig.DEBUG) {
+                                            com.techadvantage.budgetrak.BudgeTrakApplication.tokenLog(
+                                                "Ad load: tier=medium adChoicesInfo=${ad.adChoicesInfo != null} advertiser=${ad.advertiser} icon=${ad.icon != null} price=${ad.price} store=${ad.store} star=${ad.starRating} body=${ad.body?.take(40)}"
                                             )
-                                            (p.layoutParams as? android.view.ViewGroup.MarginLayoutParams)?.let { mp ->
-                                                mp.setMargins(pillMarginPx, pillMarginPx, pillMarginPx, pillMarginPx)
-                                                p.layoutParams = mp
-                                            }
                                         }
-                                    }
-                                    val badgeView = view.findViewById<android.widget.TextView>(R.id.native_ad_badge)
-                                    badgeView?.let { bv ->
-                                        bv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, adMediumDims.badgeSp)
-                                        bv.setPadding(
-                                            adMediumDims.badgePaddingHDp.toPx(),
-                                            adMediumDims.badgePaddingVDp.toPx(),
-                                            adMediumDims.badgePaddingHDp.toPx(),
-                                            adMediumDims.badgePaddingVDp.toPx(),
+                                        com.techadvantage.budgetrak.ui.components.bindMediumAdContent(
+                                            view,
+                                            com.techadvantage.budgetrak.ui.components.AdMediumContent.AdMob(ad),
+                                            pageTextColor.toArgb(),
                                         )
-                                        (bv.layoutParams as? android.view.ViewGroup.MarginLayoutParams)?.let { mp ->
-                                            mp.setMargins(pillMarginPx, pillMarginPx, pillMarginPx, pillMarginPx)
-                                            bv.layoutParams = mp
+                                    }
+                                } else {
+                                    // Small tier still uses the per-update imperative
+                                    // path (colors + text bindings against the fixed
+                                    // 70dp layout).
+                                    val leftColArgb = pageTextColor.toArgb()
+                                    val pillBgArgb = ctaBgColor.toArgb()
+                                    val pillTextArgb = ctaTextColor.toArgb()
+                                    val headlineView = view.findViewById<android.widget.TextView>(R.id.native_ad_headline)
+                                    val advertiserView = view.findViewById<android.widget.TextView>(R.id.native_ad_advertiser)
+                                    val bodyView = view.findViewById<android.widget.TextView>(R.id.native_ad_body)
+                                    val ctaView = view.findViewById<android.widget.Button>(R.id.native_ad_cta)
+                                    val iconView = view.findViewById<android.widget.ImageView>(R.id.native_ad_icon)
+                                    val priceView = view.findViewById<android.widget.TextView>(R.id.native_ad_price)
+                                    val storeView = view.findViewById<android.widget.TextView>(R.id.native_ad_store)
+                                    val starView = view.findViewById<android.widget.TextView>(R.id.native_ad_star)
+                                    headlineView.setTextColor(leftColArgb)
+                                    advertiserView?.setTextColor(leftColArgb)
+                                    advertiserView?.paintFlags =
+                                        (advertiserView?.paintFlags ?: 0) or
+                                            android.graphics.Paint.UNDERLINE_TEXT_FLAG
+                                    bodyView?.setTextColor(leftColArgb)
+                                    val density = view.resources.displayMetrics.density
+                                    ctaView.background = android.graphics.drawable.GradientDrawable().apply {
+                                        setColor(ctaBgColor.toArgb())
+                                        cornerRadius = 6f * density
+                                    }
+                                    ctaView.setTextColor(ctaTextColor.toArgb())
+                                    fun pillBg() = android.graphics.drawable.GradientDrawable().apply {
+                                        setColor(pillBgArgb)
+                                        cornerRadius = 3f * density
+                                    }
+                                    priceView?.background = pillBg()
+                                    priceView?.setTextColor(pillTextArgb)
+                                    storeView?.background = pillBg()
+                                    storeView?.setTextColor(pillTextArgb)
+                                    starView?.background = pillBg()
+                                    starView?.setTextColor(pillTextArgb)
+                                    val ad = nativeAd ?: return@AndroidView
+                                    if (com.techadvantage.budgetrak.BuildConfig.DEBUG) {
+                                        com.techadvantage.budgetrak.BudgeTrakApplication.tokenLog(
+                                            "Ad load: tier=small adChoicesInfo=${ad.adChoicesInfo != null} advertiser=${ad.advertiser} icon=${ad.icon != null} price=${ad.price} store=${ad.store} star=${ad.starRating} body=${ad.body?.take(40)}"
+                                        )
+                                    }
+                                    headlineView.text = ad.headline ?: ""
+                                    advertiserView?.text = ad.advertiser ?: ""
+                                    ctaView.text = ad.callToAction ?: ""
+                                    bodyView?.text = ad.body ?: ""
+                                    ad.icon?.drawable?.let { iconView?.setImageDrawable(it) }
+                                    priceView?.let {
+                                        val p = ad.price
+                                        if (p.isNullOrBlank()) it.visibility = android.view.View.GONE
+                                        else { it.text = p; it.visibility = android.view.View.VISIBLE }
+                                    }
+                                    storeView?.let {
+                                        val s = ad.store
+                                        if (s.isNullOrBlank()) it.visibility = android.view.View.GONE
+                                        else { it.text = s; it.visibility = android.view.View.VISIBLE }
+                                    }
+                                    starView?.let {
+                                        val r = ad.starRating
+                                        if (r == null) it.visibility = android.view.View.GONE
+                                        else {
+                                            it.text = "★ %.1f".format(r)
+                                            it.visibility = android.view.View.VISIBLE
                                         }
                                     }
+                                    view.setNativeAd(ad)
                                 }
-                                headlineView.setTextColor(leftColArgb)
-                                advertiserView?.setTextColor(leftColArgb)
-                                advertiserView?.paintFlags =
-                                    (advertiserView?.paintFlags ?: 0) or
-                                        android.graphics.Paint.UNDERLINE_TEXT_FLAG
-                                bodyView?.setTextColor(leftColArgb)
-                                // CTA button: theme-driven primary background + onPrimary text.
-                                val density = view.resources.displayMetrics.density
-                                ctaView.background = android.graphics.drawable.GradientDrawable().apply {
-                                    setColor(ctaBgColor.toArgb())
-                                    cornerRadius = 6f * density
-                                }
-                                ctaView.setTextColor(ctaTextColor.toArgb())
-                                // CTA-colored pills for bottom-start overlays. "Ad"
-                                // badge keeps its yellow + black-border XML look
-                                // (handled in native_ad_badge_bg.xml).
-                                fun pillBg() = android.graphics.drawable.GradientDrawable().apply {
-                                    setColor(pillBgArgb)
-                                    cornerRadius = 3f * density
-                                }
-                                priceView?.background = pillBg()
-                                priceView?.setTextColor(pillTextArgb)
-                                storeView?.background = pillBg()
-                                storeView?.setTextColor(pillTextArgb)
-                                starView?.background = pillBg()
-                                starView?.setTextColor(pillTextArgb)
-                                val ad = nativeAd ?: return@AndroidView
-                                if (com.techadvantage.budgetrak.BuildConfig.DEBUG) {
-                                    com.techadvantage.budgetrak.BudgeTrakApplication.tokenLog(
-                                        "Ad load: tier=${if (isMediumTier) "medium" else "small"} adChoicesInfo=${ad.adChoicesInfo != null} advertiser=${ad.advertiser} icon=${ad.icon != null} price=${ad.price} store=${ad.store} star=${ad.starRating} body=${ad.body?.take(40)}"
-                                    )
-                                }
-                                headlineView.text = ad.headline ?: ""
-                                advertiserView?.text = ad.advertiser ?: ""
-                                ctaView.text = ad.callToAction ?: ""
-                                bodyView?.text = ad.body ?: ""
-                                ad.icon?.drawable?.let { iconView?.setImageDrawable(it) }
-                                // Shopping/app-install overlays — bind text and toggle
-                                // visibility per asset availability. AdMob delivers each
-                                // independently, so each overlay is conditional.
-                                priceView?.let {
-                                    val p = ad.price
-                                    if (p.isNullOrBlank()) it.visibility = android.view.View.GONE
-                                    else { it.text = p; it.visibility = android.view.View.VISIBLE }
-                                }
-                                storeView?.let {
-                                    val s = ad.store
-                                    if (s.isNullOrBlank()) it.visibility = android.view.View.GONE
-                                    else { it.text = s; it.visibility = android.view.View.VISIBLE }
-                                }
-                                starView?.let {
-                                    val r = ad.starRating
-                                    if (r == null) it.visibility = android.view.View.GONE
-                                    else {
-                                        it.text = "★ %.1f".format(r)
-                                        it.visibility = android.view.View.VISIBLE
-                                    }
-                                }
-                                view.setNativeAd(ad)
                             },
                             modifier = Modifier.fillMaxWidth().height(adBannerHeight).background(MaterialTheme.colorScheme.background)
                         )

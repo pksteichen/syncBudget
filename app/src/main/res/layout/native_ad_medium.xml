@@ -106,6 +106,16 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent" />
 
+            <ImageView
+                android:id="@+id/native_ad_inhouse_icon"
+                android:layout_width="@dimen/ad_inhouse_app_icon_size"
+                android:layout_height="@dimen/ad_inhouse_app_icon_size"
+                android:layout_gravity="center"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_app_icon"
+                android:visibility="gone"
+                android:contentDescription="@null" />
+
             <TextView
                 android:id="@+id/native_ad_badge"
                 android:layout_width="wrap_content"

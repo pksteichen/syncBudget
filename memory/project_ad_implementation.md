@@ -1,6 +1,6 @@
 ---
-name: Native ad implementation — replaced banner in v2.10.16, continuous-scale + icon/headline restructure on dev 2026-05-15
-description: AdMob Native Advanced ad integration in BudgeTrak. Small (<400dp, 70dp fixed) and medium (≥400dp, continuous-scale) templates. Medium tier scales linearly from 400dp base via computeAdMediumDims(widthDp) — Compose-driven, applied at runtime in AndroidView.update lambda (text sizes via setTextSize, sizes/margins via layoutParams, paddings via setPadding). Top section restructured 2026-05-15 — large icon left, advertiser + headline left-justified in vertical column to its right. Five-pill MediaView overlays (Ad badge + AdChoices + store/price/star), theme-aware text color, tier-flip robustness via LocalConfiguration + key() + DisposableEffect cleanup. In-house fallback mirrors the AdMob structure with Play Billing price pill, hardcoded "BudgeTrak" advertiser, and uppercase CTA. Production-promotion swap checklist included.
+name: Native ad implementation — banner→native v2.10.16, unified rendering + continuous scaling on dev 2026-05-15
+description: AdMob Native Advanced ad integration in BudgeTrak. Small (<400dp, 70dp fixed) and medium (≥400dp, continuous-scale) templates. Medium tier scales linearly from 400dp base via computeAdMediumDims(widthDp), applied at runtime via shared applyMediumAdDimsAndColors + bindMediumAdContent functions that drive BOTH the AdMob AndroidView and the in-house Compose mirror from the same `native_ad_medium.xml`. Top section: large icon left of advertiser + headline column (left-justified). Font sizes tuned to clear AdMob's recommended max char lengths: advertiser 10sp, headline 14.5sp, body 11.5sp at base. Production-promotion swap checklist included.
 type: project
 originSessionId: 5682369f-ce9a-4adb-978b-3517ce099586
 ---
@@ -9,7 +9,9 @@ originSessionId: 5682369f-ce9a-4adb-978b-3517ce099586
 
 **Polished on `feature/ad-polish`** (2026-05-13 → 2026-05-14): 3-column layouts, dimens-based tier scaling (400/600/800dp), all asset bindings wired, theme-aware text, runtime tier-flip robustness, in-house ad redesign with Play Billing price pill. Currently using Google's TEST native ad unit ID `ca-app-pub-3940256099942544/2247696110` — production swap checklist below.
 
-**Top-section restructure + continuous scaling on dev (2026-05-15):** medium tier now scales linearly with `widthDp` via `computeAdMediumDims(widthDp)` (400dp base × `widthDp/400`, floored at 1.0×) — applied at runtime so the layout grows smoothly with display size rather than stepping at the old w600dp/w800dp resource-qualifier breakpoints. `values-w600dp/dimens.xml` and `values-w800dp/dimens.xml` deleted. Top section restructured: large icon (30dp at base, was 20dp) left-aligned at top, vertical column (advertiser + headline both left-justified) to its right, so icon's bottom edge roughly aligns with the bottom of the headline's first row. CTA bumped at base too (13sp/5dp padV, was 11sp/0dp) — the "Don't bump base values" memo from the prior dimens-tight era was overconservative; concrete math shows 32dp slack at worst-case 1-line headline + 3-line body.
+**Continuous scaling + top-section restructure on dev (2026-05-15):** medium tier scales linearly with `widthDp` via `computeAdMediumDims(widthDp)` (400dp base × `widthDp/400`, floored at 1.0×) — applied at runtime so the layout grows smoothly with display size rather than stepping at the old w600dp/w800dp resource-qualifier breakpoints. `values-w600dp/dimens.xml` and `values-w800dp/dimens.xml` deleted. Top section restructured: large icon (30dp at base, was 20dp) left-aligned at top, vertical column (advertiser + headline both left-justified) to its right, so icon's bottom edge roughly aligns with the bottom of the headline's first row. CTA bumped at base (13sp/5dp padV, was 11sp/0dp). Font sizes tuned to clear AdMob's recommended max char lengths at base 400dp: advertiser 10sp (was 11sp) → ~26 chars vs 25 max; headline 14.5sp (was 14sp) → ~36 chars across 2 lines vs 25 max; body 11.5sp (was 12sp) → ~93 chars across 3 lines vs 90 max.
+
+**Unified AdMob + in-house rendering on dev (2026-05-15):** both paths inflate the same `native_ad_medium.xml` and route through shared top-level functions `applyMediumAdDimsAndColors(view, dims, pageTextArgb, ctaBgArgb, ctaTextArgb)` (continuous-scale sizes + theme colors) and `bindMediumAdContent(view, content: AdMediumContent, pageTextArgb)` (text + visibility + asset registration). `AdMediumContent` is a sealed class with `AdMob(nativeAd)` and `InHouse(advertiser, headline, body, ctaText, featureIcon: Bitmap, price, onClick)` variants. Structural layout changes (icon position, headline alignment, etc.) now live in **one XML file** and one rendering function instead of duplicated XML + Compose code. The old `MediumInHouseAd` Compose composable is deleted; `MediumInHouseAdView` is a thin Compose wrapper that inflates the XML in `AndroidView` and routes through the shared functions. **Small tier kept on the Compose path** (`SmallInHouseAd`) — unification was scoped to medium only since that's where layout iteration happens. Helper `rememberImageVectorBitmap(vector, sizeDp, tint)` rasterizes Material `ImageVector`s to a Bitmap so they can be set on the inflated `ImageView` via `setImageBitmap` (cached via `remember` keyed on vector/size/tint).
 
 ## Architecture
 
@@ -44,10 +46,10 @@ Three coordinated defenses make small ↔ medium tier flips clean (foldable open
 | `iconMarginDp` | Icon margins (top/start/end) | 4 |
 | `iconMarginBottomDp` | Icon bottom margin | 0 |
 | `leftColMarginEndDp` | Gap between left column and MediaView | 4 |
-| `headlineSp` | Headline text size | 14 sp |
-| `bodySp` | Body text size | 12 sp |
+| `headlineSp` | Headline text size | 14.5 sp |
+| `bodySp` | Body text size | 11.5 sp |
 | `bodyMarginTopDp` | Gap above body | 0 |
-| `advertiserSp` | Advertiser line | 11 sp |
+| `advertiserSp` | Advertiser line | 10 sp |
 | `pillSp` | Overlay pill text | 10 sp |
 | `pillPaddingHDp` / `pillPaddingVDp` | Pill internal padding | 6 / 2 |
 | `pillMarginDp` | Pill external margin (stack spacing) | 4 |
@@ -89,14 +91,15 @@ XML uses `@dimen/` references for initial-inflation values; the `update` lambda 
   - **Space weight=1** — pushes CTA to bottom regardless of body line count.
   - **CTA Button** (`wrap_content`, `gravity=center`, `includeFontPadding=false`, `marginBottom=@dimen/ad_cta_margin_bottom`).
 - **Right col (FrameLayout, `@dimen/ad_media_width × @dimen/ad_slot_height` — both overridden):**
-  - **`MediaView`** fills (`match_parent × match_parent`). 16:9 aspect ratio preserved automatically since both width and height scale by the same `s` factor.
-  - **Ad badge** TextView at top-end — yellow `#FFCC00` with 2px black stroke via `native_ad_badge_bg.xml`.
-  - **Top-start vertical LinearLayout:** `store` pill + `AdChoicesView` directly below. AdChoices placement comes from this explicit view, NOT `setAdChoicesPlacement` (which is ignored when an explicit AdChoicesView is registered).
-  - **Bottom-start vertical LinearLayout:** `star` pill (★ X.X format, set at runtime) + `price` pill. Bottom-end stays clear for the SDK's video mute icon.
+  - **`MediaView`** fills (`match_parent × match_parent`). 16:9 aspect ratio preserved automatically since both width and height scale by the same `s` factor. Visible in AdMob mode, `GONE` in in-house mode.
+  - **`native_ad_inhouse_icon`** ImageView (centered, `src=@drawable/ic_app_icon`, default `visibility=gone`). Shown only in in-house mode — sized to `dims.inhouseAppIconDp` at runtime.
+  - **Ad badge** TextView at top-end — yellow `#FFCC00` with 2px black stroke via `native_ad_badge_bg.xml`. AdMob mode only.
+  - **Top-start vertical LinearLayout:** `store` pill + `AdChoicesView` directly below. AdChoices placement comes from this explicit view, NOT `setAdChoicesPlacement` (which is ignored when an explicit AdChoicesView is registered). AdMob mode only.
+  - **Bottom-start vertical LinearLayout:** `star` pill (★ X.X format, set at runtime, AdMob mode only) + `price` pill (shared between AdMob's `ad.price` and in-house's Play Billing price). Bottom-end stays clear for the SDK's video mute icon.
 
 Both layouts give every asset view a stable `R.id` so `MainActivity.update` can `findViewById` and bind text/colors/dims per recomposition. AdChoicesView is treated like any other asset view (`view.adChoicesView = ...`).
 
-**Width budget at base 400dp** (advertiser/headline column right of icon): left col ≈ 182dp (400 − 214 MediaView − 4 leftColMarginEnd), minus 30dp icon + 8dp icon margins = **~144dp** for advertiser + headline rows. At 11sp bold advertiser ≈ 24 chars before ellipsize; at 14sp bold headline ≈ 20 chars/line, ~40 chars total in 2 lines. Covers AdMob's typical 25-char headline + 25-char advertiser comfortably; long brand names ellipsize.
+**Width budget at base 400dp** (advertiser/headline column right of icon): left col ≈ 182dp (400 − 214 MediaView − 4 leftColMarginEnd), minus 30dp icon + 8dp icon margins = **~144dp** for advertiser + headline rows. Sizes tuned 2026-05-15 to comfortably clear AdMob's recommended max char lengths: advertiser 10sp bold ≈ 26 chars (vs 25 max); headline 14.5sp bold ≈ 18 chars/line × 2 = 36 chars (vs 25 max); body 11.5sp regular at full 182dp ≈ 31 chars/line × 3 = 93 chars (vs 90 max). Each clears the AdMob limit with 1-11 chars of margin so typical ads render without ellipsis.
 
 ## MainActivity binding
 
@@ -124,37 +127,35 @@ val ctaBgColor = MaterialTheme.colorScheme.primary
 val ctaTextColor = MaterialTheme.colorScheme.onPrimary
 ```
 
-`AndroidView` wrapped in `key(isMediumTier)`:
-- **factory:** inflates the layout, binds every asset view (`iconView`, `headlineView`, `advertiserView`, `callToActionView`, `mediaView` via `?.let`, `bodyView` via `?.let`, `priceView` via `?.let`, `storeView` via `?.let`, `starRatingView` via `?.let`, `adChoicesView` via `?.let`).
-- **update (colors + text):** sets text colors using `pageTextColor.toArgb()` for headline/body/advertiser; sets advertiser underline via `paintFlags or UNDERLINE_TEXT_FLAG`; builds runtime `GradientDrawable` for CTA bg using `ctaBgColor`; sets CTA text color = `ctaTextColor`. Overlay pills (price/store/star) get a `GradientDrawable` bg using `ctaBgColor` and text color = `ctaTextColor` so they match the CTA's theme colors. Star rating formats as `"★ %.1f"`. Each pill's visibility is toggled based on whether AdMob delivered the asset (`isNullOrBlank` / `null`). Ad badge keeps the XML drawable (yellow + black border) — NOT overridden at runtime.
-- **update (dimensions, when `adMediumDims != null`):** walks the view tree applying every scaled dim. Outer LinearLayout `layoutParams.height = slotHeightDp.toPx()`; left col `MarginLayoutParams.marginEnd = leftColMarginEndDp.toPx()`; MediaView FrameLayout `width/height`; icon `width/height + 4 margins`; advertiser/headline/body/CTA text sizes via `setTextSize(SP, ...)`; body `topMargin`; CTA `setPadding(...)` + `bottomMargin`; pills + badge `setTextSize` + `setPadding` + 4-margin `setMargins(...)`. **layoutParams must be re-assigned** (`view.layoutParams = (layoutParams as MarginLayoutParams).apply { ... }`) — mutating in place doesn't trigger `requestLayout`. Runs on every recomposition since `widthDp` is captured through Compose state, so dp/density changes propagate within one frame.
+`AndroidView` wrapped in `key(isMediumTier)`. Factory inflates + registers asset views with the `NativeAdView`. Update routes through the shared functions:
+- **`applyMediumAdDimsAndColors(view, adMediumDims, pageTextArgb, ctaBgArgb, ctaTextArgb)`** — applies every scaled dim + theme color (text colors, advertiser underline, CTA + pill `GradientDrawable` backgrounds, every text size, every layoutParams width/height/margin/padding). Defined in `ui/components/InHouseAd.kt`. **layoutParams must be re-assigned** (`view.layoutParams = (layoutParams as MarginLayoutParams).apply { ... }`) — mutating in place doesn't trigger `requestLayout`. Ends with an explicit `view.requestLayout()` for belt-and-suspenders. Debug builds emit one `applyDims:` line per call to `token_log.txt` so runtime values can be verified from Termux without ADB.
+- **`bindMediumAdContent(view, AdMediumContent.AdMob(nativeAd), pageTextArgb)`** — toggles visibility on AdMob-only views (MediaView/Ad badge/AdChoicesView/store/star = VISIBLE, `native_ad_inhouse_icon` = GONE), clears the icon ColorFilter, binds asset text from `ad.headline / .body / .advertiser / .callToAction`, sets icon drawable from `ad.icon?.drawable`, toggles price/store/star visibility per asset availability (`isNullOrBlank` / `null`), then calls `view.setNativeAd(ad)` to register click attribution with the SDK. Ad badge keeps the XML drawable (yellow + black border) — NOT overridden at runtime.
 
 In debug builds only, every load logs to `BudgeTrakApplication.tokenLog`:
 ```
 Ad load: tier=medium adChoicesInfo=false advertiser=null icon=true price=FREE store=Google Play star=4.5 body=...
+applyDims: slot=120.0 icon=30.0 ctaSp=13.0 ctaPadV=5.0 advSp=10.0 headSp=14.5 bodySp=11.5
 ```
 
-This writes to `/Download/BudgeTrak/support/token_log.txt` so it's readable from Termux without ADB. Test ads omit `advertiser` and `adChoicesInfo` — production ads provide both.
+This writes to `/Download/BudgeTrak/support/token_log.txt` so it's readable from Termux without ADB. Test ads omit `advertiser` and `adChoicesInfo` — production ads provide both. The `applyDims:` line fires every recomposition of the medium-tier ad slot (both AdMob and in-house paths) — invaluable for diagnosing whether runtime dim overrides are actually reaching the views.
 
 ## In-house fallback ad
 
-When `AdLoader.onAdFailedToLoad` fires, the AdMob `AndroidView` is replaced by a pure-Compose in-house promo. Five fixed-order ads cycle on each subsequent failure; `inHouseAdIndex` resumes (not resets) across AdMob recoveries.
+When `AdLoader.onAdFailedToLoad` fires, the AdMob `AndroidView` is replaced by an in-house promo. Five fixed-order ads cycle on each subsequent failure; `inHouseAdIndex` resumes (not resets) across AdMob recoveries.
 
 **Five ad themes (in order):** Receipts (Paid), Exports (Paid), SYNC (Subscriber), Simulation (Paid), OCR (Subscriber). Each entry in `InHouseAds: List<InHouseAd>` has a unique `id`, a Material `ImageVector` (feature icon), and a `tier` (PAID vs SUBSCRIBER drives CTA text + Play Billing price selection).
 
-**Structural parity with AdMob** (so the slot doesn't visually jump on swap):
-- **Small in-house:** 3 columns — left 58dp (40dp feature icon + 15dp CTA), center (5 rows: hardcoded `"BudgeTrak"` bold-underlined as advertiser, headline, 3-line body), right 58dp (PriceBadge centered; falls back to `UpgradeBadge` if Play Billing prices haven't loaded yet). Small tier uses fixed dp values, not `AdMediumDims`.
-- **Medium in-house:** `MediumInHouseAd(ad, strings, dims: AdMediumDims, ...)` — every size pulled from the passed-in `dims` so it scales identically to the AdMob template. Top section: 30dp-at-base feature icon + vertical column with bold `"BudgeTrak"` advertiser (underlined) and headline (left-justified `TextAlign.Start`, `maxLines=2`). Body below, CTA at bottom via `Spacer.weight(1f)`. Right Box sized to `dims.mediaWidthDp × dims.slotHeightDp` with the BudgeTrak app icon centered (sized via `dims.inhouseAppIconDp`) + `PriceBadge` overlay at bottom-start mirroring AdMob's price-pill location.
+**Two rendering paths** (split because the medium-tier unification was scoped to where layout iteration happens):
+- **Small in-house** (`SmallInHouseAd`) — pure Compose, 3 columns: left 58dp (40dp feature icon + 15dp CTA), center (5 rows: hardcoded `"BudgeTrak"` bold-underlined as advertiser, headline, 3-line body), right 58dp (PriceBadge centered; falls back to `UpgradeBadge` if Play Billing prices haven't loaded). Fixed dp values, not `AdMediumDims`.
+- **Medium in-house** (`MediumInHouseAdView`) — Compose wrapper around `AndroidView` that inflates the same `native_ad_medium.xml` as AdMob and routes through the shared `applyMediumAdDimsAndColors` + `bindMediumAdContent(view, AdMediumContent.InHouse(...), pageTextArgb)` functions. The in-house branch of `bindMediumAdContent` hides AdMob-only views (MediaView/Ad badge/AdChoicesView/store/star = GONE), shows `native_ad_inhouse_icon` (the BudgeTrak app icon, sized via `dims.inhouseAppIconDp`), tints the left-col feature icon with `headerTextColor` via `setColorFilter` (after `setImageBitmap(featureIcon)` from `rememberImageVectorBitmap`), binds in-house text content, shows the price pill if a Play Billing price is loaded, and wires `view.setOnClickListener { onClick() }` for whole-view click (no AdMob asset-view click attribution).
 
-**PriceBadge** displays `vm.paidUpgradePrice` (for PAID-tier ads) or `vm.subscriberPrice` (for SUBSCRIBER-tier ads) from `BillingService.queryProductDetails`. Uses `MaterialTheme.colorScheme.primary` bg + `onPrimary` text (matches the CTA), 12sp bold, 6/4 padding. Larger than AdMob's price pill (10sp at base) because the in-house has no other right-column elements.
+**`rememberImageVectorBitmap(vector, sizeDp, tint)`** — rasterizes a Compose `ImageVector` to a `Bitmap` of the requested dp size with the requested tint applied. Used by the in-house path to put a Material icon onto the inflated `ImageView` (which can't render an `ImageVector` directly). Cached via `remember` keyed on vector/size/tint/density/layoutDirection.
 
-**`UpgradeBadge`** retained for fallback (when Play Billing prices haven't loaded). Yellow `#FFCC00` + 1dp black border, 10sp default, matches the AdMob "Ad" pill style.
+**PriceBadge / UpgradeBadge** — used only by the small in-house path. The medium in-house path uses the shared `native_ad_price` TextView from the XML (sized via `dims.pillSp` etc., same as AdMob's price pill).
 
-**`CtaButton`** in in-house renders `text.uppercase()` always (AdMob CTAs use server-provided casing).
+**`tightTextStyle()`** Composable: still used by `SmallInHouseAd` for `includeFontPadding=false` parity with XML.
 
-**`tightTextStyle()`** Composable: returns a TextStyle with `PlatformTextStyle(includeFontPadding = false)` + `LineHeightStyle(alignment = Center, trim = Both)`. Applied to every Text in the in-house templates with explicit `lineHeight = fontSize × 1.15` so Compose's line spacing matches XML TextView's `includeFontPadding="false"` rendering. Without this, default Compose lineHeight (~1.5×) makes 3-line body overflow at low dp.
-
-**Click handling:** whole banner is clickable; `ad.tier` dictates `vm.launchPaidUpgrade(activity)` vs `vm.launchSubscribe(activity)`.
+**Click handling:** small path uses Compose `Modifier.clickable`. Medium path uses `view.setOnClickListener` set inside `bindMediumAdContent`'s in-house branch.
 
 **Editing the cycle:**
 - Copy changes → edit `EnglishStrings.ads` + `SpanishStrings.ads` (`InHouseAdStrings` data class in `AppStrings.kt`). Body budget ~80 chars EN / ~85 chars ES (sized to fit 3-line body at base 400dp / 12sp). Headline budget ~25 chars / 1 line.
@@ -216,7 +217,9 @@ Optional pre-production:
 - **Don't** remove `key(isMediumTier) { AndroidView(...) }`. Without it, `factory` only runs once and a tier flip leaves the old layout XML inflated under a new ad binding.
 - **Don't** wire `isAppearanceLightStatusBars` to follow the system theme — the override is intentionally always-white because both light- and dark-mode `headerBackground` colors are dark enough to demand light icons. Android can't tint status bar icons to a custom color — see comment above and `feedback_admob_validator_dp_transition.md`.
 - **Don't** re-create the `values-w600dp/dimens.xml` + `values-w800dp/dimens.xml` step-function tier system. Continuous scaling via `computeAdMediumDims(widthDp)` replaces it — anything that varied by tier should now be a `s × base` term in that function.
-- **Don't** delete entries from `res/values/dimens.xml` for `ad_*`. `native_ad_medium.xml` still references them via `@dimen/ad_*` and inflation fails without them; the `update` lambda overrides those base values at runtime.
+- **Don't** delete entries from `res/values/dimens.xml` for `ad_*`. `native_ad_medium.xml` still references them via `@dimen/ad_*` and inflation fails without them; `applyMediumAdDimsAndColors` overrides those base values at runtime.
 - **Don't** mutate `view.layoutParams` in place without re-assigning it (`view.layoutParams = view.layoutParams.apply { ... }`). The View's `setLayoutParams` setter is what triggers `requestLayout` — direct mutation leaves the layout stale.
 - **Don't** revert the icon+vertical-column top section of `native_ad_medium.xml`. The icon now spans advertiser + headline-row-1 with both texts left-justified to the right of it; this was an explicit design decision (2026-05-15), not a layout accident. Reverting to a separate icon+advertiser row with a centered headline below would shrink the headline's char budget back to 26 chars/line but at the cost of the icon-anchor visual.
+- **Don't** restore the deleted Compose-only `MediumInHouseAd`. Both AdMob and in-house medium paths now share `native_ad_medium.xml` + the shared rendering functions; structural layout changes happen in one place. The shared path is the reason the icon+headline restructure didn't have to be duplicated.
+- **Don't** trust `assembleDebug` alone when a resource/layout edit doesn't appear in the APK. Run `./gradlew clean assembleDebug` first — Gradle's incremental task graph occasionally reuses stale `intermediates/` artifacts. See `feedback_gradle_clean_when_edits_dont_show.md`.
 - **Don't** chase validator-UI "MediaView too small" warnings that persist across runtime tier flips. See `feedback_admob_validator_dp_transition.md`.
