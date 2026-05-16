@@ -1209,6 +1209,105 @@ data class CachedVerification(
 
 **`FirebaseFunctions` lazy:** `FirebaseFunctions.getInstance("us-central1")` — must match the region the `verifyPurchase` Gen 2 function is deployed to. Caller is `MainViewModel.reconcileEntitlement` which composes Layer 1 + Layer 2 per SSD §16b.5.
 
+### 6.20 AiCategorizerService
+
+**File:** `data/ai/AiCategorizerService.kt` (139 lines)  |  object singleton
+
+Gemini Flash-Lite CSV-import categorizer. Invoked from `MainViewModel.runAiCsvCategorizer` after the on-device deterministic matcher fails the confidence gate (fewer than 5 historical matches OR <80% category agreement). SSD §11.2.
+
+**Constants:**
+- `TIMEOUT_MS = 30_000L` — outer per-call budget (excluding retry delays).
+- `CHUNK_SIZE = 100` — transactions per API call.
+
+**Response schema** (`Schema.obj("CategorizerResult")`): a single `results` array of `{i: Int, categoryId: Int}` entries. Schema-constrained JSON via `responseSchema` + `responseMimeType = "application/json"`.
+
+**`liteModel` (lazy):** `GenerativeModel(modelName = "gemini-2.5-flash-lite", apiKey = BuildConfig.GEMINI_API_KEY, generationConfig = { responseMimeType, responseSchema, temperature = 0f })`. Temperature 0 for determinism.
+
+**Methods:**
+| Method | Purpose |
+|---|---|
+| `suspend fun categorizeBatch(transactions, categories): Result<Map<Int, Int>>` | Chunks `transactions` by `CHUNK_SIZE` (100). For each chunk: builds payload, runs `generateWithRetry` under `withTimeout(TIMEOUT_MS)`, parses results, merges into the output map. Returns map of input-index → categoryId. Entries missing (model skipped, returned unknown id, or whole call failed) fall back to whatever the caller had. Rethrows `CancellationException`; logs + Crashlytics-records other failures and returns `Result.failure(e)`. |
+| `private suspend fun generateWithRetry(batch, categories): String` | Builds the JSON payload (`{i, merchant, amount}` per row — **date NOT included**, privacy footprint), calls `buildCategorizerPrompt` from `CategorizerPromptBuilder`, invokes the model. 3 attempts max; exponential backoff `500L shl (attempt - 1)` (500 ms → 1 s → 2 s). Retries only on `transientPattern` matches (`503`, `UNAVAILABLE`, `overloaded`, `429`, `RESOURCE_EXHAUSTED`, `deadline`, network errors, `socket`). Non-transient failures throw immediately. |
+| `private fun parseResults(jsonText, validCategoryIds): Map<Int, Int>` | Reads the `results` array, validates each entry's `categoryId` against `validCategoryIds`, skips invalid/missing entries silently. Returns the cleaned map. |
+
+**Payload privacy rationale:** the per-row payload omits the transaction `date` deliberately. Merchant is the dominant categorization signal; amount disambiguates edge cases (small vs large gas-station charges); date adds negligible value and isn't worth the extra data shared with Google. The decision is documented inline in `generateWithRetry` so future maintainers don't re-add the date.
+
+### 6.21 CategorizerPromptBuilder
+
+**File:** `data/ai/CategorizerPromptBuilder.kt` (29 lines)  |  top-level function + constant
+
+| Symbol | Purpose |
+|---|---|
+| `const val CSV_CATEGORIZER_PROMPT_VERSION = "v1"` | Pinned prompt-version string. Bump on any semantic prompt change; surfaces in dump files via the future telemetry payload + `feedback memory project_ai_models.md`. |
+| `fun buildCategorizerPrompt(categories, batchJson): String` | Filters out `supercharge` / `recurring_income` / `deleted` categories so the model can't pick them, formats the visible list as `- id=N name="..." tag="..."` lines, and embeds the input batch JSON. Prompt body includes domain hints (amount as disambiguator, "Electric/Gas" = utility vs "Transportation/Gas" = fuel, pure Insurance vs combined property-tax categories, fallback-to-"Other" rule). Returns the rendered prompt as a String. |
+
+### 6.22 ReceiptOcrService
+
+**File:** `data/ocr/ReceiptOcrService.kt` (789 lines)  |  object singleton
+
+Split-pipeline Gemini 2.5 Flash-Lite receipt OCR. Triggered by an explicit tap on the AI sparkle in `TransactionDialog` after the user long-presses a photo slot to mark it as the OCR target. SSD §11.3 covers the call-sequence narrative; this LLD entry is the symbol catalog.
+
+**Constants:**
+- `TIMEOUT_MS = 90_000L` — outer pipeline budget.
+- `CALL1R_TIMEOUT_PAST_C2_MS = 2_000L` — Call 1.5 cap measured from Call 2 completion. Refund receipts with multiple negative numbers can otherwise stretch Call 1.5 reasoning to ~7-9 s past Call 2; capping converts those tail cases into a bounded wait.
+
+**Schemas (4):** `call1Schema` (merchant / date / amountCents / itemNames[] / fullTranscript[] / notes), `call1rSchema` (reconciled merchant / date / amountCents), `call2Schema` (per-item categoryId + score + reason × N + topChoice + multiCategoryLikely), `call3Schema` (per-item priceCents). All have `temperature = 0f` for determinism; all use `Schema.int` for cents to keep integer precision (no fractional-cent rounding bugs).
+
+**Models (4 lazy):** one `GenerativeModel` per schema, all `gemini-2.5-flash-lite`. Single helper `liteModel(schema)` builds them with `apiKey = BuildConfig.GEMINI_API_KEY`, `responseMimeType = "application/json"`, `responseSchema = schema`, `temperature = 0f`.
+
+**Public entry point:**
+```kotlin
+suspend fun extractFromReceipt(
+    context: Context,
+    receiptId: String,
+    categories: List<Category>,
+    preSelectedCategoryIds: Set<Int> = emptySet()
+): Result<OcrResult>
+```
+Reads `ReceiptManager.getReceiptFile(context, receiptId).readBytes()` and passes via `content { blob("image/jpeg", bytes) }` — **NOT** `image(bitmap)`. The latter re-encodes at JPEG q=80 inside the SDK's `encodeBitmapToBase64Png`, which silently degrades the q=92+ stored receipts. Pipeline runs under `withTimeout(TIMEOUT_MS)`. Rethrows `CancellationException`; logs + Crashlytics-records other failures.
+
+**Internal types** (visible to test harness via `internal` modifier):
+- `data class ScoredCandidate(categoryId: Int, score: Int)`
+- `data class ScoredItem(description: String, scores: List<ScoredCandidate>)`
+- private `Call1Header`, `Call1Reconciled`, `Call2Categorization` data classes mirroring the per-call schemas.
+
+**Pipeline (`runPipeline`):**
+1. **Filter `promptCats`** — if `preSelectedCategoryIds` is non-empty, restrict to those; else drop `supercharge` / `recurring_income` / `deleted`.
+2. **Call 1** — `runCall1(imageBytes)` always runs.
+3. **Shortcut** — if `preSelectedCategoryIds.size == 1` OR `c1.itemNames.isEmpty()`, return `buildSingleCatResult(c1, ...)` with the single cat. Skip reconcile (preselected receipts are typically quick-entry).
+4. **Parallel Call 1.5 + Call 2** — `coroutineScope { async { runCall2(...) } + async { runCall1Reconcile(c1) } }`. Call 2 returns first on the typical path; Call 1.5 is awaited with `CALL1R_TIMEOUT_PAST_C2_MS` cap. On Call 1.5 timeout / parse error / API error, falls back to Call 1 values silently.
+5. **Route single vs multi** — `multi = (preSelect.size >= 2) || deriveMulti(c2.items, promptCats, c2.multiCategoryLikely)`. `deriveMulti` is `internal` for harness testing.
+6. **Single-cat path:** `buildSingleCatResult(c1, c1r, c2.topChoice ?: deriveSingleCat(...))`. Returns `OcrResult` with one `OcrCategoryAmount` carrying the full amount.
+7. **Multi-cat path:** `runCall3(imageBytes, c1.itemNames, promptCats)` for per-item prices → `reconcilePrices(items, priceCents, c1r.amountCents)` (≤ $0.05 drift tolerance; tax line via `isTaxLine` preserved exactly) → `aggregateCategoryAmounts(items, reconciled)` (groups by `topChoice` per item).
+
+**Per-call helpers:**
+| Method | Purpose |
+|---|---|
+| `private suspend fun runCall1(imageBytes): Call1Header` | Image + Call 1 prompt → `Call1Header`. Marketplace rule + no-hallucinated-date rule live in the prompt body (`buildCall1Prompt`). |
+| `private suspend fun runCall1Reconcile(c1): Call1Reconciled` | Text-only second pass over `c1.fullTranscript`. Returns Call 1 values on any parse / API error. Logged via per-call timing lines. |
+| `private suspend fun runCall2(imageBytes, itemNames, promptCats, preselected): Call2Categorization` | Image + Call 2 prompt → per-item scored categories + routing. |
+| `private suspend fun runCall3(imageBytes, itemNames, promptCats): List<Int>` | Image + Call 3 prompt → priceCents per item. Multi-cat only. |
+| `internal fun deriveMulti(items, promptCats, multiCategoryLikely?): Boolean` | Routing helper. Visible to harness for unit testing. |
+| `internal fun reconcilePrices(items, priceCents, totalCents): List<Int>` | Per-item price reconciliation against Call 1's total. Tax-line passthrough via `isTaxLine`. ≤ $0.05 drift tolerance. |
+| `internal fun aggregateCategoryAmounts(items, reconciledPriceCents): List<OcrCategoryAmount>` | Groups items by their `topChoice` (or `deriveSingleCat`) and sums cents. |
+| `private fun buildSingleCatResult(c1, c1r, catId)` | Builds an `OcrResult` for the single-cat path. |
+| `private fun isTaxLine(desc): Boolean` | Matches "Sales Tax", "Estimated tax", "Tax", etc. Used by `reconcilePrices` to preserve tax exactly. |
+| `private fun isTransient(msg): Boolean` | Same transient-pattern matcher used by `AiCategorizerService` (503, UNAVAILABLE, overloaded, 429, RESOURCE_EXHAUSTED, network errors). Used for retry decisions on transient API errors. |
+
+**Refund-receipt support:** `runCall1` and `runCall1Reconcile` use `Int.MIN_VALUE` as the sentinel for "missing amountCents" so legitimate negative cents flow through unmodified. The dialog prefill in `MainActivity.applyOcrResultToDialog` detects `r.amount < 0` and flips `typeIsExpense = false` + `kotlin.math.abs(...)`. Model invariant: amount always positive, type carries polarity.
+
+**Debug logging:** every call emits a `Call N dispatch (...)` line at start and `Call N response after Nms (...)` on response. `Call1.5: timed out 2000ms past C2 — using C1 values` when the cap fires. All lines land in `token_log.txt` for forensic latency analysis. Test-harness reference: `tools/ocr-harness/scripts/test-v16-split-with-image.js`.
+
+### 6.23 OcrResult
+
+**File:** `data/ocr/OcrResult.kt` (26 lines)  |  data classes + sealed class
+
+| Type | Purpose |
+|---|---|
+| `data class OcrCategoryAmount(categoryId: Int, amount: Double)` | One entry per category that received money on a multi-cat receipt. Single-cat receipts emit a list with one entry carrying the full amount. |
+| `data class OcrResult(merchant, merchantLegalName?, date, amount, categoryAmounts?, lineItems?, notes?)` | The full pipeline output. `amount` is a `Double` (post-cents-to-dollars conversion). `categoryAmounts == null` means single-cat (caller assigns the full amount to whatever cat was preselected or the dialog's current cat). `lineItems` carries the verbatim receipt lines when present (for debugging). |
+| `sealed class OcrState { Idle, Loading, Success(result), Failed(message), Offline }` | UI state machine consumed by `TransactionDialog`. `Offline` is intentionally distinguished from `Failed` so the UI can show an offline-specific toast without string-matching the message field. |
+
 ## 7. Sync Classes
 
 All classes below live in package `com.techadvantage.budgetrak.data.sync` unless noted. Line counts reflect the verified source.
@@ -2085,6 +2184,7 @@ Sync engine: `EncryptedDocSerializer`, `FirestoreDocService`, `FirestoreDocSync`
 | 2.10.07–2.10.09 | May 7–8 2026 | **SYNC pending-edit clobber fix + sync hardenings + 5-member group cap + AdMob real integration.** v2.10.07: foreign inbound now drops on conflict — every collection branch in `SyncMergeProcessor.processBatch` early-returns `if (event.isConflict) { conflictDetected = true; continue }`. The old transaction-only `isUserCategorized=false` workaround + `conflictedTransactionsToPushBack` plumbing in `MainViewModel`/`BackgroundSyncWorker` removed. Plus four `FirestoreDocSync` hardenings: `pushRecord` sets `localPendingEdits` BEFORE the Firestore I/O (closes the smaller same-shape race during the push duration); per-collection `cursorWriteLock` + `advanceCursor` helper makes load-compare-save atomic; `isListening` guards in both listener handlers drop late callbacks racing with `stopListeners()`; cursor advance skips failed-deserialization docs. v2.10.08: `SyncScreen` Generate Pairing Code button toasts `memberLimitReached` when `devices.size >= 5` instead of generating; `GroupManager.joinGroup`, after registering membership (required to read the devices subcollection), fetches device count and rolls back membership + local prefs if `>= 5` (server-side rule deferred — see `memory/project_member_limit_server_rule.md`). v2.10.09: real AdMob banner (TEST IDs) replaces the placeholder — adaptive sizing via `getCurrentOrientationAnchoredAdaptiveBannerAdSize`, `windowInsetsPadding(statusBars.union(displayCutout))` + `Modifier.background(headerBackground)` for the decorative top strip behind the cutout, AdView `setBackgroundColor(topBarColor.toArgb())` so letterbox areas blend with the strip, `WindowCompat.getInsetsController(...).isAppearanceLightStatusBars = false` for white status-bar icons in both themes, `tools:replace="android:resource"` on `<property AD_SERVICES_CONFIG>` to resolve the `play-services-ads` ↔ `play-services-measurement-api` manifest-merger conflict. Production-swap checklist in `memory/project_ad_implementation.md`. |
 | 2.10.28-dev | May 15 2026 | **§3.7 InHouseAd + §3.8 native-ad XML/drawables added.** Documents the medium-tier native ad system that landed on dev today: `AdMediumDims` data class + `computeAdMediumDims(widthDp)` continuous-scale formula (`s = widthDp/400`, no upper clamp; replaces deleted `values-w600dp/` + `values-w800dp/` qualifiers); shared rendering via `applyMediumAdDimsAndColors` + `bindMediumAdContent` + sealed `AdMediumContent.AdMob/InHouse` so the AdMob path and the in-house Compose mirror both inflate the same `native_ad_medium.xml`; `rememberImageVectorBitmap` rasterizer for Material `ImageVector` → `Bitmap`. `ui/components/` count corrected 5 → 6 (`InHouseAd.kt` was previously absent from the inventory). Companion SSD §16a chapter added. |
 | 2.10.28-dev (P2) | May 15 2026 | **§6.17–§6.19 Play Billing classes added.** `BillingProducts` (IDs + `SUB_PERIOD_MS`), `BillingService` (Play Billing Library 7+ wrapper: `BillingState` data class, `queryAll` / `queryRawPurchases` / `launchPaidUpgrade` / `launchSubscribe` / `acknowledge` + `ensureConnected` Mutex), `EntitlementVerifier` (Layer 2 Cloud-Function-callable wrapper: `VerifyResult.Verified/Refunded/Unreachable` sealed class, 24 h SharedPreferences cache, 15 s call timeout). File inventory adds `data/billing/` (3 files). Companion SSD §16b chapter added. |
+| 2.10.28-dev (P3) | May 15 2026 | **§6.20–§6.23 AI / OCR classes added.** `AiCategorizerService` (CSV batch categorizer, `CHUNK_SIZE = 100`, schema-constrained JSON, retry on transient errors, payload omits date for privacy), `CategorizerPromptBuilder` (prompt template + `CSV_CATEGORIZER_PROMPT_VERSION = "v1"`), `ReceiptOcrService` (4-call Gemini Flash-Lite pipeline with all 4 schemas, parallel Call 1.5 / Call 2 under `CALL1R_TIMEOUT_PAST_C2_MS = 2_000L` cap, `deriveMulti` / `reconcilePrices` / `aggregateCategoryAmounts` post-processing, refund-receipt `Int.MIN_VALUE` sentinel, JPEG-blob vs bitmap-re-encode rationale, harness pointer), `OcrResult` (data classes + `OcrState` sealed class with `Offline` distinct from `Failed`). Companion SSD §11.2 + §11.3 augmented with prompt-version + helper-name details. Items 5 + 6 (period-boundary scheduling, inline FCM) already covered substantively in SSD §17.13–§17.15 + LLD §7.14 — no expansion needed. |
 
 ---
 
