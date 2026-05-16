@@ -630,6 +630,7 @@ object SpanishStrings : AppStrings {
         createGroupFailed = "Error al crear el grupo. El estado local se revirti\u00f3 — int\u00e9ntalo de nuevo.",
         joinGroupFailed = "Error al unirse al grupo. El estado local se revirti\u00f3 — int\u00e9ntalo de nuevo o revisa el c\u00f3digo de emparejamiento.",
         subscriptionGraceWarning = { days -> "La suscripci\u00f3n del administrador de tu grupo ha expirado. Recu\u00e9rdale renovar para mantener el grupo activo, o puedes suscribirte y asumir el rol de administrador en la p\u00e1gina de Sincronizaci\u00f3n. Sin suscripci\u00f3n, despu\u00e9s de $days d\u00eda${if (days != 1) "s" else ""} la funci\u00f3n de Sincronizaci\u00f3n desaparecer\u00e1, pero no perder\u00e1s datos. Cada dispositivo operar\u00e1 de forma independiente." },
+        subscriptionGraceWarningAdmin = { days -> "Tu suscripci\u00f3n ha expirado. Sin suscripci\u00f3n, despu\u00e9s de $days d\u00eda${if (days != 1) "s" else ""} la funci\u00f3n de Sincronizaci\u00f3n desaparecer\u00e1, pero no perder\u00e1s datos. Cada dispositivo operar\u00e1 de forma independiente." },
         claimVotePrompt = { name -> "El miembro del grupo \"$name\" ha solicitado asumir las funciones de administrador." },
         claimAccept = "Aceptar",
         claimReject = "Rechazar",

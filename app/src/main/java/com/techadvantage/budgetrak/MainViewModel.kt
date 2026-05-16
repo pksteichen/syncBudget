@@ -2228,7 +2228,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         if (System.currentTimeMillis() - lastWarning > 24 * 60 * 60 * 1000L) {
                             prefs.edit().putLong("lastSubscriptionWarning", System.currentTimeMillis()).apply()
                             val daysLeft = ((gracePeriodMs - elapsed) / (24 * 60 * 60 * 1000L)).toInt().coerceAtLeast(1)
-                            syncEvictionMessage = strings.sync.subscriptionGraceWarning(daysLeft)
+                            syncEvictionMessage = if (isSyncAdmin) {
+                                strings.sync.subscriptionGraceWarningAdmin(daysLeft)
+                            } else {
+                                strings.sync.subscriptionGraceWarning(daysLeft)
+                            }
                         }
                     }
                 }
