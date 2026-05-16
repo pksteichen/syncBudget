@@ -583,6 +583,52 @@ Four XML resources back the ad slot. None of these contain logic — they provid
 
 **`res/values/dimens.xml`** holds the `ad_*` base values referenced by `native_ad_medium.xml`. The runtime override (`applyMediumAdDimsAndColors`) replaces each one based on `AdMediumDims`. Don't delete entries from `dimens.xml` — XML inflation fails without them. The `values-w600dp/` and `values-w800dp/` qualifiers were deleted 2026-05-15 (continuous scaling replaces step-function tiers).
 
+### 3.9 AdAware Dialog Host (Theme.kt)
+
+The in-tree overlay system that replaced `androidx.compose.ui.window.Dialog` in v2.10.20. Lives in `ui/theme/Theme.kt` alongside the theme palette + helper composables (§3.6, §8.1). SSD §16.5 covers the architecture rationale; this entry catalogs the symbols.
+
+**State types:**
+
+| Symbol | Purpose |
+|---|---|
+| `class AdAwareDialogState` | One instance per `SyncBudgetTheme`. Holds `internal val activeDialogs = mutableStateListOf<AdAwareDialogEntry>()` and `internal val nextSequence = AtomicLong(0)`. `mutableStateListOf` so the host recomposes on add/remove. |
+| `class AdAwareDialogEntry internal constructor(sequence: Long, onDismissRequest: () -> Unit, content: @Composable () -> Unit)` | Identity-based equality (each call site creates a fresh instance) — used as composition key in the host. `sequence` determines Z-order (higher = drawn later = on top). |
+| `private val FallbackAdAwareDialogState = AdAwareDialogState()` | Defensive no-op default for callers outside `SyncBudgetTheme` (e.g. `WidgetTransactionActivity`). Entries added to it are never rendered because no `AdAwareDialogHost` exists in those trees. Reading `LocalAdAwareDialogState` emits a one-time logcat warning when the fallback is used. |
+| `val LocalAdAwareDialogState: ProvidableCompositionLocal<AdAwareDialogState>` | `staticCompositionLocalOf` with the fallback default. Provided by `SyncBudgetTheme` so all descendants share one state instance. |
+| `val LocalShareBlockingDialogRegistrar: ProvidableCompositionLocal<(Boolean) -> Unit>` | Purpose-scoped registrar — see §3.9.1. Default is a no-op `{ { } }`. |
+
+**Composables:**
+
+| Composable | Purpose |
+|---|---|
+| `@Composable fun AdAwareDialog(onDismissRequest, properties = DialogProperties(), content)` | Drop-in replacement for `androidx.compose.ui.window.Dialog`. Registers a `AdAwareDialogEntry` via `DisposableEffect(Unit)` and unregisters in `onDispose`. Renders no UI of its own. `properties` retained for API compat but ignored. Uses `rememberUpdatedState` on both `onDismissRequest` and `content` so caller recompositions propagate through the captured entry (without `rememberUpdatedState`, the entry would hold the FIRST callbacks forever). Also calls the share-blocking registrar `(true)` on enter and `(false)` on dispose. |
+| `@Composable fun AdAwareDialogHost()` | Iterates `state.activeDialogs.sortedBy { it.sequence }` and renders each. Per-entry `key(entry)` scopes nested `BackHandler` + any `remember` to that entry's lifecycle. Renders dim layer (`Box.fillMaxSize().background(Color.Black.copy(alpha = 0.6f))` with a no-op `clickable` that absorbs taps without dismissing) + centered content (`Box.fillMaxSize().imePadding()` with `contentAlignment = Center`). `BackHandler(enabled = true) { entry.onDismissRequest() }` — Compose stack semantics fire only the topmost. Called once in `SyncBudgetTheme`'s outer Box below the ad banner. |
+| `@Composable fun AdAwareAlertDialog(onDismissRequest, title?, text?, confirmButton, dismissButton?, ...)` | AlertDialog-shaped convenience wrapper around `AdAwareDialog`. Builds a Surface/Column with optional `DialogHeader` (title) + scrollable body (`PulsingScrollArrows` overlay) + footer (`confirmButton` + optional `dismissButton`). |
+| `@Composable fun AdAwareDatePickerDialog(state, onDismissRequest, confirmButton, dismissButton)` | Date picker wrapped in `AdAwareDialog`. |
+
+**Reason for the rewrite (v2.10.20):** the previous separate-window approach (`androidx.compose.ui.window.Dialog`) created an Android window per dialog. The window's bounds absorbed all taps including those on the visible-but-behind ad bar, so `NativeAdView.callToActionView` clicks couldn't register while a dialog was open. The in-tree overlay places dialog content inside the main Activity window — the ad bar lives outside the host's bounds and receives clicks normally. See `feedback_compose_dialog_window_stacking.md`.
+
+**Exceptions still using raw `androidx.compose.ui.window.Dialog`:**
+- `SwipeablePhotoRow` fullscreen photo viewer — intentionally covers the ad bar (immersive view).
+- `WidgetTransactionActivity` match dialogs — separate Activity without `SyncBudgetTheme`, so `AdAwareDialogState` isn't available.
+
+**Content-lambda safety pattern:** `state?.let { v -> AdAwareDialog(onDismissRequest = …, content = { /* use v */ }) }` — NOT `if (state != null) { AdAwareDialog(content = { /* uses state!! */ }) }`. The host may re-invoke the content lambda one frame after the gating state is set to null but before `DisposableEffect.onDispose` removes the entry; the latter form crashes with NPE in that window. See `feedback_dialog_safety_patterns.md`.
+
+#### 3.9.1 LocalShareBlockingDialogRegistrar
+
+Purpose-scoped `CompositionLocal` for routing dropped share-intent URIs while any dialog is open. Set by `MainActivity`'s `CompositionLocalProvider` to flip `vm.shareBlockingDialogCount++` / `--`. Every `AdAwareDialog` auto-registers — pickers, confirmations, Add/Edit forms alike — so consumers can detect "is anything open?" without enumerating every dialog state.
+
+Routing inside `MainViewModel.consumePendingSharedImages(uris, canAttachPhotos)`:
+
+| Condition | Action |
+|---|---|
+| Counter == 0 + no open transaction dialog | Fall through to a new Add dialog (default path). |
+| Counter > 0 + open transaction dialog | Absorb URIs into the open dialog via `vm.attachSharedImagesToOpenTransaction`. Capped at remaining photo slots; overflow → `shareOverflowToastPending`. |
+| Counter > 0 + non-transaction dialog | Drop URIs + toast `shareBlockedByOpenDialog`. Prevents the share from being lost into a confirmation popup that has no concept of receipts. |
+| Free user (`!canAttachPhotos`) | Drop URIs + toast `sharedPhotoNeedsUpgrade`. |
+
+**Purpose-scoped invariant:** do NOT repurpose this registrar for other "is a dialog open?" needs. The AdAware wrappers auto-register every dialog, so any other consumer would fire on benign popups. A new mechanism needing a different signal should add a separate registrar. Default value is a no-op so previews without a provider still render. See `feedback_share_intent_routing.md`.
+
 ## 4. Sound Classes
 
 ### 4.1 FlipSoundPlayer
@@ -2185,6 +2231,7 @@ Sync engine: `EncryptedDocSerializer`, `FirestoreDocService`, `FirestoreDocSync`
 | 2.10.28-dev | May 15 2026 | **§3.7 InHouseAd + §3.8 native-ad XML/drawables added.** Documents the medium-tier native ad system that landed on dev today: `AdMediumDims` data class + `computeAdMediumDims(widthDp)` continuous-scale formula (`s = widthDp/400`, no upper clamp; replaces deleted `values-w600dp/` + `values-w800dp/` qualifiers); shared rendering via `applyMediumAdDimsAndColors` + `bindMediumAdContent` + sealed `AdMediumContent.AdMob/InHouse` so the AdMob path and the in-house Compose mirror both inflate the same `native_ad_medium.xml`; `rememberImageVectorBitmap` rasterizer for Material `ImageVector` → `Bitmap`. `ui/components/` count corrected 5 → 6 (`InHouseAd.kt` was previously absent from the inventory). Companion SSD §16a chapter added. |
 | 2.10.28-dev (P2) | May 15 2026 | **§6.17–§6.19 Play Billing classes added.** `BillingProducts` (IDs + `SUB_PERIOD_MS`), `BillingService` (Play Billing Library 7+ wrapper: `BillingState` data class, `queryAll` / `queryRawPurchases` / `launchPaidUpgrade` / `launchSubscribe` / `acknowledge` + `ensureConnected` Mutex), `EntitlementVerifier` (Layer 2 Cloud-Function-callable wrapper: `VerifyResult.Verified/Refunded/Unreachable` sealed class, 24 h SharedPreferences cache, 15 s call timeout). File inventory adds `data/billing/` (3 files). Companion SSD §16b chapter added. |
 | 2.10.28-dev (P3) | May 15 2026 | **§6.20–§6.23 AI / OCR classes added.** `AiCategorizerService` (CSV batch categorizer, `CHUNK_SIZE = 100`, schema-constrained JSON, retry on transient errors, payload omits date for privacy), `CategorizerPromptBuilder` (prompt template + `CSV_CATEGORIZER_PROMPT_VERSION = "v1"`), `ReceiptOcrService` (4-call Gemini Flash-Lite pipeline with all 4 schemas, parallel Call 1.5 / Call 2 under `CALL1R_TIMEOUT_PAST_C2_MS = 2_000L` cap, `deriveMulti` / `reconcilePrices` / `aggregateCategoryAmounts` post-processing, refund-receipt `Int.MIN_VALUE` sentinel, JPEG-blob vs bitmap-re-encode rationale, harness pointer), `OcrResult` (data classes + `OcrState` sealed class with `Offline` distinct from `Failed`). Companion SSD §11.2 + §11.3 augmented with prompt-version + helper-name details. Items 5 + 6 (period-boundary scheduling, inline FCM) already covered substantively in SSD §17.13–§17.15 + LLD §7.14 — no expansion needed. |
+| 2.10.28-dev (P4) | May 15 2026 | **§3.9 AdAware Dialog Host added (+ §3.9.1 LocalShareBlockingDialogRegistrar).** Catalogs `AdAwareDialogState` (activeDialogs `mutableStateListOf` + `AtomicLong nextSequence`), `AdAwareDialogEntry` (identity-based, sequence-ordered), `FallbackAdAwareDialogState` (defensive no-op for `WidgetTransactionActivity`), `LocalAdAwareDialogState`, `LocalShareBlockingDialogRegistrar` (purpose-scoped). Composables: `AdAwareDialog` (DisposableEffect-registered, `rememberUpdatedState`-wrapped callbacks, auto-registers share-blocking), `AdAwareDialogHost` (per-entry `key(entry)` + `BackHandler` + dim layer no-op clickable + `imePadding` content). Share-routing precedence table for `consumePendingSharedImages`. SSD §16.5 expanded with same coverage + new §16.5a covering the share-intent registrar's purpose-scoped invariant. |
 
 ---
 
