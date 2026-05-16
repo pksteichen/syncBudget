@@ -1112,6 +1112,103 @@ Three-tier strategy (each tier fails through to the next):
 
 Callers: `DiagDumpBuilder.writeDiagToMediaStore`, `BackgroundSyncWorker` DebugDumpWorker dump path, `FullBackupSerializer.applyRestore` (pre-restore snapshot), `ExpenseReportGenerator.generateSingleReport`. Other public-download writes (`.enc` backups via `nextAvailableSuffix`, SAF-mediated CSV/XLSX/JSON, photo dumps in fresh timestamped subdirs, append-mode debug logs in swallow-EACCES try/catch) don't need the helper — they're either already orphan-resilient or deliberately tolerate failure. Full survey in SSD §9.7.
 
+### 6.17 BillingProducts
+
+**File:** `data/billing/BillingProducts.kt` (23 lines)  |  object singleton
+
+Product-ID constants and the subscription period derived locally for Layer 1 entitlement math.
+
+| Symbol | Value | Notes |
+|---|---|---|
+| `PAID_UPGRADE` | `"paid_upgrade"` | INAPP non-consumable, $9.99 one-time. |
+| `SUBSCRIBER` | `"subscriber"` | SUBS monthly base plan, $4.99/month. |
+| `SUB_PERIOD_MS` | `30L * 24 * 60 * 60 * 1000` | 30-day approximation of one billing period. `subscriptionExpiry = purchase.purchaseTime + SUB_PERIOD_MS` lets the existing 7-day grace logic work without server-side queries on every refresh; Layer 2 prefers Developer-API `expiryTimeMillis` when verified. |
+
+Changing the IDs requires Play Console product re-creation + ~24 h SKU catalog propagation before clients can query them.
+
+### 6.18 BillingService
+
+**File:** `data/billing/BillingService.kt` (242 lines)  |  class instance
+
+Wraps Google Play Billing Library 7+ for BudgeTrak's Layer 1 IAP. Constructed in `MainViewModel.init` with a `PurchasesUpdatedListener` that re-runs entitlement refresh on purchase-flow completion. SSD §16b.
+
+**Supporting type:**
+```kotlin
+data class BillingState(
+    val paidUpgradeDetails: ProductDetails?,
+    val subscriberDetails: ProductDetails?,
+    val paidUpgradePurchase: Purchase?,
+    val subscriberPurchase: Purchase?,
+    val paidUpgradePrice: String?,
+    val subscriberPrice: String?,
+    val subscriberOfferToken: String?,
+)
+```
+Null fields mean the product or purchase isn't available (offline, SKU catalog still propagating, or the user doesn't own the product).
+
+**Connection management:**
+- `private suspend fun ensureConnected(): Boolean` — serializes connect calls via a `Mutex`. Resumes from `BillingClientStateListener.onBillingSetupFinished` callback or times out at `CONNECT_TIMEOUT_MS = 10_000L`. `onBillingServiceDisconnected` does NOT resume — auto-reconnect happens on next call.
+
+**Query methods:**
+| Method | Purpose |
+|---|---|
+| `suspend fun queryAll(): BillingState?` | One-call snapshot. Two separate `queryProductDetailsAsync` calls (INAPP + SUBS — Billing 7+ disallows mixed-type queries) merged into a `Map<String, ProductDetails>`, then `queryPurchases()` for active purchases. Filters to `PurchaseState.PURCHASED`. Returns `null` if disconnected. |
+| `private suspend fun queryProductDetails(): Map<String, ProductDetails>` | Inner helper for `queryAll`. Each query suspends via `suspendCancellableCoroutine`. |
+| `private suspend fun queryPurchases(): Pair<List<Purchase>, List<Purchase>>` | Returns `(inapp, subs)`. Same suspend pattern. |
+| `suspend fun queryRawPurchases(): Pair<List<Purchase>, List<Purchase>>?` | Unfiltered (PENDING, UNSPECIFIED_STATE, etc.) for the Restore Purchases diagnostic dump. |
+
+**Purchase methods:**
+| Method | Purpose |
+|---|---|
+| `suspend fun launchPaidUpgrade(activity, details): BillingResult` | Builds `BillingFlowParams` from the one-time product and calls `client.launchBillingFlow`. Returns the immediate `BillingResult`; the listener fires when the user completes/cancels. |
+| `suspend fun launchSubscribe(activity, details, offerToken): BillingResult` | Same pattern with `offerToken` (required for SUBS). |
+| `suspend fun acknowledge(purchase): BillingResult` | Required within 3 days of purchase or Play auto-refunds. Short-circuits if `purchase.isAcknowledged` already. |
+
+**Failure sentinels:** `disconnectedResult()` returns `SERVICE_DISCONNECTED`, `okResult()` returns `OK` — used to keep return types consistent without throwing.
+
+### 6.19 EntitlementVerifier
+
+**File:** `data/billing/EntitlementVerifier.kt` (167 lines)  |  class instance
+
+Layer 2 server-side entitlement check. Closes the refund-lag window where the device's local `BillingClient` cache hasn't yet learned that a purchase was canceled or refunded. SSD §16b.4–16b.5.
+
+**Supporting types:**
+```kotlin
+sealed class VerifyResult {
+    data class Verified(val expiryTimeMillis: Long?, val orderId: String?) : VerifyResult()
+    data class Refunded(val reason: String) : VerifyResult()
+    data class Unreachable(val cause: String) : VerifyResult()
+}
+
+enum class ProductType(val wire: String) {
+    INAPP("inapp"),
+    SUBS("subs"),
+}
+
+data class CachedVerification(
+    val verified: Boolean,
+    val expiryTimeMillis: Long?,
+    val orderId: String?,
+    val reason: String?,
+    val timestampMillis: Long,
+)
+```
+
+**Constants:**
+- `PREFS = "entitlement_verifier"` — SharedPreferences file name.
+- `SERVER_CACHE_TTL_MS = 24L * 60 * 60 * 1000` — 24 h.
+- `CALL_TIMEOUT_MS = 15_000L` — Cloud Function call budget.
+
+**Methods:**
+| Method | Purpose |
+|---|---|
+| `suspend fun verify(purchaseToken, productId, productType): VerifyResult` | Calls `FirebaseFunctions.getInstance("us-central1").getHttpsCallable("verifyPurchase")` with `{purchaseToken, productId, productType: "inapp"\|"subs"}`. App Check enforced. Server reads Play Developer API and returns `{verified, expiryTimeMillis, orderId, reason}`. Wraps in `withTimeoutOrNull(CALL_TIMEOUT_MS)` → `Unreachable("timeout")` on timeout. Other exceptions → `Unreachable(e.message)`. Both `verified=true` (→ `Verified`) and `verified=false` (→ `Refunded`) results are cached; `Unreachable` is not. |
+| `fun lastServerVerification(purchaseToken): CachedVerification?` | Reads the JSON-encoded cache entry for this purchase token. Returns null if missing, malformed, or older than 24 h. Callers prefer cached over local Layer 1 on `Unreachable` only when this returns non-null. |
+| `private fun cache(...)` | Writes JSON `{verified, productType, expiryTimeMillis, orderId, reason, ts}` to `prefs.edit().putString(cacheKey(token), ...).apply()`. |
+| `private fun cacheKey(purchaseToken): String` | `"v_" + token.hashCode().toString(16)`. Hashes because tokens can be very long and underlying XML prefs storage has quirky key-length behavior. |
+
+**`FirebaseFunctions` lazy:** `FirebaseFunctions.getInstance("us-central1")` — must match the region the `verifyPurchase` Gen 2 function is deployed to. Caller is `MainViewModel.reconcileEntitlement` which composes Layer 1 + Layer 2 per SSD §16b.5.
+
 ## 7. Sync Classes
 
 All classes below live in package `com.techadvantage.budgetrak.data.sync` unless noted. Line counts reflect the verified source.
@@ -1949,6 +2046,9 @@ Sync engine: `EncryptedDocSerializer`, `FirestoreDocService`, `FirestoreDocSync`
 ### `data/telemetry/` — 1 file
 `AnalyticsEvents` (`logHealthBeacon`, `logOcrFeedback`). §7.26a.
 
+### `data/billing/` — 3 files
+`BillingProducts` (product IDs + `SUB_PERIOD_MS`), `BillingService` (Play Billing Library 7+ wrapper — `queryAll`, `launchPaidUpgrade`, `launchSubscribe`, `acknowledge`), `EntitlementVerifier` (Layer 2 Cloud-Function-callable wrapper with 24 h SharedPreferences cache; `VerifyResult.Verified/Refunded/Unreachable`). §6.17–§6.19. SSD §16b.
+
 ### `sound/` — 1 file
 `FlipSoundPlayer` (procedural flip audio). §4.
 
@@ -1984,6 +2084,7 @@ Sync engine: `EncryptedDocSerializer`, `FirestoreDocService`, `FirestoreDocSync`
 | 2.10.10–2.10.23 | May 9–12 2026 | **Play Billing Layers 1+2 + Help-page rewrite + appInstanceId in diag dump + Gemini API key restriction.** Play Billing Layer 1 (v2.10.10): new `data/billing/` package — `BillingService.kt` (Play Billing Library 7+ wrapper), `BillingProducts.kt` (`paid_upgrade`, `subscriber`, `SUB_PERIOD_MS`). `MainViewModel.refreshBillingStateWithState` derives `isPaidUser`/`isSubscriber`/`subscriptionExpiry` from `BillingClient.queryPurchasesAsync` with 7-day TTL on stale; `restorePurchases` button writes diagnostic dump to `/Download/BudgeTrak/support/billing_dump.txt`. Dashboard Help dialog overlay parity (v2.10.20). Help-page Paid/Subscriber rewrite — `paidPhotos` mentions PDFs, parallel `HelpSubSectionTitle` for both subsections (v2.10.21; EN + ES). Play Billing Layer 2 server-side verification (v2.10.22): new `data/billing/EntitlementVerifier.kt` (Cloud Functions callable wrapper, 24h SharedPreferences cache); `MainViewModel.reconcileEntitlement(local, verify, token)` returns Verified→true, Refunded→false (override local PURCHASED), Unreachable→cached-server-or-local; `subscriptionExpiry` prefers Developer-API `expiryTimeMillis` when verified; billing dump gains "Layer 2 server verification" block. **appInstanceId in DiagDumpBuilder** (v2.10.22; §6.15): `BudgeTrakApplication.appInstanceId` cached async from `FirebaseAnalytics.appInstanceId` on `onCreate`; surfaced under `DeviceId:` in every dump so per-device dumps correlate to GA4 BigQuery rows. **Firebase Functions SDK** added to `app/build.gradle.kts` (`com.google.firebase:firebase-functions-ktx`, BOM-managed). Gemini API key restriction applied at Google Cloud API gateway 2026-05-12 (no code change — server-side enforcement). v2.10.23 (vc 39): doc + memory sync. |
 | 2.10.07–2.10.09 | May 7–8 2026 | **SYNC pending-edit clobber fix + sync hardenings + 5-member group cap + AdMob real integration.** v2.10.07: foreign inbound now drops on conflict — every collection branch in `SyncMergeProcessor.processBatch` early-returns `if (event.isConflict) { conflictDetected = true; continue }`. The old transaction-only `isUserCategorized=false` workaround + `conflictedTransactionsToPushBack` plumbing in `MainViewModel`/`BackgroundSyncWorker` removed. Plus four `FirestoreDocSync` hardenings: `pushRecord` sets `localPendingEdits` BEFORE the Firestore I/O (closes the smaller same-shape race during the push duration); per-collection `cursorWriteLock` + `advanceCursor` helper makes load-compare-save atomic; `isListening` guards in both listener handlers drop late callbacks racing with `stopListeners()`; cursor advance skips failed-deserialization docs. v2.10.08: `SyncScreen` Generate Pairing Code button toasts `memberLimitReached` when `devices.size >= 5` instead of generating; `GroupManager.joinGroup`, after registering membership (required to read the devices subcollection), fetches device count and rolls back membership + local prefs if `>= 5` (server-side rule deferred — see `memory/project_member_limit_server_rule.md`). v2.10.09: real AdMob banner (TEST IDs) replaces the placeholder — adaptive sizing via `getCurrentOrientationAnchoredAdaptiveBannerAdSize`, `windowInsetsPadding(statusBars.union(displayCutout))` + `Modifier.background(headerBackground)` for the decorative top strip behind the cutout, AdView `setBackgroundColor(topBarColor.toArgb())` so letterbox areas blend with the strip, `WindowCompat.getInsetsController(...).isAppearanceLightStatusBars = false` for white status-bar icons in both themes, `tools:replace="android:resource"` on `<property AD_SERVICES_CONFIG>` to resolve the `play-services-ads` ↔ `play-services-measurement-api` manifest-merger conflict. Production-swap checklist in `memory/project_ad_implementation.md`. |
 | 2.10.28-dev | May 15 2026 | **§3.7 InHouseAd + §3.8 native-ad XML/drawables added.** Documents the medium-tier native ad system that landed on dev today: `AdMediumDims` data class + `computeAdMediumDims(widthDp)` continuous-scale formula (`s = widthDp/400`, no upper clamp; replaces deleted `values-w600dp/` + `values-w800dp/` qualifiers); shared rendering via `applyMediumAdDimsAndColors` + `bindMediumAdContent` + sealed `AdMediumContent.AdMob/InHouse` so the AdMob path and the in-house Compose mirror both inflate the same `native_ad_medium.xml`; `rememberImageVectorBitmap` rasterizer for Material `ImageVector` → `Bitmap`. `ui/components/` count corrected 5 → 6 (`InHouseAd.kt` was previously absent from the inventory). Companion SSD §16a chapter added. |
+| 2.10.28-dev (P2) | May 15 2026 | **§6.17–§6.19 Play Billing classes added.** `BillingProducts` (IDs + `SUB_PERIOD_MS`), `BillingService` (Play Billing Library 7+ wrapper: `BillingState` data class, `queryAll` / `queryRawPurchases` / `launchPaidUpgrade` / `launchSubscribe` / `acknowledge` + `ensureConnected` Mutex), `EntitlementVerifier` (Layer 2 Cloud-Function-callable wrapper: `VerifyResult.Verified/Refunded/Unreachable` sealed class, 24 h SharedPreferences cache, 15 s call timeout). File inventory adds `data/billing/` (3 files). Companion SSD §16b chapter added. |
 
 ---
 
