@@ -9,8 +9,8 @@ Android budgeting app by **Tech Advantage LLC** — package `com.techadvantage.b
 - **`memory/project_prelaunch_todo.md`** — the active todo list. _(Replaces the old `Todo.txt` at repo root, deleted 2026-04-13.)_
 
 ### Docs
-- **`docs/BudgeTrak_SSD_v2.8.md`** — system specification.
-- **`docs/BudgeTrak_LLD_v2.8.md`** — low-level design.
+- **`docs/BudgeTrak_SSD_v2.10.md`** — system specification.
+- **`docs/BudgeTrak_LLD_v2.10.md`** — low-level design.
 - **`docs/RECEIPT_PHOTO_DESIGN.md`** — receipt photo design notes (folded into `memory/spec_receipt_photos.md`; kept here as historical).
 
 ### Code

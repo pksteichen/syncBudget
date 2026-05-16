@@ -223,7 +223,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [In-app update prompts via Play Core](project_in_app_updates.md) — defer until post-production-launch; replaces Play Store's silent background-update with a dialog/snackbar inside BudgeTrak so users aren't running stale versions unnoticed. ~150 lines, 1 new dep.
 
 ## Documentation
-- SSD/LLD v2.8 (dev) at `docs/BudgeTrak_SSD_v2.8.md` + `docs/BudgeTrak_LLD_v2.8.md`. Bump on any structural change. v2.7 was the last production-shipped version (renamed to v2.8 on 2026-04-28 when dialog consolidation + refund OCR landed).
+- SSD/LLD v2.10 (dev) at `docs/BudgeTrak_SSD_v2.10.md` + `docs/BudgeTrak_LLD_v2.10.md`. Doc version is independent of app version; bump on accumulated structural changes. History: v2.7 → v2.8 (2026-04-28, dialog consolidation + refund OCR). v2.8 → v2.10 (2026-05-15, captures Ch.28 backend-infra, Play Billing L1+L2, native ads + continuous scaling + unified rendering, AI/OCR class doc, AdAware overlay internals).
 - [Pages repo location](reference_pages_repo.md) — privacy.md + homepage + branding live in `techadvantagesupport.github.io` repo at `/storage/emulated/0/Download/Tech Advantage Pages`.
 
 ## Audit Follow-ups

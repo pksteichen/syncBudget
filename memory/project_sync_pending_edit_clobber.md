@@ -2,8 +2,8 @@
 name: SYNC pending-edit clobber on multi-device active groups — bug + fix shipped
 description: When another device was actively writing to the same doc the local user just edited, the inbound silently overwrote the local pending edit despite conflict-detection firing. Fixed in v2.10.07 along with 4 related sync hardenings.
 type: project
+originSessionId: 5682369f-ce9a-4adb-978b-3517ce099586
 ---
-
 ## Status
 **Fixed in v2.10.07** (2026-05-08). `SyncMergeProcessor.processBatch` now drops conflicted inbounds at the top of every collection branch (`if (event.isConflict) { conflictDetected = true; continue }`); the old transaction `isUserCategorized=false` workaround + `conflictedTransactionsToPushBack` plumbing is gone from `MainViewModel` and `BackgroundSyncWorker`.
 
@@ -185,7 +185,7 @@ e. **Pre-fix smoke test (optional but reassuring)**: revert the change locally, 
 
 ### 5. Update spec_firestore_native_sync.md and LLD
 - `memory/project_firestore_native_sync.md` (or wherever the SyncMergeProcessor conflict handling is documented — search the memory dir for `isConflict` and `isUserCategorized = false`): update the conflict-handling description to reflect the new "drop inbound, local wins" semantics.
-- `docs/BudgeTrak_LLD_v2.8.md` line ~1471: update the bullet:
+- `docs/BudgeTrak_LLD_v2.10.md` line ~1471: update the bullet:
   > **Transactions:** if `isConflict`, set `isUserCategorized=false` and queue for push-back.
 
   to:
