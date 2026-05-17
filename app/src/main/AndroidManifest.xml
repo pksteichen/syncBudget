@@ -48,6 +48,7 @@
             android:launchMode="singleTask"
             android:screenOrientation="portrait"
             android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density|uiMode|keyboardHidden|locale"
             android:theme="@android:style/Theme.Material.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

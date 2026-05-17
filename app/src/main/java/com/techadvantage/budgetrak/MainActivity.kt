@@ -313,13 +313,18 @@ class MainActivity : ComponentActivity() {
             val heightDp = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
             // Letterbox below a minimum height:width aspect ratio so wide
             // foldables and ultra-wide configurations don't render the
-            // portrait UI in a too-short canvas (charts compressed,
-            // dashboard cramped). Effective canvas width = min(widthDp,
-            // heightDp / minAspect). Letterbox bars on the sides show the
-            // outer Column's headerBackground (same color as the inset
-            // strip above the ad bar). 1.6 = tablet-portrait-shaped
-            // minimum; phones (≥2.0 aspect typical) never letterbox.
-            val minAspect = 1.6f
+            // portrait UI in a too-short canvas. Effective canvas width =
+            // min(widthDp, heightDp / minAspect). Letterbox bars on the
+            // sides show the outer Column's headerBackground (same color
+            // as the inset strip above the ad bar). 1.3 was chosen 2026-
+            // 05-16 after testing: 1.6 was too aggressive on foldable
+            // open, where the OS already letterboxes the wide inner
+            // display down to a portrait area (typical aspect ~1.33);
+            // our additional 1.6 letterbox just shaved width without
+            // adding height, hurting readability. 1.3 lets OS-letterboxed
+            // foldables pass through unmodified while still catching
+            // ultra-wide configs (aspect < 1.3) as a safety net.
+            val minAspect = 1.3f
             val effectiveWidthDp = kotlin.math.min(widthDp, (heightDp / minAspect).toInt())
             // Scalers (ad bar + screen content) feed from `effectiveWidthDp`
             // so letterboxed canvases don't get tablet-scale text inside a
@@ -329,18 +334,21 @@ class MainActivity : ComponentActivity() {
             val nativeAdEnabled = !vm.isPaidUser && !vm.isSubscriber
             val isMediumTier = nativeAdEnabled && effectiveWidthDp >= 400
             val nativeAdLayoutId = if (isMediumTier) R.layout.native_ad_medium else R.layout.native_ad_small
-            val adMediumDims = if (isMediumTier)
-                com.techadvantage.budgetrak.ui.components.computeAdMediumDims(effectiveWidthDp)
-            else null
+            val adMediumDims = remember(isMediumTier, effectiveWidthDp) {
+                if (isMediumTier) com.techadvantage.budgetrak.ui.components.computeAdMediumDims(effectiveWidthDp)
+                else null
+            }
             val adBannerHeight = when {
                 !nativeAdEnabled -> 0.dp
                 adMediumDims != null -> adMediumDims.slotHeightDp.dp
                 else -> 70.dp
             }
-            val contentScale = when {
-                effectiveWidthDp <= 400 -> 1.0f
-                effectiveWidthDp <= 800 -> 1.0f + (effectiveWidthDp - 400f) * 0.6f / 400f
-                else -> effectiveWidthDp * 1.6f / 800f
+            val contentScale = remember(effectiveWidthDp) {
+                when {
+                    effectiveWidthDp <= 400 -> 1.0f
+                    effectiveWidthDp <= 800 -> 1.0f + (effectiveWidthDp - 400f) * 0.6f / 400f
+                    else -> effectiveWidthDp * 1.6f / 800f
+                }
             }
             // Layout diagnostic: log whenever Configuration changes (orientation,
             // foldable state, density slider). Useful for verifying that the
