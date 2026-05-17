@@ -1,6 +1,7 @@
 package com.techadvantage.budgetrak
 
 import android.app.Application
+import android.content.Context
 import android.util.Log
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 
@@ -206,10 +207,26 @@ class BudgeTrakApplication : Application() {
         // verifyAppSignature() below for the pin/enforcement details.
         verifyAppSignature(this)
 
-        // Initialize AdMob. Async; safe to call before any Activity exists.
-        // Returns to its callback on the main thread; we don't need a result.
+        // Initialize AdMob — but only when the user might actually see ads.
+        // Paid + Subscriber users skip MobileAds entirely: saves ~5 MB of SDK
+        // init + the eagerly-loaded in-process WebView (TrichromeLibrary /
+        // libmonochrome_64.so) that the AdMob SDK preps regardless of whether
+        // any ad is rendered. Also sidesteps a WebView native crash on 16k-
+        // page-size emulator AVDs (Fatal signal 5 SIGTRAP in MemoryInfra
+        // thread, fault inside libmonochrome_64.so — emulator-stack-specific,
+        // not a BudgeTrak bug). Entitlement is read synchronously from
+        // SharedPreferences here; if a user upgrades mid-session, MobileAds
+        // simply won't be initialized for the rest of that session, which is
+        // fine because ad-rendering would already be gated off downstream.
+        // Same logic for mid-session downgrades — paid users see ads on the
+        // next launch instead.
         try {
-            com.google.android.gms.ads.MobileAds.initialize(this) {}
+            val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+            val isPaidUser = prefs.getBoolean("isPaidUser", false)
+            val isSubscriber = prefs.getBoolean("isSubscriber", false)
+            if (!isPaidUser && !isSubscriber) {
+                com.google.android.gms.ads.MobileAds.initialize(this) {}
+            }
         } catch (_: Exception) {}
 
         // Install App Check provider factory early — before any Firebase service calls.

@@ -45,6 +45,7 @@
                         android:layout_height="wrap_content"
                         android:textSize="@dimen/ad_advertiser_text_size"
                         android:textStyle="bold"
+                        android:gravity="center"
                         android:maxLines="1"
                         android:ellipsize="end" />
 
@@ -54,7 +55,7 @@
                         android:layout_height="wrap_content"
                         android:textSize="@dimen/ad_headline_text_size"
                         android:textStyle="bold"
-                        android:gravity="start"
+                        android:gravity="center"
                         android:includeFontPadding="false"
                         android:maxLines="2"
                         android:ellipsize="end" />

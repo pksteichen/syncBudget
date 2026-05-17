@@ -101,6 +101,14 @@ Both layouts give every asset view a stable `R.id` so `MainActivity.update` can 
 
 **Width budget at base 400dp** (advertiser/headline column right of icon): left col ≈ 182dp (400 − 214 MediaView − 4 leftColMarginEnd), minus 30dp icon + 8dp icon margins = **~144dp** for advertiser + headline rows. Sizes tuned 2026-05-15 to comfortably clear AdMob's recommended max char lengths: advertiser 10sp bold ≈ 26 chars (vs 25 max); headline 14.5sp bold ≈ 18 chars/line × 2 = 36 chars (vs 25 max); body 11.5sp regular at full 182dp ≈ 31 chars/line × 3 = 93 chars (vs 90 max). Each clears the AdMob limit with 1-11 chars of margin so typical ads render without ellipsis.
 
+## MobileAds.initialize gated on entitlement (dev 2026-05-16)
+
+`BudgeTrakApplication.onCreate` reads `isPaidUser` + `isSubscriber` synchronously from `SharedPreferences("app_prefs")` and **skips `MobileAds.initialize(this)` entirely** when either is true. Saves ~5 MB of SDK init + the eagerly-loaded in-process WebView (`TrichromeLibrary` / `libmonochrome_64.so`) that the AdMob SDK preps regardless of whether any ad renders.
+
+**Why this matters beyond the memory savings:** WebView is what crashes BudgeTrak on **16k-page-size emulator AVDs** (`sdk_gphone16k_x86_64` / `emu64xa16k`). Signature is always `Fatal signal 5 SIGTRAP code 128 (SI_KERNEL) in tid <N> (MemoryInfra)`, all 14 native frames inside `libmonochrome_64.so`, returning to `__pthread_start`. Emulator-stack-specific (TrichromeLibrary's bundled native code conflicts with 16k page sizes); real devices don't reproduce. Disabling ad *rendering* via the subscription override is NOT enough — only the gated `MobileAds.initialize` actually prevents WebView from loading at all. See `feedback_admob_webview_16k_emulator_crash.md`.
+
+**Mid-session toggles:** entitlement is read once at `Application.onCreate`. If a user upgrades mid-session, MobileAds simply won't be initialized for the rest of that session — fine because ad-rendering is also gated off downstream by `nativeAdEnabled`. If a user downgrades mid-session, they see ads again on the next launch instead. Acceptable for both directions.
+
 ## MainActivity binding
 
 In `setContent`:

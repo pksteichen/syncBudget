@@ -128,6 +128,12 @@ data class AdMediumDims(
 )
 
 fun computeAdMediumDims(widthDp: Int): AdMediumDims {
+    // Proportional scaling: `widthDp / 400`, floored at 1.0×, unbounded above.
+    // The ad keeps a constant fraction of screen width at every dp — apparent
+    // size on a given screen doesn't change with display density. 1.5× at
+    // 600dp, 2.0× at 800dp, 2.57× at 1028dp, 2.7× at foldable 1080dp.
+    // App content uses a different (gentler) scaler in MainActivity so more
+    // fits on tablet portraits.
     val s = (widthDp / 400f).coerceAtLeast(1.0f)
     return AdMediumDims(
         slotHeightDp = 120f * s,
@@ -151,7 +157,7 @@ fun computeAdMediumDims(widthDp: Int): AdMediumDims {
         badgePaddingHDp = 5f * s,
         badgePaddingVDp = 1f * s,
         inhouseAppIconDp = 100f * s,
-        leftColMarginEndDp = 4f * s,
+        leftColMarginEndDp = 5f * s,
     )
 }
 
@@ -294,6 +300,11 @@ fun applyMediumAdDimsAndColors(
         bv.layoutParams = (bv.layoutParams as android.view.ViewGroup.MarginLayoutParams).apply {
             topMargin = dims.bodyMarginTopDp.toPx()
         }
+        // Symmetric edge gap: body's left mirrors the left col's marginEnd
+        // (right gap from MediaView). Reuses leftColMarginEndDp so both gaps
+        // scale together. Advertiser/headline already get the right-side gap
+        // for free via the parent left col's marginEnd.
+        bv.setPaddingRelative(dims.leftColMarginEndDp.toPx(), 0, 0, 0)
     }
     ctaView.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, dims.ctaSp)
     ctaView.setPadding(

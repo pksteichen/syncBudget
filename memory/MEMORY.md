@@ -141,6 +141,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [Add debug logging early](feedback_debug_with_logging.md).
 - [Analyze ALL failure cases](feedback_analyze_all_cases.md).
 - [Wait for user decision](feedback_wait_for_decision.md).
+- [Explain the idea before coding](feedback_explain_before_coding.md) — state the plan in 2-4 sentences before non-trivial changes. Especially when the request is ambiguous (one of several plausible fixes); name the interpretation before picking.
 - [Keep analysis concise](feedback_concise_analysis.md).
 - [Help-text vs code audit method](feedback_help_audit_method.md).
 - [Audit methodology](feedback_audit_methodology.md).
@@ -182,6 +183,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [Subscriber tier is a superset of Paid](feedback_subscriber_implies_paid.md) — gates checking `isPaidUser` only are bugs unless the feature is genuinely Subscriber-exclusive (AI, SYNC create/admin).
 - [MediaStore ghost files from Termux rm](feedback_mediastore_ghost_files.md) — never `rm` app-owned public-Download files from Termux; leaves a MediaStore ghost that blocks app O_CREAT with EEXIST. Recover via `touch` placeholder, or delete via Files app. Default new high-frequency logs to `context.filesDir`.
 - [Gradle clean when on-disk edits don't appear](feedback_gradle_clean_when_edits_dont_show.md) — `assembleDebug` occasionally reuses stale intermediates (resource/AAPT2 cache), source-edits absent from APK despite BUILD SUCCESSFUL. Run `./gradlew clean assembleDebug` before debugging at runtime.
+- [AdMob WebView crashes on 16k-page emulator AVDs](feedback_admob_webview_16k_emulator_crash.md) — `Fatal signal 5 SIGTRAP code 128 in MemoryInfra thread` with all frames in `libmonochrome_64.so`. Gate `MobileAds.initialize` on entitlement (paid users skip SDK init entirely) — landed v2.10.28+ in `BudgeTrakApplication.onCreate`. Subscription override alone is NOT enough.
 
 ## Firebase Backend
 - Plan: Blaze. App Check enforced on Firestore/RTDB/Storage (not Auth). Debug → `DebugAppCheckProviderFactory`, release → `PlayIntegrityAppCheckProviderFactory`. **TTL is provider-dependent**: Play Integrity (release) = 40 h as of 2026-04-26 (set in Firebase Console → Project Settings → Your apps → BudgeTrak Android → App Check section, dropdown selector); Debug provider = 1 h (Google-imposed, ignores Console setting — by design for short-lived dev tokens). So debug-build observed refresh cadence is 40× higher than release will be. **Play Integrity advanced settings**: `PLAY_RECOGNIZED` required (anti-piracy), `LICENSED` not required (don't gate free users on Huawei/degooglified devices), device integrity = "Don't explicitly check" (relies on PLAY_RECOGNIZED + per-field encryption for actual security; tighten post-launch if Crashlytics shows abuse).

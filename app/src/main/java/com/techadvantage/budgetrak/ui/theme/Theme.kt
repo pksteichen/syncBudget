@@ -802,6 +802,7 @@ fun SyncBudgetTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     strings: AppStrings = EnglishStrings,
     adBannerHeight: Dp = 0.dp,
+    contentScale: Float = 1.0f,
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
@@ -832,12 +833,25 @@ fun SyncBudgetTheme(
     val appToastState = remember { AppToastState() }
     val adAwareDialogState = remember { AdAwareDialogState() }
 
+    // Apply content scaling at the theme level so dialogs (rendered by
+    // AdAwareDialogHost) + toast (AppToast) inherit the same scale as the
+    // screen content underneath. Caller (MainActivity) passes the computed
+    // factor; the ad bar should opt out by overriding LocalDensity back to
+    // base inside its own subtree (otherwise the ad's Modifier.height would
+    // be double-scaled atop its own computeAdMediumDims scaler).
+    val baseDensity = LocalDensity.current
+    val scaledDensity = androidx.compose.ui.unit.Density(
+        density = baseDensity.density * contentScale,
+        fontScale = baseDensity.fontScale,
+    )
+
     CompositionLocalProvider(
         LocalSyncBudgetColors provides customColors,
         LocalStrings provides strings,
         LocalAppToast provides appToastState,
         LocalAdBannerHeight provides adBannerHeight,
         LocalAdAwareDialogState provides adAwareDialogState,
+        LocalDensity provides scaledDensity,
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

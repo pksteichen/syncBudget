@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -430,9 +431,20 @@ fun MainScreen(
                         // Inset matches FlipDisplay's internal padding so icons
                         // visually anchor to the Solari border corners
                         val solariInset = if (solariWidthFraction < 0.80f) 8.dp else 12.dp
+                        // Cap Solari height at 30% of the dashboard canvas.
+                        // FlipDisplay's BoxWithConstraints honors this via a
+                        // cardWidth-by-maxHeight cap, so the board shrinks
+                        // instead of clipping. On phones the natural board
+                        // height is well under 30% and this is a no-op; on
+                        // wide/letterboxed canvases where the content scaler
+                        // grows the board past 30%, it shrinks back to the
+                        // cap so the chart keeps room.
+                        val maxSolariHeight = this@BoxWithConstraints.maxHeight * 0.3f
                         Box(
                             contentAlignment = Alignment.Center,
-                            modifier = Modifier.fillMaxWidth(solariWidthFraction)
+                            modifier = Modifier
+                                .fillMaxWidth(solariWidthFraction)
+                                .heightIn(max = maxSolariHeight)
                         ) {
                             FlipDisplay(
                                 amount = displayAmount,

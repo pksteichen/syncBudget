@@ -301,22 +301,58 @@ class MainActivity : ComponentActivity() {
             // its old (no-MediaView) layout but began reporting medium-tier
             // dimensions, which is what tripped the AdMob validator into its
             // "MediaView too small" warning that survived until app restart.
+            // Base (OS) density captured before SyncBudgetTheme overrides
+            // LocalDensity. Passed back through to the ad bar so its
+            // Modifier.height(adBannerHeight) doesn't get double-scaled
+            // (the ad has its own continuous scaler in computeAdMediumDims;
+            // multiplying again by the screen-content factor would over-grow
+            // the slot). Everything else inside SyncBudgetTheme (screen,
+            // dialogs, toast) inherits the scaled density.
+            val baseDensity = androidx.compose.ui.platform.LocalDensity.current
             val widthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
+            val heightDp = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
+            // Letterbox below a minimum height:width aspect ratio so wide
+            // foldables and ultra-wide configurations don't render the
+            // portrait UI in a too-short canvas (charts compressed,
+            // dashboard cramped). Effective canvas width = min(widthDp,
+            // heightDp / minAspect). Letterbox bars on the sides show the
+            // outer Column's headerBackground (same color as the inset
+            // strip above the ad bar). 1.6 = tablet-portrait-shaped
+            // minimum; phones (≥2.0 aspect typical) never letterbox.
+            val minAspect = 1.6f
+            val effectiveWidthDp = kotlin.math.min(widthDp, (heightDp / minAspect).toInt())
+            // Scalers (ad bar + screen content) feed from `effectiveWidthDp`
+            // so letterboxed canvases don't get tablet-scale text inside a
+            // phone-shape area. Ads scale proportionally (constant fraction
+            // of canvas width); content scales linearly 1.0× → 1.6× over
+            // 400 → 800dp, then proportionally above 800.
             val nativeAdEnabled = !vm.isPaidUser && !vm.isSubscriber
-            val isMediumTier = nativeAdEnabled && widthDp >= 400
+            val isMediumTier = nativeAdEnabled && effectiveWidthDp >= 400
             val nativeAdLayoutId = if (isMediumTier) R.layout.native_ad_medium else R.layout.native_ad_small
-            // Medium-tier dimensions scale continuously with screen width
-            // (400dp base × widthDp/400, floor 1.0×) — applied at runtime in
-            // the AndroidView.update lambda and to the in-house Compose
-            // mirror so the layout grows smoothly with display size rather
-            // than stepping at old w600dp / w800dp breakpoints.
             val adMediumDims = if (isMediumTier)
-                com.techadvantage.budgetrak.ui.components.computeAdMediumDims(widthDp)
+                com.techadvantage.budgetrak.ui.components.computeAdMediumDims(effectiveWidthDp)
             else null
             val adBannerHeight = when {
                 !nativeAdEnabled -> 0.dp
                 adMediumDims != null -> adMediumDims.slotHeightDp.dp
                 else -> 70.dp
+            }
+            val contentScale = when {
+                effectiveWidthDp <= 400 -> 1.0f
+                effectiveWidthDp <= 800 -> 1.0f + (effectiveWidthDp - 400f) * 0.6f / 400f
+                else -> effectiveWidthDp * 1.6f / 800f
+            }
+            // Layout diagnostic: log whenever Configuration changes (orientation,
+            // foldable state, density slider). Useful for verifying that the
+            // letterboxing + scaling are responding correctly on unusual form
+            // factors. Fires once per dp/height change, not per recomposition.
+            androidx.compose.runtime.LaunchedEffect(widthDp, heightDp) {
+                if (com.techadvantage.budgetrak.BuildConfig.DEBUG) {
+                    val aspect = if (widthDp > 0) heightDp.toFloat() / widthDp else 0f
+                    com.techadvantage.budgetrak.BudgeTrakApplication.tokenLog(
+                        "Layout: widthDp=$widthDp heightDp=$heightDp effective=$effectiveWidthDp scale=${"%.3f".format(contentScale)} aspect=${"%.2f".format(aspect)}"
+                    )
+                }
             }
 
             // Native ad load + 60 s refresh, paused when app is backgrounded.
@@ -414,7 +450,7 @@ class MainActivity : ComponentActivity() {
                     if (open) vm.shareBlockingDialogCount++ else vm.shareBlockingDialogCount--
                 }
             ) {
-            SyncBudgetTheme(strings = vm.strings, adBannerHeight = adBannerHeight) {
+            SyncBudgetTheme(strings = vm.strings, adBannerHeight = adBannerHeight, contentScale = contentScale) {
               val toastState = LocalAppToast.current
               run {
               // Archive toast
@@ -468,13 +504,31 @@ class MainActivity : ComponentActivity() {
               Column(modifier = Modifier
                   .fillMaxSize()
                   .background(topBarColor)
-                  .windowInsetsPadding(WindowInsets.statusBars.union(WindowInsets.displayCutout))
+                  .windowInsetsPadding(WindowInsets.statusBars.union(WindowInsets.displayCutout)),
+                  horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
               ) {
+                // Letterbox inner column: ad bar + screen content sit in a
+                // centered Column constrained to `effectiveWidthDp`. The
+                // outer Column's `topBarColor` background fills the
+                // letterbox bars on either side automatically. On phones
+                // (aspect ≥ minAspect = 1.6) `effectiveWidthDp == widthDp`
+                // so this is a no-op; on wide foldables / ultra-wide
+                // configs the inner column shrinks toward a tablet-
+                // portrait-shaped canvas.
+                Column(modifier = Modifier.width(effectiveWidthDp.dp)) {
                 // Native ad slot — TEST ad-unit ID. Production-promotion swap
                 // checklist in memory/project_ad_implementation.md.
                 // When AdMob fails to load (offline / no fill), swaps to one
                 // of 5 cycling in-house upgrade promos. Slot dimensions match
                 // either way so no layout shift on swap.
+                // Ad bar overrides LocalDensity back to base — SyncBudgetTheme
+                // provides scaled density for screen content + dialogs +
+                // toast, but the ad has its own continuous scaler in
+                // computeAdMediumDims; layering both would double-scale slot
+                // height, text, and padding.
+                androidx.compose.runtime.CompositionLocalProvider(
+                    androidx.compose.ui.platform.LocalDensity provides baseDensity
+                ) {
                 if (nativeAdEnabled) {
                     // pageTextColor: theme-conditional for the left column of
                     // the ad (which sits on the page bg). In light mode use
@@ -649,8 +703,12 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+                } // CompositionLocalProvider(LocalDensity = baseDensity) — end ad bar's base-density scope
 
-                // Screen content
+                // Screen content. LocalDensity is the scaled density
+                // provided by SyncBudgetTheme — every dp/sp inside multiplies
+                // by `contentScale`. Dialogs + toast (rendered by
+                // SyncBudgetTheme above) inherit the same scale.
                 Box(modifier = Modifier.weight(1f)) {
                 if (vm.currentScreen == "main") {
                     BackHandler { moveTaskToBack(true) }
@@ -1211,7 +1269,8 @@ class MainActivity : ComponentActivity() {
                 DashboardDialogs(vm, vm.strings, toastState)
 
                 } // Box(weight)
-              } // Column
+                } // Letterbox inner Column (width = effectiveWidthDp)
+              } // Outer Column (fillMaxSize + headerBackground letterbox bars)
             // Quick Start Guide overlay
             if (vm.quickStartStep != null) {
                 QuickStartOverlay(

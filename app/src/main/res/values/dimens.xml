@@ -49,5 +49,5 @@
     <!-- Gap between left column and MediaView. Kept tight at base width to
          maximize body char capacity (a 90-char body needs ~198dp; the column
          is 178dp at 400dp screen, so every dp of margin matters here). -->
-    <dimen name="ad_left_col_margin_end">4dp</dimen>
+    <dimen name="ad_left_col_margin_end">5dp</dimen>
 </resources>
