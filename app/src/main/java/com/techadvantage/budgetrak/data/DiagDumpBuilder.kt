@@ -117,9 +117,6 @@ object DiagDumpBuilder {
 
         // Sync metadata
         dump.appendLine("── Sync Metadata ──")
-        val nativeDocsDone = syncPrefs.getBoolean("migration_native_docs_done", false)
-        dump.appendLine("syncMode: ${if (nativeDocsDone) "FIRESTORE_NATIVE" else "CRDT_LEGACY"}")
-        dump.appendLine("migration_native_docs_done: $nativeDocsDone")
         dump.appendLine("syncStatus: synced")
         dump.appendLine("SyncWriteHelper.isInitialized: ${SyncWriteHelper.isInitialized()}")
         val remapJsonDump = syncPrefs.getString("catIdRemap", null)

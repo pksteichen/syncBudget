@@ -305,28 +305,13 @@ object BudgetCalculator {
         return total
     }
 
-    fun activeSavingsGoalDeductions(
-        goals: List<SavingsGoal>,
-        budgetPeriod: BudgetPeriod,
-        today: LocalDate = LocalDate.now(),
-        resetDayOfWeek: Int = 1
-    ): Double {
+    fun activeSavingsGoalDeductions(goals: List<SavingsGoal>): Double {
         var total = 0.0
         for (goal in goals) {
             if (goal.isPaused) continue
             val remaining = goal.targetAmount - goal.totalSavedSoFar
             if (remaining <= 0) continue
-
-            if (goal.targetDate != null) {
-                // Target-date type: auto-calculate deduction from remaining time
-                if (!today.isBefore(goal.targetDate)) continue
-                val periods = countElapsedPeriods(today, goal.targetDate, budgetPeriod, resetDayOfWeek).toLong()
-                if (periods <= 0) continue
-                total += roundCents(remaining / periods.toDouble())
-            } else {
-                // Fixed contribution type: use contributionPerPeriod capped at remaining
-                total += minOf(goal.contributionPerPeriod, remaining)
-            }
+            total += minOf(goal.contributionPerPeriod, remaining)
         }
         return total
     }
@@ -396,7 +381,7 @@ object BudgetCalculator {
         val base = if (isManualBudgetEnabled) manualBudgetAmount
                    else calculateSafeBudgetAmount(incomeSources, recurringExpenses, budgetPeriod, today)
         val amortDed = activeAmortizationDeductions(amortizationEntries, budgetPeriod, today, resetDayOfWeek)
-        val savingsDed = activeSavingsGoalDeductions(savingsGoals, budgetPeriod, today, resetDayOfWeek)
+        val savingsDed = activeSavingsGoalDeductions(savingsGoals)
         val accelDed = acceleratedREExtraDeductions(recurringExpenses, budgetPeriod, today, resetDayOfWeek)
         return roundCents(maxOf(0.0, base - amortDed - savingsDed - accelDed))
     }

@@ -604,7 +604,7 @@ fun TransactionsScreen(
                     parsedTransactions.toList()
                 }
                 val processed = if (isBank && aiCsvCategorizeEnabled && (isPaidUser || isSubscriber) && isNetworkAvailable) {
-                    aiUpgradeLowConfidence(heuristicResult, parsedTransactions.toList(), transactions, categories, matchChars) { busy -> aiImportBusy = busy }
+                    aiUpgradeLowConfidence(context, heuristicResult, parsedTransactions.toList(), transactions, categories, matchChars) { busy -> aiImportBusy = busy }
                 } else {
                     heuristicResult
                 }
@@ -2028,7 +2028,7 @@ fun TransactionsScreen(
             }
             if (aiCsvCategorizeEnabled && (isPaidUser || isSubscriber) && isNetworkAvailable) {
                 saveScope.launch {
-                    val upgraded = aiUpgradeLowConfidence(heuristicResult, originalParsed, transactions, categories, matchChars) { busy -> aiImportBusy = busy }
+                    val upgraded = aiUpgradeLowConfidence(context, heuristicResult, originalParsed, transactions, categories, matchChars) { busy -> aiImportBusy = busy }
                     applyAndAdvance(upgraded)
                 }
             } else {
@@ -2342,6 +2342,7 @@ fun MatchDialogCard(
     val headerTextColor = dialogHeaderTextColor()
     val footerColor = dialogFooterColor()
 
+    val scrollState = rememberScrollState()
     AdAwareDialog(onDismissRequest = onDismiss) {
         Surface(
             modifier = Modifier.fillMaxWidth(0.92f),
@@ -2349,48 +2350,51 @@ fun MatchDialogCard(
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
         ) {
-            Column {
-                // Header
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            headerColor,
-                            RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+            Box {
+                Column {
+                    // Header
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                headerColor,
+                                RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                            )
+                            .padding(horizontal = 20.dp, vertical = 14.dp)
+                    ) {
+                        Text(
+                            title,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = headerTextColor
                         )
-                        .padding(horizontal = 20.dp, vertical = 14.dp)
-                ) {
-                    Text(
-                        title,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = headerTextColor
+                    }
+
+                    // Body — weight(1f, fill=false) + verticalScroll so long match
+                    // lists (rare but possible) don't push the footer off-screen
+                    // by extending the Surface past its host overlay bounds.
+                    Column(
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .verticalScroll(scrollState)
+                            .padding(horizontal = 20.dp, vertical = 16.dp),
+                        content = content
                     )
-                }
 
-                // Body — weight(1f, fill=false) + verticalScroll so long match
-                // lists (rare but possible) don't push the footer off-screen
-                // by extending the Surface past its host overlay bounds.
-                Column(
-                    modifier = Modifier
-                        .weight(1f, fill = false)
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 20.dp, vertical = 16.dp),
-                    content = content
-                )
-
-                // Footer
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            footerColor,
-                            RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)
-                        )
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    buttons()
+                    // Footer
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                footerColor,
+                                RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)
+                            )
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        buttons()
+                    }
                 }
+                PulsingScrollArrows(scrollState = scrollState)
             }
         }
     }
@@ -3515,7 +3519,10 @@ fun TransactionDialog(
                 onClearOcrState?.invoke()
             }
             is com.techadvantage.budgetrak.data.ocr.OcrState.Failed -> {
-                toastState.show(S.settings.aiOcrFailed, windowYPx = aiIconWindowY)
+                val msg = if (com.techadvantage.budgetrak.BuildConfig.DEBUG) {
+                    "OCR failed: ${ocrState.message}"
+                } else S.settings.aiOcrFailed
+                toastState.show(msg, windowYPx = aiIconWindowY)
                 onClearOcrState?.invoke()
             }
             is com.techadvantage.budgetrak.data.ocr.OcrState.Offline -> {
@@ -3643,7 +3650,7 @@ fun TransactionDialog(
                                     .padding(horizontal = 8.dp, vertical = 3.dp)
                             ) {
                                 Text(
-                                    S.transactions.expensesFilter,
+                                    S.transactions.expenseToggle,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = if (typeIsExpense) Color.White else expColor
                                 )
@@ -4116,7 +4123,8 @@ fun TransactionDialog(
                             IconButton(onClick = { showDatePicker = true }) {
                                 Icon(
                                     imageVector = Icons.Filled.CalendarMonth,
-                                    contentDescription = S.transactions.date
+                                    contentDescription = S.transactions.date,
+                                    tint = MaterialTheme.colorScheme.onSurface
                                 )
                             }
                         },
@@ -5346,12 +5354,14 @@ fun TransactionDialog(
 
     // Link to recurring expense picker dialog
     if (showLinkRecurringPicker) {
+        val linkRecurringScroll = rememberScrollState()
         AdAwareAlertDialog(
             onDismissRequest = { showLinkRecurringPicker = false },
             title = { Text(S.transactions.linkToRecurring) },
             scrollable = false,
+            scrollState = linkRecurringScroll,
             text = {
-                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Column(modifier = Modifier.verticalScroll(linkRecurringScroll)) {
                     recurringExpenses.sortedByDescending { it.amount }.forEach { re ->
                         Row(
                             modifier = Modifier
@@ -5393,12 +5403,14 @@ fun TransactionDialog(
 
     // Link to amortization entry picker dialog
     if (showLinkAmortizationPicker) {
+        val linkAmortScroll = rememberScrollState()
         AdAwareAlertDialog(
             onDismissRequest = { showLinkAmortizationPicker = false },
             title = { Text(S.transactions.linkToAmortization) },
             scrollable = false,
+            scrollState = linkAmortScroll,
             text = {
-                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Column(modifier = Modifier.verticalScroll(linkAmortScroll)) {
                     amortizationEntries.sortedByDescending { it.amount }.forEach { ae ->
                         Row(
                             modifier = Modifier
@@ -5487,12 +5499,14 @@ fun TransactionDialog(
     }
 
     if (showLinkIncomePicker) {
+        val linkIncomeScroll = rememberScrollState()
         AdAwareAlertDialog(
             onDismissRequest = { showLinkIncomePicker = false },
             title = { Text(S.transactions.linkToIncome) },
             scrollable = false,
+            scrollState = linkIncomeScroll,
             text = {
-                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Column(modifier = Modifier.verticalScroll(linkIncomeScroll)) {
                     incomeSources.sortedByDescending { it.amount }.forEach { src ->
                         Row(
                             modifier = Modifier
@@ -5532,16 +5546,15 @@ fun TransactionDialog(
 
     // Link to savings goal picker dialog
     if (showLinkSavingsGoalPicker) {
+        val linkSavingsScroll = rememberScrollState()
         AdAwareAlertDialog(
             onDismissRequest = { showLinkSavingsGoalPicker = false },
             title = { Text(S.transactions.linkToSavingsGoal) },
             scrollable = false,
+            scrollState = linkSavingsScroll,
             text = {
-                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    // Only fixed-contribution goals can be linked to transactions.
-                    // Target-date goals are excluded because withdrawals would cause
-                    // unpredictable per-period deduction spikes near the deadline.
-                    savingsGoals.filter { it.targetDate == null }.sortedBy { it.name }.forEach { goal ->
+                Column(modifier = Modifier.verticalScroll(linkSavingsScroll)) {
+                    savingsGoals.sortedBy { it.name }.forEach { goal ->
                         val remaining = goal.targetAmount - goal.totalSavedSoFar
                         Row(
                             modifier = Modifier
@@ -6271,6 +6284,7 @@ private fun EffectExplanationPopup(
 // Hybrid: run heuristic on every row, then send only low-confidence rows to Flash-Lite.
 // High-confidence = ≥5 matching historical txns AND ≥80% agreement on a single category.
 private suspend fun aiUpgradeLowConfidence(
+    context: android.content.Context,
     heuristicResult: List<Transaction>,
     originalParsed: List<Transaction>,
     history: List<Transaction>,
@@ -6288,7 +6302,7 @@ private suspend fun aiUpgradeLowConfidence(
     try {
         val batch = lowConfIndices.map { originalParsed[it] }
         val apiResult = com.techadvantage.budgetrak.data.ai.AiCategorizerService
-            .categorizeBatch(batch, categories)
+            .categorizeBatch(context, batch, categories)
         val aiMap = apiResult.getOrNull() ?: return heuristicResult
         val output = heuristicResult.toMutableList()
         lowConfIndices.forEachIndexed { batchIdx, origIdx ->

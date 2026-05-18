@@ -832,7 +832,6 @@ class FirestoreDocSync(
                         ?.sortedBy { it.key }
                         ?.joinToString("|") { "${it.key}=${it.value}" }
                         ?.hashCode()?.toString()
-                        ?: change.document.getString("enc") // fallback for old single-blob format
 
                     if (change.type != DocumentChange.Type.REMOVED) {
                         if (encComposite != null && lastSeenEnc[stateKey] == encComposite) {
@@ -922,7 +921,6 @@ class FirestoreDocSync(
             ?.sortedBy { it.key }
             ?.joinToString("|") { "${it.key}=${it.value}" }
             ?.hashCode()?.toString()
-            ?: doc.getString("enc") // fallback for old single-blob format
 
         if (encComposite != null && lastSeenEnc[stateKey] == encComposite) {
             syncLog("Skipped 1 unchanged doc in sharedSettings")
@@ -963,10 +961,8 @@ class FirestoreDocSync(
     // ── internal: deserialization dispatch ───────────────────────────────
 
     private fun deserializeDoc(collection: String, doc: DocumentSnapshot): Any? {
-        // Accept docs with either old single-blob "enc" field or new per-field "enc_*" fields
-        val hasEncBlob = doc.contains("enc") && doc.getString("enc") != null
         val hasEncFields = doc.data?.keys?.any { it.startsWith("enc_") } == true
-        if (!hasEncBlob && !hasEncFields) return null
+        if (!hasEncFields) return null
 
         return when (collection) {
             EncryptedDocSerializer.COLLECTION_TRANSACTIONS ->

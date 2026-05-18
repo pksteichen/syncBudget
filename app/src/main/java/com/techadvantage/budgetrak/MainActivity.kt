@@ -2422,14 +2422,7 @@ class MainActivity : ComponentActivity() {
                                 toastState.show(vm.strings.settings.dumpUploading)
                             }
                             val extraDebug = StringBuilder(diagText)
-                            // clock_dump.txt is legacy public-Download (still in supportDir);
-                            // fcm_debug.txt moved to private filesDir (immune to MediaStore EEXIST).
                             val internalDiagDir = BackupManager.getInternalDiagDir(context)
-                            val clockFile = java.io.File(supportDir, "clock_dump.txt")
-                            if (clockFile.exists()) {
-                                extraDebug.appendLine("\n=== clock_dump.txt ===")
-                                extraDebug.appendLine(clockFile.readText())
-                            }
                             val fcmDebugFile = java.io.File(internalDiagDir, "fcm_debug.txt")
                             if (fcmDebugFile.exists()) {
                                 extraDebug.appendLine("\n=== fcm_debug.txt ===")
@@ -3047,11 +3040,6 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
-
-                            vm.syncPrefs.edit()
-                                .putBoolean("migration_native_docs_done", true)
-                                .putBoolean("migration_per_field_enc_done", true)
-                                .apply()
 
                             vm.syncGroupId = GroupManager.getGroupId(context)
                             vm.isSyncAdmin = false

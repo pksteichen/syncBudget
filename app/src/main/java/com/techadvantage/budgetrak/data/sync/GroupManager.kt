@@ -43,12 +43,7 @@ object GroupManager {
     }
 
     fun getEncryptionKey(context: Context): ByteArray? {
-        // Try encrypted prefs first, then fall back to plain (pre-migration)
-        val securePrefs = SecurePrefs.get(context)
-        val keyStr = securePrefs.getString("encryptionKey", null)
-            ?: context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .getString("encryptionKey", null)
-            ?: return null
+        val keyStr = SecurePrefs.get(context).getString("encryptionKey", null) ?: return null
         return Base64.decode(keyStr, Base64.NO_WRAP)
     }
 
@@ -191,8 +186,6 @@ object GroupManager {
             .remove("lastSyncVersion")
             .remove("catIdRemap")
             .remove("syncDirty")
-            .remove("migration_native_docs_done")
-            .remove("migration_per_field_enc_done")
             .apply()
         // Also clear from encrypted prefs
         try { SecurePrefs.get(context).edit().remove("encryptionKey").commit() } catch (_: Exception) {}

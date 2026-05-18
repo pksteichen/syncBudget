@@ -17,9 +17,6 @@ import java.time.LocalDateTime
  * Each business field is individually encrypted and stored as `enc_<fieldName>`.
  * Metadata fields (deviceId, updatedAt, deleted, lastEditBy) are stored in
  * plain text for Firestore queries and conflict resolution.
- *
- * Backward-compatible: `xxxFromDoc` detects old single-blob format (has "enc"
- * key) and falls back to decrypting that blob as JSON.
  */
 object EncryptedDocSerializer {
 
@@ -70,24 +67,6 @@ object EncryptedDocSerializer {
     /** Decrypt a required encrypted Boolean field from a doc. */
     private fun DocumentSnapshot.decryptBoolean(field: String, key: ByteArray, default: Boolean = false): Boolean =
         getString(field)?.let { decryptField(it, key).toBooleanStrictOrNull() } ?: default
-
-    // ── Old single-blob helpers (backward compat) ───────────────────────
-
-    private fun decryptBlob(enc: String, key: ByteArray): JSONObject {
-        val ciphertext = Base64.decode(enc, Base64.NO_WRAP)
-        val plaintext = CryptoHelper.decryptWithKey(ciphertext, key)
-        return JSONObject(String(plaintext, Charsets.UTF_8))
-    }
-
-    private fun JSONObject.nullableInt(name: String): Int? =
-        if (has(name) && !isNull(name)) getInt(name) else null
-
-    private fun JSONObject.nullableString(name: String): String? =
-        if (has(name) && !isNull(name)) getString(name) else null
-
-    /** Returns true if the doc uses new per-field format. */
-    private fun isPerField(doc: DocumentSnapshot): Boolean =
-        doc.contains("enc_id") || doc.contains("enc_periodStartDate") || doc.contains("enc_currency")
 
     // ── Transaction ─────────────────────────────────────────────────────
 
@@ -194,45 +173,6 @@ object EncryptedDocSerializer {
     }
 
     fun transactionFromDoc(doc: DocumentSnapshot, key: ByteArray): Transaction {
-        if (!isPerField(doc)) {
-            // Old single-blob format
-            val json = decryptBlob(doc.getString("enc")!!, key)
-            val catAmounts = if (json.has("categoryAmounts")) {
-                val arr = json.getJSONArray("categoryAmounts")
-                (0 until arr.length()).map { i ->
-                    val c = arr.getJSONObject(i)
-                    CategoryAmount(c.getInt("categoryId"), SafeIO.safeDouble(c.getDouble("amount")))
-                }
-            } else emptyList()
-            return Transaction(
-                id = json.getInt("id"),
-                type = TransactionType.valueOf(json.getString("type")),
-                date = LocalDate.parse(json.getString("date")),
-                source = json.optString("source", ""),
-                description = json.optString("description", ""),
-                amount = SafeIO.safeDouble(json.getDouble("amount")),
-                isUserCategorized = json.optBoolean("isUserCategorized", true),
-                excludeFromBudget = json.optBoolean("excludeFromBudget", false),
-                isBudgetIncome = json.optBoolean("isBudgetIncome", false),
-                linkedRecurringExpenseId = json.nullableInt("linkedRecurringExpenseId"),
-                linkedAmortizationEntryId = json.nullableInt("linkedAmortizationEntryId"),
-                linkedIncomeSourceId = json.nullableInt("linkedIncomeSourceId"),
-                amortizationAppliedAmount = SafeIO.safeDouble(json.optDouble("amortizationAppliedAmount", 0.0)),
-                linkedRecurringExpenseAmount = SafeIO.safeDouble(json.optDouble("linkedRecurringExpenseAmount", 0.0)),
-                linkedIncomeSourceAmount = SafeIO.safeDouble(json.optDouble("linkedIncomeSourceAmount", 0.0)),
-                linkedSavingsGoalId = json.nullableInt("linkedSavingsGoalId"),
-                linkedSavingsGoalAmount = SafeIO.safeDouble(json.optDouble("linkedSavingsGoalAmount", 0.0)),
-                receiptId1 = json.nullableString("receiptId1"),
-                receiptId2 = json.nullableString("receiptId2"),
-                receiptId3 = json.nullableString("receiptId3"),
-                receiptId4 = json.nullableString("receiptId4"),
-                receiptId5 = json.nullableString("receiptId5"),
-                categoryAmounts = catAmounts,
-                deviceId = doc.getString("deviceId") ?: "",
-                deleted = doc.getBoolean("deleted") ?: false
-            )
-        }
-        // New per-field format
         val catAmounts = doc.getString("enc_categoryAmounts")?.let { enc ->
             val arr = JSONArray(decryptField(enc, key))
             (0 until arr.length()).map { i ->
@@ -350,24 +290,6 @@ object EncryptedDocSerializer {
     }
 
     fun recurringExpenseFromDoc(doc: DocumentSnapshot, key: ByteArray): RecurringExpense {
-        if (!isPerField(doc)) {
-            val json = decryptBlob(doc.getString("enc")!!, key)
-            return RecurringExpense(
-                id = json.getInt("id"),
-                source = json.optString("source", ""),
-                description = json.optString("description", ""),
-                amount = SafeIO.safeDouble(json.getDouble("amount")),
-                repeatType = try { RepeatType.valueOf(json.getString("repeatType")) } catch (_: Exception) { RepeatType.MONTHS },
-                repeatInterval = json.optInt("repeatInterval", 1),
-                startDate = json.nullableString("startDate")?.let { LocalDate.parse(it) },
-                monthDay1 = json.nullableInt("monthDay1"),
-                monthDay2 = json.nullableInt("monthDay2"),
-                setAsideSoFar = SafeIO.safeDouble(json.optDouble("setAsideSoFar", 0.0)),
-                isAccelerated = json.optBoolean("isAccelerated", false),
-                deviceId = doc.getString("deviceId") ?: "",
-                deleted = doc.getBoolean("deleted") ?: false
-            )
-        }
         return RecurringExpense(
             id = doc.decryptInt("enc_id", key),
             source = doc.decryptString("enc_source", key),
@@ -449,22 +371,6 @@ object EncryptedDocSerializer {
     }
 
     fun incomeSourceFromDoc(doc: DocumentSnapshot, key: ByteArray): IncomeSource {
-        if (!isPerField(doc)) {
-            val json = decryptBlob(doc.getString("enc")!!, key)
-            return IncomeSource(
-                id = json.getInt("id"),
-                source = json.optString("source", ""),
-                description = json.optString("description", ""),
-                amount = SafeIO.safeDouble(json.getDouble("amount")),
-                repeatType = try { RepeatType.valueOf(json.getString("repeatType")) } catch (_: Exception) { RepeatType.MONTHS },
-                repeatInterval = json.optInt("repeatInterval", 1),
-                startDate = json.nullableString("startDate")?.let { LocalDate.parse(it) },
-                monthDay1 = json.nullableInt("monthDay1"),
-                monthDay2 = json.nullableInt("monthDay2"),
-                deviceId = doc.getString("deviceId") ?: "",
-                deleted = doc.getBoolean("deleted") ?: false
-            )
-        }
         return IncomeSource(
             id = doc.decryptInt("enc_id", key),
             source = doc.decryptString("enc_source", key),
@@ -510,7 +416,6 @@ object EncryptedDocSerializer {
             "deleted" to sg.deleted,
             "lastEditBy" to deviceId
         )
-        encryptNullableString(sg.targetDate?.toString(), key)?.let { map["enc_targetDate"] = it }
         return map
     }
 
@@ -524,8 +429,6 @@ object EncryptedDocSerializer {
                 "id" -> map["enc_id"] = encryptField(sg.id.toString(), key)
                 "name" -> map["enc_name"] = encryptField(sg.name, key)
                 "targetAmount" -> map["enc_targetAmount"] = encryptField(sg.targetAmount.toString(), key)
-                "targetDate" -> map["enc_targetDate"] =
-                    encryptNullableString(sg.targetDate?.toString(), key) ?: FieldValue.delete()
                 "totalSavedSoFar" -> map["enc_totalSavedSoFar"] = encryptField(sg.totalSavedSoFar.toString(), key)
                 "contributionPerPeriod" -> map["enc_contributionPerPeriod"] = encryptField(sg.contributionPerPeriod.toString(), key)
                 "isPaused" -> map["enc_isPaused"] = encryptField(sg.isPaused.toString(), key)
@@ -536,25 +439,10 @@ object EncryptedDocSerializer {
     }
 
     fun savingsGoalFromDoc(doc: DocumentSnapshot, key: ByteArray): SavingsGoal {
-        if (!isPerField(doc)) {
-            val json = decryptBlob(doc.getString("enc")!!, key)
-            return SavingsGoal(
-                id = json.getInt("id"),
-                name = json.optString("name", ""),
-                targetAmount = SafeIO.safeDouble(json.getDouble("targetAmount")),
-                targetDate = json.nullableString("targetDate")?.let { LocalDate.parse(it) },
-                totalSavedSoFar = SafeIO.safeDouble(json.optDouble("totalSavedSoFar", 0.0)),
-                contributionPerPeriod = SafeIO.safeDouble(json.optDouble("contributionPerPeriod", 0.0)),
-                isPaused = json.optBoolean("isPaused", false),
-                deviceId = doc.getString("deviceId") ?: "",
-                deleted = doc.getBoolean("deleted") ?: false
-            )
-        }
         return SavingsGoal(
             id = doc.decryptInt("enc_id", key),
             name = doc.decryptString("enc_name", key),
             targetAmount = doc.decryptDouble("enc_targetAmount", key),
-            targetDate = doc.decryptNullableString("enc_targetDate", key)?.let { LocalDate.parse(it) },
             totalSavedSoFar = doc.decryptDouble("enc_totalSavedSoFar", key),
             contributionPerPeriod = doc.decryptDouble("enc_contributionPerPeriod", key),
             isPaused = doc.decryptBoolean("enc_isPaused", key, false),
@@ -568,7 +456,6 @@ object EncryptedDocSerializer {
         if (old.id != new.id) changed.add("id")
         if (old.name != new.name) changed.add("name")
         if (old.targetAmount != new.targetAmount) changed.add("targetAmount")
-        if (old.targetDate != new.targetDate) changed.add("targetDate")
         if (old.totalSavedSoFar != new.totalSavedSoFar) changed.add("totalSavedSoFar")
         if (old.contributionPerPeriod != new.contributionPerPeriod) changed.add("contributionPerPeriod")
         if (old.isPaused != new.isPaused) changed.add("isPaused")
@@ -616,20 +503,6 @@ object EncryptedDocSerializer {
     }
 
     fun amortizationEntryFromDoc(doc: DocumentSnapshot, key: ByteArray): AmortizationEntry {
-        if (!isPerField(doc)) {
-            val json = decryptBlob(doc.getString("enc")!!, key)
-            return AmortizationEntry(
-                id = json.getInt("id"),
-                source = json.optString("source", ""),
-                description = json.optString("description", ""),
-                amount = SafeIO.safeDouble(json.getDouble("amount")),
-                totalPeriods = json.getInt("totalPeriods"),
-                startDate = LocalDate.parse(json.getString("startDate")),
-                isPaused = json.optBoolean("isPaused", false),
-                deviceId = doc.getString("deviceId") ?: "",
-                deleted = doc.getBoolean("deleted") ?: false
-            )
-        }
         return AmortizationEntry(
             id = doc.decryptInt("enc_id", key),
             source = doc.decryptString("enc_source", key),
@@ -694,19 +567,6 @@ object EncryptedDocSerializer {
     }
 
     fun categoryFromDoc(doc: DocumentSnapshot, key: ByteArray): Category {
-        if (!isPerField(doc)) {
-            val json = decryptBlob(doc.getString("enc")!!, key)
-            return Category(
-                id = json.getInt("id"),
-                name = json.optString("name", ""),
-                iconName = json.optString("iconName", ""),
-                tag = json.optString("tag", ""),
-                charted = json.optBoolean("charted", true),
-                widgetVisible = json.optBoolean("widgetVisible", true),
-                deviceId = doc.getString("deviceId") ?: "",
-                deleted = doc.getBoolean("deleted") ?: false
-            )
-        }
         return Category(
             id = doc.decryptInt("enc_id", key),
             name = doc.decryptString("enc_name", key),
@@ -758,14 +618,6 @@ object EncryptedDocSerializer {
     }
 
     fun periodLedgerFromDoc(doc: DocumentSnapshot, key: ByteArray): PeriodLedgerEntry {
-        if (!isPerField(doc)) {
-            val json = decryptBlob(doc.getString("enc")!!, key)
-            return PeriodLedgerEntry(
-                periodStartDate = try { LocalDateTime.parse(json.getString("periodStartDate")) } catch (_: Exception) { LocalDateTime.now() },
-                appliedAmount = SafeIO.safeDouble(json.getDouble("appliedAmount")),
-                deviceId = doc.getString("deviceId") ?: ""
-            )
-        }
         return PeriodLedgerEntry(
             periodStartDate = try { LocalDateTime.parse(doc.decryptString("enc_periodStartDate", key)) } catch (_: Exception) { LocalDateTime.now() },
             appliedAmount = doc.decryptDouble("enc_appliedAmount", key),
@@ -848,31 +700,6 @@ object EncryptedDocSerializer {
     }
 
     fun sharedSettingsFromDoc(doc: DocumentSnapshot, key: ByteArray): SharedSettings {
-        if (!isPerField(doc)) {
-            val json = decryptBlob(doc.getString("enc")!!, key)
-            return SharedSettings(
-                currency = json.optString("currency", "$"),
-                budgetPeriod = json.optString("budgetPeriod", "DAILY"),
-                budgetStartDate = json.nullableString("budgetStartDate"),
-                isManualBudgetEnabled = json.optBoolean("isManualBudgetEnabled", false),
-                manualBudgetAmount = SafeIO.safeDouble(json.optDouble("manualBudgetAmount", 0.0)),
-                weekStartSunday = json.optBoolean("weekStartSunday", true),
-                resetDayOfWeek = json.optInt("resetDayOfWeek", 7),
-                resetDayOfMonth = json.optInt("resetDayOfMonth", 1),
-                resetHour = json.optInt("resetHour", 0),
-                familyTimezone = json.optString("familyTimezone", ""),
-                matchDays = json.optInt("matchDays", 7),
-                matchPercent = SafeIO.safeDouble(json.optDouble("matchPercent", 1.0)),
-                matchDollar = json.optInt("matchDollar", 1),
-                matchChars = json.optInt("matchChars", 5),
-                showAttribution = json.optBoolean("showAttribution", false),
-                availableCash = SafeIO.safeDouble(json.optDouble("availableCash", 0.0)),
-                incomeMode = json.optString("incomeMode", "FIXED"),
-                deviceRoster = json.optString("deviceRoster", "{}"),
-                receiptPruneAgeDays = json.nullableInt("receiptPruneAgeDays"),
-                lastChangedBy = json.optString("lastChangedBy", "")
-            )
-        }
         return SharedSettings(
             currency = doc.decryptString("enc_currency", key, "$"),
             budgetPeriod = doc.decryptString("enc_budgetPeriod", key, "DAILY"),
@@ -985,35 +812,6 @@ object EncryptedDocSerializer {
         is SharedSettings -> diffSharedSettingsFields(old, new as SharedSettings)
         else -> throw IllegalArgumentException("Unknown record type: ${(old as Any)::class}")
     }
-
-    // ── Backward-compat aliases (old toDoc names → new toFieldMap) ─────
-
-    fun transactionToDoc(t: Transaction, key: ByteArray, deviceId: String): Map<String, Any> =
-        transactionToFieldMap(t, key, deviceId)
-
-    fun recurringExpenseToDoc(re: RecurringExpense, key: ByteArray, deviceId: String): Map<String, Any> =
-        recurringExpenseToFieldMap(re, key, deviceId)
-
-    fun incomeSourceToDoc(src: IncomeSource, key: ByteArray, deviceId: String): Map<String, Any> =
-        incomeSourceToFieldMap(src, key, deviceId)
-
-    fun savingsGoalToDoc(sg: SavingsGoal, key: ByteArray, deviceId: String): Map<String, Any> =
-        savingsGoalToFieldMap(sg, key, deviceId)
-
-    fun amortizationEntryToDoc(ae: AmortizationEntry, key: ByteArray, deviceId: String): Map<String, Any> =
-        amortizationEntryToFieldMap(ae, key, deviceId)
-
-    fun categoryToDoc(cat: Category, key: ByteArray, deviceId: String): Map<String, Any> =
-        categoryToFieldMap(cat, key, deviceId)
-
-    fun periodLedgerToDoc(ple: PeriodLedgerEntry, key: ByteArray, deviceId: String): Map<String, Any> =
-        periodLedgerToFieldMap(ple, key, deviceId)
-
-    fun sharedSettingsToDoc(ss: SharedSettings, key: ByteArray, deviceId: String): Map<String, Any> =
-        sharedSettingsToFieldMap(ss, key, deviceId)
-
-    fun toDoc(record: Any, key: ByteArray, deviceId: String): Map<String, Any> =
-        toFieldMap(record, key, deviceId)
 
     // ── Collection name constants ───────────────────────────────────────
 

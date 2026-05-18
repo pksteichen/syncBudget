@@ -1258,23 +1258,22 @@ data class CachedVerification(
 
 ### 6.20 AiCategorizerService
 
-**File:** `data/ai/AiCategorizerService.kt` (139 lines)  |  object singleton
+**File:** `data/ai/AiCategorizerService.kt` (~130 lines)  |  object singleton
 
 Gemini Flash-Lite CSV-import categorizer. Invoked from `MainViewModel.runAiCsvCategorizer` after the on-device deterministic matcher fails the confidence gate (fewer than 5 historical matches OR <80% category agreement). SSD §11.2.
 
 **Constants:**
 - `TIMEOUT_MS = 30_000L` — outer per-call budget (excluding retry delays).
 - `CHUNK_SIZE = 100` — transactions per API call.
+- `MODEL_NAME = "gemini-2.5-flash-lite"`.
 
-**Response schema** (`Schema.obj("CategorizerResult")`): a single `results` array of `{i: Int, categoryId: Int}` entries. Schema-constrained JSON via `responseSchema` + `responseMimeType = "application/json"`.
-
-**`liteModel` (lazy):** `GenerativeModel(modelName = "gemini-2.5-flash-lite", apiKey = BuildConfig.GEMINI_API_KEY, generationConfig = { responseMimeType, responseSchema, temperature = 0f })`. Temperature 0 for determinism.
+**Response schema:** inline `JSONObject` matching the Gemini OpenAPI subset (OBJECT with `results` ARRAY of `{i: INTEGER, categoryId: INTEGER}`). No SDK builder dependency. `responseMimeType = "application/json"` is set by `GeminiHttpClient.generate`.
 
 **Methods:**
 | Method | Purpose |
 |---|---|
-| `suspend fun categorizeBatch(transactions, categories): Result<Map<Int, Int>>` | Chunks `transactions` by `CHUNK_SIZE` (100). For each chunk: builds payload, runs `generateWithRetry` under `withTimeout(TIMEOUT_MS)`, parses results, merges into the output map. Returns map of input-index → categoryId. Entries missing (model skipped, returned unknown id, or whole call failed) fall back to whatever the caller had. Rethrows `CancellationException`; logs + Crashlytics-records other failures and returns `Result.failure(e)`. |
-| `private suspend fun generateWithRetry(batch, categories): String` | Builds the JSON payload (`{i, merchant, amount}` per row — **date NOT included**, privacy footprint), calls `buildCategorizerPrompt` from `CategorizerPromptBuilder`, invokes the model. 3 attempts max; exponential backoff `500L shl (attempt - 1)` (500 ms → 1 s → 2 s). Retries only on `transientPattern` matches (`503`, `UNAVAILABLE`, `overloaded`, `429`, `RESOURCE_EXHAUSTED`, `deadline`, network errors, `socket`). Non-transient failures throw immediately. |
+| `suspend fun categorizeBatch(context, transactions, categories): Result<Map<Int, Int>>` | Chunks `transactions` by `CHUNK_SIZE` (100). For each chunk: builds payload, runs `generateWithRetry` under `withTimeout(TIMEOUT_MS)`, parses results, merges into the output map. Returns map of input-index → categoryId. Entries missing (model skipped, returned unknown id, or whole call failed) fall back to whatever the caller had. Rethrows `CancellationException`; logs + Crashlytics-records other failures and returns `Result.failure(e)`. `context` is required for the cert-header attach inside `GeminiHttpClient`. |
+| `private suspend fun generateWithRetry(context, batch, categories): String` | Builds the JSON payload (`{i, merchant, amount}` per row — **date NOT included**, privacy footprint), calls `buildCategorizerPrompt` from `CategorizerPromptBuilder`, invokes `GeminiHttpClient.generate` with `imageBytes = null` + `temperature = 0f`. 3 attempts max; exponential backoff `500L shl (attempt - 1)` (500 ms → 1 s → 2 s). Retries on `transientPattern` matches (`503`, `UNAVAILABLE`, `overloaded`, `429`, `RESOURCE_EXHAUSTED`, `deadline`, network errors, `socket`) plus `GeminiHttpClient.HttpError` with status 429 or 500-599. Non-transient failures throw immediately. |
 | `private fun parseResults(jsonText, validCategoryIds): Map<Int, Int>` | Reads the `results` array, validates each entry's `categoryId` against `validCategoryIds`, skips invalid/missing entries silently. Returns the cleaned map. |
 
 **Payload privacy rationale:** the per-row payload omits the transaction `date` deliberately. Merchant is the dominant categorization signal; amount disambiguates edge cases (small vs large gas-station charges); date adds negligible value and isn't worth the extra data shared with Google. The decision is documented inline in `generateWithRetry` so future maintainers don't re-add the date.
@@ -1290,17 +1289,18 @@ Gemini Flash-Lite CSV-import categorizer. Invoked from `MainViewModel.runAiCsvCa
 
 ### 6.22 ReceiptOcrService
 
-**File:** `data/ocr/ReceiptOcrService.kt` (789 lines)  |  object singleton
+**File:** `data/ocr/ReceiptOcrService.kt` (~700 lines)  |  object singleton
 
 Split-pipeline Gemini 2.5 Flash-Lite receipt OCR. Triggered by an explicit tap on the AI sparkle in `TransactionDialog` after the user long-presses a photo slot to mark it as the OCR target. SSD §11.3 covers the call-sequence narrative; this LLD entry is the symbol catalog.
 
 **Constants:**
 - `TIMEOUT_MS = 90_000L` — outer pipeline budget.
 - `CALL1R_TIMEOUT_PAST_C2_MS = 2_000L` — Call 1.5 cap measured from Call 2 completion. Refund receipts with multiple negative numbers can otherwise stretch Call 1.5 reasoning to ~7-9 s past Call 2; capping converts those tail cases into a bounded wait.
+- `MODEL_NAME = "gemini-2.5-flash-lite"`.
 
-**Schemas (4):** `call1Schema` (merchant / date / amountCents / itemNames[] / fullTranscript[] / notes), `call1rSchema` (reconciled merchant / date / amountCents), `call2Schema` (per-item categoryId + score + reason × N + topChoice + multiCategoryLikely), `call3Schema` (per-item priceCents). All have `temperature = 0f` for determinism; all use `Schema.int` for cents to keep integer precision (no fractional-cent rounding bugs).
+**Schemas:** stored as four static `JSONObject` graphs in `data/ocr/GeminiSchemas.kt` (`call1`, `call1r`, `call2`, `call3`). Each is the Gemini OpenAPI subset for that call's response. Built once, reused. See §3.x (GeminiSchemas) for the construction helpers.
 
-**Models (4 lazy):** one `GenerativeModel` per schema, all `gemini-2.5-flash-lite`. Single helper `liteModel(schema)` builds them with `apiKey = BuildConfig.GEMINI_API_KEY`, `responseMimeType = "application/json"`, `responseSchema = schema`, `temperature = 0f`.
+**Transport:** every call routes through `GeminiHttpClient.generate(context, modelName, prompt, schema, imageBytes?, temperature = 0f)`. No SDK; raw OkHttp with manual `X-Android-Package` / `X-Android-Cert` header attach. The SDK was removed 2026-05-18 because it didn't send those headers (see §28.12.2a).
 
 **Public entry point:**
 ```kotlin
@@ -1311,7 +1311,7 @@ suspend fun extractFromReceipt(
     preSelectedCategoryIds: Set<Int> = emptySet()
 ): Result<OcrResult>
 ```
-Reads `ReceiptManager.getReceiptFile(context, receiptId).readBytes()` and passes via `content { blob("image/jpeg", bytes) }` — **NOT** `image(bitmap)`. The latter re-encodes at JPEG q=80 inside the SDK's `encodeBitmapToBase64Png`, which silently degrades the q=92+ stored receipts. Pipeline runs under `withTimeout(TIMEOUT_MS)`. Rethrows `CancellationException`; logs + Crashlytics-records other failures.
+Reads `ReceiptManager.getReceiptFile(context, receiptId).readBytes()` and passes the raw JPEG bytes through to `GeminiHttpClient`, which Base64-encodes them into the `inline_data.data` field of the request body. **Never decode to Bitmap** — that path opens up the JPEG q=80 re-encode trap documented in `memory/feedback_genai_sdk_bitmap_reencode.md`. Pipeline runs under `withTimeout(TIMEOUT_MS)`. Rethrows `CancellationException`; logs + Crashlytics-records other failures.
 
 **Internal types** (visible to test harness via `internal` modifier):
 - `data class ScoredCandidate(categoryId: Int, score: Int)`
@@ -1327,23 +1327,68 @@ Reads `ReceiptManager.getReceiptFile(context, receiptId).readBytes()` and passes
 6. **Single-cat path:** `buildSingleCatResult(c1, c1r, c2.topChoice ?: deriveSingleCat(...))`. Returns `OcrResult` with one `OcrCategoryAmount` carrying the full amount.
 7. **Multi-cat path:** `runCall3(imageBytes, c1.itemNames, promptCats)` for per-item prices → `reconcilePrices(items, priceCents, c1r.amountCents)` (≤ $0.05 drift tolerance; tax line via `isTaxLine` preserved exactly) → `aggregateCategoryAmounts(items, reconciled)` (groups by `topChoice` per item).
 
-**Per-call helpers:**
+**Per-call helpers:** every call site below takes `context: Context` as the first arg (threaded through from `extractFromReceipt`) and passes it to `GeminiHttpClient.generate`.
+
 | Method | Purpose |
 |---|---|
-| `private suspend fun runCall1(imageBytes): Call1Header` | Image + Call 1 prompt → `Call1Header`. Marketplace rule + no-hallucinated-date rule live in the prompt body (`buildCall1Prompt`). |
-| `private suspend fun runCall1Reconcile(c1): Call1Reconciled` | Text-only second pass over `c1.fullTranscript`. Returns Call 1 values on any parse / API error. Logged via per-call timing lines. |
-| `private suspend fun runCall2(imageBytes, itemNames, promptCats, preselected): Call2Categorization` | Image + Call 2 prompt → per-item scored categories + routing. |
-| `private suspend fun runCall3(imageBytes, itemNames, promptCats): List<Int>` | Image + Call 3 prompt → priceCents per item. Multi-cat only. |
+| `private suspend fun runCall1(context, imageBytes): Call1Header` | Image + Call 1 prompt → `Call1Header`. Marketplace rule + no-hallucinated-date rule live in the prompt body (`buildCall1Prompt`). |
+| `private suspend fun runCall1Reconcile(context, c1): Call1Reconciled` | Text-only second pass over `c1.fullTranscript` (uses `generateWithRetry` with `imageBytes = null`). Returns Call 1 values on any parse / API error. Logged via per-call timing lines. |
+| `private suspend fun runCall2(context, imageBytes, itemNames, promptCats, preselected): Call2Categorization` | Image + Call 2 prompt → per-item scored categories + routing. |
+| `private suspend fun runMultiCat(context, imageBytes, c1, c1r, c2, promptCats): OcrResult` | Builds multi-cat output. Internally fires Call 3 (`GeminiSchemas.call3`) for per-item prices, then runs `reconcilePrices` + `aggregateCategoryAmounts`. |
+| `private suspend fun generateWithRetry(context, schema, prompt, imageBytes?): String` | Single retry helper for all calls (image and text-only). 4 attempts max; exponential backoff `500L shl (attempt - 1)`. Retries on `transientPattern` matches plus `GeminiHttpClient.HttpError` with status 429 or 500-599. |
 | `internal fun deriveMulti(items, promptCats, multiCategoryLikely?): Boolean` | Routing helper. Visible to harness for unit testing. |
 | `internal fun reconcilePrices(items, priceCents, totalCents): List<Int>` | Per-item price reconciliation against Call 1's total. Tax-line passthrough via `isTaxLine`. ≤ $0.05 drift tolerance. |
 | `internal fun aggregateCategoryAmounts(items, reconciledPriceCents): List<OcrCategoryAmount>` | Groups items by their `topChoice` (or `deriveSingleCat`) and sums cents. |
 | `private fun buildSingleCatResult(c1, c1r, catId)` | Builds an `OcrResult` for the single-cat path. |
 | `private fun isTaxLine(desc): Boolean` | Matches "Sales Tax", "Estimated tax", "Tax", etc. Used by `reconcilePrices` to preserve tax exactly. |
-| `private fun isTransient(msg): Boolean` | Same transient-pattern matcher used by `AiCategorizerService` (503, UNAVAILABLE, overloaded, 429, RESOURCE_EXHAUSTED, network errors). Used for retry decisions on transient API errors. |
+| `private fun isTransient(msg): Boolean` | Transient-pattern matcher (503, UNAVAILABLE, overloaded, 429, RESOURCE_EXHAUSTED, network errors). Used inside `generateWithRetry` for retry decisions. |
 
 **Refund-receipt support:** `runCall1` and `runCall1Reconcile` use `Int.MIN_VALUE` as the sentinel for "missing amountCents" so legitimate negative cents flow through unmodified. The dialog prefill in `MainActivity.applyOcrResultToDialog` detects `r.amount < 0` and flips `typeIsExpense = false` + `kotlin.math.abs(...)`. Model invariant: amount always positive, type carries polarity.
 
 **Debug logging:** every call emits a `Call N dispatch (...)` line at start and `Call N response after Nms (...)` on response. `Call1.5: timed out 2000ms past C2 — using C1 values` when the cap fires. All lines land in `token_log.txt` for forensic latency analysis. Test-harness reference: `tools/ocr-harness/scripts/test-v16-split-with-image.js`.
+
+### 6.22a GeminiHttpClient
+
+**File:** `data/ocr/GeminiHttpClient.kt` (~115 lines)  |  object singleton
+
+Raw HTTP transport for Gemini `generateContent`. Replaced `com.google.ai.client.generativeai:0.9.0` on 2026-05-18 so we can attach the `X-Android-Package` / `X-Android-Cert` headers that Google's API gateway requires for the Android-app key restriction to actually validate (SSD §28.12.2a). The standalone SDK didn't.
+
+**Constants:**
+- `ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models"`.
+- `JSON = "application/json; charset=utf-8".toMediaType()`.
+
+**OkHttp client (lazy):** `connectTimeout 30 s / readTimeout 60 s / writeTimeout 60 s`. Built once, shared.
+
+**Cached cert SHA-1:** `@Volatile var cachedCertSha1: String?` — read once via `PackageManager.getPackageInfo(GET_SIGNING_CERTIFICATES)` (API 28+ path) or legacy `GET_SIGNATURES` (pre-P), hashed with SHA-1, formatted uppercase hex (no colons), then memoized. The SHA-1 is invariant per install so we don't re-read it.
+
+**Methods:**
+| Method | Purpose |
+|---|---|
+| `suspend fun generate(context, modelName, prompt, schema: JSONObject, imageBytes: ByteArray?, temperature: Float = 0f): String` | Builds the request body (`contents[0].parts` with optional `inline_data` blob + text prompt, plus `generationConfig` carrying schema + temperature), POSTs to `$ENDPOINT/$modelName:generateContent?key=…`, attaches `X-Android-Package` + `X-Android-Cert`, extracts and concatenates `candidates[0].content.parts[*].text`. Throws `HttpError` for non-2xx; `IllegalStateException` for malformed responses. Runs on `Dispatchers.IO`. |
+| `private fun extractText(responseBody): String` | Unwraps `candidates[0].content.parts[*].text`; concatenates all parts (Gemini sometimes splits long JSON across parts). |
+| `private fun certSha1(context): String` | Reads + caches the cert SHA-1 (see above). Handles both `signingInfo.hasMultipleSigners` and `signingCertificateHistory` paths. |
+
+**Exception type:** `class HttpError(status: Int, body: String) : IOException(...)` — `status` is the HTTP code; `message` preserves the first 500 chars of Google's error body for diagnosis. Callers in `ReceiptOcrService` / `AiCategorizerService` use `status` for transient-retry decisions.
+
+### 6.22b GeminiSchemas
+
+**File:** `data/ocr/GeminiSchemas.kt` (~110 lines)  |  internal object singleton
+
+Static JSON schemas for the OCR pipeline. Replaces the prior SDK's `Schema.obj(...)` / `Schema.str(...)` builders with direct `JSONObject` construction matching the Gemini OpenAPI subset:
+
+```json
+{ "type": "OBJECT|STRING|INTEGER|BOOLEAN|ARRAY",
+  "description": "...",
+  "properties": { ... },
+  "items": { ... },
+  "required": ["..."] }
+```
+
+**Private builders:** `str(description)`, `int(description)`, `bool(description)`, `arr(description, items)`, `obj(description, properties, required)`. `obj` defaults `required` to all keys.
+
+**Public schemas:** `call1`, `call1r`, `call2`, `call3` — exactly mirror the prior `Schema.obj(...)` graphs in `ReceiptOcrService` (merchant / date / amountCents / itemNames[] / fullTranscript[] / notes for `call1`; reconciled trio for `call1r`; per-item scored cats + routing for `call2`; per-item priceCents for `call3`).
+
+`AiCategorizerService` constructs its own schema inline (one place, simpler) rather than importing from this object. No coupling between them.
 
 ### 6.23 OcrResult
 
@@ -1361,7 +1406,7 @@ All classes below live in package `com.techadvantage.budgetrak.data.sync` unless
 
 ### 7.1 EncryptedDocSerializer (object)
 
-Serializes data classes to/from encrypted Firestore documents using per-field encryption. Each business field is individually encrypted as `enc_<fieldName>` via `CryptoHelper.encryptWithKey` (ChaCha20-Poly1305, direct 256-bit key); metadata fields (`deviceId`, `updatedAt`, `deleted`, `lastEditBy`) are plaintext. Backward-compatible with the legacy single-blob format (key `"enc"`).
+Serializes data classes to/from encrypted Firestore documents using per-field encryption. Each business field is individually encrypted as `enc_<fieldName>` via `CryptoHelper.encryptWithKey` (ChaCha20-Poly1305, direct 256-bit key); metadata fields (`deviceId`, `updatedAt`, `deleted`, `lastEditBy`) are plaintext. The legacy single-blob format (`"enc"` key) was removed pre-launch on 2026-05-18 — no users had old-format synced data, so the dual-decoder branches collapsed to the per-field path.
 
 **Collection constants** (`COLLECTION_*`): `transactions`, `recurringExpenses`, `incomeSources`, `savingsGoals`, `amortizationEntries`, `categories`, `periodLedger`, `sharedSettings`. `SHARED_SETTINGS_DOC_ID = "current"`. `ALL_COLLECTIONS` — 7 entries (excludes sharedSettings).
 
@@ -1370,13 +1415,13 @@ Serializes data classes to/from encrypted Firestore documents using per-field en
 | Method | Purpose |
 |---|---|
 | `xxxToFieldMap(record, key, deviceId)` | Full encryption for Firestore `set()` |
-| `xxxFromDoc(doc, key)` | Decrypt; auto-detects per-field vs legacy blob |
+| `xxxFromDoc(doc, key)` | Decrypt the per-field `enc_*` keys |
 | `xxxFieldUpdate(changed, record, key, deviceId)` | Encrypts only changed fields for `update()` |
 | `diffXxxFields(old, new)` | Compares records; returns `Set<String>` of changed field names |
 
 **Generic dispatchers:** `docId(record)`, `collectionName(record)`, `toFieldMap(...)`, `fieldUpdate(...)`, `diffFields(...)`.
 
-**Encryption helpers:** `encryptField(value, key)`, `decryptField(enc, key)`, plus `DocumentSnapshot.decryptString/Int/Double/Boolean` extensions and nullable variants. `isPerField(doc)` checks for `enc_id`, `enc_periodStartDate`, or `enc_currency`.
+**Encryption helpers:** `encryptField(value, key)`, `decryptField(enc, key)`, plus `DocumentSnapshot.decryptString/Int/Double/Boolean` extensions and nullable variants.
 
 **Encrypted fields per type:**
 

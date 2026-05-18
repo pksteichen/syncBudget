@@ -7,7 +7,6 @@ import com.techadvantage.budgetrak.data.sync.PeriodLedgerRepository
 import com.techadvantage.budgetrak.data.sync.active
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.temporal.ChronoUnit
 
 /**
  * Extracted period refresh logic, shared by both foreground (MainViewModel) and
@@ -151,31 +150,13 @@ object PeriodRefreshService {
                 if (!goal.isPaused && !goal.deleted) {
                     val remaining = goal.targetAmount - goal.totalSavedSoFar
                     if (remaining > 0) {
-                        if (goal.targetDate != null) {
-                            if (periodDate.isBefore(goal.targetDate)) {
-                                val periods = when (config.budgetPeriod) {
-                                    BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(periodDate, goal.targetDate)
-                                    BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(periodDate, goal.targetDate)
-                                    BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(periodDate, goal.targetDate)
-                                }
-                                if (periods > 0) {
-                                    val deduction = BudgetCalculator.roundCents(
-                                        minOf(remaining / periods.toDouble(), remaining)
-                                    )
-                                    savingsGoals[idx] = goal.copy(
-                                        totalSavedSoFar = goal.totalSavedSoFar + deduction
-                                    )
-                                }
-                            }
-                        } else {
-                            val contribution = BudgetCalculator.roundCents(
-                                minOf(goal.contributionPerPeriod, remaining)
+                        val contribution = BudgetCalculator.roundCents(
+                            minOf(goal.contributionPerPeriod, remaining)
+                        )
+                        if (contribution > 0) {
+                            savingsGoals[idx] = goal.copy(
+                                totalSavedSoFar = goal.totalSavedSoFar + contribution
                             )
-                            if (contribution > 0) {
-                                savingsGoals[idx] = goal.copy(
-                                    totalSavedSoFar = goal.totalSavedSoFar + contribution
-                                )
-                            }
                         }
                     }
                 }

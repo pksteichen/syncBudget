@@ -96,11 +96,11 @@ Deduction math lives in `BudgetCalculator.activeAmortizationDeductions`.
 
 ## SavingsGoal (`data/SavingsGoal.kt`)
 
-`id, name, targetAmount, totalSavedSoFar, contributionPerPeriod, targetDate?, superchargeMode?, deviceId, deleted`
+`id, name, targetAmount, totalSavedSoFar, contributionPerPeriod, isPaused, deviceId, deleted`
 
-- Target-date goal: `targetDate` set, `contributionPerPeriod` computed as `remaining / periodsUntilTarget`.
-- Fixed-contribution goal: `contributionPerPeriod` set, `targetDate` null.
-- Supercharge: bolt dialog on dashboard writes `superchargeMode` = REDUCE_CONTRIBUTIONS or ACHIEVE_SOONER, redistributing excess cash.
+- Single goal type (fixed contribution). `targetDate` field was removed pre-launch (2026-05-18) along with all branches that special-cased it; the "Calculate with Target Date" button in the add/edit dialog is a one-shot calculator that fills in `contributionPerPeriod` and saves with the value the user accepted.
+- Deduction math: `min(contributionPerPeriod, remaining)` where `remaining = targetAmount − totalSavedSoFar`.
+- Supercharge bolt dialog on dashboard offers REDUCE_CONTRIBUTIONS or ACHIEVE_SOONER modes, redistributing excess cash. The `SuperchargeMode` enum is set transiently in dialog state, not persisted on the goal.
 
 ## Category (`data/Category.kt`)
 

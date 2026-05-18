@@ -35,15 +35,15 @@ Frozen: excluded from set-aside updates and budget deductions; not shown in simu
 `RecurringExpensesScreen.kt`: list with set-aside progress bar per RE, add/edit dialog, accelerated toggle (with row-level indicator). Help screen `RecurringExpensesHelpScreen.kt` documents the accelerated mode explicitly (audit caught a gap in 2026-04-11).
 
 ## Savings Goals model
-`SavingsGoal`: `id, name, targetAmount, totalSavedSoFar, contributionPerPeriod, targetDate?, isPaused, deviceId, deleted`. The `targetDate` field exists in the data class for backward compatibility but the add/edit dialog **always saves with `targetDate = null`** as of v2.10.06 — there is now only one goal type.
+`SavingsGoal`: `id, name, targetAmount, totalSavedSoFar, contributionPerPeriod, isPaused, deviceId, deleted`. Single goal type — the legacy `targetDate` field was removed pre-launch (2026-05-18) along with all branches in `calculatePerPeriodDeduction`, `BudgetCalculator.activeSavingsGoalDeductions`, `PeriodRefreshService`, `SavingsSimulator`, `EncryptedDocSerializer`, and `SavingsGoalRepository`.
 
 ### Single goal type — fixed contribution
 - `deduction = min(contributionPerPeriod, remaining)` per period (`remaining = targetAmount − totalSavedSoFar`).
 - Active iff `!deleted && !isPaused && totalSavedSoFar < targetAmount`.
-- `BudgetCalculator.activeSavingsGoalDeductions` sums deductions across active goals. Per-period deductions are added to `totalSavedSoFar` by `PeriodRefreshService` at each real boundary; the simulator's `simGoalSaved[i]` array projects the same accumulation forward for the chart's floor line.
+- `BudgetCalculator.activeSavingsGoalDeductions(goals)` sums deductions across active goals (no budgetPeriod/today/resetDayOfWeek params — those legacy params were dropped). Per-period deductions are added to `totalSavedSoFar` by `PeriodRefreshService` at each real boundary; the simulator's `simGoalSaved[i]` array projects the same accumulation forward for the chart's floor line.
 
 ### Target-Date helper (calculator, not a goal type)
-The "Calculate with Target Date" button inside the add/edit dialog opens a date picker, then computes `contribution = roundCents(remaining / periodsBetween(today, picked))` and writes that into the Contribution per Period field. The user can edit the suggested number before saving. The saved goal still has `targetDate = null` — it's a one-shot calculator, not a separate goal type. Branch `goal.targetDate != null` exists in `calculatePerPeriodDeduction` and the simulator for legacy synced goals; new goals never take that branch.
+The "Calculate with Target Date" button inside the add/edit dialog opens a date picker, then computes `contribution = roundCents(remaining / periodsBetween(today, picked))` and writes that into the Contribution per Period field. The user can edit the suggested number before saving. The picked date is NOT persisted — it's a one-shot calculator.
 
 ### Linked transactions
 When a transaction is linked to a savings goal:
