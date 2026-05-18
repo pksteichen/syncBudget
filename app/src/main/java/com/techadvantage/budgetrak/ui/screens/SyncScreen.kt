@@ -612,13 +612,13 @@ fun SyncScreen(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        ScreenPrimaryButton(
+                                        DialogPrimaryButton(
                                             onClick = onAcceptClaim,
                                             modifier = Modifier.weight(1f)
                                         ) {
                                             Text(S.sync.claimAccept)
                                         }
-                                        ScreenPrimaryButton(
+                                        DialogPrimaryButton(
                                             onClick = onRejectClaim,
                                             modifier = Modifier.weight(1f)
                                         ) {

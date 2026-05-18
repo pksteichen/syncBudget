@@ -574,7 +574,7 @@ internal fun AddEditAmortizationDialog(
                         colors = textFieldColors,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    ScreenPrimaryButton(
+                    DialogPrimaryButton(
                         onClick = { showDatePicker = true },
                         modifier = Modifier.fillMaxWidth()
                     ) {

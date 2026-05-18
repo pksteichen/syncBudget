@@ -772,7 +772,7 @@ private fun AddEditIncomeDialog(
                                     Modifier.border(1.dp, Color.Red, RoundedCornerShape(4.dp))
                                 else Modifier
                             ) {
-                                ScreenPrimaryButton(
+                                DialogPrimaryButton(
                                     onClick = { showDatePicker = true },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
@@ -802,7 +802,7 @@ private fun AddEditIncomeDialog(
                                     Modifier.border(1.dp, Color.Red, RoundedCornerShape(4.dp))
                                 else Modifier
                             ) {
-                                ScreenPrimaryButton(
+                                DialogPrimaryButton(
                                     onClick = { showDatePicker = true },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
@@ -827,7 +827,7 @@ private fun AddEditIncomeDialog(
                                     Modifier.border(1.dp, Color.Red, RoundedCornerShape(4.dp))
                                 else Modifier
                             ) {
-                                ScreenPrimaryButton(
+                                DialogPrimaryButton(
                                     onClick = { showDatePicker = true },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
@@ -865,7 +865,7 @@ private fun AddEditIncomeDialog(
                                     Modifier.border(1.dp, Color.Red, RoundedCornerShape(4.dp))
                                 else Modifier
                             ) {
-                                ScreenPrimaryButton(
+                                DialogPrimaryButton(
                                     onClick = { showDatePicker = true },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
@@ -917,7 +917,7 @@ private fun AddEditIncomeDialog(
                                     Modifier.border(1.dp, Color.Red, RoundedCornerShape(4.dp))
                                 else Modifier
                             ) {
-                                ScreenPrimaryButton(
+                                DialogPrimaryButton(
                                     onClick = { showDatePicker = true },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {

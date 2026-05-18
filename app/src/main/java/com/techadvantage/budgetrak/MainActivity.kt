@@ -235,6 +235,32 @@ class MainActivity : ComponentActivity() {
         }
 
         isAppActive = true
+        // TEMP DIAGNOSTIC (2026-05-17): dump themes.json + selectedThemeName pref
+        // to /Download/BudgeTrak/support/themes_debug.txt on every app start so
+        // we can compare what's on disk vs what loads. Debug builds only.
+        if (com.techadvantage.budgetrak.BuildConfig.DEBUG) {
+            try {
+                val sb = StringBuilder()
+                sb.appendLine("=== themes_debug.txt @ ${java.time.LocalDateTime.now()} ===")
+                val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+                sb.appendLine("selectedThemeName=${prefs.getString("selectedThemeName", "<missing>")}")
+                sb.appendLine("selectedChartPaletteName=${prefs.getString("selectedChartPaletteName", "<missing>")}")
+                val themesFile = getFileStreamPath("themes.json")
+                sb.appendLine("themes.json.exists=${themesFile.exists()}")
+                if (themesFile.exists()) {
+                    sb.appendLine("themes.json.size=${themesFile.length()}")
+                    sb.appendLine("--- themes.json ---")
+                    sb.appendLine(themesFile.readText())
+                }
+                com.techadvantage.budgetrak.data.PublicDownloadWriter.writeBytes(
+                    context = this,
+                    relSubdir = "BudgeTrak/support",
+                    fileName = "themes_debug.txt",
+                    mimeType = "text/plain",
+                    bytes = sb.toString().toByteArray()
+                )
+            } catch (_: Exception) { /* best-effort diag */ }
+        }
         enableEdgeToEdge()
         // Force white status-bar and nav-bar icons: the inset-padding strip
         // around the page uses the header background color which is dark in

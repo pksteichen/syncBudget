@@ -45,6 +45,8 @@ Working APK in `Download/BudgeTrak.apk`. Not pushed for release — branch is ex
 
 **Dialog action buttons**: `DialogPrimaryButton` now follows `surfaceHeader`/`surfaceHeaderText` (the Window Header slots). `DialogSecondaryButton` (gray), `DialogDangerButton` (red), and `DialogWarningButton` (orange) stay convention-locked. The `ColorsScreen` "New theme"/"New palette" button uses `ScreenPrimaryButton` (Header colors) so it doesn't visually merge with the dialogs it spawns.
 
+**Dialog-internal helper buttons** (date-picker openers in AddEditExpense / AddEditIncome / AddEditAmortization / AddEditSavingsGoal, "link to recurring/amortization/savings/income" buttons inside `TransactionDialog`, Accept/Reject in the admin-claim alert) → `DialogPrimaryButton`. They live inside dialog bodies, so they need to follow Window Header colors to harmonize with the dialog chrome above/below. Page-level filter / sort / date-range / add buttons stay `ScreenPrimaryButton`.
+
 ## System bars (added 2026-05-17)
 
 Status bar AND nav bar pick up `headerBackground` via a single `windowInsetsPadding(statusBars ∪ displayCutout ∪ navigationBars)` on the root `Column` whose background is `topBarColor`. Icons forced light on both bars (`isAppearanceLightStatusBars = false`, `isAppearanceLightNavigationBars = false`) since header is dark in both themes.

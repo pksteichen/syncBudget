@@ -4,7 +4,7 @@ import androidx.compose.ui.graphics.Color
 
 // Dark theme
 val DarkBackground = Color(0xFF2A3A2F)          // Medium green/grey page
-val DarkSurface = Color(0xFF1A1A1A)
+val DarkSurface = Color(0xFF3A4E42)              // Dark green-grey cards/dialogs body
 val DarkHeaderBackground = Color(0xFF1E2D23)
 val DarkHeaderText = Color(0xFFE0E0E0)
 val DarkPrimary = Color(0xFFE8D5A0)
@@ -12,8 +12,8 @@ val DarkOnPrimary = Color(0xFF1A1A1A)
 val DarkCardBackground = Color(0xFF1A1A1A)       // Dark charcoal cards
 val DarkCardText = Color(0xFFE8D5A0)             // Warm amber text
 val DarkDisplayBackground = Color(0xFF383838)    // Dark grey Solari frame
-val DarkSurfaceHeader = Color(0xFF1B5E20)        // Dark dialog/popup header
-val DarkSurfaceHeaderText = Color(0xFFE8F5E9)    // Pale green text on dark dialog header
+val DarkSurfaceHeader = Color(0xFF004E62)        // Deep teal dialog/popup header
+val DarkSurfaceHeaderText = Color(0xFFE8F5E9)    // Pale green text on dialog header
 
 // Light theme
 val LightBackground = Color(0xFFBDD5CC)          // Medium greenish-blue page

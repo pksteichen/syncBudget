@@ -734,7 +734,7 @@ private fun AddEditSavingsGoalDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
                     // Helper: calculate contribution from a target date
-                    ScreenPrimaryButton(
+                    DialogPrimaryButton(
                         onClick = { showDatePicker = true },
                         modifier = Modifier.fillMaxWidth()
                     ) {

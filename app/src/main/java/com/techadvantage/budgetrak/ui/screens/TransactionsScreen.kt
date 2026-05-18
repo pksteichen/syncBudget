@@ -4261,7 +4261,7 @@ fun TransactionDialog(
                                 val fixedFontSize = with(LocalDensity.current) { 13.dp.toSp() }
                                 val fixedIconSize = 18.dp / LocalDensity.current.fontScale
                                 if (recurringExpenses.isNotEmpty()) {
-                                    ScreenPrimaryButton(
+                                    DialogPrimaryButton(
                                         onClick = { showLinkRecurringPicker = true },
                                         modifier = Modifier.weight(1f),
                                         contentPadding = linkPadding
@@ -4272,7 +4272,7 @@ fun TransactionDialog(
                                     }
                                 }
                                 if (amortizationEntries.isNotEmpty() || onAddAmortization != null) {
-                                    ScreenPrimaryButton(
+                                    DialogPrimaryButton(
                                         onClick = {
                                             if (amortizationEntries.isNotEmpty()) {
                                                 showLinkAmortizationPicker = true
@@ -4289,7 +4289,7 @@ fun TransactionDialog(
                                     }
                                 }
                                 if (savingsGoals.isNotEmpty()) {
-                                    ScreenPrimaryButton(
+                                    DialogPrimaryButton(
                                         onClick = { showLinkSavingsGoalPicker = true },
                                         modifier = Modifier.weight(1f),
                                         contentPadding = linkPadding
@@ -4321,7 +4321,7 @@ fun TransactionDialog(
                                 }
                             }
                         } else if (incomeSources.isNotEmpty()) {
-                            ScreenPrimaryButton(
+                            DialogPrimaryButton(
                                 onClick = { showLinkIncomePicker = true },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
