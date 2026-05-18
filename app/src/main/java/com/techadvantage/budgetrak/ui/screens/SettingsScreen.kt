@@ -73,6 +73,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.techadvantage.budgetrak.ui.theme.AdAwareDialog
 import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrows
+import com.techadvantage.budgetrak.ui.theme.ScreenPrimaryButton
 import com.techadvantage.budgetrak.ui.theme.ScrollableDropdownContent
 import com.techadvantage.budgetrak.data.Category
 import com.techadvantage.budgetrak.data.CATEGORY_ICON_MAP
@@ -151,8 +152,6 @@ fun SettingsScreen(
     onToggleCharted: (Category) -> Unit = {},
     onToggleWidgetVisible: (Category) -> Unit = {},
     onReassignCategory: (fromId: Int, toId: Int) -> Unit = { _, _ -> },
-    chartPalette: String = "Bright",
-    onChartPaletteChange: (String) -> Unit = {},
     weekStartSunday: Boolean = true,
     onWeekStartChange: (Boolean) -> Unit = {},
     budgetPeriod: String = "DAILY",
@@ -253,7 +252,7 @@ fun SettingsScreen(
                 )
             }
             item {
-                OutlinedButton(
+                ScreenPrimaryButton(
                     onClick = onNavigateToQuickStart,
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -266,13 +265,13 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    OutlinedButton(
+                    ScreenPrimaryButton(
                         onClick = onNavigateToBudgetConfig,
                         modifier = Modifier.weight(2f)
                     ) {
                         Text(S.settings.configureYourBudget)
                     }
-                    OutlinedButton(
+                    ScreenPrimaryButton(
                         onClick = onNavigateToSync,
                         modifier = Modifier.weight(1f)
                     ) {
@@ -283,7 +282,7 @@ fun SettingsScreen(
 
             if (com.techadvantage.budgetrak.BuildConfig.DEBUG) {
                 item {
-                    OutlinedButton(
+                    ScreenPrimaryButton(
                         onClick = onDumpDebug,
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -690,7 +689,7 @@ fun SettingsScreen(
             }
             if (!isPaidUser) {
                 item {
-                    OutlinedButton(
+                    ScreenPrimaryButton(
                         onClick = onLaunchPaidUpgrade,
                         enabled = paidUpgradePrice != null,
                         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
@@ -702,7 +701,7 @@ fun SettingsScreen(
             }
             if (!isSubscriber) {
                 item {
-                    OutlinedButton(
+                    ScreenPrimaryButton(
                         onClick = onLaunchSubscribe,
                         enabled = subscriberPrice != null,
                         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
@@ -713,7 +712,7 @@ fun SettingsScreen(
                 }
             }
             item {
-                OutlinedButton(
+                ScreenPrimaryButton(
                     onClick = onRestorePurchases,
                     modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
                 ) {
@@ -1006,7 +1005,7 @@ fun SettingsScreen(
                         )
                     }
                     Spacer(Modifier.height(8.dp))
-                    OutlinedButton(
+                    ScreenPrimaryButton(
                         onClick = onSavePhotos,
                         enabled = isPaidUser || isSubscriber,
                         modifier = Modifier.alpha(if (isPaidUser || isSubscriber) 1f else 0.5f)
@@ -1143,13 +1142,13 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        OutlinedButton(
+                        ScreenPrimaryButton(
                             onClick = onBackupNow,
                             modifier = Modifier.weight(1f)
                         ) { Text(S.settings.backupNow) }
                         val canRestore = !isSyncConfigured
                         Box(modifier = Modifier.weight(1f)) {
-                            OutlinedButton(
+                            ScreenPrimaryButton(
                                 onClick = onRestoreBackup,
                                 enabled = canRestore,
                                 modifier = Modifier.fillMaxWidth()
@@ -1182,7 +1181,7 @@ fun SettingsScreen(
                     Spacer(Modifier.height(8.dp))
                     val canRestore = !isSyncConfigured
                     Box {
-                        OutlinedButton(
+                        ScreenPrimaryButton(
                             onClick = onRestoreBackup,
                             enabled = canRestore
                         ) { Text(S.settings.restoreBackup) }
@@ -1375,7 +1374,7 @@ fun SettingsScreen(
             }
 
             item {
-                OutlinedButton(
+                ScreenPrimaryButton(
                     onClick = { showAddCategory = true },
                     modifier = Modifier.fillMaxWidth()
                 ) {

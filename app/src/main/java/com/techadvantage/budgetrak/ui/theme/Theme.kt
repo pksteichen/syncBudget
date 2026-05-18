@@ -77,6 +77,15 @@ import com.techadvantage.budgetrak.ui.strings.AppStrings
 import com.techadvantage.budgetrak.ui.strings.EnglishStrings
 import com.techadvantage.budgetrak.ui.strings.LocalStrings
 
+/**
+ * Solari border derived from the user's Solari background — a small lerp
+ * toward white so the border reads as a "lifted" edge on whatever color
+ * the user picked. Single source of truth for everywhere a border around
+ * the Solari display is drawn.
+ */
+fun solariBorderFor(displayBackground: Color): Color =
+    androidx.compose.ui.graphics.lerp(displayBackground, Color.White, 0.15f)
+
 data class SyncBudgetColors(
     val headerBackground: Color,
     val headerText: Color,
@@ -86,8 +95,6 @@ data class SyncBudgetColors(
     val displayBorder: Color,
     val userCategoryIconTint: Color,
     val accentTint: Color,
-    val incomeGreen: Color,
-    val expenseRed: Color
 )
 
 val LocalSyncBudgetColors = staticCompositionLocalOf {
@@ -97,11 +104,9 @@ val LocalSyncBudgetColors = staticCompositionLocalOf {
         cardBackground = DarkCardBackground,
         cardText = DarkCardText,
         displayBackground = DarkDisplayBackground,
-        displayBorder = DarkDisplayBorder,
+        displayBorder = solariBorderFor(DarkDisplayBackground),
         userCategoryIconTint = LightCardBackground,
         accentTint = DarkCardText,
-        incomeGreen = IncomeGreen,
-        expenseRed = ExpenseRed
     )
 }
 
@@ -164,6 +169,40 @@ fun DialogPrimaryButton(
         colors = ButtonDefaults.buttonColors(
             containerColor = if (isSystemInDarkTheme()) Color(0xFF388E3C) else Color(0xFF2E7D32),
             contentColor = Color.White
+        ),
+        content = content
+    )
+}
+
+/**
+ * Filled page-level button that follows the user's Header background + Header
+ * Text colors. Use for buttons on screens (Settings, BudgetConfig, Sync, etc.).
+ *
+ * Not for dialog actions — those use [DialogPrimaryButton] / [DialogSecondaryButton] /
+ * [DialogDangerButton] / [DialogWarningButton], which are convention-locked
+ * green/gray/red/orange so danger and warning still read as such regardless of
+ * the user's theme.
+ */
+@Composable
+fun ScreenPrimaryButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
+    content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit
+) {
+    val customColors = LocalSyncBudgetColors.current
+    Button(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        shape = RoundedCornerShape(8.dp),
+        contentPadding = contentPadding,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = customColors.headerBackground,
+            contentColor = customColors.headerText,
+            disabledContainerColor = customColors.headerBackground.copy(alpha = 0.38f),
+            disabledContentColor = customColors.headerText.copy(alpha = 0.38f),
         ),
         content = content
     )
@@ -811,14 +850,14 @@ fun SyncBudgetTheme(
     content: @Composable () -> Unit
 ) {
     val cs = if (darkTheme) profile.dark else profile.light
-    // Auto-derive onPrimary from primary luminance — keeps CTA/pill text legible
-    // on user-chosen Primary colors (the ad redesign in v2.10.28 made CTA text
-    // and price/store/star pill text use MaterialTheme.colorScheme.onPrimary,
-    // which previously was a fixed Black/White and could contrast badly).
-    val derivedOnPrimary = if (cs.primary.luminance() > 0.5f) Color.Black else Color.White
+    // MaterialTheme.colorScheme.primary is sourced from the Header (cardBackground)
+    // slot so all "primary"-tinted UI (CTA buttons, AdMob upgrade pills, etc.)
+    // follows the header color the user picks. onPrimary is derived from the
+    // header's luminance to keep text legible on whatever the user chose.
+    val derivedOnPrimary = if (cs.cardBackground.luminance() > 0.5f) Color.Black else Color.White
     val colorScheme = if (darkTheme) {
         darkColorScheme(
-            primary = cs.primary,
+            primary = cs.cardBackground,
             onPrimary = derivedOnPrimary,
             background = cs.background,
             surface = cs.surface,
@@ -827,7 +866,7 @@ fun SyncBudgetTheme(
         )
     } else {
         lightColorScheme(
-            primary = cs.primary,
+            primary = cs.cardBackground,
             onPrimary = derivedOnPrimary,
             primaryContainer = Color(0xFF4A3270),
             onPrimaryContainer = Color(0xFFE8DEF8),
@@ -843,11 +882,9 @@ fun SyncBudgetTheme(
         cardBackground = cs.cardBackground,
         cardText = cs.cardText,
         displayBackground = cs.displayBackground,
-        displayBorder = cs.displayBorder,
+        displayBorder = solariBorderFor(cs.displayBackground),
         userCategoryIconTint = LightCardBackground,
         accentTint = if (darkTheme) cs.cardText else cs.cardBackground,
-        incomeGreen = cs.incomeGreen,
-        expenseRed = cs.expenseRed
     )
 
     val appToastState = remember { AppToastState() }

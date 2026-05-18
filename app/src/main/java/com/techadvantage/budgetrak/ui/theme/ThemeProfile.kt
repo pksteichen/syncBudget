@@ -3,28 +3,32 @@ package com.techadvantage.budgetrak.ui.theme
 import androidx.compose.ui.graphics.Color
 
 /**
- * One of the ten themable color roles per light/dark mode. The following are
- * intentionally NOT here — semantically or policy-locked:
+ * One of the six themable color roles per light/dark mode. The following are
+ * intentionally NOT here — semantically or policy-locked, or auto-derived:
+ *   • Income green / Expense red — Western finance convention, reinforced by
+ *     text labels everywhere they appear (so red-green colorblind users still
+ *     parse the UI)
  *   • Sync-indicator state colors (green/blue/yellow/red/grey) — convention
  *   • Dialog Danger (red) / Warning (orange) — convention
  *   • AdMob "Ad" badge yellow (#FFCC00) + black stroke — AdMob policy
  *   • Native-ad overlay backdrop (#B3000000) — readability backstop
  *   • UpgradeBadge yellow/black in InHouseAd — mirrors Ad badge convention
  *
- * onPrimary (text/icons on Primary buttons + CTA + price pills) is auto-derived
- * from Primary's luminance inside SyncBudgetTheme — no slot needed.
+ * onPrimary (text/icons on the header / primary buttons / CTA / price pills)
+ * is auto-derived from cardBackground's luminance inside SyncBudgetTheme — no
+ * slot needed. MaterialTheme.colorScheme.primary is sourced from cardBackground
+ * so all "primary"-tinted UI follows the header color the user picks.
+ *
+ * The Solari border is auto-derived from displayBackground via a small lerp
+ * toward white inside SyncBudgetTheme — no slot needed.
  */
 data class ThemeColorSet(
-    val primary: Color,
     val cardBackground: Color,
     val cardText: Color,
     val background: Color,
     val surface: Color,
     val onSurface: Color,
     val displayBackground: Color,
-    val displayBorder: Color,
-    val incomeGreen: Color,
-    val expenseRed: Color,
 )
 
 /**
@@ -58,28 +62,20 @@ data class ChartPalette(
 
 object BuiltInThemes {
     private val DEFAULT_LIGHT = ThemeColorSet(
-        primary = LightPrimary,
         cardBackground = LightCardBackground,
         cardText = LightCardText,
         background = LightBackground,
         surface = LightSurface,
         onSurface = LightOnSurface,
         displayBackground = LightDisplayBackground,
-        displayBorder = LightDisplayBorder,
-        incomeGreen = IncomeGreen,
-        expenseRed = ExpenseRed,
     )
     private val DEFAULT_DARK = ThemeColorSet(
-        primary = DarkPrimary,
         cardBackground = DarkCardBackground,
         cardText = DarkCardText,
         background = DarkBackground,
         surface = DarkSurface,
         onSurface = DarkCardText,
         displayBackground = DarkDisplayBackground,
-        displayBorder = DarkDisplayBorder,
-        incomeGreen = IncomeGreen,
-        expenseRed = ExpenseRed,
     )
 
     val DEFAULT = ThemeProfile(

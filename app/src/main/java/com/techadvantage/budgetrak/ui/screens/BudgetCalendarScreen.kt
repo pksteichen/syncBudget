@@ -220,7 +220,7 @@ fun BudgetCalendarScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(customColors.displayBackground)
+                    .background(customColors.headerBackground)
                     .padding(vertical = 6.dp)
             ) {
                 weekdayLabels.forEach { label ->

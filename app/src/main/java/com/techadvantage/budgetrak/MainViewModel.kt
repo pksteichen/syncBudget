@@ -263,7 +263,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var matchDollar by mutableIntStateOf(prefs.getInt("matchDollar", 1))
     var matchChars by mutableIntStateOf(prefs.getInt("matchChars", 5))
     var weekStartSunday by mutableStateOf(prefs.getBoolean("weekStartSunday", true))
-    var chartPalette by mutableStateOf(prefs.getString("chartPalette", "Sunset") ?: "Sunset")
 
     // ── Custom Themes + Chart Palette (decoupled) ──
     var activeTheme by mutableStateOf(
@@ -2780,7 +2779,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             digitCount = prefs.getInt("digitCount", 3)
             showDecimals = prefs.getBoolean("showDecimals", false)
             dateFormatPattern = prefs.getString("dateFormatPattern", "yyyy-MM-dd") ?: "yyyy-MM-dd"
-            chartPalette = prefs.getString("chartPalette", "Sunset") ?: "Sunset"
+            activeChartPalette = com.techadvantage.budgetrak.data.ChartPalettesRepository.getSelected(getApplication())
             appLanguage = prefs.getString("appLanguage", "en") ?: "en"
             budgetPeriod = try { BudgetPeriod.valueOf(prefs.getString("budgetPeriod", "DAILY") ?: "DAILY") }
                            catch (_: Exception) { BudgetPeriod.DAILY }

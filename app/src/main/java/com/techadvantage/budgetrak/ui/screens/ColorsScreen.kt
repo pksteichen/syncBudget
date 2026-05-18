@@ -74,43 +74,31 @@ private enum class EditMode(val label: String, val isChart: Boolean) {
 private data class Slot(val key: String, val label: String)
 
 private val BASE_SLOTS = listOf(
-    Slot("primary", "Primary / Accent"),
-    Slot("cardBackground", "Header / Card Background"),
-    Slot("cardText", "Header / Card Text"),
+    Slot("cardBackground", "Header"),
+    Slot("cardText", "Header Text"),
     Slot("background", "Page Background"),
-    Slot("surface", "Surface (cards/dialogs)"),
+    Slot("surface", "Window Background"),
     Slot("onSurface", "Body Text"),
-    Slot("displayBackground", "Solari Display Background"),
-    Slot("displayBorder", "Solari Display Border"),
-    Slot("incomeGreen", "Income / Success"),
-    Slot("expenseRed", "Expense / Error"),
+    Slot("displayBackground", "Solari Background"),
 )
 
 private fun ThemeColorSet.get(key: String): Color = when (key) {
-    "primary" -> primary
     "cardBackground" -> cardBackground
     "cardText" -> cardText
     "background" -> background
     "surface" -> surface
     "onSurface" -> onSurface
     "displayBackground" -> displayBackground
-    "displayBorder" -> displayBorder
-    "incomeGreen" -> incomeGreen
-    "expenseRed" -> expenseRed
     else -> Color.Transparent
 }
 
 private fun ThemeColorSet.set(key: String, c: Color): ThemeColorSet = when (key) {
-    "primary" -> copy(primary = c)
     "cardBackground" -> copy(cardBackground = c)
     "cardText" -> copy(cardText = c)
     "background" -> copy(background = c)
     "surface" -> copy(surface = c)
     "onSurface" -> copy(onSurface = c)
     "displayBackground" -> copy(displayBackground = c)
-    "displayBorder" -> copy(displayBorder = c)
-    "incomeGreen" -> copy(incomeGreen = c)
-    "expenseRed" -> copy(expenseRed = c)
     else -> this
 }
 
@@ -250,10 +238,10 @@ fun ColorsScreen(
     // changes live. Light/Chart_Light → light cs; Dark/Chart_Dark → dark cs.
     val previewDark = mode == EditMode.DARK || mode == EditMode.CHART_DARK
     val previewCs = if (previewDark) currentTheme.dark else currentTheme.light
-    val previewOnPrimary = if (previewCs.primary.luminance() > 0.5f) Color.Black else Color.White
+    val previewOnPrimary = if (previewCs.cardBackground.luminance() > 0.5f) Color.Black else Color.White
     val previewColorScheme = if (previewDark) {
         androidx.compose.material3.darkColorScheme(
-            primary = previewCs.primary,
+            primary = previewCs.cardBackground,
             onPrimary = previewOnPrimary,
             background = previewCs.background,
             surface = previewCs.surface,
@@ -262,7 +250,7 @@ fun ColorsScreen(
         )
     } else {
         androidx.compose.material3.lightColorScheme(
-            primary = previewCs.primary,
+            primary = previewCs.cardBackground,
             onPrimary = previewOnPrimary,
             background = previewCs.background,
             surface = previewCs.surface,
@@ -276,11 +264,9 @@ fun ColorsScreen(
         cardBackground = previewCs.cardBackground,
         cardText = previewCs.cardText,
         displayBackground = previewCs.displayBackground,
-        displayBorder = previewCs.displayBorder,
+        displayBorder = com.techadvantage.budgetrak.ui.theme.solariBorderFor(previewCs.displayBackground),
         userCategoryIconTint = previewCs.cardBackground,
         accentTint = if (previewDark) previewCs.cardText else previewCs.cardBackground,
-        incomeGreen = previewCs.incomeGreen,
-        expenseRed = previewCs.expenseRed,
     )
     val customColors = previewSyncColors
 
@@ -652,9 +638,8 @@ private fun SampleDialog() {
             DialogHeader(title = "Sample Dialog")
             Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
                 Text(
-                    "Body text on the dialog surface. " +
-                        "Income " + "+$1,234.56 " + "and expense " + "-$78.90 " +
-                        "show in the income/expense colors above.",
+                    "Body text on the dialog surface. The header band above " +
+                        "tints primary buttons and other accent UI throughout the app.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )

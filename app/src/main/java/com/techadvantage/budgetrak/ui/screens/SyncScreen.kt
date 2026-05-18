@@ -86,6 +86,7 @@ import com.techadvantage.budgetrak.ui.strings.LocalStrings
 import com.techadvantage.budgetrak.ui.theme.LocalAppToast
 import com.techadvantage.budgetrak.ui.theme.LocalSyncBudgetColors
 import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrows
+import com.techadvantage.budgetrak.ui.theme.ScreenPrimaryButton
 
 private val COMMON_TIMEZONES = listOf(
     "America/New_York",
@@ -249,7 +250,7 @@ fun SyncScreen(
                 }
 
                 item {
-                    OutlinedButton(
+                    ScreenPrimaryButton(
                         onClick = {
                             if (isSubscriber) showCreateDialog = true
                             else toastState.show(S.settings.subscribeToAccess)
@@ -272,7 +273,7 @@ fun SyncScreen(
                 item { Spacer(modifier = Modifier.height(8.dp)) }
 
                 item {
-                    OutlinedButton(
+                    ScreenPrimaryButton(
                         onClick = { showJoinDialog = true },
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -455,7 +456,7 @@ fun SyncScreen(
 
                 // Sync Now button
                 item {
-                    OutlinedButton(
+                    ScreenPrimaryButton(
                         onClick = onSyncNow,
                         modifier = Modifier.fillMaxWidth(),
                         enabled = syncStatus != "syncing"
@@ -611,13 +612,13 @@ fun SyncScreen(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        OutlinedButton(
+                                        ScreenPrimaryButton(
                                             onClick = onAcceptClaim,
                                             modifier = Modifier.weight(1f)
                                         ) {
                                             Text(S.sync.claimAccept)
                                         }
-                                        OutlinedButton(
+                                        ScreenPrimaryButton(
                                             onClick = onRejectClaim,
                                             modifier = Modifier.weight(1f)
                                         ) {
@@ -635,7 +636,7 @@ fun SyncScreen(
                     item { Spacer(modifier = Modifier.height(8.dp)) }
                     item {
                         val atMemberLimit = devices.size >= 5
-                        OutlinedButton(
+                        ScreenPrimaryButton(
                             onClick = {
                                 if (atMemberLimit) toastState.show(S.sync.memberLimitReached)
                                 else onGeneratePairingCode()
@@ -661,7 +662,7 @@ fun SyncScreen(
                     // Claim Admin button (only when no pending claim, requires subscription)
                     if (pendingAdminClaim == null) {
                         item {
-                            OutlinedButton(
+                            ScreenPrimaryButton(
                                 onClick = {
                                     if (isSubscriber) onClaimAdmin()
                                     else toastState.show(S.settings.subscribeToAccess)

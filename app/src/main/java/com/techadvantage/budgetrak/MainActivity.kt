@@ -128,6 +128,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -235,11 +236,14 @@ class MainActivity : ComponentActivity() {
 
         isAppActive = true
         enableEdgeToEdge()
-        // Force white status-bar icons: the inset-padding strip uses the
-        // header background color which is dark in both light and dark
-        // themes, so black icons (light-theme default) would be unreadable.
-        androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
-            .isAppearanceLightStatusBars = false
+        // Force white status-bar and nav-bar icons: the inset-padding strip
+        // around the page uses the header background color which is dark in
+        // both light and dark themes, so black icons (light-theme default)
+        // would be unreadable.
+        androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = false
+            isAppearanceLightNavigationBars = false
+        }
         setContent {
             val vm: MainViewModel = viewModel()
 
@@ -457,14 +461,18 @@ class MainActivity : ComponentActivity() {
                       vm.shareOverflowToastPending = false
                   }
               }
-              // Status bar inset uses page header color (always-dark
-              // headerBackground) with always-light icons — consistent
-              // across themes and across pages with/without ads.
+              // Status bar + navigation bar insets use page header color
+              // (always-dark headerBackground) with always-light icons —
+              // consistent across themes and across pages with/without ads.
               val topBarColor = LocalSyncBudgetColors.current.headerBackground
               Column(modifier = Modifier
                   .fillMaxSize()
                   .background(topBarColor)
-                  .windowInsetsPadding(WindowInsets.statusBars.union(WindowInsets.displayCutout))
+                  .windowInsetsPadding(
+                      WindowInsets.statusBars
+                          .union(WindowInsets.displayCutout)
+                          .union(WindowInsets.navigationBars)
+                  )
               ) {
                 // Native ad slot — TEST ad-unit ID. Production-promotion swap
                 // checklist in memory/project_ad_implementation.md.
@@ -728,7 +736,7 @@ class MainActivity : ComponentActivity() {
                         onNavigate = { vm.currentScreen = it },
                         onAddTransaction = { vm.dashboardShowAddTransaction = true },
                         weekStartDay = if (vm.weekStartSunday) java.time.DayOfWeek.SUNDAY else java.time.DayOfWeek.MONDAY,
-                        chartPalette = vm.chartPalette,
+                        chartPalette = vm.activeChartPalette,
                         dateFormatPattern = vm.dateFormatPattern,
                         budgetPeriod = vm.budgetPeriod,
                         syncStatus = vm.syncStatus,
@@ -1299,7 +1307,7 @@ class MainActivity : ComponentActivity() {
                 currencySymbol = vm.currencySymbol,
                 dateFormatter = vm.dateFormatter,
                 isExpense = true,
-                chartPalette = vm.chartPalette,
+                chartPalette = vm.activeChartPalette,
                 recurringExpenses = vm.activeRecurringExpenses,
                 amortizationEntries = vm.activeAmortizationEntries,
                 incomeSources = vm.activeIncomeSources,
@@ -2100,8 +2108,6 @@ class MainActivity : ComponentActivity() {
                     vm.saveSharedSettings()
                 }
             },
-            chartPalette = vm.chartPalette,
-            onChartPaletteChange = { vm.chartPalette = it; vm.prefs.edit().putString("chartPalette", it).apply() },
             budgetPeriod = vm.budgetPeriod.name,
             weekStartSunday = vm.weekStartSunday,
             onWeekStartChange = {
@@ -2479,7 +2485,7 @@ class MainActivity : ComponentActivity() {
             matchPercent = vm.matchPercent,
             matchDollar = vm.matchDollar,
             matchChars = vm.matchChars,
-            chartPalette = vm.chartPalette,
+            chartPalette = vm.activeChartPalette,
             showAttribution = vm.showAttribution && vm.isSyncConfigured,
             deviceNameMap = run {
                 val roster = try {

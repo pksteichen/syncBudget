@@ -65,7 +65,6 @@ object FullBackupSerializer {
             localPrefs.put("digitCount", prefs.getInt("digitCount", 3))
             localPrefs.put("showDecimals", prefs.getBoolean("showDecimals", false))
             localPrefs.put("dateFormatPattern", prefs.getString("dateFormatPattern", "yyyy-MM-dd"))
-            localPrefs.put("chartPalette", prefs.getString("chartPalette", "Sunset"))
             localPrefs.put("appLanguage", prefs.getString("appLanguage", "en"))
             localPrefs.put("budgetPeriod", prefs.getString("budgetPeriod", "DAILY"))
             localPrefs.put("resetHour", prefs.getInt("resetHour", 0))
@@ -276,7 +275,6 @@ object FullBackupSerializer {
                 putInt("digitCount", lp.optInt("digitCount", 3))
                 putBoolean("showDecimals", lp.optBoolean("showDecimals", false))
                 putString("dateFormatPattern", lp.optString("dateFormatPattern", "yyyy-MM-dd"))
-                putString("chartPalette", lp.optString("chartPalette", "Sunset"))
                 putString("appLanguage", lp.optString("appLanguage", "en"))
                 putString("budgetPeriod", lp.optString("budgetPeriod", "DAILY"))
                 putInt("resetHour", lp.optInt("resetHour", 0))
@@ -293,7 +291,13 @@ object FullBackupSerializer {
                 putBoolean("autoCapitalize", lp.optBoolean("autoCapitalize", true))
                 putBoolean("showWidgetLogo", lp.optBoolean("showWidgetLogo", true))
                 putString("selectedThemeName", lp.optString("selectedThemeName", "Default"))
-                putString("selectedChartPaletteName", lp.optString("selectedChartPaletteName", "Bright"))
+                // Pre-custom-themes backups stored the chart palette under "chartPalette";
+                // fall back to that so a restore from an older backup keeps the user's choice.
+                val legacyChartPalette = lp.optString("chartPalette", "")
+                putString(
+                    "selectedChartPaletteName",
+                    lp.optString("selectedChartPaletteName", legacyChartPalette.ifBlank { "Bright" })
+                )
                 apply()
             }
         }

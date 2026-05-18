@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -69,6 +70,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.techadvantage.budgetrak.ui.theme.AdAwareDialog
 import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrows
+import com.techadvantage.budgetrak.ui.theme.ScreenPrimaryButton
 import com.techadvantage.budgetrak.ui.theme.ScrollableDropdownContent
 import com.techadvantage.budgetrak.data.BudgetPeriod
 import com.techadvantage.budgetrak.data.IncomeSource
@@ -253,7 +255,7 @@ fun BudgetConfigScreen(
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Box {
-                        OutlinedButton(
+                        ScreenPrimaryButton(
                             onClick = { showResetDialog = true },
                             enabled = !isLocked
                         ) {
@@ -290,7 +292,7 @@ fun BudgetConfigScreen(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Box {
-                    OutlinedButton(
+                    ScreenPrimaryButton(
                         onClick = { showResetBudgetConfirm = true },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !isLocked
@@ -416,31 +418,20 @@ fun BudgetConfigScreen(
                     if (isLocked) Box(Modifier.matchParentSize().clickable { toastState.show(S.settings.administratorOnly) })
                     }
                     // Add income source button (available to all members)
-                    Surface(
+                    ScreenPrimaryButton(
                         onClick = { showAddDialog = true },
-                        enabled = true,
-                        color = Color.Transparent,
-                        shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)
                     ) {
-                        Row(
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Add,
-                                contentDescription = null,
-                                modifier = Modifier.padding(end = 4.dp),
-                                tint = MaterialTheme.colorScheme.onBackground
-                            )
-                            Text(
-                                text = S.budgetConfig.addIncomeSource,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onBackground
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 4.dp)
+                        )
+                        Text(
+                            text = S.budgetConfig.addIncomeSource,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
                     }
                 }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -781,7 +772,7 @@ private fun AddEditIncomeDialog(
                                     Modifier.border(1.dp, Color.Red, RoundedCornerShape(4.dp))
                                 else Modifier
                             ) {
-                                OutlinedButton(
+                                ScreenPrimaryButton(
                                     onClick = { showDatePicker = true },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
@@ -811,7 +802,7 @@ private fun AddEditIncomeDialog(
                                     Modifier.border(1.dp, Color.Red, RoundedCornerShape(4.dp))
                                 else Modifier
                             ) {
-                                OutlinedButton(
+                                ScreenPrimaryButton(
                                     onClick = { showDatePicker = true },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
@@ -836,7 +827,7 @@ private fun AddEditIncomeDialog(
                                     Modifier.border(1.dp, Color.Red, RoundedCornerShape(4.dp))
                                 else Modifier
                             ) {
-                                OutlinedButton(
+                                ScreenPrimaryButton(
                                     onClick = { showDatePicker = true },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
@@ -874,7 +865,7 @@ private fun AddEditIncomeDialog(
                                     Modifier.border(1.dp, Color.Red, RoundedCornerShape(4.dp))
                                 else Modifier
                             ) {
-                                OutlinedButton(
+                                ScreenPrimaryButton(
                                     onClick = { showDatePicker = true },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
@@ -926,7 +917,7 @@ private fun AddEditIncomeDialog(
                                     Modifier.border(1.dp, Color.Red, RoundedCornerShape(4.dp))
                                 else Modifier
                             ) {
-                                OutlinedButton(
+                                ScreenPrimaryButton(
                                     onClick = { showDatePicker = true },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {

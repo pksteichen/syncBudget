@@ -83,31 +83,23 @@ object ThemesRepository {
 
     private fun colorSetToJson(c: ThemeColorSet): JSONObject {
         val o = JSONObject()
-        o.put("primary", colorToHex(c.primary))
         o.put("cardBackground", colorToHex(c.cardBackground))
         o.put("cardText", colorToHex(c.cardText))
         o.put("background", colorToHex(c.background))
         o.put("surface", colorToHex(c.surface))
         o.put("onSurface", colorToHex(c.onSurface))
         o.put("displayBackground", colorToHex(c.displayBackground))
-        o.put("displayBorder", colorToHex(c.displayBorder))
-        o.put("incomeGreen", colorToHex(c.incomeGreen))
-        o.put("expenseRed", colorToHex(c.expenseRed))
         return o
     }
 
     private fun colorSetFromJson(o: JSONObject): ThemeColorSet? {
         return ThemeColorSet(
-            primary = parseHex(o.optString("primary")) ?: return null,
             cardBackground = parseHex(o.optString("cardBackground")) ?: return null,
             cardText = parseHex(o.optString("cardText")) ?: return null,
             background = parseHex(o.optString("background")) ?: return null,
             surface = parseHex(o.optString("surface")) ?: return null,
             onSurface = parseHex(o.optString("onSurface")) ?: return null,
             displayBackground = parseHex(o.optString("displayBackground")) ?: return null,
-            displayBorder = parseHex(o.optString("displayBorder")) ?: return null,
-            incomeGreen = parseHex(o.optString("incomeGreen")) ?: return null,
-            expenseRed = parseHex(o.optString("expenseRed")) ?: return null,
         )
     }
 
@@ -146,8 +138,16 @@ object ChartPalettesRepository {
     }
 
     fun getSelected(context: Context): ChartPalette {
-        val name = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(KEY_SELECTED, BuiltInChartPalettes.DEFAULT.name)
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        // Migrate the pre-custom-themes "chartPalette" pref into KEY_SELECTED so users
+        // who picked Sunset / Pastel on the old picker keep that choice after upgrade.
+        if (!prefs.contains(KEY_SELECTED) && prefs.contains("chartPalette")) {
+            val legacy = prefs.getString("chartPalette", null)
+            val edit = prefs.edit().remove("chartPalette")
+            if (!legacy.isNullOrBlank()) edit.putString(KEY_SELECTED, legacy)
+            edit.apply()
+        }
+        val name = prefs.getString(KEY_SELECTED, BuiltInChartPalettes.DEFAULT.name)
             ?: BuiltInChartPalettes.DEFAULT.name
         return load(context).firstOrNull { it.name == name } ?: BuiltInChartPalettes.DEFAULT
     }
