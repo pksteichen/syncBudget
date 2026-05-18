@@ -305,18 +305,66 @@ class MainActivity : ComponentActivity() {
             // its old (no-MediaView) layout but began reporting medium-tier
             // dimensions, which is what tripped the AdMob validator into its
             // "MediaView too small" warning that survived until app restart.
+            // Base (OS) density captured before SyncBudgetTheme overrides
+            // LocalDensity. Passed back through to the ad bar so its
+            // Modifier.height(adBannerHeight) doesn't get double-scaled
+            // (the ad has its own continuous scaler in computeAdMediumDims;
+            // multiplying again by the screen-content factor would over-grow
+            // the slot). Everything else inside SyncBudgetTheme (screen,
+            // dialogs, toast) inherits the scaled density.
+            val baseDensity = androidx.compose.ui.platform.LocalDensity.current
             val widthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
+            val heightDp = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
+            // Letterbox below a minimum height:width aspect ratio so wide
+            // foldables and ultra-wide configurations don't render the
+            // portrait UI in a too-short canvas. Effective canvas width =
+            // min(widthDp, heightDp / minAspect). Letterbox bars on the
+            // sides show the outer Column's headerBackground (same color
+            // as the inset strip above the ad bar). 1.3 was chosen 2026-
+            // 05-16 after testing: 1.6 was too aggressive on foldable
+            // open, where the OS already letterboxes the wide inner
+            // display down to a portrait area (typical aspect ~1.33);
+            // our additional 1.6 letterbox just shaved width without
+            // adding height, hurting readability. 1.3 lets OS-letterboxed
+            // foldables pass through unmodified while still catching
+            // ultra-wide configs (aspect < 1.3) as a safety net.
+            val minAspect = 1.3f
+            val effectiveWidthDp = kotlin.math.min(widthDp, (heightDp / minAspect).toInt())
+            // Scalers (ad bar + screen content) feed from `effectiveWidthDp`
+            // so letterboxed canvases don't get tablet-scale text inside a
+            // phone-shape area. Ads scale proportionally (constant fraction
+            // of canvas width); content scales linearly 1.0× → 1.6× over
+            // 400 → 800dp, then proportionally above 800.
             val nativeAdEnabled = !vm.isPaidUser && !vm.isSubscriber
-            val isMediumTier = nativeAdEnabled && widthDp >= 400
+            val isMediumTier = nativeAdEnabled && effectiveWidthDp >= 400
             val nativeAdLayoutId = if (isMediumTier) R.layout.native_ad_medium else R.layout.native_ad_small
-            // Slot height for the medium tier is resource-driven via
-            // res/values{-w600dp,-w800dp}/dimens.xml so the slot scales up on
-            // tablets / foldables without per-device branching here.
-            val mediumSlotHeight = dimensionResource(R.dimen.ad_slot_height)
+            val adMediumDims = remember(isMediumTier, effectiveWidthDp) {
+                if (isMediumTier) com.techadvantage.budgetrak.ui.components.computeAdMediumDims(effectiveWidthDp)
+                else null
+            }
             val adBannerHeight = when {
                 !nativeAdEnabled -> 0.dp
-                isMediumTier -> mediumSlotHeight
+                adMediumDims != null -> adMediumDims.slotHeightDp.dp
                 else -> 70.dp
+            }
+            val contentScale = remember(effectiveWidthDp) {
+                when {
+                    effectiveWidthDp <= 400 -> 1.0f
+                    effectiveWidthDp <= 800 -> 1.0f + (effectiveWidthDp - 400f) * 0.6f / 400f
+                    else -> effectiveWidthDp * 1.6f / 800f
+                }
+            }
+            // Layout diagnostic: log whenever Configuration changes (orientation,
+            // foldable state, density slider). Useful for verifying that the
+            // letterboxing + scaling are responding correctly on unusual form
+            // factors. Fires once per dp/height change, not per recomposition.
+            androidx.compose.runtime.LaunchedEffect(widthDp, heightDp) {
+                if (com.techadvantage.budgetrak.BuildConfig.DEBUG) {
+                    val aspect = if (widthDp > 0) heightDp.toFloat() / widthDp else 0f
+                    com.techadvantage.budgetrak.BudgeTrakApplication.tokenLog(
+                        "Layout: widthDp=$widthDp heightDp=$heightDp effective=$effectiveWidthDp scale=${"%.3f".format(contentScale)} aspect=${"%.2f".format(aspect)}"
+                    )
+                }
             }
 
             // Native ad load + 60 s refresh, paused when app is backgrounded.
@@ -414,7 +462,7 @@ class MainActivity : ComponentActivity() {
                     if (open) vm.shareBlockingDialogCount++ else vm.shareBlockingDialogCount--
                 }
             ) {
-            SyncBudgetTheme(strings = vm.strings, adBannerHeight = adBannerHeight, profile = vm.activeTheme) {
+            SyncBudgetTheme(strings = vm.strings, adBannerHeight = adBannerHeight, profile = vm.activeTheme, contentScale = contentScale) {
               val toastState = LocalAppToast.current
               run {
               // Archive toast
@@ -472,13 +520,31 @@ class MainActivity : ComponentActivity() {
                       WindowInsets.statusBars
                           .union(WindowInsets.displayCutout)
                           .union(WindowInsets.navigationBars)
-                  )
+                  ),
+                  horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
               ) {
+                // Letterbox inner column: ad bar + screen content sit in a
+                // centered Column constrained to `effectiveWidthDp`. The
+                // outer Column's `topBarColor` background fills the
+                // letterbox bars on either side automatically. On phones
+                // (aspect ≥ minAspect = 1.6) `effectiveWidthDp == widthDp`
+                // so this is a no-op; on wide foldables / ultra-wide
+                // configs the inner column shrinks toward a tablet-
+                // portrait-shaped canvas.
+                Column(modifier = Modifier.width(effectiveWidthDp.dp)) {
                 // Native ad slot — TEST ad-unit ID. Production-promotion swap
                 // checklist in memory/project_ad_implementation.md.
                 // When AdMob fails to load (offline / no fill), swaps to one
                 // of 5 cycling in-house upgrade promos. Slot dimensions match
                 // either way so no layout shift on swap.
+                // Ad bar overrides LocalDensity back to base — SyncBudgetTheme
+                // provides scaled density for screen content + dialogs +
+                // toast, but the ad has its own continuous scaler in
+                // computeAdMediumDims; layering both would double-scale slot
+                // height, text, and padding.
+                androidx.compose.runtime.CompositionLocalProvider(
+                    androidx.compose.ui.platform.LocalDensity provides baseDensity
+                ) {
                 if (nativeAdEnabled) {
                     // pageTextColor: theme-conditional for the left column of
                     // the ad (which sits on the page bg). In light mode use
@@ -497,6 +563,7 @@ class MainActivity : ComponentActivity() {
                             ad = inHouseAd,
                             strings = vm.strings,
                             isMediumTier = isMediumTier,
+                            mediumDims = adMediumDims,
                             // In-house ad text + icon sit on the page-bg ad bar, so
                             // use page text color (theme-aware) — dark in light
                             // theme, light in dark theme. Parameter name is legacy.
@@ -552,88 +619,112 @@ class MainActivity : ComponentActivity() {
                                 view
                             },
                             update = { view ->
-                                // Left column text sits on the page-bg ad bar — use page
-                                // text color (theme-aware) for contrast. Pills (in
-                                // MediaView area) reuse the CTA's primary/onPrimary
-                                // theme colors for visual consistency with the CTA pill.
-                                val leftColArgb = pageTextColor.toArgb()
-                                val pillBgArgb = ctaBgColor.toArgb()
-                                val pillTextArgb = ctaTextColor.toArgb()
-                                val headlineView = view.findViewById<android.widget.TextView>(R.id.native_ad_headline)
-                                val advertiserView = view.findViewById<android.widget.TextView>(R.id.native_ad_advertiser)
-                                val bodyView = view.findViewById<android.widget.TextView>(R.id.native_ad_body)
-                                val ctaView = view.findViewById<android.widget.Button>(R.id.native_ad_cta)
-                                val iconView = view.findViewById<android.widget.ImageView>(R.id.native_ad_icon)
-                                val priceView = view.findViewById<android.widget.TextView>(R.id.native_ad_price)
-                                val storeView = view.findViewById<android.widget.TextView>(R.id.native_ad_store)
-                                val starView = view.findViewById<android.widget.TextView>(R.id.native_ad_star)
-                                headlineView.setTextColor(leftColArgb)
-                                advertiserView?.setTextColor(leftColArgb)
-                                advertiserView?.paintFlags =
-                                    (advertiserView?.paintFlags ?: 0) or
-                                        android.graphics.Paint.UNDERLINE_TEXT_FLAG
-                                bodyView?.setTextColor(leftColArgb)
-                                // CTA button: theme-driven primary background + onPrimary text.
-                                val density = view.resources.displayMetrics.density
-                                ctaView.background = android.graphics.drawable.GradientDrawable().apply {
-                                    setColor(ctaBgColor.toArgb())
-                                    cornerRadius = 6f * density
-                                }
-                                ctaView.setTextColor(ctaTextColor.toArgb())
-                                // CTA-colored pills for bottom-start overlays. "Ad"
-                                // badge keeps its yellow + black-border XML look
-                                // (handled in native_ad_badge_bg.xml).
-                                fun pillBg() = android.graphics.drawable.GradientDrawable().apply {
-                                    setColor(pillBgArgb)
-                                    cornerRadius = 3f * density
-                                }
-                                priceView?.background = pillBg()
-                                priceView?.setTextColor(pillTextArgb)
-                                storeView?.background = pillBg()
-                                storeView?.setTextColor(pillTextArgb)
-                                starView?.background = pillBg()
-                                starView?.setTextColor(pillTextArgb)
-                                val ad = nativeAd ?: return@AndroidView
-                                if (com.techadvantage.budgetrak.BuildConfig.DEBUG) {
-                                    com.techadvantage.budgetrak.BudgeTrakApplication.tokenLog(
-                                        "Ad load: tier=${if (isMediumTier) "medium" else "small"} adChoicesInfo=${ad.adChoicesInfo != null} advertiser=${ad.advertiser} icon=${ad.icon != null} price=${ad.price} store=${ad.store} star=${ad.starRating} body=${ad.body?.take(40)}"
+                                // Apply continuous-scale dims + theme colors (shared
+                                // with the in-house path so visual scaling stays
+                                // identical when the slot swaps between AdMob and
+                                // in-house content). Medium tier only — small tier
+                                // uses the dim-fixed `native_ad_small.xml`.
+                                if (adMediumDims != null) {
+                                    com.techadvantage.budgetrak.ui.components.applyMediumAdDimsAndColors(
+                                        view,
+                                        adMediumDims,
+                                        pageTextColor.toArgb(),
+                                        ctaBgColor.toArgb(),
+                                        ctaTextColor.toArgb(),
                                     )
-                                }
-                                headlineView.text = ad.headline ?: ""
-                                advertiserView?.text = ad.advertiser ?: ""
-                                ctaView.text = ad.callToAction ?: ""
-                                bodyView?.text = ad.body ?: ""
-                                ad.icon?.drawable?.let { iconView?.setImageDrawable(it) }
-                                // Shopping/app-install overlays — bind text and toggle
-                                // visibility per asset availability. AdMob delivers each
-                                // independently, so each overlay is conditional.
-                                priceView?.let {
-                                    val p = ad.price
-                                    if (p.isNullOrBlank()) it.visibility = android.view.View.GONE
-                                    else { it.text = p; it.visibility = android.view.View.VISIBLE }
-                                }
-                                storeView?.let {
-                                    val s = ad.store
-                                    if (s.isNullOrBlank()) it.visibility = android.view.View.GONE
-                                    else { it.text = s; it.visibility = android.view.View.VISIBLE }
-                                }
-                                starView?.let {
-                                    val r = ad.starRating
-                                    if (r == null) it.visibility = android.view.View.GONE
-                                    else {
-                                        it.text = "★ %.1f".format(r)
-                                        it.visibility = android.view.View.VISIBLE
+                                    val ad = nativeAd
+                                    if (ad != null) {
+                                        if (com.techadvantage.budgetrak.BuildConfig.DEBUG) {
+                                            com.techadvantage.budgetrak.BudgeTrakApplication.tokenLog(
+                                                "Ad load: tier=medium adChoicesInfo=${ad.adChoicesInfo != null} advertiser=${ad.advertiser} icon=${ad.icon != null} price=${ad.price} store=${ad.store} star=${ad.starRating} body=${ad.body?.take(40)}"
+                                            )
+                                        }
+                                        com.techadvantage.budgetrak.ui.components.bindMediumAdContent(
+                                            view,
+                                            com.techadvantage.budgetrak.ui.components.AdMediumContent.AdMob(ad),
+                                            pageTextColor.toArgb(),
+                                        )
                                     }
+                                } else {
+                                    // Small tier still uses the per-update imperative
+                                    // path (colors + text bindings against the fixed
+                                    // 70dp layout).
+                                    val leftColArgb = pageTextColor.toArgb()
+                                    val pillBgArgb = ctaBgColor.toArgb()
+                                    val pillTextArgb = ctaTextColor.toArgb()
+                                    val headlineView = view.findViewById<android.widget.TextView>(R.id.native_ad_headline)
+                                    val advertiserView = view.findViewById<android.widget.TextView>(R.id.native_ad_advertiser)
+                                    val bodyView = view.findViewById<android.widget.TextView>(R.id.native_ad_body)
+                                    val ctaView = view.findViewById<android.widget.Button>(R.id.native_ad_cta)
+                                    val iconView = view.findViewById<android.widget.ImageView>(R.id.native_ad_icon)
+                                    val priceView = view.findViewById<android.widget.TextView>(R.id.native_ad_price)
+                                    val storeView = view.findViewById<android.widget.TextView>(R.id.native_ad_store)
+                                    val starView = view.findViewById<android.widget.TextView>(R.id.native_ad_star)
+                                    headlineView.setTextColor(leftColArgb)
+                                    advertiserView?.setTextColor(leftColArgb)
+                                    advertiserView?.paintFlags =
+                                        (advertiserView?.paintFlags ?: 0) or
+                                            android.graphics.Paint.UNDERLINE_TEXT_FLAG
+                                    bodyView?.setTextColor(leftColArgb)
+                                    val density = view.resources.displayMetrics.density
+                                    ctaView.background = android.graphics.drawable.GradientDrawable().apply {
+                                        setColor(ctaBgColor.toArgb())
+                                        cornerRadius = 6f * density
+                                    }
+                                    ctaView.setTextColor(ctaTextColor.toArgb())
+                                    fun pillBg() = android.graphics.drawable.GradientDrawable().apply {
+                                        setColor(pillBgArgb)
+                                        cornerRadius = 3f * density
+                                    }
+                                    priceView?.background = pillBg()
+                                    priceView?.setTextColor(pillTextArgb)
+                                    storeView?.background = pillBg()
+                                    storeView?.setTextColor(pillTextArgb)
+                                    starView?.background = pillBg()
+                                    starView?.setTextColor(pillTextArgb)
+                                    val ad = nativeAd ?: return@AndroidView
+                                    if (com.techadvantage.budgetrak.BuildConfig.DEBUG) {
+                                        com.techadvantage.budgetrak.BudgeTrakApplication.tokenLog(
+                                            "Ad load: tier=small adChoicesInfo=${ad.adChoicesInfo != null} advertiser=${ad.advertiser} icon=${ad.icon != null} price=${ad.price} store=${ad.store} star=${ad.starRating} body=${ad.body?.take(40)}"
+                                        )
+                                    }
+                                    headlineView.text = ad.headline ?: ""
+                                    advertiserView?.text = ad.advertiser ?: ""
+                                    ctaView.text = ad.callToAction ?: ""
+                                    bodyView?.text = ad.body ?: ""
+                                    ad.icon?.drawable?.let { iconView?.setImageDrawable(it) }
+                                    priceView?.let {
+                                        val p = ad.price
+                                        if (p.isNullOrBlank()) it.visibility = android.view.View.GONE
+                                        else { it.text = p; it.visibility = android.view.View.VISIBLE }
+                                    }
+                                    storeView?.let {
+                                        val s = ad.store
+                                        if (s.isNullOrBlank()) it.visibility = android.view.View.GONE
+                                        else { it.text = s; it.visibility = android.view.View.VISIBLE }
+                                    }
+                                    starView?.let {
+                                        val r = ad.starRating
+                                        if (r == null) it.visibility = android.view.View.GONE
+                                        else {
+                                            it.text = "★ %.1f".format(r)
+                                            it.visibility = android.view.View.VISIBLE
+                                        }
+                                    }
+                                    view.setNativeAd(ad)
                                 }
-                                view.setNativeAd(ad)
                             },
                             modifier = Modifier.fillMaxWidth().height(adBannerHeight).background(MaterialTheme.colorScheme.background)
                         )
                         }
                     }
                 }
+                } // CompositionLocalProvider(LocalDensity = baseDensity) — end ad bar's base-density scope
 
-                // Screen content
+                // Screen content. LocalDensity is the scaled density
+                // provided by SyncBudgetTheme — every dp/sp inside multiplies
+                // by `contentScale`. Dialogs + toast (rendered by
+                // SyncBudgetTheme above) inherit the same scale.
                 Box(modifier = Modifier.weight(1f)) {
                 if (vm.currentScreen == "main") {
                     BackHandler { moveTaskToBack(true) }
@@ -1202,7 +1293,8 @@ class MainActivity : ComponentActivity() {
                 DashboardDialogs(vm, vm.strings, toastState)
 
                 } // Box(weight)
-              } // Column
+                } // Letterbox inner Column (width = effectiveWidthDp)
+              } // Outer Column (fillMaxSize + headerBackground letterbox bars)
             // Quick Start Guide overlay
             if (vm.quickStartStep != null) {
                 QuickStartOverlay(

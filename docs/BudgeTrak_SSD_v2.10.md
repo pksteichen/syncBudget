@@ -2,17 +2,18 @@
 
 | | |
 |---|---|
-| Document / App Version | 2.8 (in development) |
-| Date | April 2026 |
+| Document Version | 2.10 (in development) |
+| App Version | 2.10.28 (dev), versionCode 44 |
+| Date | May 2026 |
 | Publisher | Tech Advantage LLC |
 | Application ID / Package / Namespace | `com.techadvantage.budgetrak` |
-| Platform | Android 9.0+ (minSdk 28, compile/target SDK 34) |
+| Platform | Android 9.0+ (minSdk 28, compile/target SDK 34/35 — bifurcated, see §27) |
 | Language / UI | Kotlin 2.0.21, Jetpack Compose + Material 3 |
 | Build | Gradle 8.9 (Kotlin DSL), JVM 17 |
 | Code Size | ~100 Kotlin files, ~51,500 lines (refreshed at release tags — see §26) |
 | Status | Dev — Internal / Technical Reference |
 
-> v2.7 (versionCode=4) is the production release on Google Play; v2.8 (versionCode=5) is in development. Per-release diff in §28.
+> Doc-version cadence is independent of app version. v2.10 bump (from v2.8) captures: Chapter 28 backend-infra consolidation (post-v2.8), Play Billing Layers 1+2 (§16b, app v2.10.10–22), native ad refresh banner→native + continuous scaling + AdMob/in-house unified rendering (§16a, app v2.10.16/28), AI/OCR class documentation (§§11.2-3, §6.20-23), AdAware dialog overlay system internals (§16.5/§16.5a). App v2.10.23 was the last AAB published; v2.10.28 is current on dev.
 
 ## Table of Contents
 
@@ -32,6 +33,8 @@
 14. PDF Expense Reports
 15. Localization System
 16. Theme System
+16a. Native Advertising (AdMob + In-House Fallback)
+16b. Play Billing & Entitlement
 17. SYNC System (Firestore-Native)
 18. Receipt Photo System
 19. Home Screen Widget
@@ -830,9 +833,10 @@ Runs only when the deterministic matcher's confidence is low (fewer than 5 histo
 
 - Model: Gemini 2.5 Flash-Lite via Firebase AI Logic SDK
 - Payload per transaction: `{i, merchant, amount}` — index, merchant name, and amount **only**. The transaction date is NOT sent (trimmed in 2.7 for a smaller privacy footprint; merchant is the dominant categorization signal and date adds negligible value).
-- Batched at 100 transactions per call; schema-constrained JSON response
-- On receipt: maps `i → categoryId`, drops any invalid IDs, merges back into the import. `isUserCategorized = false` so the user sees an "unverified" flag until they review.
-- Retry: 3 attempts with exponential backoff on transient errors; total timeout 30 s per call.
+- Batched at 100 transactions per call (`CHUNK_SIZE`); schema-constrained JSON response (`Schema.obj("CategorizerResult")`).
+- On receipt: maps `i → categoryId`, drops any invalid IDs (validates against the user's non-deleted category set), merges back into the import. `isUserCategorized = false` so the user sees an "unverified" flag until they review.
+- Retry: 3 attempts with exponential backoff `500L shl (attempt - 1)` (500 ms → 1 s → 2 s) on transient errors only (`503`, `UNAVAILABLE`, `overloaded`, `429`, `RESOURCE_EXHAUSTED`, `deadline`, network errors); total timeout 30 s per call (`TIMEOUT_MS`).
+- Prompt template: `buildCategorizerPrompt(categories, batchJson)` in `data/ai/CategorizerPromptBuilder.kt`. Version pinned via `const val CSV_CATEGORIZER_PROMPT_VERSION = "v1"`. Filters out `supercharge` / `recurring_income` / `deleted` categories from the prompt so the model can't pick them. Domain hints (amount as disambiguator, "Electric/Gas" vs "Transportation/Gas", pure Insurance vs combined property-tax, fallback-to-"Other") live in the prompt body.
 
 Privacy: data is encrypted in transit (HTTPS); Google's Gemini Developer API terms (Blaze tier) provide no-training-use and brief abuse-detection-only logging. No account identifiers, balances, other transactions, or receipt photos are sent.
 
@@ -861,6 +865,13 @@ Triggered by an explicit tap on the AI sparkle in the transaction dialog header.
 **Per-call timing logs (debug only).** Every call emits `Call N dispatch (...)` at start and `Call N response after Nms (...)` on response. `Call1.5: timed out 2000ms past C2 — using C1 values` when the cap fires. Logs land in dump files for forensic latency analysis.
 
 **Cost model.** ≤ 4 API calls per OCR; Lite tier; no separate fallback model. Caller is `MainViewModel.runOcrOnSlot1(receiptId, preSelectedCategoryIds)`. Single entry point: `ReceiptOcrService.extractFromReceipt`.
+
+**Post-processing helpers** (multi-cat path, all `internal` for harness testing):
+- `deriveMulti(items, promptCats, multiCategoryLikely?)` — single-vs-multi routing decision combining Call 2's `multiCategoryLikely` hint with a score-spread heuristic over `promptCats`.
+- `reconcilePrices(items, priceCents, totalCents)` — reconciles Call 3's per-item cents against Call 1/1.5's total, tolerating ≤ $0.05 drift. Tax lines (matched by `isTaxLine` — "Sales Tax", "Estimated tax", "Tax", etc.) are preserved exactly so reconciliation drift doesn't bleed into tax.
+- `aggregateCategoryAmounts(items, reconciledPriceCents)` — groups items by their per-item `topChoice` (or `deriveSingleCat` fallback) and sums cents to produce the `List<OcrCategoryAmount>` returned in `OcrResult`.
+
+**Image-bytes path.** `extractFromReceipt` passes the JPEG via `content { blob("image/jpeg", bytes) }` — **NOT** `content { image(bitmap) }`. The latter re-encodes at JPEG q=80 inside the SDK's `encodeBitmapToBase64Png` helper, silently degrading the q=92+ stored receipts. The `blob` form bypasses the re-encode entirely. Confirmed by source inspection of `com.google.ai.client.generativeai.internal.util.ConversionsKt`.
 
 ## 12. Category Management
 
@@ -1008,13 +1019,15 @@ Static composition local `LocalSyncBudgetColors` + `LocalAdBannerHeight`.
 
 `AdAwareDialog` / `AdAwareAlertDialog` are rendered as in-tree overlays inside the main Activity window — NOT as separate Compose `Dialog` windows. State-driven host pattern:
 
-- `AdAwareDialogState` (one instance per `SyncBudgetTheme`) holds a `mutableStateListOf<AdAwareDialogEntry>` of active dialogs.
-- `LocalAdAwareDialogState` is provided by `SyncBudgetTheme` and visible to all descendants.
-- `AdAwareDialog(onDismissRequest, content)` registers/unregisters an entry via `DisposableEffect`; renders no UI of its own. `properties: DialogProperties` retained for API compat but ignored.
-- `AdAwareDialogHost` is placed once inside `SyncBudgetTheme`'s outer Box (below status bar + ad banner, above the navigation bar — `Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(top = adBannerHeight)`). Iterates entries sorted by `sequence: Long` (stable Z-order) and renders dim layer + content centered for each entry.
-- Per-entry `BackHandler(enabled = true)` — Compose's stack semantics close the topmost dialog first.
-- Each entry's `sequence` is assigned from an `AtomicLong` so registration order is preserved even under composition re-keying.
-- `rememberUpdatedState` on both `onDismissRequest` and `content` so caller recompositions propagate through the captured entry.
+- `AdAwareDialogState` (one instance per `SyncBudgetTheme`) holds a `mutableStateListOf<AdAwareDialogEntry>` of active dialogs plus an `AtomicLong nextSequence` for stable ordering. Class is declared in `ui/theme/Theme.kt`.
+- `LocalAdAwareDialogState` is provided by `SyncBudgetTheme` and visible to all descendants. A `FallbackAdAwareDialogState` no-op default (also in `Theme.kt`) covers callers outside `SyncBudgetTheme` (e.g., `WidgetTransactionActivity` which uses raw `MaterialTheme`) — calls become silent no-ops with a one-time logcat warning instead of a crash.
+- `AdAwareDialog(onDismissRequest, content)` registers/unregisters an entry via `DisposableEffect(Unit)`; renders no UI of its own. `properties: DialogProperties` is retained as a parameter for API compat with `androidx.compose.ui.window.Dialog` (the ~13 existing call sites compile without change) but ignored — the host reimplements the few relevant bits (`dismissOnBackPress` is always on, `dismissOnClickOutside` is always off).
+- Each entry is constructed with `sequence = state.nextSequence.getAndIncrement()`, plus `rememberUpdatedState`-wrapped `onDismissRequest` + `content` callbacks so caller recompositions propagate through the captured entry. Without `rememberUpdatedState`, the DisposableEffect would hold the FIRST onDismissRequest / content reference forever and ignore subsequent caller updates.
+- `AdAwareDialogHost` is placed once inside `SyncBudgetTheme`'s outer Box (below status bar + ad banner, above the navigation bar — `Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(top = adBannerHeight)`). Iterates entries sorted by `sequence: Long` ascending (stable Z-order — last added draws on top) and renders dim layer + content centered for each.
+- Per-entry rendering is wrapped in `key(entry)` so each entry gets its own composition slot — `BackHandler` and any `remember` inside the entry's content are scoped to that entry's lifecycle, not collapsed when the list reorders.
+- Per-entry `BackHandler(enabled = true)` calls `entry.onDismissRequest()`. Compose's stack semantics fire only the topmost handler, so back closes the top dialog first.
+- Dim layer: `Box.fillMaxSize().background(Color.Black.copy(alpha = 0.6f))` with a `clickable` whose lambda is a deliberate no-op (uses `MutableInteractionSource` + `indication = null` so scrim taps don't show a ripple but also can't leak to anything underneath).
+- Content wrapper: `Box.fillMaxSize().imePadding()` with `contentAlignment = Alignment.Center` — the `.imePadding()` is what lifts the dialog above the soft keyboard without needing window-level adjustments.
 
 **Reason for the rewrite:** the previous separate-Window approach absorbed all taps in its window bounds, including the visible-but-behind ad bar — AdMob `NativeAdView` clicks didn't register while a dialog was open. With the in-tree overlay, the ad bar lives in the main window outside the host's bounds and receives clicks normally during open dialogs.
 
@@ -1028,12 +1041,191 @@ Static composition local `LocalSyncBudgetColors` + `LocalAdBannerHeight`.
 
 **Content-lambda safety:** dialog content should be invoked via `state?.let { value -> AdAwareDialog(...) }` rather than `if (state != null) { ... state!! ... }` — the host may re-invoke the lambda one frame after the gating state is set to null but before the `DisposableEffect.onDispose` apply phase removes the entry. See `feedback_dialog_safety_patterns.md`.
 
+### 16.5a Share-Intent Blocking (LocalShareBlockingDialogRegistrar)
+
+Companion `CompositionLocal` for routing dropped share-intent URIs while any dialog is open. `LocalShareBlockingDialogRegistrar: (Boolean) -> Unit` is a purpose-scoped registrar: every `AdAwareDialog` calls `registrar(true)` in its `DisposableEffect` body and `registrar(false)` in `onDispose`. `MainActivity` provides the registrar to flip `vm.shareBlockingDialogCount++` / `--`. When share intents arrive (Android `ACTION_SEND` / `ACTION_SEND_MULTIPLE`), `MainViewModel.consumePendingSharedImages` checks the counter:
+
+- Counter == 0 + no open transaction dialog → fall through to a new Add dialog (default path).
+- Counter > 0 + open transaction dialog → absorb URIs into the open dialog (route through `vm.attachSharedImagesToOpenTransaction`).
+- Counter > 0 + non-transaction dialog → drop URIs + toast `shareBlockedByOpenDialog`.
+
+**Purpose-scoped** is load-bearing: the AdAware wrappers auto-register EVERY dialog (pickers, confirmations, Add/Edit forms alike). A different "is a dialog open?" need should add a separate registrar — repurposing this one would fire on benign popups. Default value is a no-op so previews without a provider still render. See `feedback_share_intent_routing.md`.
+
 ### 16.6 Scroll Affordance (bidirectional)
 
 Every scrollable dialog body and every dropdown body shows pulsing arrows for further content above / below. Two composables in `Theme.kt`:
 
 - **`BoxScope.PulsingScrollArrows(scrollState)`** — renders an up-arrow at `TopStart` when `scrollState.canScrollBackward`, and a down-arrow at `BottomStart` when `scrollState.canScrollForward`. Default paddings: `topPadding = 36.dp` (clears `DialogHeader`), `bottomPadding = 50.dp` (clears footer buttons); both 24dp-wide icons animate with `tween(600ms, Reverse)` bounce, alpha 0.5 onSurface.
 - **`ScrollableDropdownContent { … }`** — wrap inside a `DropdownMenu` / `ExposedDropdownMenu` when the list may scroll at default or enlarged font. Owns its own `ScrollState`, caps height at `280.dp`, indents its content by `32.dp` on the start edge so items clear the arrow column. Short lists wrap to content size and show no arrows.
+
+## 16a. Native Advertising (AdMob + In-House Fallback)
+
+### 16a.1 Overview
+
+Free-tier users see ads in a banner slot at the top of every screen below the status bar and above the AdAware-dialog overlay. Subscribers and Paid users skip the slot entirely (`adBannerHeight = 0.dp`). Two responsive tiers:
+- `widthDp < 400` → small template (fixed 70 dp slot)
+- `widthDp ≥ 400` → medium template (continuous-scale, 120 dp at 400 dp width × `widthDp/400`)
+
+The slot loads an AdMob Native Advanced ad; on load failure (offline, no fill) it falls back to an in-house upgrade promo cycling through five fixed-order themes (Receipts / Exports / SYNC / Simulation / OCR — three Paid + two Subscriber). Both paths produce identical visual structure at the medium tier because they share the same `native_ad_medium.xml` layout and the same rendering functions.
+
+### 16a.2 Why Native (not Banner)
+
+Earlier iterations tried AdMob `AdView` + `AdSize` banners (anchored adaptive / custom AdSize / fixed-size constants). Every approach had a letterbox or clipping failure mode in at least one device class. Native Advanced sidesteps this: the app renders the layout, AdMob delivers asset data (headline / icon / image / CTA / advertiser / body / mediaContent / price / store / starRating / adChoicesInfo). The mandatory yellow "Ad" badge and the `AdChoicesView` remain visible per AdMob policy + FTC native-ad disclosure.
+
+### 16a.3 Continuous Compose-Driven Scaling
+
+`AdMediumDims` carries every dimension the medium template uses (slot height, MediaView width, icon size, text sizes in sp, paddings in dp, margins). `computeAdMediumDims(widthDp: Int)` returns a fresh instance with scale `s = (widthDp / 400f).coerceAtLeast(1.0f)`. At 400 dp: base values. At 600 dp: 1.5× across the board. At foldable 1080 dp: 2.7×. No upper clamp — bigger screens get proportionally bigger ads. Replaces the previous step-function `values-w600dp/` + `values-w800dp/` qualifiers (deleted 2026-05-15).
+
+Base values (at 400 dp):
+
+| Field | Value |
+|---|---|
+| slot height | 120 dp |
+| MediaView width | 214 dp |
+| left-col feature icon | 30 dp |
+| advertiser text | 10 sp |
+| headline text | 14.5 sp |
+| body text | 11.5 sp |
+| CTA text + padding | 13 sp / 14 dp × 5 dp |
+| pill text (price / store / star) | 10 sp |
+| Ad badge text | 10 sp |
+| in-house BudgeTrak app icon (right Box) | 100 dp |
+| left col → MediaView gap | 4 dp |
+
+Font sizes are tuned to clear AdMob's recommended max char lengths with a small buffer: advertiser ~26 chars (vs 25 max), headline ~36 chars across 2 lines (vs 25), body ~93 chars across 3 lines (vs 90).
+
+### 16a.4 Tier-Flip Robustness
+
+Three coordinated defenses make small ↔ medium tier flips clean (foldable hinge, Settings density slider, `adb shell wm density`):
+
+1. **Reactive widthDp:** `LocalConfiguration.current.screenWidthDp` recomposes on dp/density/orientation changes. NOT `remember {}` — that would cache the first-composition value forever.
+2. **`androidx.compose.runtime.key(isMediumTier) { AndroidView(...) }`:** `AndroidView.factory` only runs on first composition per instance; `key` forces fresh inflation when the tier flips.
+3. **`DisposableEffect(isMediumTier) { onDispose { nativeAd?.destroy(); nativeAd = null; adMobFailed = false } }`:** destroys the cached `NativeAd` immediately on tier change so the re-keyed `LaunchedEffect` reloads with the new MediaView dimensions.
+
+Validator caveat: AdMob's native-ad validator UI keeps "MediaView too small" warnings across runtime tier flips even when the app renders correctly. Don't chase further code fixes — see `memory/feedback_admob_validator_dp_transition.md`.
+
+### 16a.5 Shared Rendering Path
+
+Both AdMob and in-house medium-tier paths inflate the same `R.layout.native_ad_medium` and route through two top-level functions in `ui/components/InHouseAd.kt`:
+
+- **`applyMediumAdDimsAndColors(view, dims, pageTextArgb, ctaBgArgb, ctaTextArgb)`** — walks the inflated view tree and applies every scaled dim + theme color: outer LinearLayout slot height; left col `marginEnd`; MediaView FrameLayout width / height; icon width / height / margins; every TextView text size via `setTextSize(SP, ...)`; CTA + pill paddings + margins; advertiser underline via `paintFlags`; CTA + pill backgrounds via runtime `GradientDrawable`. **Re-assigns** `layoutParams` (mutating in place doesn't trigger `requestLayout`). Ends with explicit `view.requestLayout()`. Debug builds emit one `applyDims:` line per call to `token_log.txt` so runtime values are inspectable from Termux.
+
+- **`bindMediumAdContent(view, content: AdMediumContent, pageTextArgb)`** — toggles visibility on mode-specific views and binds text/icons. `AdMediumContent` is a sealed class:
+  - `AdMediumContent.AdMob(nativeAd)` — shows `MediaView` / Ad badge / `AdChoicesView` / store / star, hides `native_ad_inhouse_icon`, clears the icon `ColorFilter`, binds text from `ad.headline/body/advertiser/callToAction`, sets icon drawable from `ad.icon?.drawable`, toggles price / store / star visibility per asset availability, ends with `view.setNativeAd(ad)` (registers click attribution with the SDK).
+  - `AdMediumContent.InHouse(advertiser, headline, body, ctaText, featureIcon, price, onClick)` — hides AdMob-only views, shows `native_ad_inhouse_icon` (the BudgeTrak app icon sized via `dims.inhouseAppIconDp`), tints the left-col feature icon with `headerTextColor` via `setColorFilter`, sets icon from `featureIcon: Bitmap`, binds in-house text, shows price pill if Play Billing has loaded a price, wires `view.setOnClickListener` for whole-view click.
+
+`rememberImageVectorBitmap(vector, sizeDp, tint)` rasterizes a Compose `ImageVector` to a `Bitmap` of the requested dp size with the requested tint applied — used by the in-house path so a Material icon can sit on the inflated `ImageView`. Cached via `remember` keyed on vector / size / tint / density / layoutDirection.
+
+The small tier (`widthDp < 400`) is NOT unified — `SmallInHouseAd` stays a pure-Compose composable mirroring `native_ad_small.xml` separately. Unification was scoped to medium because that's where layout iteration happens.
+
+### 16a.6 Lifecycle
+
+- **Load + refresh:** `LaunchedEffect(nativeAdEnabled, isMediumTier, isAppActiveCompose)` runs `AdLoader.loadAd()` every 60 s. Each successful load destroys the previous `NativeAd` to avoid leaks. Effect pauses while backgrounded and resumes immediately on foreground (re-keys on `isAppActiveCompose`).
+- **Video mute discipline:** `NativeAdOptions.Builder().setVideoOptions(VideoOptions.Builder().setStartMuted(true))` locks muted start. `MediaView` renders the mute / unmute icon overlay automatically (policy). `DisposableEffect` `ON_STOP` lifecycle observer re-mutes on backgrounding so a user who unmuted before backgrounding sees the ad re-muted on return.
+- **In-house cycling:** on `AdLoader.onAdFailedToLoad`, `adMobFailed` flips to true and `inHouseAdIndex` advances. `inHouseAdIndex` resumes (not resets) across AdMob recoveries so a free user sees variety over a session.
+- **Anti-piracy benefit:** a free user who blocks the app's internet to dodge AdMob still sees the in-house upgrade promo cycling.
+
+### 16a.7 Gate & Slot Height
+
+`nativeAdEnabled = !vm.isPaidUser && !vm.isSubscriber` (Subscriber is a superset of Paid; both flags must be checked). `adBannerHeight` is 0 dp when ads are off, else `dims.slotHeightDp.dp` at medium tier or 70 dp at small. The value is also exposed via `LocalAdBannerHeight` so `AdAwareDialog` content (and `AppToast`) anchor above it.
+
+### 16a.8 Theme Integration
+
+Left-column text (advertiser / headline / body) renders in a theme-aware color: in light mode `LocalSyncBudgetColors.current.headerBackground` (dark grey, matches the page-header strip); in dark mode `MaterialTheme.colorScheme.onBackground`. CTA + overlay pills (price / store / star) use `MaterialTheme.colorScheme.primary` background + `onPrimary` text built at runtime via `GradientDrawable` so they follow theme changes without resource swaps. The mandatory yellow Ad badge keeps its XML drawable (`native_ad_badge_bg.xml`) — never tinted, per AdMob policy.
+
+### 16a.9 In-House Promo Catalog
+
+Five entries in `InHouseAds: List<InHouseAd>` (`ui/components/InHouseAd.kt`), each carrying an `id`, a Material `ImageVector` (feature icon), and a `tier` (`PAID` or `SUBSCRIBER`). Tier drives the CTA text (`upgradeCta` vs `subscribeCta`) and the Play Billing price selection (`vm.paidUpgradePrice` vs `vm.subscriberPrice`). Headline + body copy lives in `EnglishStrings.ads` + `SpanishStrings.ads` (`InHouseAdStrings` data class in `AppStrings.kt`). Body budget ~80 chars EN / ~85 chars ES sized to fit 3-line body at base 400 dp. Headline budget ~25 chars / 1 line.
+
+Click handler: small path uses Compose `Modifier.clickable`; medium path uses `view.setOnClickListener` set inside `bindMediumAdContent`'s in-house branch. Both route to `vm.launchPaidUpgrade(activity)` or `vm.launchSubscribe(activity)` per tier.
+
+### 16a.10 AdMob Manifest & Locale Targeting
+
+`AndroidManifest.xml` declares the AdMob app ID via `<meta-data android:name="com.google.android.gms.ads.APPLICATION_ID">` and overrides the `AD_SERVICES_CONFIG` resource via `tools:replace="android:resource"` to resolve the `play-services-ads` ↔ `play-services-measurement-api` manifest-merger conflict. AdMob's creative-language signal comes from `Resources.configuration.locale`, which `BudgeTrakApplication.applyAppLocale(context, tag)` sets on `onCreate` and on every language toggle — so a Spanish-language user on an English-IP gets Spanish ads.
+
+### 16a.11 Production Promotion
+
+Currently using Google's TEST native ad unit ID `ca-app-pub-3940256099942544/2247696110`. Full swap checklist (AdMob Console + AndroidManifest + MainActivity + app-ads.txt) maintained in `memory/project_ad_implementation.md` § "Production-promotion swap checklist".
+
+## 16b. Play Billing & Entitlement
+
+### 16b.1 Overview
+
+BudgeTrak monetizes through two Play Billing products: a one-time **Paid Upgrade** and a recurring **Subscriber** plan. Entitlement is decided by two cooperating layers:
+
+- **Layer 1 — client-side** (`data/billing/BillingService.kt`): wraps Play Billing Library 7+. `BillingClient.queryPurchasesAsync` returns active purchases; `MainViewModel` derives `isPaidUser` / `isSubscriber` / `subscriptionExpiry` from the result. Cached locally and gated by a 7-day TTL.
+- **Layer 2 — server-side** (`data/billing/EntitlementVerifier.kt` + `verifyPurchase` Gen 2 Cloud Function): calls Google's Play Developer API to confirm the purchase is still valid (i.e. wasn't refunded after the device saw it). Overrides Layer 1 when the server gives a definitive negative. 24-h SharedPreferences cache so an offline device can still trust the most recent positive verification.
+
+The two layers compose via `MainViewModel.reconcileEntitlement(local, verify, token)`, a precedence function whose output drives `isPaidUser` / `isSubscriber` in observed app state.
+
+### 16b.2 Products
+
+| ID | Type | Price (USD) | Mechanism |
+|---|---|---|---|
+| `paid_upgrade` | INAPP, non-consumable | $9.99 one-time | Once acknowledged, `isPaidUser` stays true forever. Server-verified by `verifyPurchase` returning `purchaseState=0`. |
+| `subscriber` | SUBS, monthly base plan | $4.99/month | `purchase.purchaseTime` advances on each successful auto-renewal. Layer 1 derives `subscriptionExpiry = purchaseTime + SUB_PERIOD_MS` (30 days in ms). Layer 2 prefers Developer-API `expiryTimeMillis` when verified. |
+
+`Subscriber` is a superset of `Paid` — every Subscriber-tier feature is also available to Paid users plus AI features (OCR + CSV categorization) and SYNC create/admin. Gates that check `isPaidUser` alone are bugs unless the feature is genuinely Subscriber-exclusive (see `memory/feedback_subscriber_implies_paid.md`).
+
+Changing the product IDs requires Play Console re-creation + ~24 h SKU catalog propagation before clients can query them.
+
+### 16b.3 Layer 1 — Client-Side (BillingService)
+
+`BillingService` is constructed in `MainViewModel.init` with a `PurchasesUpdatedListener` that re-runs the entitlement refresh after a successful purchase flow. Lifecycle:
+
+- **Connect on demand:** every public method routes through `ensureConnected()` which serializes via a `Mutex` and resumes from a `BillingClientStateListener` callback or times out at 10 s. Auto-reconnects on next call after a `onBillingServiceDisconnected`.
+- **One-call snapshot:** `queryAll(): BillingState?` issues two `queryProductDetailsAsync` (INAPP + SUBS — Billing 7+ disallows mixed-type queries) plus two `queryPurchasesAsync`, then composes a `BillingState` with both products' `ProductDetails`, the active (PURCHASED-state) `Purchase` for each, formatted prices, and the first subscription offer's `offerToken`. Used at app start and on every `Activity.onResume` to detect cross-device entitlements, sub renewals, expirations, and refunds — Play doesn't push these.
+- **Purchase flow:** `launchPaidUpgrade(activity, details)` builds a `BillingFlowParams` from the one-time product. `launchSubscribe(activity, details, offerToken)` adds the offer token (required for SUBS). Both return a `BillingResult`; the listener fires on completion.
+- **Acknowledgement:** `acknowledge(purchase)` must run within 3 days or Play auto-refunds. Idempotent (`purchase.isAcknowledged` short-circuits).
+- **Raw query:** `queryRawPurchases()` returns unfiltered results (PENDING, UNSPECIFIED_STATE, etc.) — used by the Restore Purchases diagnostic dump so testers can see purchases in any state, not just PURCHASED.
+
+`MainViewModel.refreshBillingStateWithState(state)` derives `isPaidUser` from `paidUpgradePurchase != null` and `isSubscriber` from `subscriberPurchase != null`, computes `subscriptionExpiry` from `subscriberPurchase.purchaseTime + SUB_PERIOD_MS`, and persists prices for the in-house ad's PriceBadge. `lastSuccessfulBillingCheck` SharedPreferences value timestamps each successful refresh; if more than 7 days elapse without a successful Layer 1 query (extended offline), the app falls back to its last known entitlement state.
+
+### 16b.4 Layer 2 — Server-Side (EntitlementVerifier + verifyPurchase)
+
+Layer 2 closes the **refund-lag attack window**: the time between when a buyer refunds a purchase (via Google Play or admin action) and when their device's local `BillingClient` cache catches up. Without server verification, a refunded user could keep entitlement for hours or days.
+
+`EntitlementVerifier.verify(purchaseToken, productId, productType)` calls the `verifyPurchase` Gen 2 Cloud Function (`us-central1`) via `FirebaseFunctions.getHttpsCallable`, App Check enforced. The function runs as the `play-publisher` service account, reads Google's authoritative ledger via the Play Developer API, and returns:
+- `verified: Boolean` — true when INAPP `purchaseState=0` or SUBS active/grace/canceled-with-future-expiry.
+- `expiryTimeMillis: Long?` — preferred over Layer 1's derived value when present.
+- `orderId: String?` — for diagnostics.
+- `reason: String?` — populated on `verified=false` (e.g. `"purchaseState=1"`, `"expired"`, `"410 GONE"`, `"404 NOT_FOUND"`).
+
+`VerifyResult` sealed class:
+- `Verified(expiryTimeMillis, orderId)` — definitive positive.
+- `Refunded(reason)` — definitive negative. Local flag should flip to false even if `BillingClient` still says PURCHASED.
+- `Unreachable(cause)` — transient failure (network, App Check, 15-s timeout). Caller falls back to the cached server result or local Layer 1.
+
+15-s call timeout. Both positive and negative server outcomes cache to SharedPreferences (`entitlement_verifier`) as JSON keyed by the purchase-token hashCode, with a `ts` timestamp. `Unreachable` results are not cached — they would just re-mask the previous decision.
+
+`lastServerVerification(purchaseToken): CachedVerification?` reads the cache and returns null if older than 24 h. Callers prefer the cached value on `Unreachable` only when it's still fresh.
+
+### 16b.5 Reconciliation Precedence
+
+`MainViewModel.reconcileEntitlement(local: Boolean, verify: VerifyResult, token: String?)` returns the effective entitlement using this precedence:
+
+1. **`Verified` → true.** Server confirms — entitlement is on, override local false if needed (rare; cross-device sync lag).
+2. **`Refunded` → false.** Server denies — entitlement is off, override local true (this is the refund-lag fix).
+3. **`Unreachable` → cached server result if fresh, else local.** Transient failure: trust the last positive server check within 24 h; otherwise fall through to the local Layer 1 signal.
+
+Called from `MainViewModel.refreshBillingState` after every successful Layer 1 query for which a purchase token exists. The reconciled result feeds `isPaidUser` / `isSubscriber` / `subscriptionExpiry` (where `Verified.expiryTimeMillis` overrides the derived value when present).
+
+### 16b.6 Refund-Lag Window & Grace Period
+
+Two layered defenses bound the attack surface:
+
+- **Layer 2 catches refunds within one app foreground after Play's ledger updates.** Typically <1 h for self-service Play Store refunds; longer for Console-admin refunds depending on Play Developer API propagation.
+- **Layer 1's 7-day TTL** (via `lastSuccessfulBillingCheck`) bounds offline-attack durations. A user who buys, then blocks app internet to dodge Layer 2 and a future refund check, gets at most 7 days of post-refund entitlement before Layer 1 itself falls back to the previously cached state.
+
+The 7-day grace also matches the SYNC admin subscription grace period (`subscriptionGraceWarning` dialog) so a household whose admin's sub lapses can still operate for 7 days before SYNC retires (see §17.20). After grace, SYNC dissolves; each device falls back to solo operation. Data is never lost.
+
+### 16b.7 Restore Purchases Diagnostic Dump
+
+Settings → Restore Purchases writes a plain-text diagnostic to `/Download/BudgeTrak/support/billing_dump.txt`. Captures: `BillingClient` connection state, raw `queryPurchasesAsync` results (both INAPP and SUBS, all `purchaseState`s), Layer 1 derived flags, Layer 2 server-verification block (last `VerifyResult` + cache age for each known purchase token), and the `lastSuccessfulBillingCheck` timestamp. Used by support to diagnose tester reports of "I bought it but the app says I'm free".
+
+### 16b.8 Deferred — Layer 2.5 Server-Side Entitlement Doc
+
+A future anti-forge layer (`entitlements/{uid}` Firestore doc, App-Check gated, Cloud-Function-only writable from `verifyPurchase`'s server context) is documented but not implemented. Today's app trusts the device to honestly invoke `verifyPurchase` and act on the result; a sophisticated attacker could short-circuit the local check. Layer 2.5 would make `isPaidUser` server-authoritative by reading the entitlements doc directly. Deferred until evidence of piracy — see `memory/project_play_billing_layer_2_5.md`.
 
 ## 17. SYNC System (Firestore-Native)
 
@@ -2909,6 +3101,11 @@ Estimates from 2026-04 (40 K groups, 100 K devices, 5 sessions/day, 2 changes/se
 | 2.10.01 | May 2 2026 | **Data Safety hygiene + native debug symbols** (versionCode 16). SYNC group setup field renamed from "Your name" / "Tu nombre" to "Device nickname" / "Apodo del dispositivo" (the `enterNickname` string in `EnglishStrings` / `SpanishStrings`, used by Create-group + Join-group + repair flows in `SyncScreen.kt`). The previous wording implied BudgeTrak collects personal name data, which conflicted with the Data Safety declaration that we don't. Repair Attributions dialog already used "Nickname" — this aligns SYNC group setup with that precedent. `TranslationContext` updated to document the device-labeling intent so translators don't drift the field back toward personal-name semantics. **Native debug symbols** now embedded in release AABs via `ndk { debugSymbolLevel = "SYMBOL_TABLE" }` in the `release` buildType — fixes the Play Console "AAB contains native code, and you've not uploaded debug symbols" warning, gives Crashlytics native-frame symbolication for bundled libs (Firebase, Compose runtime). Privacy policy at `https://techadvantagesupport.github.io/privacy` updated with explicit `## Data Deletion` section enumerating five deletion paths so Play Console Data Safety review (Yes-with-deletion-URL answer) lands on a clearly findable section via `#data-deletion` anchor. |
 | 2.10.02 | May 2 2026 | **Phantom-group-state PERMISSION_DENIED loop fix** (versionCode 17). `onCreateGroup` / `onJoinGroup` catch handlers (`MainActivity.kt`) now record a `GROUP_CREATE_FAILED` / `GROUP_JOIN_FAILED` non-fatal and **fully roll back** local state — `vm.disposeSyncListeners()`, `GroupManager.leaveGroup(localOnly = true)`, `vm.resetSyncState()` — instead of silently leaving `groupId` set in prefs while the Firestore group doc is missing (the v2.10.01 behavior that produced Paul's PERMISSION_DENIED loop on 2026-05-01). New strings `createGroupFailed` / `joinGroupFailed` (en + es-419). **Dissolution detection in `FirestoreDocSync.triggerFullRestart()`**: on PERMISSION_DENIED, before refreshing the App Check token, probes `groups/{groupId}` and `groups/{groupId}/members/{authUid}` via `Source.SERVER` (10 s timeout each); if either returns "doesn't exist", fires the new `onGroupDissolved` callback wired in `MainViewModel.configureSyncGroup`, which dispatches `evictFromSync(strings.sync.evictionDissolved)`. Probe-time errors fall through to the standard token-refresh path so transient outages don't trigger spurious eviction. Together: any path that writes `groupId` to local prefs rolls it back atomically on Firestore failure, and any orphaned `groupId` left over from older bugs gets cleaned up the next time it surfaces a PERMISSION_DENIED. |
 | 2.10.03 | May 2 2026 | **Public-download write hardening + pinned debug token** (versionCode 18). New `data/PublicDownloadWriter.kt` — three-tier orphan-safe writer (cached path → canonical direct → MediaStore fallback with `(N)` auto-suffix). Refactor: `DiagDumpBuilder.writeDiagToMediaStore` (used by Dump button + DebugDumpWorker FCM path), `FullBackupSerializer.applyRestore` (pre-restore snapshot — production users hit this on restore-after-reinstall), `ExpenseReportGenerator.generateSingleReport` (PDF expense reports — production users with backup-restored transactions reusing orphan filenames). Other public-download writes (encrypted backups via `nextAvailableSuffix`, SAF-mediated CSV/XLSX/JSON, photo dumps in fresh timestamped subdirs, append-mode debug logs in swallow-EACCES try/catch) don't need the helper; full survey in §9.7. **Pinned App Check debug token**: `local.properties:APP_CHECK_DEBUG_TOKEN` → `BuildConfig.APP_CHECK_DEBUG_TOKEN` → seeded into `com.google.firebase.appcheck.debug.store.<persistenceKey>` SharedPreferences in `BudgeTrakApplication.onCreate` before `installAppCheckProviderFactory`. One Console-registered UUID covers every dev/test device — no Console roundtrip on reinstall. Skip-if-already-equal so cold starts don't churn the prefs. Empty BuildConfig value disables the seed (SDK falls back to per-install UUIDs; logcat scrape still surfaces them to `token_log.txt`). Detail: §28.6.1. |
+| 2.10.28-dev | May 15 2026 | **§16a Native Advertising chapter added.** Documents the medium-tier native ad system that landed on dev: tier model (small <400 dp fixed / medium ≥400 dp continuous-scale), `computeAdMediumDims(widthDp)` formula with base values + scaling math, tier-flip robustness (3 defenses), shared rendering path (`applyMediumAdDimsAndColors` + `bindMediumAdContent` + `AdMediumContent` sealed class), 60 s refresh + video-mute discipline, in-house cycling fallback, theme integration, AdMob manifest + locale targeting, production-swap pointer. Companion LLD §3.7 (`InHouseAd.kt`) + §3.8 (XML layouts + drawables) added. |
+| 2.10.28-dev (P2) | May 15 2026 | **§16b Play Billing & Entitlement chapter added.** Two-layer architecture: Layer 1 client-side `BillingService` (Play Billing Library 7+, 7-day TTL via `lastSuccessfulBillingCheck`); Layer 2 server-side `EntitlementVerifier` (Gen 2 `verifyPurchase` callable, 24 h SharedPreferences cache, `VerifyResult.Verified/Refunded/Unreachable` sealed class). Reconciliation precedence: `Verified → true`, `Refunded → false (override local)`, `Unreachable → cached server if fresh else local`. Companion LLD §6.17–§6.19 added. |
+| 2.10.28-dev (P3) | May 15 2026 | **§11.2 + §11.3 AI augmentations.** §11.2: surfaces `CHUNK_SIZE = 100`, `TIMEOUT_MS = 30_000L`, exponential-backoff formula `500L shl (attempt-1)`, transient-pattern matcher, and the `CategorizerPromptBuilder` template + `CSV_CATEGORIZER_PROMPT_VERSION = "v1"` constant. §11.3: surfaces multi-cat post-processing helpers (`deriveMulti`, `reconcilePrices` with ≤ $0.05 drift tolerance + `isTaxLine` passthrough, `aggregateCategoryAmounts`) and the image-bytes-via-blob-not-bitmap rationale to avoid silent JPEG q=80 re-encode. Companion LLD §6.20–§6.23 added. Items 5 + 6 (period-boundary scheduling, inline FCM) already covered substantively in §17.13–§17.15 — no expansion needed. |
+| Doc bump v2.8 → v2.10 | May 15 2026 | **Filename + header + footer bumped.** Doc version is independent of app version. v2.10 captures cumulative coverage since v2.8: Chapter 28 (backend-infra reconstruction reference), Play Billing Layers 1+2 (§16b, app v2.10.10–22), banner→native ads + continuous scaling + unified AdMob/in-house rendering (§16a, app v2.10.16/28), AI/OCR class documentation (§§11.2-3, §6.20-23), AdAware dialog overlay internals (§16.5/§16.5a). Files renamed `BudgeTrak_{SSD,LLD}_v2.8.md → _v2.10.md`. References in `README.md` and `memory/MEMORY.md` updated. |
+| 2.10.28-dev (P4) | May 15 2026 | **§16.5 AdAware Dialogs expanded + §16.5a Share-Intent Blocking added.** §16.5 surfaces `AdAwareDialogState`'s `mutableStateListOf` + `AtomicLong nextSequence`, `AdAwareDialogEntry` identity-based equality, `FallbackAdAwareDialogState` defensive no-op for callers outside `SyncBudgetTheme`, `rememberUpdatedState` rationale, per-entry `key(entry)` scoping, dim layer's no-op `clickable` with custom `MutableInteractionSource`. §16.5a is new — documents `LocalShareBlockingDialogRegistrar`, the per-counter routing of incoming share intents (`consumePendingSharedImages` precedence: counter==0 → new Add dialog, counter>0 + open txn dialog → absorb, counter>0 + non-txn dialog → drop+toast, free user → upgrade toast), and the purpose-scoped invariant (don't repurpose; add a new registrar for any other "is a dialog open?" need). Companion LLD §3.9 + §3.9.1 added. |
 | 2.10.07–2.10.09 | May 7–8 2026 | **SYNC pending-edit clobber fix + sync hardenings + 5-member group cap + AdMob real integration.** v2.10.07 (versionCode 22): foreign inbound now drops on conflict — every collection branch in `SyncMergeProcessor.processBatch` early-returns `if (event.isConflict) { conflictDetected = true; continue }`. Removed the transaction-only `isUserCategorized=false` workaround + `conflictedTransactionsToPushBack` plumbing in `MainViewModel`/`BackgroundSyncWorker`. Plus four `FirestoreDocSync` hardenings: `pushRecord` sets `localPendingEdits` BEFORE the Firestore I/O (closes the smaller same-shape race during the push duration); per-collection `cursorWriteLock` + `advanceCursor(collection, candidate)` helper makes load-compare-save atomic for concurrent batches in the same collection; `if (!isListening) return` guards in `handleCollectionChanges` and `handleSharedSettingsChange` drop late callbacks racing with `stopListeners()` so a stale callback can't advance the cursor past data we never propagated; cursor advance now skips docs that failed to deserialize via a per-batch `failedDocIds` set so transient corruption (or wrong-key) gets re-delivered next listener fire. Validated 2026-05-08 across 3 devices (incl. tablet emulator) — first-attempt RE / transaction edits + deletions now apply on the first try. v2.10.08 (versionCode 23): 5-member group cap — `SyncScreen.kt` Generate Pairing Code button toasts `S.sync.memberLimitReached` when `devices.size >= 5` instead of generating; `GroupManager.joinGroup`, after registering membership (required to read the devices subcollection per Firestore rules), fetches device count and rolls back membership + clears local prefs (`groupId`, `isAdmin`, encrypted `encryptionKey`) if `>= 5`. Server-side Firestore rule for race-free enforcement (concurrent joiners using the same code) deferred to follow-up — `memory/project_member_limit_server_rule.md`. v2.10.09 (versionCode 24): real AdMob banner replaces the placeholder Box. `play-services-ads:23.6.0` added; `MobileAds.initialize` in `BudgeTrakApplication.onCreate`; AdMob TEST `APPLICATION_ID` meta-data + `<property AD_SERVICES_CONFIG tools:replace="android:resource">` override (resolves the `play-services-ads` ↔ `play-services-measurement-api` manifest-merger conflict). UI: `getCurrentOrientationAnchoredAdaptiveBannerAdSize(activity, screenWidthDp)` for full-width adaptive banner; outer Column uses `windowInsetsPadding(WindowInsets.statusBars.union(WindowInsets.displayCutout)).background(headerBackground)` so the cutout area becomes a decorative top strip in the page-header color (no naked transparent zone); `AdView.setBackgroundColor(topBarColor.toArgb())` so creatives that letterbox inside the slot blend with the strip instead of showing black; `WindowCompat.getInsetsController(window, decorView).isAppearanceLightStatusBars = false` after `enableEdgeToEdge()` for white status-bar icons in both light and dark mode (header colors are dark enough in both that OS-default black icons in light mode were unreadable). DisposableEffect wires `resume/pause/destroy` to Activity lifecycle. Production-promotion swap checklist (real app + ad-unit IDs, `app-ads.txt`) in `memory/project_ad_implementation.md`. Manifest-merger fix in `memory/feedback_admob_manifest_merger.md`. |
 | 2.10.16 | May 9 2026 | **Banner ads → Native Advanced, video-aware refresh + mute discipline** (versionCode 32; first attempt at versionCode 31 uploaded the AAB but Play rejected the publish-edit because the Spanish `whatsnew-es-419` notes were 515 chars, over Play's 500-char limit — Spanish trimmed and versionCode bumped for the second dispatch). After a 4-iteration arc through anchored adaptive / custom `AdSize(width, height)` / fixed `AdSize.LEADERBOARD`-or-`BANNER` constants confirmed every banner approach had a letterbox or clipping failure mode in at least one device class, switched to `NativeAdView` + `AdLoader.forNativeAd`. Native sidesteps the issue entirely: app renders the layout, AdMob delivers asset data (headline / icon / image / CTA / advertiser / body / `MediaView`). Two custom XML templates: `native_ad_small.xml` (single-row card, 64 dp slot, `widthDp < 400`), `native_ad_medium.xml` (horizontal card — text column left + 160×120 dp `MediaView` right, 144 dp slot, `widthDp ≥ 400`). Mandatory yellow "Ad" badge per AdMob policy + FTC native-ad disclosure. Theme-driven colors via `LocalSyncBudgetColors.current.headerText` and a runtime `GradientDrawable` from `MaterialTheme.colorScheme.primary` for the CTA so it follows light/dark. 60 s refresh `LaunchedEffect` keyed on `(nativeAdEnabled, isMediumTier, isAppActiveCompose)` — pauses backgrounded, resumes on foreground (effect re-keys + immediate fresh load). Video discipline: `NativeAdOptions.Builder().setVideoOptions(VideoOptions.Builder().setStartMuted(true))` locks muted start locally (AdMob also defaults muted, this is belt-and-suspenders); separate `DisposableEffect` `ON_STOP` lifecycle observer calls `nativeAd?.mediaContent?.videoController?.mute(true)` so a user who unmuted before backgrounding sees the ad re-muted on return; `MediaView`'s speaker mute/unmute icon overlay is auto-rendered by AdMob (policy requirement, no app code). `com.google.android.gms:play-services-ads-native-templates` artifact does not exist on Maven (404 on both `repo1.maven.org` and `dl.google.com/.../maven2`) — Google ships its native templates as GitHub-sample source code only, so BudgeTrak ships custom layouts instead. Manifest-merger fix on `AD_SERVICES_CONFIG` retained from v2.10.09 (`feedback_admob_manifest_merger.md`). Production-promotion checklist now requires **two** Native Advanced ad units (one for the small phone template, one for the medium tablet template) per `memory/project_ad_implementation.md`. |
 | 2.10.10–2.10.23 | May 9–12 2026 | **Play Billing Layer 1 + Layer 2 + Dashboard Help rewrite + appInstanceId in diag dump + Gemini API key restriction.** Play Billing Layer 1 (v2.10.10, vc 25): `data/billing/BillingService.kt` wraps Play Billing Library 7+ for the two products (`paid_upgrade` $9.99 one-time, `subscriber` $4.99/mo); `MainViewModel.refreshBillingState` derives `isPaidUser` / `isSubscriber` / `subscriptionExpiry` from `BillingClient.queryPurchasesAsync`, with 7-day TTL on stale results (`lastSuccessfulBillingCheck` pref) and debug-build override checkboxes; pairs with existing 7-day SYNC admin grace period. Dashboard Help dialog overlay + feature parity (v2.10.20, vc 36). Help-page Paid/Subscriber section rewrite + bullet reorder (v2.10.21, vc 37) — `paidPhotos` mentions PDFs, parallel `HelpSubSectionTitle` for Paid + Subscriber subsections. Layer 2 server-side purchase verification (v2.10.22, vc 38; §28.7.7, §27.2a) — Gen 2 callable `verifyPurchase` reads Play Developer API authoritative purchase state; `data/billing/EntitlementVerifier.kt` wraps with 24h SharedPreferences cache; `MainViewModel.reconcileEntitlement` overrides local Layer 1 `PURCHASED` with server `REFUNDED`; closes the 24h+ Console-admin refund propagation lag. **appInstanceId in diag dump** (v2.10.22): `BudgeTrakApplication.appInstanceId` cached async on startup from `FirebaseAnalytics.appInstanceId`; `DiagDumpBuilder.build` surfaces it under `DeviceId:` so dump files self-identify their GA4 `user_pseudo_id` for BigQuery correlation. **Gemini API key restriction** (2026-05-12; §28.12.2a) — Android-app cert restriction (Play Signing + Upload + debug keystore) + Gemini-only API restriction applied at Google Cloud API gateway. Reference memory `reference_gemini_api_key.md` documents rotation gotcha (new keys require SA binding). v2.10.23 (vc 39): doc + memory updates for the above; main branch promoted to match dev. |
@@ -2916,4 +3113,4 @@ Estimates from 2026-04 (40 K groups, 100 K devices, 5 sessions/day, 2 changes/se
 
 ---
 
-BudgeTrak SSD v2.8 — April 2026 — END OF DOCUMENT
+BudgeTrak SSD v2.10 — May 2026 — END OF DOCUMENT

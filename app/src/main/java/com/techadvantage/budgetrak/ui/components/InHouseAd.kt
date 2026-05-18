@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
@@ -94,6 +95,72 @@ data class InHouseAd(
     val tier: InHouseAdTier
 )
 
+/** Continuously-scaled medium ad dimensions, derived linearly from the
+ *  400dp base values. Scale = `widthDp / 400`, clamped at 1.0 floor. So
+ *  600dp → 1.5×, 800dp → 2.0×, foldable open at 1080dp → 2.7×. Replaces
+ *  the old step-function `values{-w600dp,-w800dp}/dimens.xml` so ad
+ *  elements grow smoothly with screen width like the rest of the app.
+ *  Both the AdMob template (applied at runtime in MainActivity's
+ *  AndroidView.update) and the in-house Compose mirror read from this. */
+data class AdMediumDims(
+    val slotHeightDp: Float,
+    val mediaWidthDp: Float,
+    val iconSizeDp: Float,
+    val iconMarginDp: Float,
+    val iconMarginBottomDp: Float,
+    val advertiserSp: Float,
+    val headlineSp: Float,
+    val bodySp: Float,
+    val bodyMarginTopDp: Float,
+    val ctaSp: Float,
+    val ctaPaddingHDp: Float,
+    val ctaPaddingVDp: Float,
+    val ctaMarginBottomDp: Float,
+    val pillSp: Float,
+    val pillPaddingHDp: Float,
+    val pillPaddingVDp: Float,
+    val pillMarginDp: Float,
+    val badgeSp: Float,
+    val badgePaddingHDp: Float,
+    val badgePaddingVDp: Float,
+    val inhouseAppIconDp: Float,
+    val leftColMarginEndDp: Float,
+)
+
+fun computeAdMediumDims(widthDp: Int): AdMediumDims {
+    // Proportional scaling: `widthDp / 400`, floored at 1.0×, unbounded above.
+    // The ad keeps a constant fraction of screen width at every dp — apparent
+    // size on a given screen doesn't change with display density. 1.5× at
+    // 600dp, 2.0× at 800dp, 2.57× at 1028dp, 2.7× at foldable 1080dp.
+    // App content uses a different (gentler) scaler in MainActivity so more
+    // fits on tablet portraits.
+    val s = (widthDp / 400f).coerceAtLeast(1.0f)
+    return AdMediumDims(
+        slotHeightDp = 120f * s,
+        mediaWidthDp = 214f * s,
+        iconSizeDp = 30f * s,
+        iconMarginDp = 4f * s,
+        iconMarginBottomDp = 0f,
+        advertiserSp = 10f * s,
+        headlineSp = 14.5f * s,
+        bodySp = 11.5f * s,
+        bodyMarginTopDp = 0f,
+        ctaSp = 13f * s,
+        ctaPaddingHDp = 14f * s,
+        ctaPaddingVDp = 5f * s,
+        ctaMarginBottomDp = 3f * s,
+        pillSp = 10f * s,
+        pillPaddingHDp = 6f * s,
+        pillPaddingVDp = 2f * s,
+        pillMarginDp = 4f * s,
+        badgeSp = 10f * s,
+        badgePaddingHDp = 5f * s,
+        badgePaddingVDp = 1f * s,
+        inhouseAppIconDp = 100f * s,
+        leftColMarginEndDp = 5f * s,
+    )
+}
+
 /** Fixed display order; we advance through this on each AdMob load failure. */
 val InHouseAds: List<InHouseAd> = listOf(
     InHouseAd("receipts",   Icons.Filled.CameraAlt,    InHouseAdTier.PAID),
@@ -121,6 +188,285 @@ private fun bodyFor(id: String, s: AppStrings): String = when (id) {
     else -> ""
 }
 
+/** Sealed content type for the unified medium-tier renderer. AdMob branch
+ *  carries a NativeAd whose assets drive every TextView/ImageView; in-house
+ *  branch carries app-controlled text + a rasterized feature-icon bitmap
+ *  (Material ImageVector → Bitmap via rememberImageVectorBitmap). */
+sealed class AdMediumContent {
+    data class AdMob(
+        val nativeAd: com.google.android.gms.ads.nativead.NativeAd,
+    ) : AdMediumContent()
+
+    data class InHouse(
+        val advertiser: String,
+        val headline: String,
+        val body: String,
+        val ctaText: String,
+        val featureIcon: android.graphics.Bitmap?,
+        val price: String?,
+        val onClick: () -> Unit,
+    ) : AdMediumContent()
+}
+
+/** Rasterize a Compose ImageVector into a Bitmap so it can be set on an
+ *  inflated XML ImageView. Used for the in-house feature icon — Material
+ *  ImageVectors are Compose-native and can't go directly into a regular
+ *  ImageView. Cached via `remember` keyed on vector/size/tint, so the
+ *  bitmap is built once per icon+tier and reused across recompositions. */
+@Composable
+fun rememberImageVectorBitmap(
+    vector: androidx.compose.ui.graphics.vector.ImageVector,
+    sizeDp: androidx.compose.ui.unit.Dp,
+    tint: Color,
+): android.graphics.Bitmap {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val layoutDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
+    val sizePx = with(density) { sizeDp.roundToPx() }.coerceAtLeast(1)
+    val painter = androidx.compose.ui.graphics.vector.rememberVectorPainter(vector)
+    return androidx.compose.runtime.remember(vector, sizePx, tint, density, layoutDirection, painter) {
+        val bitmap = android.graphics.Bitmap.createBitmap(sizePx, sizePx, android.graphics.Bitmap.Config.ARGB_8888)
+        val androidCanvas = android.graphics.Canvas(bitmap)
+        val composeCanvas = androidx.compose.ui.graphics.Canvas(androidCanvas)
+        val scope = androidx.compose.ui.graphics.drawscope.CanvasDrawScope()
+        scope.draw(
+            density = density,
+            layoutDirection = layoutDirection,
+            canvas = composeCanvas,
+            size = androidx.compose.ui.geometry.Size(sizePx.toFloat(), sizePx.toFloat()),
+        ) {
+            with(painter) {
+                draw(
+                    size = androidx.compose.ui.geometry.Size(sizePx.toFloat(), sizePx.toFloat()),
+                    colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(tint),
+                )
+            }
+        }
+        bitmap
+    }
+}
+
+/** Apply continuous-scale dimensions + theme colors to every view inside
+ *  the inflated `native_ad_medium.xml`. Called by both the AdMob path
+ *  (MainActivity update lambda) and the in-house path (MediumInHouseAdView
+ *  update lambda) so visual scaling is guaranteed identical. */
+fun applyMediumAdDimsAndColors(
+    view: com.google.android.gms.ads.nativead.NativeAdView,
+    dims: AdMediumDims,
+    pageTextArgb: Int,
+    ctaBgArgb: Int,
+    ctaTextArgb: Int,
+) {
+    val density = view.resources.displayMetrics.density
+    fun Float.toPx(): Int = (this * density).toInt()
+    val slotPx = dims.slotHeightDp.toPx()
+
+    val outerLL = view.getChildAt(0) as android.view.ViewGroup
+    outerLL.layoutParams = outerLL.layoutParams.apply { height = slotPx }
+    val leftCol = outerLL.getChildAt(0)
+    leftCol.layoutParams = (leftCol.layoutParams as android.view.ViewGroup.MarginLayoutParams).apply {
+        marginEnd = dims.leftColMarginEndDp.toPx()
+    }
+    val mediaFrame = outerLL.getChildAt(1)
+    mediaFrame.layoutParams = mediaFrame.layoutParams.apply {
+        width = dims.mediaWidthDp.toPx()
+        height = slotPx
+    }
+
+    val iconView = view.findViewById<android.widget.ImageView>(R.id.native_ad_icon)
+    val headlineView = view.findViewById<android.widget.TextView>(R.id.native_ad_headline)
+    val advertiserView = view.findViewById<android.widget.TextView>(R.id.native_ad_advertiser)
+    val bodyView = view.findViewById<android.widget.TextView>(R.id.native_ad_body)
+    val ctaView = view.findViewById<android.widget.Button>(R.id.native_ad_cta)
+    val priceView = view.findViewById<android.widget.TextView>(R.id.native_ad_price)
+    val storeView = view.findViewById<android.widget.TextView>(R.id.native_ad_store)
+    val starView = view.findViewById<android.widget.TextView>(R.id.native_ad_star)
+    val badgeView = view.findViewById<android.widget.TextView>(R.id.native_ad_badge)
+    val inhouseIconView = view.findViewById<android.widget.ImageView>(R.id.native_ad_inhouse_icon)
+
+    iconView?.let { iv ->
+        iv.layoutParams = (iv.layoutParams as android.view.ViewGroup.MarginLayoutParams).apply {
+            width = dims.iconSizeDp.toPx()
+            height = dims.iconSizeDp.toPx()
+            marginStart = dims.iconMarginDp.toPx()
+            topMargin = dims.iconMarginDp.toPx()
+            marginEnd = dims.iconMarginDp.toPx()
+            bottomMargin = dims.iconMarginBottomDp.toPx()
+        }
+    }
+    advertiserView?.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, dims.advertiserSp)
+    headlineView.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, dims.headlineSp)
+    bodyView?.let { bv ->
+        bv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, dims.bodySp)
+        bv.layoutParams = (bv.layoutParams as android.view.ViewGroup.MarginLayoutParams).apply {
+            topMargin = dims.bodyMarginTopDp.toPx()
+        }
+        // Symmetric edge gap: body's left mirrors the left col's marginEnd
+        // (right gap from MediaView). Reuses leftColMarginEndDp so both gaps
+        // scale together. Advertiser/headline already get the right-side gap
+        // for free via the parent left col's marginEnd.
+        bv.setPaddingRelative(dims.leftColMarginEndDp.toPx(), 0, 0, 0)
+    }
+    ctaView.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, dims.ctaSp)
+    ctaView.setPadding(
+        dims.ctaPaddingHDp.toPx(),
+        dims.ctaPaddingVDp.toPx(),
+        dims.ctaPaddingHDp.toPx(),
+        dims.ctaPaddingVDp.toPx(),
+    )
+    ctaView.layoutParams = (ctaView.layoutParams as android.view.ViewGroup.MarginLayoutParams).apply {
+        bottomMargin = dims.ctaMarginBottomDp.toPx()
+    }
+    val pillMarginPx = dims.pillMarginDp.toPx()
+    listOf(priceView, storeView, starView).forEach { pill ->
+        pill?.let { p ->
+            p.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, dims.pillSp)
+            p.setPadding(
+                dims.pillPaddingHDp.toPx(),
+                dims.pillPaddingVDp.toPx(),
+                dims.pillPaddingHDp.toPx(),
+                dims.pillPaddingVDp.toPx(),
+            )
+            (p.layoutParams as? android.view.ViewGroup.MarginLayoutParams)?.let { mp ->
+                mp.setMargins(pillMarginPx, pillMarginPx, pillMarginPx, pillMarginPx)
+                p.layoutParams = mp
+            }
+        }
+    }
+    badgeView?.let { bv ->
+        bv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, dims.badgeSp)
+        bv.setPadding(
+            dims.badgePaddingHDp.toPx(),
+            dims.badgePaddingVDp.toPx(),
+            dims.badgePaddingHDp.toPx(),
+            dims.badgePaddingVDp.toPx(),
+        )
+        (bv.layoutParams as? android.view.ViewGroup.MarginLayoutParams)?.let { mp ->
+            mp.setMargins(pillMarginPx, pillMarginPx, pillMarginPx, pillMarginPx)
+            bv.layoutParams = mp
+        }
+    }
+    inhouseIconView?.let { iv ->
+        iv.layoutParams = iv.layoutParams.apply {
+            width = dims.inhouseAppIconDp.toPx()
+            height = dims.inhouseAppIconDp.toPx()
+        }
+    }
+
+    // Theme colors
+    headlineView.setTextColor(pageTextArgb)
+    advertiserView?.setTextColor(pageTextArgb)
+    advertiserView?.paintFlags = (advertiserView?.paintFlags ?: 0) or android.graphics.Paint.UNDERLINE_TEXT_FLAG
+    bodyView?.setTextColor(pageTextArgb)
+
+    ctaView.background = android.graphics.drawable.GradientDrawable().apply {
+        setColor(ctaBgArgb)
+        cornerRadius = 6f * density
+    }
+    ctaView.setTextColor(ctaTextArgb)
+
+    fun pillBg() = android.graphics.drawable.GradientDrawable().apply {
+        setColor(ctaBgArgb)
+        cornerRadius = 3f * density
+    }
+    priceView?.background = pillBg()
+    priceView?.setTextColor(ctaTextArgb)
+    storeView?.background = pillBg()
+    storeView?.setTextColor(ctaTextArgb)
+    starView?.background = pillBg()
+    starView?.setTextColor(ctaTextArgb)
+
+    if (com.techadvantage.budgetrak.BuildConfig.DEBUG) {
+        com.techadvantage.budgetrak.BudgeTrakApplication.tokenLog(
+            "applyDims: slot=${dims.slotHeightDp} icon=${dims.iconSizeDp} ctaSp=${dims.ctaSp} ctaPadV=${dims.ctaPaddingVDp} advSp=${dims.advertiserSp} headSp=${dims.headlineSp} bodySp=${dims.bodySp}"
+        )
+    }
+    view.requestLayout()
+}
+
+/** Bind content (AdMob asset data OR in-house upgrade promo) to the
+ *  inflated `native_ad_medium.xml`. Visibility of AdMob-only views
+ *  (MediaView/Ad badge/AdChoicesView/store/star) and the in-house BudgeTrak
+ *  app-icon ImageView is toggled per branch. Caller must have already
+ *  invoked `applyMediumAdDimsAndColors` so sizes + colors are current. */
+fun bindMediumAdContent(
+    view: com.google.android.gms.ads.nativead.NativeAdView,
+    content: AdMediumContent,
+    pageTextArgb: Int,
+) {
+    val iconView = view.findViewById<android.widget.ImageView>(R.id.native_ad_icon)
+    val headlineView = view.findViewById<android.widget.TextView>(R.id.native_ad_headline)
+    val advertiserView = view.findViewById<android.widget.TextView>(R.id.native_ad_advertiser)
+    val bodyView = view.findViewById<android.widget.TextView>(R.id.native_ad_body)
+    val ctaView = view.findViewById<android.widget.Button>(R.id.native_ad_cta)
+    val priceView = view.findViewById<android.widget.TextView>(R.id.native_ad_price)
+    val storeView = view.findViewById<android.widget.TextView>(R.id.native_ad_store)
+    val starView = view.findViewById<android.widget.TextView>(R.id.native_ad_star)
+    val badgeView = view.findViewById<android.widget.TextView>(R.id.native_ad_badge)
+    val mediaView = view.findViewById<com.google.android.gms.ads.nativead.MediaView>(R.id.native_ad_media)
+    val adChoicesView = view.findViewById<com.google.android.gms.ads.nativead.AdChoicesView>(R.id.native_ad_choices)
+    val inhouseIconView = view.findViewById<android.widget.ImageView>(R.id.native_ad_inhouse_icon)
+
+    when (content) {
+        is AdMediumContent.AdMob -> {
+            mediaView?.visibility = android.view.View.VISIBLE
+            badgeView?.visibility = android.view.View.VISIBLE
+            adChoicesView?.visibility = android.view.View.VISIBLE
+            inhouseIconView?.visibility = android.view.View.GONE
+            iconView?.clearColorFilter()
+            view.setOnClickListener(null)
+            view.isClickable = false
+
+            val ad = content.nativeAd
+            headlineView.text = ad.headline ?: ""
+            advertiserView?.text = ad.advertiser ?: ""
+            ctaView.text = ad.callToAction ?: ""
+            bodyView?.text = ad.body ?: ""
+            ad.icon?.drawable?.let { iconView?.setImageDrawable(it) }
+            priceView?.let {
+                val p = ad.price
+                if (p.isNullOrBlank()) it.visibility = android.view.View.GONE
+                else { it.text = p; it.visibility = android.view.View.VISIBLE }
+            }
+            storeView?.let {
+                val s = ad.store
+                if (s.isNullOrBlank()) it.visibility = android.view.View.GONE
+                else { it.text = s; it.visibility = android.view.View.VISIBLE }
+            }
+            starView?.let {
+                val r = ad.starRating
+                if (r == null) it.visibility = android.view.View.GONE
+                else { it.text = "★ %.1f".format(r); it.visibility = android.view.View.VISIBLE }
+            }
+            view.setNativeAd(ad)
+        }
+        is AdMediumContent.InHouse -> {
+            mediaView?.visibility = android.view.View.GONE
+            badgeView?.visibility = android.view.View.GONE
+            adChoicesView?.visibility = android.view.View.GONE
+            storeView?.visibility = android.view.View.GONE
+            starView?.visibility = android.view.View.GONE
+            inhouseIconView?.visibility = android.view.View.VISIBLE
+            iconView?.setColorFilter(pageTextArgb)
+            content.featureIcon?.let { iconView?.setImageBitmap(it) }
+
+            headlineView.text = content.headline
+            advertiserView?.text = content.advertiser
+            ctaView.text = content.ctaText.uppercase()
+            bodyView?.text = content.body
+
+            priceView?.let {
+                if (content.price.isNullOrBlank()) it.visibility = android.view.View.GONE
+                else { it.text = content.price; it.visibility = android.view.View.VISIBLE }
+            }
+
+            view.isClickable = true
+            view.setOnClickListener { content.onClick() }
+            // AdMob no-op when in-house is showing
+            view.callToActionView = null
+        }
+    }
+}
+
 @Composable
 fun InHouseAdSlot(
     ad: InHouseAd,
@@ -132,17 +478,76 @@ fun InHouseAdSlot(
     onClick: () -> Unit,
     paidUpgradePrice: String?,
     subscriberPrice: String?,
+    mediumDims: AdMediumDims? = null,
     modifier: Modifier = Modifier
 ) {
     val ctaText = if (ad.tier == InHouseAdTier.PAID) strings.ads.upgradeCta else strings.ads.subscribeCta
     val price = if (ad.tier == InHouseAdTier.PAID) paidUpgradePrice else subscriberPrice
-    Box(modifier = modifier.clickable(onClick = onClick)) {
-        if (isMediumTier) {
-            MediumInHouseAd(ad, strings, headerTextColor, ctaBgColor, ctaTextColor, ctaText, price)
-        } else {
+    if (isMediumTier && mediumDims != null) {
+        // Medium tier: shared XML inflation path so structural layout
+        // changes (icon position, headline alignment, etc.) live in one
+        // place. The whole-view click is set inside bindMediumAdContent.
+        MediumInHouseAdView(
+            ad = ad,
+            strings = strings,
+            dims = mediumDims,
+            headerTextColor = headerTextColor,
+            ctaBgColor = ctaBgColor,
+            ctaTextColor = ctaTextColor,
+            ctaText = ctaText,
+            price = price,
+            onClick = onClick,
+            modifier = modifier,
+        )
+    } else {
+        Box(modifier = modifier.clickable(onClick = onClick)) {
             SmallInHouseAd(ad, strings, headerTextColor, ctaBgColor, ctaTextColor, ctaText, price)
         }
     }
+}
+
+@Composable
+private fun MediumInHouseAdView(
+    ad: InHouseAd,
+    strings: AppStrings,
+    dims: AdMediumDims,
+    headerTextColor: Color,
+    ctaBgColor: Color,
+    ctaTextColor: Color,
+    ctaText: String,
+    price: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val featureIcon = rememberImageVectorBitmap(ad.icon, dims.iconSizeDp.dp, headerTextColor)
+    val headlineText = headlineFor(ad.id, strings)
+    val bodyText = bodyFor(ad.id, strings)
+    val pageTextArgb = headerTextColor.toArgb()
+    val ctaBgArgb = ctaBgColor.toArgb()
+    val ctaTextArgb = ctaTextColor.toArgb()
+    androidx.compose.ui.viewinterop.AndroidView(
+        modifier = modifier,
+        factory = { ctx ->
+            android.view.LayoutInflater.from(ctx)
+                .inflate(R.layout.native_ad_medium, null) as com.google.android.gms.ads.nativead.NativeAdView
+        },
+        update = { view ->
+            applyMediumAdDimsAndColors(view, dims, pageTextArgb, ctaBgArgb, ctaTextArgb)
+            bindMediumAdContent(
+                view,
+                AdMediumContent.InHouse(
+                    advertiser = "BudgeTrak",
+                    headline = headlineText,
+                    body = bodyText,
+                    ctaText = ctaText,
+                    featureIcon = featureIcon,
+                    price = price,
+                    onClick = onClick,
+                ),
+                pageTextArgb,
+            )
+        },
+    )
 }
 
 @Composable
@@ -338,124 +743,3 @@ private fun SmallInHouseAd(
     }
 }
 
-@Composable
-private fun MediumInHouseAd(
-    ad: InHouseAd,
-    strings: AppStrings,
-    headerTextColor: Color,
-    ctaBgColor: Color,
-    ctaTextColor: Color,
-    ctaText: String,
-    price: String?,
-) {
-    // Mirrors native_ad_medium.xml. All sizes (slot height, MediaView width,
-    // icon size, padding, text sizes) are resource-driven via
-    // res/values{,-w600dp,-w800dp}/dimens.xml so the layout scales up on
-    // tablets / foldables / large displays without per-tier branching here.
-    val iconMargin = dimensionResource(R.dimen.ad_icon_margin)
-    val iconMarginBottom = dimensionResource(R.dimen.ad_icon_margin_bottom)
-    val pillMargin = dimensionResource(R.dimen.ad_pill_margin)
-    Row(
-        modifier = Modifier.fillMaxSize(),
-    ) {
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
-                .padding(end = dimensionResource(R.dimen.ad_left_col_margin_end)),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier.padding(
-                        start = iconMargin,
-                        top = iconMargin,
-                        end = iconMargin,
-                        bottom = iconMarginBottom,
-                    )
-                ) {
-                    Icon(
-                        imageVector = ad.icon,
-                        contentDescription = null,
-                        tint = headerTextColor,
-                        modifier = Modifier.size(dimensionResource(R.dimen.ad_icon_size)),
-                    )
-                }
-                val advertiserSp = textSizeResource(R.dimen.ad_advertiser_text_size)
-                Text(
-                    text = "BudgeTrak",
-                    color = headerTextColor,
-                    fontSize = advertiserSp,
-                    lineHeight = advertiserSp * 1.15f,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = tightTextStyle(),
-                    modifier = Modifier
-                        .padding(start = pillMargin)
-                        .weight(1f),
-                )
-            }
-            val headlineSp = textSizeResource(R.dimen.ad_headline_text_size)
-            Text(
-                text = headlineFor(ad.id, strings),
-                color = headerTextColor,
-                fontSize = headlineSp,
-                lineHeight = headlineSp * 1.15f,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                style = tightTextStyle(),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(dimensionResource(R.dimen.ad_body_margin_top)))
-            val bodySp = textSizeResource(R.dimen.ad_body_text_size)
-            Text(
-                text = bodyFor(ad.id, strings),
-                color = headerTextColor,
-                fontSize = bodySp,
-                lineHeight = bodySp * 1.15f,
-                textAlign = TextAlign.Center,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-                style = tightTextStyle(),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.weight(1f))
-            CtaButton(
-                ctaText,
-                ctaBgColor,
-                ctaTextColor,
-                paddingH = dimensionResource(R.dimen.ad_cta_padding_h).value.toInt(),
-                paddingV = dimensionResource(R.dimen.ad_cta_padding_v).value.toInt(),
-                ctaSpOverride = textSizeResource(R.dimen.ad_cta_text_size),
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .padding(bottom = dimensionResource(R.dimen.ad_cta_margin_bottom)),
-            )
-        }
-        Box(
-            modifier = Modifier
-                .width(dimensionResource(R.dimen.ad_media_width))
-                .height(dimensionResource(R.dimen.ad_slot_height)),
-        ) {
-            androidx.compose.foundation.Image(
-                painter = painterResource(R.drawable.ic_app_icon),
-                contentDescription = null,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(dimensionResource(R.dimen.ad_inhouse_app_icon_size)),
-            )
-            // Price overlay bottom-start, mirroring AdMob's price pill location.
-            if (price != null) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(pillMargin),
-                ) {
-                    PriceBadge(price)
-                }
-            }
-        }
-    }
-}

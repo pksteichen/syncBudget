@@ -682,6 +682,7 @@ data class SyncStrings(
     val createGroupFailed: String,
     val joinGroupFailed: String,
     val subscriptionGraceWarning: (daysLeft: Int) -> String,
+    val subscriptionGraceWarningAdmin: (daysLeft: Int) -> String,
     val claimVotePrompt: (claimantName: String) -> String,
     val claimAccept: String,
     val claimReject: String,

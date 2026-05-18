@@ -3,7 +3,8 @@
 **Application:** BudgeTrak  **Package / applicationId:** `com.techadvantage.budgetrak`
 **Vendor:** Tech Advantage LLC.  **Platform:** Android (minSdk 28, targetSdk 34)
 **Framework:** Jetpack Compose, Material Design 3  **Language:** Kotlin
-**Document Version:** 2.8 (in development, April 2026)
+**Document Version:** 2.10 (in development, May 2026)
+**App Version:** 2.10.28 (dev), versionCode 44
 **Source:** ~100 Kotlin files, ~51,500 lines (refreshed at release tags)
 
 > Per-release diff in §15.
@@ -512,6 +513,122 @@ Supporting declarations:
 - `enum class DialogStyle { DEFAULT, DANGER, WARNING }` — green / red / orange header palettes.
 - `val LocalAdBannerHeight = compositionLocalOf { 0.dp }` — 50.dp (free tier) or 0.dp (paid).
 - `val LocalAppToast = staticCompositionLocalOf { AppToastState() }` + class `AppToastState` — Y-anchored toast positioned above the ad banner.
+
+### 3.7 InHouseAd
+
+**File:** `ui/components/InHouseAd.kt` (~700 lines)  |  **Package:** `com.techadvantage.budgetrak.ui.components`
+
+Hosts the shared rendering for the medium-tier native ad slot (AdMob + in-house) plus the small-tier in-house promo. See SSD §16a for architecture.
+
+**Top-level types & rendering helpers:**
+
+| Symbol | Purpose |
+|---|---|
+| `data class AdMediumDims(...)` | All medium-tier sizes. Float fields suffixed `Dp` or `Sp` indicate unit. Fields: `slotHeightDp, mediaWidthDp, iconSizeDp, iconMarginDp, iconMarginBottomDp, advertiserSp, headlineSp, bodySp, bodyMarginTopDp, ctaSp, ctaPaddingHDp, ctaPaddingVDp, ctaMarginBottomDp, pillSp, pillPaddingHDp, pillPaddingVDp, pillMarginDp, badgeSp, badgePaddingHDp, badgePaddingVDp, inhouseAppIconDp, leftColMarginEndDp`. |
+| `fun computeAdMediumDims(widthDp: Int): AdMediumDims` | Scale `s = (widthDp / 400f).coerceAtLeast(1.0f)`; multiplies every base value by `s` and returns a fresh instance. No upper clamp. Base values match `res/values/dimens.xml` so initial XML inflation and runtime override agree at 400 dp. |
+| `sealed class AdMediumContent` | `AdMob(nativeAd: NativeAd)` and `InHouse(advertiser, headline, body, ctaText, featureIcon: Bitmap?, price: String?, onClick: () -> Unit)`. |
+| `fun applyMediumAdDimsAndColors(view: NativeAdView, dims, pageTextArgb, ctaBgArgb, ctaTextArgb)` | Walks the inflated view tree and applies every scaled dim + theme color. Outer LinearLayout via `view.getChildAt(0)`, left col via `outerLL.getChildAt(0)`, MediaView FrameLayout via `outerLL.getChildAt(1)`. Re-assigns `layoutParams` (mutating in place doesn't trigger `requestLayout`). Ends with `view.requestLayout()`. Debug builds emit one `applyDims:` line per call to `token_log.txt`. |
+| `fun bindMediumAdContent(view: NativeAdView, content: AdMediumContent, pageTextArgb: Int)` | Toggles visibility on AdMob-only views (`MediaView`, Ad badge, `AdChoicesView`, store, star) vs the in-house BudgeTrak app icon. AdMob branch sets each asset from `nativeAd.headline/body/advertiser/callToAction/icon/price/store/starRating`, then `view.setNativeAd(ad)`. In-house branch sets text/icon from the content fields, applies icon tint via `iconView.setColorFilter(pageTextArgb)`, wires `view.setOnClickListener`. |
+| `@Composable fun rememberImageVectorBitmap(vector, sizeDp, tint): Bitmap` | Rasterizes a Compose `ImageVector` via `rememberVectorPainter` → `Bitmap.createBitmap` → `CanvasDrawScope.draw` with `ColorFilter.tint`. Cached via `remember` keyed on vector / size / tint / density / layoutDirection. Used by the in-house path to put a Material icon on the inflated `ImageView`. |
+
+**In-house catalog + composables:**
+
+| Symbol | Purpose |
+|---|---|
+| `enum class InHouseAdTier { PAID, SUBSCRIBER }` | Drives CTA text + Play Billing price selection. |
+| `data class InHouseAd(id: String, icon: ImageVector, tier: InHouseAdTier)` | One entry in the cycle. |
+| `val InHouseAds: List<InHouseAd>` | Fixed-order list of 5: receipts (PAID) → exports (PAID) → sync (SUBSCRIBER) → simulation (PAID) → ocr (SUBSCRIBER). |
+| `private fun headlineFor(id, strings) / bodyFor(id, strings)` | Branch tables routing `id` to the matching `AppStrings.ads.*` field. Add a branch when adding a new ad. |
+| `@Composable fun InHouseAdSlot(...)` | Public entry point. Routes to `MediumInHouseAdView` (`isMediumTier && mediumDims != null`) or wraps `SmallInHouseAd` in `Box.clickable(onClick)`. Medium tier delegates click to `bindMediumAdContent`. |
+| `@Composable private fun MediumInHouseAdView(ad, strings, dims, ..., onClick)` | Thin `AndroidView` wrapper that inflates `R.layout.native_ad_medium` in factory, routes through `applyMediumAdDimsAndColors` + `bindMediumAdContent(AdMediumContent.InHouse(...))` in update. Rasterizes the feature icon via `rememberImageVectorBitmap` keyed on `dims.iconSizeDp`. |
+| `@Composable private fun SmallInHouseAd(ad, strings, ...)` | Pure-Compose 3-column layout mirroring `native_ad_small.xml`. Uses hardcoded dp values (58 dp side columns, 40 dp icon, 15 dp CTA, etc.) — not `AdMediumDims`. |
+| `@Composable private fun PriceBadge(price, fontSize=12sp, paddingH=6dp, paddingV=4dp)` | Theme-aware (`MaterialTheme.colorScheme.primary` / `onPrimary`). Used only by `SmallInHouseAd` — fills the otherwise-empty 3rd column. |
+| `@Composable private fun UpgradeBadge(label, fontSize=10sp, paddingH=5dp, paddingV=1dp)` | Yellow `#FFCC00` + 1 dp black border, mirrors the AdMob "Ad" pill style. Fallback when Play Billing prices haven't loaded yet. |
+| `@Composable private fun CtaButton(text, bg, fg, ...)` | Pill-shaped button used by `SmallInHouseAd` only. `text.uppercase()` always (AdMob CTAs use server-provided casing). |
+| `@Composable private fun tightTextStyle()` | `LocalTextStyle.current.copy(platformStyle = PlatformTextStyle(includeFontPadding = false), lineHeightStyle = LineHeightStyle(Center, Both))`. Compose mirror of XML's `includeFontPadding="false"` rendering, used by `SmallInHouseAd`. |
+| `@Composable private fun textSizeResource(@DimenRes id): TextUnit` | Reads an sp dimension via `Resources.getValue` and returns a Compose `TextUnit` preserving `fontScale`. Now only used by `SmallInHouseAd` (medium path reads sizes from `AdMediumDims` directly). |
+
+**Click attribution:**
+- AdMob mode: clicks flow through the registered asset views (`view.callToActionView`, etc.). SDK records the impression and routes the click.
+- In-house mode: `view.setOnClickListener` (medium) or `Modifier.clickable` (small) routes to `vm.launchPaidUpgrade(activity)` (PAID tier) or `vm.launchSubscribe(activity)` (SUBSCRIBER tier).
+
+**Lifecycle gotchas:**
+- `layoutParams` mutation: every dim assignment in `applyMediumAdDimsAndColors` re-assigns (`view.layoutParams = (... as MarginLayoutParams).apply { ... }`). Mutating in place doesn't fire `View.setLayoutParams` → no `requestLayout`. The final `view.requestLayout()` is belt-and-suspenders.
+- `view.callToActionView = null` in the in-house branch — disables AdMob's CTA click attribution since there's no NativeAd to attribute to.
+- `iconView.clearColorFilter()` in the AdMob branch — undoes the in-house tint in case the same NativeAdView was just used for an in-house render (defensive; in practice the two paths are separate `AndroidView` instances).
+- Debug log line at the end of `applyMediumAdDimsAndColors` writes to `token_log.txt` for offline diagnostics — invaluable when ad-bar visuals don't match expectations.
+
+**Editing the in-house cycle:**
+1. Copy changes → edit `EnglishStrings.ads` + `SpanishStrings.ads` (`InHouseAdStrings` in `AppStrings.kt`). Body budget ~80 chars EN / ~85 chars ES; headline ~25 chars / 1 line.
+2. Add / remove / reorder ads → edit `InHouseAds: List<InHouseAd>`. New ids need branches in `headlineFor` / `bodyFor` plus matching strings.
+3. Translation context: `TranslationContext.ads` — keep synchronized.
+
+### 3.8 Native Ad XML layouts + drawables
+
+Four XML resources back the ad slot. None of these contain logic — they provide the initial inflation values which `applyMediumAdDimsAndColors` overrides at runtime for the medium template.
+
+**Layouts (`res/layout/`):**
+
+| File | Slot | Structure |
+|---|---|---|
+| `native_ad_small.xml` | 70 dp fixed (small tier) | Horizontal LinearLayout. Left col 58 dp (5 dp padding + 25 dp icon + 5 dp gap + 15 dp CTA). Center col `weight=1`, gravity centered, 5 stacked TextViews (advertiser 8 sp / headline 9 sp / body 8 sp). Right col 58 dp FrameLayout (Ad badge top-start + `AdChoicesView` top-end + LinearLayout bottom-center stacking store / price / star pills at 7 sp). All `includeFontPadding=false`. Dimensions hardcoded — small tier does NOT use `AdMediumDims`. |
+| `native_ad_medium.xml` | `@dimen/ad_slot_height` (overridden at runtime) | Horizontal LinearLayout. Left col (vertical, `weight=1`) holds a top section (horizontal: 30 dp icon + vertical column with advertiser + headline left-justified) → body (`gravity=center`, `maxLines=3`) → `Space weight=1` → CTA Button. Right col FrameLayout (`@dimen/ad_media_width × @dimen/ad_slot_height`) holds: `MediaView match_parent` (AdMob mode only); `native_ad_inhouse_icon` ImageView centered (`@drawable/ic_app_icon`, default `gone`, in-house mode only); Ad badge TextView top-end (AdMob only); top-start vertical LinearLayout with store pill + `AdChoicesView` (AdMob only); bottom-start vertical LinearLayout with star pill + price pill. All asset views have stable `R.id` for `findViewById` + asset registration. |
+
+**Drawables (`res/drawable/`):**
+
+| File | Style | Use |
+|---|---|---|
+| `native_ad_badge_bg.xml` | Yellow `#FFCC00` rounded rect, 3 dp corners, **2 px black stroke**. | Mandatory "Ad" disclosure label. Stroke distinguishes it from CTA-colored pills. Never tinted at runtime (policy requires high contrast). |
+| `native_ad_cta_bg.xml` | `LightPrimary` blue rounded rect, 6 dp corners. | Initial CTA background; overridden at runtime with `GradientDrawable(MaterialTheme.colorScheme.primary)` so it follows theme. |
+| `native_ad_overlay_bg.xml` | Translucent `#B3000000` rounded rect, 3 dp corners. | Initial bg for price / store / star pills; overridden at runtime to the CTA color via `GradientDrawable`. |
+
+**`res/values/dimens.xml`** holds the `ad_*` base values referenced by `native_ad_medium.xml`. The runtime override (`applyMediumAdDimsAndColors`) replaces each one based on `AdMediumDims`. Don't delete entries from `dimens.xml` — XML inflation fails without them. The `values-w600dp/` and `values-w800dp/` qualifiers were deleted 2026-05-15 (continuous scaling replaces step-function tiers).
+
+### 3.9 AdAware Dialog Host (Theme.kt)
+
+The in-tree overlay system that replaced `androidx.compose.ui.window.Dialog` in v2.10.20. Lives in `ui/theme/Theme.kt` alongside the theme palette + helper composables (§3.6, §8.1). SSD §16.5 covers the architecture rationale; this entry catalogs the symbols.
+
+**State types:**
+
+| Symbol | Purpose |
+|---|---|
+| `class AdAwareDialogState` | One instance per `SyncBudgetTheme`. Holds `internal val activeDialogs = mutableStateListOf<AdAwareDialogEntry>()` and `internal val nextSequence = AtomicLong(0)`. `mutableStateListOf` so the host recomposes on add/remove. |
+| `class AdAwareDialogEntry internal constructor(sequence: Long, onDismissRequest: () -> Unit, content: @Composable () -> Unit)` | Identity-based equality (each call site creates a fresh instance) — used as composition key in the host. `sequence` determines Z-order (higher = drawn later = on top). |
+| `private val FallbackAdAwareDialogState = AdAwareDialogState()` | Defensive no-op default for callers outside `SyncBudgetTheme` (e.g. `WidgetTransactionActivity`). Entries added to it are never rendered because no `AdAwareDialogHost` exists in those trees. Reading `LocalAdAwareDialogState` emits a one-time logcat warning when the fallback is used. |
+| `val LocalAdAwareDialogState: ProvidableCompositionLocal<AdAwareDialogState>` | `staticCompositionLocalOf` with the fallback default. Provided by `SyncBudgetTheme` so all descendants share one state instance. |
+| `val LocalShareBlockingDialogRegistrar: ProvidableCompositionLocal<(Boolean) -> Unit>` | Purpose-scoped registrar — see §3.9.1. Default is a no-op `{ { } }`. |
+
+**Composables:**
+
+| Composable | Purpose |
+|---|---|
+| `@Composable fun AdAwareDialog(onDismissRequest, properties = DialogProperties(), content)` | Drop-in replacement for `androidx.compose.ui.window.Dialog`. Registers a `AdAwareDialogEntry` via `DisposableEffect(Unit)` and unregisters in `onDispose`. Renders no UI of its own. `properties` retained for API compat but ignored. Uses `rememberUpdatedState` on both `onDismissRequest` and `content` so caller recompositions propagate through the captured entry (without `rememberUpdatedState`, the entry would hold the FIRST callbacks forever). Also calls the share-blocking registrar `(true)` on enter and `(false)` on dispose. |
+| `@Composable fun AdAwareDialogHost()` | Iterates `state.activeDialogs.sortedBy { it.sequence }` and renders each. Per-entry `key(entry)` scopes nested `BackHandler` + any `remember` to that entry's lifecycle. Renders dim layer (`Box.fillMaxSize().background(Color.Black.copy(alpha = 0.6f))` with a no-op `clickable` that absorbs taps without dismissing) + centered content (`Box.fillMaxSize().imePadding()` with `contentAlignment = Center`). `BackHandler(enabled = true) { entry.onDismissRequest() }` — Compose stack semantics fire only the topmost. Called once in `SyncBudgetTheme`'s outer Box below the ad banner. |
+| `@Composable fun AdAwareAlertDialog(onDismissRequest, title?, text?, confirmButton, dismissButton?, ...)` | AlertDialog-shaped convenience wrapper around `AdAwareDialog`. Builds a Surface/Column with optional `DialogHeader` (title) + scrollable body (`PulsingScrollArrows` overlay) + footer (`confirmButton` + optional `dismissButton`). |
+| `@Composable fun AdAwareDatePickerDialog(state, onDismissRequest, confirmButton, dismissButton)` | Date picker wrapped in `AdAwareDialog`. |
+
+**Reason for the rewrite (v2.10.20):** the previous separate-window approach (`androidx.compose.ui.window.Dialog`) created an Android window per dialog. The window's bounds absorbed all taps including those on the visible-but-behind ad bar, so `NativeAdView.callToActionView` clicks couldn't register while a dialog was open. The in-tree overlay places dialog content inside the main Activity window — the ad bar lives outside the host's bounds and receives clicks normally. See `feedback_compose_dialog_window_stacking.md`.
+
+**Exceptions still using raw `androidx.compose.ui.window.Dialog`:**
+- `SwipeablePhotoRow` fullscreen photo viewer — intentionally covers the ad bar (immersive view).
+- `WidgetTransactionActivity` match dialogs — separate Activity without `SyncBudgetTheme`, so `AdAwareDialogState` isn't available.
+
+**Content-lambda safety pattern:** `state?.let { v -> AdAwareDialog(onDismissRequest = …, content = { /* use v */ }) }` — NOT `if (state != null) { AdAwareDialog(content = { /* uses state!! */ }) }`. The host may re-invoke the content lambda one frame after the gating state is set to null but before `DisposableEffect.onDispose` removes the entry; the latter form crashes with NPE in that window. See `feedback_dialog_safety_patterns.md`.
+
+#### 3.9.1 LocalShareBlockingDialogRegistrar
+
+Purpose-scoped `CompositionLocal` for routing dropped share-intent URIs while any dialog is open. Set by `MainActivity`'s `CompositionLocalProvider` to flip `vm.shareBlockingDialogCount++` / `--`. Every `AdAwareDialog` auto-registers — pickers, confirmations, Add/Edit forms alike — so consumers can detect "is anything open?" without enumerating every dialog state.
+
+Routing inside `MainViewModel.consumePendingSharedImages(uris, canAttachPhotos)`:
+
+| Condition | Action |
+|---|---|
+| Counter == 0 + no open transaction dialog | Fall through to a new Add dialog (default path). |
+| Counter > 0 + open transaction dialog | Absorb URIs into the open dialog via `vm.attachSharedImagesToOpenTransaction`. Capped at remaining photo slots; overflow → `shareOverflowToastPending`. |
+| Counter > 0 + non-transaction dialog | Drop URIs + toast `shareBlockedByOpenDialog`. Prevents the share from being lost into a confirmation popup that has no concept of receipts. |
+| Free user (`!canAttachPhotos`) | Drop URIs + toast `sharedPhotoNeedsUpgrade`. |
+
+**Purpose-scoped invariant:** do NOT repurpose this registrar for other "is a dialog open?" needs. The AdAware wrappers auto-register every dialog, so any other consumer would fire on benign popups. A new mechanism needing a different signal should add a separate registrar. Default value is a no-op so previews without a provider still render. See `feedback_share_intent_routing.md`.
 
 ## 4. Sound Classes
 
@@ -1041,6 +1158,202 @@ Three-tier strategy (each tier fails through to the next):
 | `writeStream(context, relSubdir, fileName, mimeType, produce): File?` | Stream variant for large content (PDFs). Materializes via `ByteArrayOutputStream` first so the three-tier retry can fall through without re-invoking `produce` mid-stream. |
 
 Callers: `DiagDumpBuilder.writeDiagToMediaStore`, `BackgroundSyncWorker` DebugDumpWorker dump path, `FullBackupSerializer.applyRestore` (pre-restore snapshot), `ExpenseReportGenerator.generateSingleReport`. Other public-download writes (`.enc` backups via `nextAvailableSuffix`, SAF-mediated CSV/XLSX/JSON, photo dumps in fresh timestamped subdirs, append-mode debug logs in swallow-EACCES try/catch) don't need the helper — they're either already orphan-resilient or deliberately tolerate failure. Full survey in SSD §9.7.
+
+### 6.17 BillingProducts
+
+**File:** `data/billing/BillingProducts.kt` (23 lines)  |  object singleton
+
+Product-ID constants and the subscription period derived locally for Layer 1 entitlement math.
+
+| Symbol | Value | Notes |
+|---|---|---|
+| `PAID_UPGRADE` | `"paid_upgrade"` | INAPP non-consumable, $9.99 one-time. |
+| `SUBSCRIBER` | `"subscriber"` | SUBS monthly base plan, $4.99/month. |
+| `SUB_PERIOD_MS` | `30L * 24 * 60 * 60 * 1000` | 30-day approximation of one billing period. `subscriptionExpiry = purchase.purchaseTime + SUB_PERIOD_MS` lets the existing 7-day grace logic work without server-side queries on every refresh; Layer 2 prefers Developer-API `expiryTimeMillis` when verified. |
+
+Changing the IDs requires Play Console product re-creation + ~24 h SKU catalog propagation before clients can query them.
+
+### 6.18 BillingService
+
+**File:** `data/billing/BillingService.kt` (242 lines)  |  class instance
+
+Wraps Google Play Billing Library 7+ for BudgeTrak's Layer 1 IAP. Constructed in `MainViewModel.init` with a `PurchasesUpdatedListener` that re-runs entitlement refresh on purchase-flow completion. SSD §16b.
+
+**Supporting type:**
+```kotlin
+data class BillingState(
+    val paidUpgradeDetails: ProductDetails?,
+    val subscriberDetails: ProductDetails?,
+    val paidUpgradePurchase: Purchase?,
+    val subscriberPurchase: Purchase?,
+    val paidUpgradePrice: String?,
+    val subscriberPrice: String?,
+    val subscriberOfferToken: String?,
+)
+```
+Null fields mean the product or purchase isn't available (offline, SKU catalog still propagating, or the user doesn't own the product).
+
+**Connection management:**
+- `private suspend fun ensureConnected(): Boolean` — serializes connect calls via a `Mutex`. Resumes from `BillingClientStateListener.onBillingSetupFinished` callback or times out at `CONNECT_TIMEOUT_MS = 10_000L`. `onBillingServiceDisconnected` does NOT resume — auto-reconnect happens on next call.
+
+**Query methods:**
+| Method | Purpose |
+|---|---|
+| `suspend fun queryAll(): BillingState?` | One-call snapshot. Two separate `queryProductDetailsAsync` calls (INAPP + SUBS — Billing 7+ disallows mixed-type queries) merged into a `Map<String, ProductDetails>`, then `queryPurchases()` for active purchases. Filters to `PurchaseState.PURCHASED`. Returns `null` if disconnected. |
+| `private suspend fun queryProductDetails(): Map<String, ProductDetails>` | Inner helper for `queryAll`. Each query suspends via `suspendCancellableCoroutine`. |
+| `private suspend fun queryPurchases(): Pair<List<Purchase>, List<Purchase>>` | Returns `(inapp, subs)`. Same suspend pattern. |
+| `suspend fun queryRawPurchases(): Pair<List<Purchase>, List<Purchase>>?` | Unfiltered (PENDING, UNSPECIFIED_STATE, etc.) for the Restore Purchases diagnostic dump. |
+
+**Purchase methods:**
+| Method | Purpose |
+|---|---|
+| `suspend fun launchPaidUpgrade(activity, details): BillingResult` | Builds `BillingFlowParams` from the one-time product and calls `client.launchBillingFlow`. Returns the immediate `BillingResult`; the listener fires when the user completes/cancels. |
+| `suspend fun launchSubscribe(activity, details, offerToken): BillingResult` | Same pattern with `offerToken` (required for SUBS). |
+| `suspend fun acknowledge(purchase): BillingResult` | Required within 3 days of purchase or Play auto-refunds. Short-circuits if `purchase.isAcknowledged` already. |
+
+**Failure sentinels:** `disconnectedResult()` returns `SERVICE_DISCONNECTED`, `okResult()` returns `OK` — used to keep return types consistent without throwing.
+
+### 6.19 EntitlementVerifier
+
+**File:** `data/billing/EntitlementVerifier.kt` (167 lines)  |  class instance
+
+Layer 2 server-side entitlement check. Closes the refund-lag window where the device's local `BillingClient` cache hasn't yet learned that a purchase was canceled or refunded. SSD §16b.4–16b.5.
+
+**Supporting types:**
+```kotlin
+sealed class VerifyResult {
+    data class Verified(val expiryTimeMillis: Long?, val orderId: String?) : VerifyResult()
+    data class Refunded(val reason: String) : VerifyResult()
+    data class Unreachable(val cause: String) : VerifyResult()
+}
+
+enum class ProductType(val wire: String) {
+    INAPP("inapp"),
+    SUBS("subs"),
+}
+
+data class CachedVerification(
+    val verified: Boolean,
+    val expiryTimeMillis: Long?,
+    val orderId: String?,
+    val reason: String?,
+    val timestampMillis: Long,
+)
+```
+
+**Constants:**
+- `PREFS = "entitlement_verifier"` — SharedPreferences file name.
+- `SERVER_CACHE_TTL_MS = 24L * 60 * 60 * 1000` — 24 h.
+- `CALL_TIMEOUT_MS = 15_000L` — Cloud Function call budget.
+
+**Methods:**
+| Method | Purpose |
+|---|---|
+| `suspend fun verify(purchaseToken, productId, productType): VerifyResult` | Calls `FirebaseFunctions.getInstance("us-central1").getHttpsCallable("verifyPurchase")` with `{purchaseToken, productId, productType: "inapp"\|"subs"}`. App Check enforced. Server reads Play Developer API and returns `{verified, expiryTimeMillis, orderId, reason}`. Wraps in `withTimeoutOrNull(CALL_TIMEOUT_MS)` → `Unreachable("timeout")` on timeout. Other exceptions → `Unreachable(e.message)`. Both `verified=true` (→ `Verified`) and `verified=false` (→ `Refunded`) results are cached; `Unreachable` is not. |
+| `fun lastServerVerification(purchaseToken): CachedVerification?` | Reads the JSON-encoded cache entry for this purchase token. Returns null if missing, malformed, or older than 24 h. Callers prefer cached over local Layer 1 on `Unreachable` only when this returns non-null. |
+| `private fun cache(...)` | Writes JSON `{verified, productType, expiryTimeMillis, orderId, reason, ts}` to `prefs.edit().putString(cacheKey(token), ...).apply()`. |
+| `private fun cacheKey(purchaseToken): String` | `"v_" + token.hashCode().toString(16)`. Hashes because tokens can be very long and underlying XML prefs storage has quirky key-length behavior. |
+
+**`FirebaseFunctions` lazy:** `FirebaseFunctions.getInstance("us-central1")` — must match the region the `verifyPurchase` Gen 2 function is deployed to. Caller is `MainViewModel.reconcileEntitlement` which composes Layer 1 + Layer 2 per SSD §16b.5.
+
+### 6.20 AiCategorizerService
+
+**File:** `data/ai/AiCategorizerService.kt` (139 lines)  |  object singleton
+
+Gemini Flash-Lite CSV-import categorizer. Invoked from `MainViewModel.runAiCsvCategorizer` after the on-device deterministic matcher fails the confidence gate (fewer than 5 historical matches OR <80% category agreement). SSD §11.2.
+
+**Constants:**
+- `TIMEOUT_MS = 30_000L` — outer per-call budget (excluding retry delays).
+- `CHUNK_SIZE = 100` — transactions per API call.
+
+**Response schema** (`Schema.obj("CategorizerResult")`): a single `results` array of `{i: Int, categoryId: Int}` entries. Schema-constrained JSON via `responseSchema` + `responseMimeType = "application/json"`.
+
+**`liteModel` (lazy):** `GenerativeModel(modelName = "gemini-2.5-flash-lite", apiKey = BuildConfig.GEMINI_API_KEY, generationConfig = { responseMimeType, responseSchema, temperature = 0f })`. Temperature 0 for determinism.
+
+**Methods:**
+| Method | Purpose |
+|---|---|
+| `suspend fun categorizeBatch(transactions, categories): Result<Map<Int, Int>>` | Chunks `transactions` by `CHUNK_SIZE` (100). For each chunk: builds payload, runs `generateWithRetry` under `withTimeout(TIMEOUT_MS)`, parses results, merges into the output map. Returns map of input-index → categoryId. Entries missing (model skipped, returned unknown id, or whole call failed) fall back to whatever the caller had. Rethrows `CancellationException`; logs + Crashlytics-records other failures and returns `Result.failure(e)`. |
+| `private suspend fun generateWithRetry(batch, categories): String` | Builds the JSON payload (`{i, merchant, amount}` per row — **date NOT included**, privacy footprint), calls `buildCategorizerPrompt` from `CategorizerPromptBuilder`, invokes the model. 3 attempts max; exponential backoff `500L shl (attempt - 1)` (500 ms → 1 s → 2 s). Retries only on `transientPattern` matches (`503`, `UNAVAILABLE`, `overloaded`, `429`, `RESOURCE_EXHAUSTED`, `deadline`, network errors, `socket`). Non-transient failures throw immediately. |
+| `private fun parseResults(jsonText, validCategoryIds): Map<Int, Int>` | Reads the `results` array, validates each entry's `categoryId` against `validCategoryIds`, skips invalid/missing entries silently. Returns the cleaned map. |
+
+**Payload privacy rationale:** the per-row payload omits the transaction `date` deliberately. Merchant is the dominant categorization signal; amount disambiguates edge cases (small vs large gas-station charges); date adds negligible value and isn't worth the extra data shared with Google. The decision is documented inline in `generateWithRetry` so future maintainers don't re-add the date.
+
+### 6.21 CategorizerPromptBuilder
+
+**File:** `data/ai/CategorizerPromptBuilder.kt` (29 lines)  |  top-level function + constant
+
+| Symbol | Purpose |
+|---|---|
+| `const val CSV_CATEGORIZER_PROMPT_VERSION = "v1"` | Pinned prompt-version string. Bump on any semantic prompt change; surfaces in dump files via the future telemetry payload + `feedback memory project_ai_models.md`. |
+| `fun buildCategorizerPrompt(categories, batchJson): String` | Filters out `supercharge` / `recurring_income` / `deleted` categories so the model can't pick them, formats the visible list as `- id=N name="..." tag="..."` lines, and embeds the input batch JSON. Prompt body includes domain hints (amount as disambiguator, "Electric/Gas" = utility vs "Transportation/Gas" = fuel, pure Insurance vs combined property-tax categories, fallback-to-"Other" rule). Returns the rendered prompt as a String. |
+
+### 6.22 ReceiptOcrService
+
+**File:** `data/ocr/ReceiptOcrService.kt` (789 lines)  |  object singleton
+
+Split-pipeline Gemini 2.5 Flash-Lite receipt OCR. Triggered by an explicit tap on the AI sparkle in `TransactionDialog` after the user long-presses a photo slot to mark it as the OCR target. SSD §11.3 covers the call-sequence narrative; this LLD entry is the symbol catalog.
+
+**Constants:**
+- `TIMEOUT_MS = 90_000L` — outer pipeline budget.
+- `CALL1R_TIMEOUT_PAST_C2_MS = 2_000L` — Call 1.5 cap measured from Call 2 completion. Refund receipts with multiple negative numbers can otherwise stretch Call 1.5 reasoning to ~7-9 s past Call 2; capping converts those tail cases into a bounded wait.
+
+**Schemas (4):** `call1Schema` (merchant / date / amountCents / itemNames[] / fullTranscript[] / notes), `call1rSchema` (reconciled merchant / date / amountCents), `call2Schema` (per-item categoryId + score + reason × N + topChoice + multiCategoryLikely), `call3Schema` (per-item priceCents). All have `temperature = 0f` for determinism; all use `Schema.int` for cents to keep integer precision (no fractional-cent rounding bugs).
+
+**Models (4 lazy):** one `GenerativeModel` per schema, all `gemini-2.5-flash-lite`. Single helper `liteModel(schema)` builds them with `apiKey = BuildConfig.GEMINI_API_KEY`, `responseMimeType = "application/json"`, `responseSchema = schema`, `temperature = 0f`.
+
+**Public entry point:**
+```kotlin
+suspend fun extractFromReceipt(
+    context: Context,
+    receiptId: String,
+    categories: List<Category>,
+    preSelectedCategoryIds: Set<Int> = emptySet()
+): Result<OcrResult>
+```
+Reads `ReceiptManager.getReceiptFile(context, receiptId).readBytes()` and passes via `content { blob("image/jpeg", bytes) }` — **NOT** `image(bitmap)`. The latter re-encodes at JPEG q=80 inside the SDK's `encodeBitmapToBase64Png`, which silently degrades the q=92+ stored receipts. Pipeline runs under `withTimeout(TIMEOUT_MS)`. Rethrows `CancellationException`; logs + Crashlytics-records other failures.
+
+**Internal types** (visible to test harness via `internal` modifier):
+- `data class ScoredCandidate(categoryId: Int, score: Int)`
+- `data class ScoredItem(description: String, scores: List<ScoredCandidate>)`
+- private `Call1Header`, `Call1Reconciled`, `Call2Categorization` data classes mirroring the per-call schemas.
+
+**Pipeline (`runPipeline`):**
+1. **Filter `promptCats`** — if `preSelectedCategoryIds` is non-empty, restrict to those; else drop `supercharge` / `recurring_income` / `deleted`.
+2. **Call 1** — `runCall1(imageBytes)` always runs.
+3. **Shortcut** — if `preSelectedCategoryIds.size == 1` OR `c1.itemNames.isEmpty()`, return `buildSingleCatResult(c1, ...)` with the single cat. Skip reconcile (preselected receipts are typically quick-entry).
+4. **Parallel Call 1.5 + Call 2** — `coroutineScope { async { runCall2(...) } + async { runCall1Reconcile(c1) } }`. Call 2 returns first on the typical path; Call 1.5 is awaited with `CALL1R_TIMEOUT_PAST_C2_MS` cap. On Call 1.5 timeout / parse error / API error, falls back to Call 1 values silently.
+5. **Route single vs multi** — `multi = (preSelect.size >= 2) || deriveMulti(c2.items, promptCats, c2.multiCategoryLikely)`. `deriveMulti` is `internal` for harness testing.
+6. **Single-cat path:** `buildSingleCatResult(c1, c1r, c2.topChoice ?: deriveSingleCat(...))`. Returns `OcrResult` with one `OcrCategoryAmount` carrying the full amount.
+7. **Multi-cat path:** `runCall3(imageBytes, c1.itemNames, promptCats)` for per-item prices → `reconcilePrices(items, priceCents, c1r.amountCents)` (≤ $0.05 drift tolerance; tax line via `isTaxLine` preserved exactly) → `aggregateCategoryAmounts(items, reconciled)` (groups by `topChoice` per item).
+
+**Per-call helpers:**
+| Method | Purpose |
+|---|---|
+| `private suspend fun runCall1(imageBytes): Call1Header` | Image + Call 1 prompt → `Call1Header`. Marketplace rule + no-hallucinated-date rule live in the prompt body (`buildCall1Prompt`). |
+| `private suspend fun runCall1Reconcile(c1): Call1Reconciled` | Text-only second pass over `c1.fullTranscript`. Returns Call 1 values on any parse / API error. Logged via per-call timing lines. |
+| `private suspend fun runCall2(imageBytes, itemNames, promptCats, preselected): Call2Categorization` | Image + Call 2 prompt → per-item scored categories + routing. |
+| `private suspend fun runCall3(imageBytes, itemNames, promptCats): List<Int>` | Image + Call 3 prompt → priceCents per item. Multi-cat only. |
+| `internal fun deriveMulti(items, promptCats, multiCategoryLikely?): Boolean` | Routing helper. Visible to harness for unit testing. |
+| `internal fun reconcilePrices(items, priceCents, totalCents): List<Int>` | Per-item price reconciliation against Call 1's total. Tax-line passthrough via `isTaxLine`. ≤ $0.05 drift tolerance. |
+| `internal fun aggregateCategoryAmounts(items, reconciledPriceCents): List<OcrCategoryAmount>` | Groups items by their `topChoice` (or `deriveSingleCat`) and sums cents. |
+| `private fun buildSingleCatResult(c1, c1r, catId)` | Builds an `OcrResult` for the single-cat path. |
+| `private fun isTaxLine(desc): Boolean` | Matches "Sales Tax", "Estimated tax", "Tax", etc. Used by `reconcilePrices` to preserve tax exactly. |
+| `private fun isTransient(msg): Boolean` | Same transient-pattern matcher used by `AiCategorizerService` (503, UNAVAILABLE, overloaded, 429, RESOURCE_EXHAUSTED, network errors). Used for retry decisions on transient API errors. |
+
+**Refund-receipt support:** `runCall1` and `runCall1Reconcile` use `Int.MIN_VALUE` as the sentinel for "missing amountCents" so legitimate negative cents flow through unmodified. The dialog prefill in `MainActivity.applyOcrResultToDialog` detects `r.amount < 0` and flips `typeIsExpense = false` + `kotlin.math.abs(...)`. Model invariant: amount always positive, type carries polarity.
+
+**Debug logging:** every call emits a `Call N dispatch (...)` line at start and `Call N response after Nms (...)` on response. `Call1.5: timed out 2000ms past C2 — using C1 values` when the cap fires. All lines land in `token_log.txt` for forensic latency analysis. Test-harness reference: `tools/ocr-harness/scripts/test-v16-split-with-image.js`.
+
+### 6.23 OcrResult
+
+**File:** `data/ocr/OcrResult.kt` (26 lines)  |  data classes + sealed class
+
+| Type | Purpose |
+|---|---|
+| `data class OcrCategoryAmount(categoryId: Int, amount: Double)` | One entry per category that received money on a multi-cat receipt. Single-cat receipts emit a list with one entry carrying the full amount. |
+| `data class OcrResult(merchant, merchantLegalName?, date, amount, categoryAmounts?, lineItems?, notes?)` | The full pipeline output. `amount` is a `Double` (post-cents-to-dollars conversion). `categoryAmounts == null` means single-cat (caller assigns the full amount to whatever cat was preselected or the dialog's current cat). `lineItems` carries the verbatim receipt lines when present (for debugging). |
+| `sealed class OcrState { Idle, Loading, Success(result), Failed(message), Offline }` | UI state machine consumed by `TransactionDialog`. `Offline` is intentionally distinguished from `Failed` so the UI can show an offline-specific toast without string-matching the message field. |
 
 ## 7. Sync Classes
 
@@ -1879,11 +2192,14 @@ Sync engine: `EncryptedDocSerializer`, `FirestoreDocService`, `FirestoreDocSync`
 ### `data/telemetry/` — 1 file
 `AnalyticsEvents` (`logHealthBeacon`, `logOcrFeedback`). §7.26a.
 
+### `data/billing/` — 3 files
+`BillingProducts` (product IDs + `SUB_PERIOD_MS`), `BillingService` (Play Billing Library 7+ wrapper — `queryAll`, `launchPaidUpgrade`, `launchSubscribe`, `acknowledge`), `EntitlementVerifier` (Layer 2 Cloud-Function-callable wrapper with 24 h SharedPreferences cache; `VerifyResult.Verified/Refunded/Unreachable`). §6.17–§6.19. SSD §16b.
+
 ### `sound/` — 1 file
 `FlipSoundPlayer` (procedural flip audio). §4.
 
-### `ui/components/` — 5 files
-`FlipChar`, `FlipDigit`, `FlipDisplay`, `PieChartEditor`, `SwipeablePhotoRow`. §3.
+### `ui/components/` — 6 files
+`FlipChar`, `FlipDigit`, `FlipDisplay`, `PieChartEditor`, `SwipeablePhotoRow`, `InHouseAd` (native ad rendering + in-house fallback; AdMediumDims + applyMediumAdDimsAndColors + bindMediumAdContent + InHouseAds catalog). §3.
 
 ### `ui/screens/` — 22 files
 11 main: `MainScreen`, `TransactionsScreen`, `RecurringExpensesScreen`, `AmortizationScreen`, `SavingsGoalsScreen`, `BudgetConfigScreen`, `BudgetCalendarScreen`, `SimulationGraphScreen`, `SyncScreen`, `SettingsScreen`, `QuickStartGuide`. 10 help screens (one per main, except BudgetCalendar/Sync/Simulation share the pattern). 1 shared: `HelpComponents`. §2.4–2.14, §10.
@@ -1913,7 +2229,12 @@ Sync engine: `EncryptedDocSerializer`, `FirestoreDocService`, `FirestoreDocSync`
 | 2.10.04 | May 3 2026 | **Restore-list merge + side-by-side debug install + first end-to-end CI publish.** Restore dialog `LaunchedEffect` always loads the persisted SAF tree URI when present (was short-circuiting whenever `BackupManager.listAvailableBackups()` returned anything), and `availableBackups` now merges both lists deduplicated by `date` so orphan `.enc` files from prior installs stay visible after the user creates their first own auto-backup. Debug buildType gets `applicationIdSuffix = ".debug"` + `versionNameSuffix = "-debug"` so debug-keystore-signed sideloads (`com.techadvantage.budgetrak.debug`) coexist with the Play-Store-signed release (`com.techadvantage.budgetrak`) on the same device — separate Firebase app entries, separate sandboxes, separate sync groups. CI workflow `release_status` input added (default `draft`); first end-to-end CI publish to Internal testing track (run 25269576441) succeeded after the upstream Play Integrity setup gap was closed (Play app signing key SHA-256 added to Firebase Project settings — see SSD §28.6.5). |
 | 2.10.10–2.10.23 | May 9–12 2026 | **Play Billing Layers 1+2 + Help-page rewrite + appInstanceId in diag dump + Gemini API key restriction.** Play Billing Layer 1 (v2.10.10): new `data/billing/` package — `BillingService.kt` (Play Billing Library 7+ wrapper), `BillingProducts.kt` (`paid_upgrade`, `subscriber`, `SUB_PERIOD_MS`). `MainViewModel.refreshBillingStateWithState` derives `isPaidUser`/`isSubscriber`/`subscriptionExpiry` from `BillingClient.queryPurchasesAsync` with 7-day TTL on stale; `restorePurchases` button writes diagnostic dump to `/Download/BudgeTrak/support/billing_dump.txt`. Dashboard Help dialog overlay parity (v2.10.20). Help-page Paid/Subscriber rewrite — `paidPhotos` mentions PDFs, parallel `HelpSubSectionTitle` for both subsections (v2.10.21; EN + ES). Play Billing Layer 2 server-side verification (v2.10.22): new `data/billing/EntitlementVerifier.kt` (Cloud Functions callable wrapper, 24h SharedPreferences cache); `MainViewModel.reconcileEntitlement(local, verify, token)` returns Verified→true, Refunded→false (override local PURCHASED), Unreachable→cached-server-or-local; `subscriptionExpiry` prefers Developer-API `expiryTimeMillis` when verified; billing dump gains "Layer 2 server verification" block. **appInstanceId in DiagDumpBuilder** (v2.10.22; §6.15): `BudgeTrakApplication.appInstanceId` cached async from `FirebaseAnalytics.appInstanceId` on `onCreate`; surfaced under `DeviceId:` in every dump so per-device dumps correlate to GA4 BigQuery rows. **Firebase Functions SDK** added to `app/build.gradle.kts` (`com.google.firebase:firebase-functions-ktx`, BOM-managed). Gemini API key restriction applied at Google Cloud API gateway 2026-05-12 (no code change — server-side enforcement). v2.10.23 (vc 39): doc + memory sync. |
 | 2.10.07–2.10.09 | May 7–8 2026 | **SYNC pending-edit clobber fix + sync hardenings + 5-member group cap + AdMob real integration.** v2.10.07: foreign inbound now drops on conflict — every collection branch in `SyncMergeProcessor.processBatch` early-returns `if (event.isConflict) { conflictDetected = true; continue }`. The old transaction-only `isUserCategorized=false` workaround + `conflictedTransactionsToPushBack` plumbing in `MainViewModel`/`BackgroundSyncWorker` removed. Plus four `FirestoreDocSync` hardenings: `pushRecord` sets `localPendingEdits` BEFORE the Firestore I/O (closes the smaller same-shape race during the push duration); per-collection `cursorWriteLock` + `advanceCursor` helper makes load-compare-save atomic; `isListening` guards in both listener handlers drop late callbacks racing with `stopListeners()`; cursor advance skips failed-deserialization docs. v2.10.08: `SyncScreen` Generate Pairing Code button toasts `memberLimitReached` when `devices.size >= 5` instead of generating; `GroupManager.joinGroup`, after registering membership (required to read the devices subcollection), fetches device count and rolls back membership + local prefs if `>= 5` (server-side rule deferred — see `memory/project_member_limit_server_rule.md`). v2.10.09: real AdMob banner (TEST IDs) replaces the placeholder — adaptive sizing via `getCurrentOrientationAnchoredAdaptiveBannerAdSize`, `windowInsetsPadding(statusBars.union(displayCutout))` + `Modifier.background(headerBackground)` for the decorative top strip behind the cutout, AdView `setBackgroundColor(topBarColor.toArgb())` so letterbox areas blend with the strip, `WindowCompat.getInsetsController(...).isAppearanceLightStatusBars = false` for white status-bar icons in both themes, `tools:replace="android:resource"` on `<property AD_SERVICES_CONFIG>` to resolve the `play-services-ads` ↔ `play-services-measurement-api` manifest-merger conflict. Production-swap checklist in `memory/project_ad_implementation.md`. |
+| 2.10.28-dev | May 15 2026 | **§3.7 InHouseAd + §3.8 native-ad XML/drawables added.** Documents the medium-tier native ad system that landed on dev today: `AdMediumDims` data class + `computeAdMediumDims(widthDp)` continuous-scale formula (`s = widthDp/400`, no upper clamp; replaces deleted `values-w600dp/` + `values-w800dp/` qualifiers); shared rendering via `applyMediumAdDimsAndColors` + `bindMediumAdContent` + sealed `AdMediumContent.AdMob/InHouse` so the AdMob path and the in-house Compose mirror both inflate the same `native_ad_medium.xml`; `rememberImageVectorBitmap` rasterizer for Material `ImageVector` → `Bitmap`. `ui/components/` count corrected 5 → 6 (`InHouseAd.kt` was previously absent from the inventory). Companion SSD §16a chapter added. |
+| 2.10.28-dev (P2) | May 15 2026 | **§6.17–§6.19 Play Billing classes added.** `BillingProducts` (IDs + `SUB_PERIOD_MS`), `BillingService` (Play Billing Library 7+ wrapper: `BillingState` data class, `queryAll` / `queryRawPurchases` / `launchPaidUpgrade` / `launchSubscribe` / `acknowledge` + `ensureConnected` Mutex), `EntitlementVerifier` (Layer 2 Cloud-Function-callable wrapper: `VerifyResult.Verified/Refunded/Unreachable` sealed class, 24 h SharedPreferences cache, 15 s call timeout). File inventory adds `data/billing/` (3 files). Companion SSD §16b chapter added. |
+| 2.10.28-dev (P3) | May 15 2026 | **§6.20–§6.23 AI / OCR classes added.** `AiCategorizerService` (CSV batch categorizer, `CHUNK_SIZE = 100`, schema-constrained JSON, retry on transient errors, payload omits date for privacy), `CategorizerPromptBuilder` (prompt template + `CSV_CATEGORIZER_PROMPT_VERSION = "v1"`), `ReceiptOcrService` (4-call Gemini Flash-Lite pipeline with all 4 schemas, parallel Call 1.5 / Call 2 under `CALL1R_TIMEOUT_PAST_C2_MS = 2_000L` cap, `deriveMulti` / `reconcilePrices` / `aggregateCategoryAmounts` post-processing, refund-receipt `Int.MIN_VALUE` sentinel, JPEG-blob vs bitmap-re-encode rationale, harness pointer), `OcrResult` (data classes + `OcrState` sealed class with `Offline` distinct from `Failed`). Companion SSD §11.2 + §11.3 augmented with prompt-version + helper-name details. Items 5 + 6 (period-boundary scheduling, inline FCM) already covered substantively in SSD §17.13–§17.15 + LLD §7.14 — no expansion needed. |
+| Doc bump v2.8 → v2.10 | May 15 2026 | **Filename + header + footer bumped.** Doc version independent of app version. v2.10 captures cumulative coverage since v2.8: §6.17–§6.19 Play Billing classes, §6.20–§6.23 AI/OCR classes, §3.7/§3.8 Native ad + XML/drawables, §3.9/§3.9.1 AdAware dialog host + share-blocking registrar. Files renamed `BudgeTrak_{SSD,LLD}_v2.8.md → _v2.10.md`. References in `README.md` and `memory/MEMORY.md` updated. |
+| 2.10.28-dev (P4) | May 15 2026 | **§3.9 AdAware Dialog Host added (+ §3.9.1 LocalShareBlockingDialogRegistrar).** Catalogs `AdAwareDialogState` (activeDialogs `mutableStateListOf` + `AtomicLong nextSequence`), `AdAwareDialogEntry` (identity-based, sequence-ordered), `FallbackAdAwareDialogState` (defensive no-op for `WidgetTransactionActivity`), `LocalAdAwareDialogState`, `LocalShareBlockingDialogRegistrar` (purpose-scoped). Composables: `AdAwareDialog` (DisposableEffect-registered, `rememberUpdatedState`-wrapped callbacks, auto-registers share-blocking), `AdAwareDialogHost` (per-entry `key(entry)` + `BackHandler` + dim layer no-op clickable + `imePadding` content). Share-routing precedence table for `consumePendingSharedImages`. SSD §16.5 expanded with same coverage + new §16.5a covering the share-intent registrar's purpose-scoped invariant. |
 
 ---
 
-BudgeTrak Low-Level Design Document v2.8 — April 2026 — END OF DOCUMENT
+BudgeTrak Low-Level Design Document v2.10 — May 2026 — END OF DOCUMENT

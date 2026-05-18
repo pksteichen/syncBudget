@@ -144,6 +144,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [Add debug logging early](feedback_debug_with_logging.md).
 - [Analyze ALL failure cases](feedback_analyze_all_cases.md).
 - [Wait for user decision](feedback_wait_for_decision.md).
+- [Explain the idea before coding](feedback_explain_before_coding.md) — state the plan in 2-4 sentences before non-trivial changes. Especially when the request is ambiguous (one of several plausible fixes); name the interpretation before picking.
 - [Keep analysis concise](feedback_concise_analysis.md).
 - [Help-text vs code audit method](feedback_help_audit_method.md).
 - [Audit methodology](feedback_audit_methodology.md).
@@ -151,7 +152,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [Never rename persistence-layer fields](feedback_preserve_persistence_names.md).
 - [Keep firebase-config-reference.txt updated](feedback_update_firebase_config.md).
 - [Always update release notes before CI dispatch](feedback_update_release_notes.md) — `whatsNew/whatsnew-en-US` + `whatsnew-es-419` ship verbatim via the workflow; stale notes mean testers see wrong info about their build. Both under 500 chars; Spanish runs ~20% longer.
-- [Native ad implementation — banner→native v2.10.16, polished on feature/ad-polish](project_ad_implementation.md) — 3-col small/medium templates, dimens-based 400/600/800dp tier scaling, 5-pill MediaView overlays, theme-aware text, tier-flip robustness (LocalConfiguration + key + DisposableEffect), in-house ad mirror with Play Billing price pill, production-swap checklist.
+- [Native ad implementation — banner→native v2.10.16, continuous-scale + icon/headline restructure 2026-05-15](project_ad_implementation.md) — small (<400dp, fixed 70dp) + medium (≥400dp, continuous-scale via computeAdMediumDims(widthDp) applied in AndroidView.update), large icon left of advertiser+headline column, in-house Compose mirror reads same dims, production-swap checklist.
 - [AdMob + Firebase manifest merger conflict](feedback_admob_manifest_merger.md) — `AD_SERVICES_CONFIG` resolves with `tools:replace` override.
 - [AdMob validator "too small" persists on low→high dp tier flip](feedback_admob_validator_dp_transition.md) — validator-UI session cache, not an app bug; app-side state is correct. Restart validator or app to clear.
 - [Play Billing Layers 1+2 — L1 v2.10.10, L2 2026-05-11](project_play_billing_integration.md) — entitlement flow, 7-day TTL cache, Gen 2 `verifyPurchase` callable for server-authoritative refund detection; L2.5 (Firestore entitlement doc, anti-forge) still pending.
@@ -185,6 +186,8 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [Don't delete google*.html in Pages repo](feedback_keep_google_verification_file.md) — `google17d827ef1b64ae6d.html` at the root verifies techadvantagesupport.github.io ownership for Google services; removing it breaks Play Console / Search Console verification.
 - [Subscriber tier is a superset of Paid](feedback_subscriber_implies_paid.md) — gates checking `isPaidUser` only are bugs unless the feature is genuinely Subscriber-exclusive (AI, SYNC create/admin).
 - [MediaStore ghost files from Termux rm](feedback_mediastore_ghost_files.md) — never `rm` app-owned public-Download files from Termux; leaves a MediaStore ghost that blocks app O_CREAT with EEXIST. Recover via `touch` placeholder, or delete via Files app. Default new high-frequency logs to `context.filesDir`.
+- [Gradle clean when on-disk edits don't appear](feedback_gradle_clean_when_edits_dont_show.md) — `assembleDebug` occasionally reuses stale intermediates (resource/AAPT2 cache), source-edits absent from APK despite BUILD SUCCESSFUL. Run `./gradlew clean assembleDebug` before debugging at runtime.
+- [AdMob WebView crashes on 16k-page emulator AVDs](feedback_admob_webview_16k_emulator_crash.md) — `Fatal signal 5 SIGTRAP code 128 in MemoryInfra thread` with all frames in `libmonochrome_64.so`. Gate `MobileAds.initialize` on entitlement (paid users skip SDK init entirely) — landed v2.10.28+ in `BudgeTrakApplication.onCreate`. Subscription override alone is NOT enough.
 
 ## Firebase Backend
 - Plan: Blaze. App Check enforced on Firestore/RTDB/Storage (not Auth). Debug → `DebugAppCheckProviderFactory`, release → `PlayIntegrityAppCheckProviderFactory`. **TTL is provider-dependent**: Play Integrity (release) = 40 h as of 2026-04-26 (set in Firebase Console → Project Settings → Your apps → BudgeTrak Android → App Check section, dropdown selector); Debug provider = 1 h (Google-imposed, ignores Console setting — by design for short-lived dev tokens). So debug-build observed refresh cadence is 40× higher than release will be. **Play Integrity advanced settings**: `PLAY_RECOGNIZED` required (anti-piracy), `LICENSED` not required (don't gate free users on Huawei/degooglified devices), device integrity = "Don't explicitly check" (relies on PLAY_RECOGNIZED + per-field encryption for actual security; tighten post-launch if Crashlytics shows abuse).
@@ -226,7 +229,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [In-app update prompts via Play Core](project_in_app_updates.md) — defer until post-production-launch; replaces Play Store's silent background-update with a dialog/snackbar inside BudgeTrak so users aren't running stale versions unnoticed. ~150 lines, 1 new dep.
 
 ## Documentation
-- SSD/LLD v2.8 (dev) at `docs/BudgeTrak_SSD_v2.8.md` + `docs/BudgeTrak_LLD_v2.8.md`. Bump on any structural change. v2.7 was the last production-shipped version (renamed to v2.8 on 2026-04-28 when dialog consolidation + refund OCR landed).
+- SSD/LLD v2.10 (dev) at `docs/BudgeTrak_SSD_v2.10.md` + `docs/BudgeTrak_LLD_v2.10.md`. Doc version is independent of app version; bump on accumulated structural changes. History: v2.7 → v2.8 (2026-04-28, dialog consolidation + refund OCR). v2.8 → v2.10 (2026-05-15, captures Ch.28 backend-infra, Play Billing L1+L2, native ads + continuous scaling + unified rendering, AI/OCR class doc, AdAware overlay internals).
 - [Pages repo location](reference_pages_repo.md) — privacy.md + homepage + branding live in `techadvantagesupport.github.io` repo at `/storage/emulated/0/Download/Tech Advantage Pages`.
 
 ## Audit Follow-ups

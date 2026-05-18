@@ -59,7 +59,7 @@ private const val CARD_ASPECT = 1.5f
 private val GAP = 5.dp
 private val DOT_WIDTH = 10.dp
 private val FRAME_H_PAD = 16.dp
-private val FRAME_V_PAD = 20.dp
+private val FRAME_V_PAD = 10.dp
 private val MAX_CARD_WIDTH = 72.dp
 
 fun buildSignCurrencyValues(currencies: List<String>): List<String> {
@@ -149,7 +149,20 @@ fun FlipDisplay(
         val dotSpace = if (hasDecimals) DOT_WIDTH else 0.dp
         val availableWidth = maxWidth - GAP * gapCount - dotSpace
         val computedCardWidth = availableWidth / fullCardCount.toFloat()
-        val cardWidth = if (computedCardWidth < MAX_CARD_WIDTH) computedCardWidth else MAX_CARD_WIDTH
+        // Height-derived cap: when the parent constrains height (e.g.,
+        // MainScreen's `Modifier.heightIn(max = maxHeight * 0.2f)` on the
+        // Solari Box), respect it by shrinking cardWidth proportionally.
+        // CARD_ASPECT × cardWidth = cardHeight, plus 2 × FRAME_V_PAD for
+        // frame padding. Solving cardHeight + 2*pad ≤ maxHeight gives
+        // cardWidth ≤ (maxHeight - 2*pad) / CARD_ASPECT. When maxHeight is
+        // unbounded (Dp.Infinity from the parent's Modifier) the cap is
+        // bypassed by min().
+        val cardWidthByHeight = if (maxHeight < Dp.Infinity) {
+            ((maxHeight - FRAME_V_PAD * 2f).coerceAtLeast(0.dp) / CARD_ASPECT)
+        } else {
+            Dp.Infinity
+        }
+        val cardWidth = minOf(computedCardWidth, MAX_CARD_WIDTH, cardWidthByHeight)
         val cardHeight = cardWidth * CARD_ASPECT
 
         // Scale font sizes proportionally to card width
