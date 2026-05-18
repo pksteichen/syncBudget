@@ -12,6 +12,8 @@ val DarkOnPrimary = Color(0xFF1A1A1A)
 val DarkCardBackground = Color(0xFF1A1A1A)       // Dark charcoal cards
 val DarkCardText = Color(0xFFE8D5A0)             // Warm amber text
 val DarkDisplayBackground = Color(0xFF383838)    // Dark grey Solari frame
+val DarkSurfaceHeader = Color(0xFF1B5E20)        // Dark dialog/popup header
+val DarkSurfaceHeaderText = Color(0xFFE8F5E9)    // Pale green text on dark dialog header
 
 // Light theme
 val LightBackground = Color(0xFFBDD5CC)          // Medium greenish-blue page
@@ -25,6 +27,8 @@ val LightOnSurface = Color(0xFF1C1B1F)
 val LightCardBackground = Color(0xFF305880)      // Lighter blue cards
 val LightCardText = Color(0xFFFFFFFF)            // White text
 val LightDisplayBackground = Color(0xFFD6E5DE)   // Light greenish Solari frame
+val LightSurfaceHeader = Color(0xFF2E7D32)       // Light dialog/popup header
+val LightSurfaceHeaderText = Color(0xFFFFFFFF)   // White text on light dialog header
 
 // Semantic income/expense (shared light + dark today; themable via SyncBudgetColors).
 // NOTE: the same hexes also appear as raw literals in sync-indicator state code

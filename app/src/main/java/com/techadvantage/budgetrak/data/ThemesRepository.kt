@@ -75,8 +75,8 @@ object ThemesRepository {
     private fun fromJson(o: JSONObject): ThemeProfile? {
         val name = o.optString("name").takeIf { it.isNotBlank() } ?: return null
         if (BuiltInThemes.ALL.any { it.name.equals(name, ignoreCase = true) }) return null
-        val light = colorSetFromJson(o.optJSONObject("light") ?: return null) ?: return null
-        val dark = colorSetFromJson(o.optJSONObject("dark") ?: return null) ?: return null
+        val light = colorSetFromJson(o.optJSONObject("light") ?: return null, BuiltInThemes.DEFAULT.light) ?: return null
+        val dark = colorSetFromJson(o.optJSONObject("dark") ?: return null, BuiltInThemes.DEFAULT.dark) ?: return null
         val forkedFrom = o.optString("forkedFrom").takeIf { it.isNotBlank() }
         return ThemeProfile(name = name, isBuiltIn = false, light = light, dark = dark, forkedFrom = forkedFrom)
     }
@@ -87,17 +87,24 @@ object ThemesRepository {
         o.put("cardText", colorToHex(c.cardText))
         o.put("background", colorToHex(c.background))
         o.put("surface", colorToHex(c.surface))
+        o.put("surfaceHeader", colorToHex(c.surfaceHeader))
+        o.put("surfaceHeaderText", colorToHex(c.surfaceHeaderText))
         o.put("onSurface", colorToHex(c.onSurface))
         o.put("displayBackground", colorToHex(c.displayBackground))
         return o
     }
 
-    private fun colorSetFromJson(o: JSONObject): ThemeColorSet? {
+    private fun colorSetFromJson(o: JSONObject, defaults: ThemeColorSet): ThemeColorSet? {
+        // surfaceHeader / surfaceHeaderText were added later; older custom themes
+        // don't carry them, so fall back to the supplied mode-appropriate
+        // defaults rather than failing the whole profile parse.
         return ThemeColorSet(
             cardBackground = parseHex(o.optString("cardBackground")) ?: return null,
             cardText = parseHex(o.optString("cardText")) ?: return null,
             background = parseHex(o.optString("background")) ?: return null,
             surface = parseHex(o.optString("surface")) ?: return null,
+            surfaceHeader = parseHex(o.optString("surfaceHeader")) ?: defaults.surfaceHeader,
+            surfaceHeaderText = parseHex(o.optString("surfaceHeaderText")) ?: defaults.surfaceHeaderText,
             onSurface = parseHex(o.optString("onSurface")) ?: return null,
             displayBackground = parseHex(o.optString("displayBackground")) ?: return null,
         )

@@ -12,21 +12,23 @@ Working APK in `Download/BudgeTrak.apk`. Not pushed for release — branch is ex
 ## Architecture decisions
 
 **Decoupled theme vs chart palette** (initial design conflated them):
-- `ThemeProfile` = base light + dark `ThemeColorSet` (six themable roles each).
+- `ThemeProfile` = base light + dark `ThemeColorSet` (eight themable roles each).
 - `ChartPalette` = chartLight + chartDark (12 colors each).
 - Two independent active selections in MainViewModel: `activeTheme` + `activeChartPalette`.
 - Built-ins: 1 theme (Default) + 3 chart palettes (Bright, Pastel, Sunset).
 
-**Themable roles**: cardBackground, cardText, background, surface, onSurface, displayBackground. Six. Persistence JSON keys match the field names — do NOT rename them.
+**Themable roles**: cardBackground, cardText, background, surface, surfaceHeader, surfaceHeaderText, onSurface, displayBackground. Eight. Persistence JSON keys match the field names — do NOT rename them. Picker labels: Header / Header Text / Page Background / Window Header / Window Header Text / Window Background / Body Text / Solari Background.
 
 **Auto-derived inside SyncBudgetTheme** (don't add slots for these):
 - `MaterialTheme.colorScheme.primary` = `cs.cardBackground` — so every existing `MaterialTheme.colorScheme.primary` usage in the app follows the user's Header pick. `onPrimary` derived from `cardBackground.luminance()` (black if >0.5 else white).
-- Solari border = `solariBorderFor(displayBackground)` = `lerp(bg, White, 0.15f)`. Single source of truth in `Theme.kt`. Tune the 0.15 there.
+- Solari border = `solariBorderFor(displayBackground)` = `lerp(bg, White, 0.15f)`. Single source of truth in `Theme.kt`.
+- Dialog footer band = `dialogFooterFor(surfaceHeader, surface)` = `lerp(surfaceHeader, surface, 0.85f)` — subtle tinted strip paired with the user's Window Header.
 
 **Locked colors (intentionally non-themable)**:
 - **Income green / Expense red** — Western finance convention. Reinforced by text labels everywhere they appear, so red-green colorblind users still parse the UI. **Revisit if/when shipping an East-Asian locale** (CN/JP/KR finance UX inverts: red=up/gains, green=down/losses).
 - Sync-indicator states (green/blue/yellow/red/grey)
-- Dialog Danger (red) / Warning (orange)
+- Dialog Danger (red) / Warning (orange) — only the `DialogStyle.DEFAULT` header/footer/`DialogPrimaryButton` follow `surfaceHeader`/`surfaceHeaderText`. DANGER/WARNING headers stay hard-coded red/orange, and `DialogDangerButton`/`DialogWarningButton` stay locked.
+- `DialogSecondaryButton` (gray) — neutral on purpose so dialog actions retain visual hierarchy regardless of theme.
 - AdMob "Ad" badge yellow (#FFCC00) + black stroke — AdMob policy
 - Native-ad overlay backdrop (#B3000000) — readability backstop
 - UpgradeBadge yellow/black in InHouseAd
@@ -41,7 +43,7 @@ Working APK in `Download/BudgeTrak.apk`. Not pushed for release — branch is ex
 - `MainActivity.kt` dialog backup-folder picker — inside a dialog body.
 - `WidgetTransactionActivity.kt` — uses its own MaterialTheme outside the SyncBudgetTheme tree; `LocalSyncBudgetColors` resolves to fallback.
 
-**Dialog buttons stay convention-locked**: `DialogPrimaryButton` (green) / `DialogSecondaryButton` (gray) / `DialogDangerButton` (red) / `DialogWarningButton` (orange). These are NOT swapped to `ScreenPrimaryButton`.
+**Dialog action buttons**: `DialogPrimaryButton` now follows `surfaceHeader`/`surfaceHeaderText` (the Window Header slots). `DialogSecondaryButton` (gray), `DialogDangerButton` (red), and `DialogWarningButton` (orange) stay convention-locked. The `ColorsScreen` "New theme"/"New palette" button uses `ScreenPrimaryButton` (Header colors) so it doesn't visually merge with the dialogs it spawns.
 
 ## System bars (added 2026-05-17)
 
@@ -55,7 +57,7 @@ Status bar AND nav bar pick up `headerBackground` via a single `windowInsetsPadd
 - Edit-a-built-in auto-forks to `"<name> (Custom)"`.
 - **Lineage tracking** via optional `forkedFrom: String?` on `ThemeProfile` + `ChartPalette` — names the source built-in. Drives the undo icon's "restore default" target so a Pastel-forked custom undoes to Pastel, not Bright. JSON field is optional.
 - **One-time migration** of legacy `chartPalette` pref into `selectedChartPaletteName` inside `ChartPalettesRepository.getSelected` — preserves prior Sunset/Pastel selections on first launch after upgrade.
-- **Backwards-compat parse**: `colorSetFromJson` silently ignores removed keys (`primary`, `displayBorder`, `incomeGreen`, `expenseRed`) so old custom theme JSON still loads.
+- **Backwards-compat parse**: `colorSetFromJson` silently ignores removed keys (`primary`, `displayBorder`, `incomeGreen`, `expenseRed`) so old custom theme JSON still loads. New keys (`surfaceHeader`, `surfaceHeaderText`) fall back to **mode-appropriate** `BuiltInThemes.DEFAULT.light`/`.dark` values — `fromJson` passes the right defaults per block. Don't reintroduce the single-default fallback bug.
 
 ## ColorsScreen design quirks
 - Standard screen chrome (`CenterAlignedTopAppBar` + Scaffold + LazyColumn, 24dp outer padding, 16dp item spacing) — same pattern as SyncScreen/BudgetConfigScreen.

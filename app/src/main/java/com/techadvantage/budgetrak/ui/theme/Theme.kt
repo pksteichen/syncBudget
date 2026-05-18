@@ -86,11 +86,21 @@ import com.techadvantage.budgetrak.ui.strings.LocalStrings
 fun solariBorderFor(displayBackground: Color): Color =
     androidx.compose.ui.graphics.lerp(displayBackground, Color.White, 0.15f)
 
+/**
+ * Dialog/popup footer band derived from the user's Window Header — lerped
+ * heavily toward the Window Background so the footer reads as a subtle
+ * tinted strip beneath the body, paired with the header above.
+ */
+fun dialogFooterFor(surfaceHeader: Color, surface: Color): Color =
+    androidx.compose.ui.graphics.lerp(surfaceHeader, surface, 0.85f)
+
 data class SyncBudgetColors(
     val headerBackground: Color,
     val headerText: Color,
     val cardBackground: Color,
     val cardText: Color,
+    val surfaceHeader: Color,
+    val surfaceHeaderText: Color,
     val displayBackground: Color,
     val displayBorder: Color,
     val userCategoryIconTint: Color,
@@ -103,6 +113,8 @@ val LocalSyncBudgetColors = staticCompositionLocalOf {
         headerText = DarkHeaderText,
         cardBackground = DarkCardBackground,
         cardText = DarkCardText,
+        surfaceHeader = DarkSurfaceHeader,
+        surfaceHeaderText = DarkSurfaceHeaderText,
         displayBackground = DarkDisplayBackground,
         displayBorder = solariBorderFor(DarkDisplayBackground),
         userCategoryIconTint = LightCardBackground,
@@ -118,9 +130,8 @@ enum class DialogStyle { DEFAULT, DANGER, WARNING }
 
 @Composable
 fun dialogHeaderColor(style: DialogStyle = DialogStyle.DEFAULT): Color {
-    val isDark = isSystemInDarkTheme()
     return when (style) {
-        DialogStyle.DEFAULT -> if (isDark) Color(0xFF1B5E20) else Color(0xFF2E7D32)
+        DialogStyle.DEFAULT -> LocalSyncBudgetColors.current.surfaceHeader
         DialogStyle.DANGER -> Color(0xFFB71C1C)
         DialogStyle.WARNING -> Color(0xFFE65100)
     }
@@ -129,7 +140,7 @@ fun dialogHeaderColor(style: DialogStyle = DialogStyle.DEFAULT): Color {
 @Composable
 fun dialogHeaderTextColor(style: DialogStyle = DialogStyle.DEFAULT): Color {
     return when (style) {
-        DialogStyle.DEFAULT -> if (isSystemInDarkTheme()) Color(0xFFE8F5E9) else Color.White
+        DialogStyle.DEFAULT -> LocalSyncBudgetColors.current.surfaceHeaderText
         DialogStyle.DANGER -> Color(0xFFFFEBEE)
         DialogStyle.WARNING -> Color(0xFFFFF3E0)
     }
@@ -137,7 +148,8 @@ fun dialogHeaderTextColor(style: DialogStyle = DialogStyle.DEFAULT): Color {
 
 @Composable
 fun dialogFooterColor(): Color {
-    return if (isSystemInDarkTheme()) Color(0xFF1A3A1A) else Color(0xFFE8F5E9)
+    val c = LocalSyncBudgetColors.current
+    return dialogFooterFor(c.surfaceHeader, MaterialTheme.colorScheme.surface)
 }
 
 @Composable
@@ -145,7 +157,7 @@ fun dialogSectionLabelColor(): Color {
     return if (isSystemInDarkTheme()) Color(0xFF81C784) else Color(0xFF2E7D32)
 }
 
-/** Green filled primary button for dialogs. */
+/** Filled primary affirmative button for dialogs — follows Window Header colors. */
 private val CompactButtonPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
 
 @Composable
@@ -156,6 +168,7 @@ fun DialogPrimaryButton(
     contentPadding: PaddingValues = CompactButtonPadding,
     content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit
 ) {
+    val c = LocalSyncBudgetColors.current
     var lastClickTime by remember { mutableStateOf(0L) }
     Button(
         onClick = {
@@ -167,8 +180,10 @@ fun DialogPrimaryButton(
         shape = RoundedCornerShape(8.dp),
         contentPadding = contentPadding,
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (isSystemInDarkTheme()) Color(0xFF388E3C) else Color(0xFF2E7D32),
-            contentColor = Color.White
+            containerColor = c.surfaceHeader,
+            contentColor = c.surfaceHeaderText,
+            disabledContainerColor = c.surfaceHeader.copy(alpha = 0.38f),
+            disabledContentColor = c.surfaceHeaderText.copy(alpha = 0.38f),
         ),
         content = content
     )
@@ -882,6 +897,8 @@ fun SyncBudgetTheme(
         headerText = cs.cardText,
         cardBackground = cs.cardBackground,
         cardText = cs.cardText,
+        surfaceHeader = cs.surfaceHeader,
+        surfaceHeaderText = cs.surfaceHeaderText,
         displayBackground = cs.displayBackground,
         displayBorder = solariBorderFor(cs.displayBackground),
         userCategoryIconTint = LightCardBackground,

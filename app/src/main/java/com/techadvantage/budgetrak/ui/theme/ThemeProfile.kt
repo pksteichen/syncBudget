@@ -3,13 +3,17 @@ package com.techadvantage.budgetrak.ui.theme
 import androidx.compose.ui.graphics.Color
 
 /**
- * One of the six themable color roles per light/dark mode. The following are
+ * One of the eight themable color roles per light/dark mode. The following are
  * intentionally NOT here — semantically or policy-locked, or auto-derived:
  *   • Income green / Expense red — Western finance convention, reinforced by
  *     text labels everywhere they appear (so red-green colorblind users still
  *     parse the UI)
  *   • Sync-indicator state colors (green/blue/yellow/red/grey) — convention
- *   • Dialog Danger (red) / Warning (orange) — convention
+ *   • Dialog Danger (red) / Warning (orange) — convention; only the
+ *     DialogStyle.DEFAULT dialog header / footer / DialogPrimaryButton follow
+ *     surfaceHeader/surfaceHeaderText. DANGER/WARNING stay locked.
+ *   • DialogSecondaryButton (gray) — kept neutral so dialog actions retain
+ *     visual hierarchy regardless of theme.
  *   • AdMob "Ad" badge yellow (#FFCC00) + black stroke — AdMob policy
  *   • Native-ad overlay backdrop (#B3000000) — readability backstop
  *   • UpgradeBadge yellow/black in InHouseAd — mirrors Ad badge convention
@@ -21,12 +25,17 @@ import androidx.compose.ui.graphics.Color
  *
  * The Solari border is auto-derived from displayBackground via a small lerp
  * toward white inside SyncBudgetTheme — no slot needed.
+ *
+ * The dialog/popup footer band is auto-derived from surfaceHeader via a lerp
+ * toward surface inside SyncBudgetTheme — no slot needed.
  */
 data class ThemeColorSet(
     val cardBackground: Color,
     val cardText: Color,
     val background: Color,
     val surface: Color,
+    val surfaceHeader: Color,
+    val surfaceHeaderText: Color,
     val onSurface: Color,
     val displayBackground: Color,
 )
@@ -66,6 +75,8 @@ object BuiltInThemes {
         cardText = LightCardText,
         background = LightBackground,
         surface = LightSurface,
+        surfaceHeader = LightSurfaceHeader,
+        surfaceHeaderText = LightSurfaceHeaderText,
         onSurface = LightOnSurface,
         displayBackground = LightDisplayBackground,
     )
@@ -74,6 +85,8 @@ object BuiltInThemes {
         cardText = DarkCardText,
         background = DarkBackground,
         surface = DarkSurface,
+        surfaceHeader = DarkSurfaceHeader,
+        surfaceHeaderText = DarkSurfaceHeaderText,
         onSurface = DarkCardText,
         displayBackground = DarkDisplayBackground,
     )

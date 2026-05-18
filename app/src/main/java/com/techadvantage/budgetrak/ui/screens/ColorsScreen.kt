@@ -77,6 +77,8 @@ private val BASE_SLOTS = listOf(
     Slot("cardBackground", "Header"),
     Slot("cardText", "Header Text"),
     Slot("background", "Page Background"),
+    Slot("surfaceHeader", "Window Header"),
+    Slot("surfaceHeaderText", "Window Header Text"),
     Slot("surface", "Window Background"),
     Slot("onSurface", "Body Text"),
     Slot("displayBackground", "Solari Background"),
@@ -87,6 +89,8 @@ private fun ThemeColorSet.get(key: String): Color = when (key) {
     "cardText" -> cardText
     "background" -> background
     "surface" -> surface
+    "surfaceHeader" -> surfaceHeader
+    "surfaceHeaderText" -> surfaceHeaderText
     "onSurface" -> onSurface
     "displayBackground" -> displayBackground
     else -> Color.Transparent
@@ -97,6 +101,8 @@ private fun ThemeColorSet.set(key: String, c: Color): ThemeColorSet = when (key)
     "cardText" -> copy(cardText = c)
     "background" -> copy(background = c)
     "surface" -> copy(surface = c)
+    "surfaceHeader" -> copy(surfaceHeader = c)
+    "surfaceHeaderText" -> copy(surfaceHeaderText = c)
     "onSurface" -> copy(onSurface = c)
     "displayBackground" -> copy(displayBackground = c)
     else -> this
@@ -263,6 +269,8 @@ fun ColorsScreen(
         headerText = previewCs.cardText,
         cardBackground = previewCs.cardBackground,
         cardText = previewCs.cardText,
+        surfaceHeader = previewCs.surfaceHeader,
+        surfaceHeaderText = previewCs.surfaceHeaderText,
         displayBackground = previewCs.displayBackground,
         displayBorder = com.techadvantage.budgetrak.ui.theme.solariBorderFor(previewCs.displayBackground),
         userCategoryIconTint = previewCs.cardBackground,
@@ -475,7 +483,7 @@ fun ColorsScreen(
             // Theme / palette management buttons.
             item {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    DialogPrimaryButton(onClick = { newName = ""; newDialog = true }) {
+                    com.techadvantage.budgetrak.ui.theme.ScreenPrimaryButton(onClick = { newName = ""; newDialog = true }) {
                         Text(if (mode.isChart) "New palette" else "New theme")
                     }
                     val canDelete = if (mode.isChart) !currentPalette.isBuiltIn else !currentTheme.isBuiltIn
