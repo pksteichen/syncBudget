@@ -17,6 +17,10 @@ cp .env.example .env
 
 **Gemini key:** generate at <https://aistudio.google.com/app/apikey>. Your Google account must be on a paid (Blaze-linked) project for the no-training/no-retention guarantee to apply. Free-tier Spark keys *will* train on your data — don't use those here.
 
+> **Important:** the harness needs a **separate API key** from the one embedded in the Android app. The Android-app key is locked to `Application restriction: Android apps` with three `(package, SHA-1)` cert allowlist entries — Google's gateway validates `X-Android-Package` / `X-Android-Cert` request headers and rejects anything that doesn't match. The Node.js harness can't send those headers (no APK signing cert on Linux), so it gets `403 API_KEY_ANDROID_APP_BLOCKED` if you reuse the Android key.
+>
+> Create a second key in the same `sync-23ce9` Google Cloud project: APIs & Services → Credentials → + Create credentials → API key. Set **Application restrictions** to "None" (or IP addresses → your dev box) and either leave **API restrictions** unrestricted or, if you want the extra hardening, follow the SA-binding flow in `memory/reference_gemini_api_key.md` to allow "Gemini API only". Paste THIS key into `.env`, not the Android-app key.
+
 **Anthropic key (optional):** generate at <https://console.anthropic.com/settings/keys>. Separate from your claude.ai subscription — you'll need to add pay-as-you-go billing to the API console. Running the full test set costs well under $1.
 
 ## Adding test data
