@@ -1,5 +1,5 @@
 Novedades en BudgeTrak:
-• Diseño de anuncios renovado muestra precio y valoraciones cuando el anunciante los proporciona
-• El diseño de anuncios ahora se ajusta en tablets y dispositivos plegables
-• Texto más compacto con hasta 3 líneas de cuerpo
-• Corrección de anuncios que mostraban el diseño incorrecto al cambiar el tamaño de pantalla
+• Restaurados el escaneo de recibos y la categorización IA de CSV — quedaron bloqueados por un cambio reciente en la API de Google
+• El botón eliminar del visor de fotos queda por encima del botón Atrás en Android 16 / One UI 8
+• Flechas de desplazamiento añadidas a los diálogos Vincular a Recurrente / Amortización / Ingreso / Meta de Ahorro
+• Etiqueta Gasto/Ingreso refinada

@@ -1,5 +1,5 @@
 What's new in BudgeTrak:
-• Refreshed ad layout shows price and ratings when the advertiser provides them
-• Ad layout now scales nicely on tablets and foldables
-• Tighter text rendering with up to 3 lines of body copy
-• Fix for ads briefly showing the wrong layout when the device display size changes
+• AI receipt scan and CSV auto-categorize restored — a Google API policy change had blocked them
+• Photo viewer delete button now clears the system back button on Android 16 / One UI 8
+• Scroll arrows added to the Link-to-RE / Amortization / Income / Savings Goal pickers
+• Expense/Income toggle label refined
