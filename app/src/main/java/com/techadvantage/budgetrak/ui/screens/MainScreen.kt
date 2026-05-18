@@ -1061,7 +1061,7 @@ private fun SavingsSuperchargeDialog(
                                     )
                                 }
                                 // Current per-period contribution
-                                val currentContribution = calculatePerPeriodDeduction(goal, budgetPeriod)
+                                val currentContribution = calculatePerPeriodDeduction(goal)
                                 Text(
                                     text = S.savingsGoals.contributionLabel(
                                         formatCurrency(currentContribution, currencySymbol),

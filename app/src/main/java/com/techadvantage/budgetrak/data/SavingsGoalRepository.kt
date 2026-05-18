@@ -4,7 +4,6 @@ import android.content.Context
 import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
-import java.time.LocalDate
 
 object SavingsGoalRepository {
 
@@ -18,9 +17,6 @@ object SavingsGoalRepository {
             obj.put("id", g.id)
             obj.put("name", g.name)
             obj.put("targetAmount", g.targetAmount)
-            if (g.targetDate != null) {
-                obj.put("targetDate", g.targetDate.toString())
-            }
             obj.put("totalSavedSoFar", g.totalSavedSoFar)
             obj.put("contributionPerPeriod", g.contributionPerPeriod)
             obj.put("isPaused", g.isPaused)
@@ -40,15 +36,11 @@ object SavingsGoalRepository {
                 val obj = jsonArray.getJSONObject(i)
                 val name = if (obj.has("name")) obj.getString("name") else ""
                 val targetAmount = SafeIO.safeDouble(if (obj.has("targetAmount")) obj.getDouble("targetAmount") else 0.0)
-                val targetDate = if (obj.has("targetDate") && !obj.isNull("targetDate")) {
-                    try { LocalDate.parse(obj.getString("targetDate")) } catch (_: Exception) { null }
-                } else null
                 list.add(
                     SavingsGoal(
                         id = obj.getInt("id"),
                         name = name,
                         targetAmount = targetAmount,
-                        targetDate = targetDate,
                         totalSavedSoFar = SafeIO.safeDouble(if (obj.has("totalSavedSoFar")) obj.getDouble("totalSavedSoFar") else 0.0),
                         contributionPerPeriod = SafeIO.safeDouble(if (obj.has("contributionPerPeriod")) obj.getDouble("contributionPerPeriod") else 0.0),
                         isPaused = if (obj.has("isPaused")) obj.getBoolean("isPaused") else false,

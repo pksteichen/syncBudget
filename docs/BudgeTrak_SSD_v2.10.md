@@ -831,9 +831,9 @@ Runs only on imported CSV bank-format transactions (§9.3 step 6) and NOT on Tra
 
 Runs only when the deterministic matcher's confidence is low (fewer than 5 historical matches OR <80% category agreement across those matches) AND the user has enabled "AI categorization" in Settings.
 
-- Model: Gemini 2.5 Flash-Lite via Firebase AI Logic SDK
+- Model: Gemini 2.5 Flash-Lite via raw HTTP to `generativelanguage.googleapis.com/v1beta` (replaced the prior `com.google.ai.client.generativeai` SDK on 2026-05-18 — see §28.12 / §28.12.2a).
 - Payload per transaction: `{i, merchant, amount}` — index, merchant name, and amount **only**. The transaction date is NOT sent (trimmed in 2.7 for a smaller privacy footprint; merchant is the dominant categorization signal and date adds negligible value).
-- Batched at 100 transactions per call (`CHUNK_SIZE`); schema-constrained JSON response (`Schema.obj("CategorizerResult")`).
+- Batched at 100 transactions per call (`CHUNK_SIZE`); schema-constrained JSON response via an inline `JSONObject` schema enforcing `{results: [{i, categoryId}]}`.
 - On receipt: maps `i → categoryId`, drops any invalid IDs (validates against the user's non-deleted category set), merges back into the import. `isUserCategorized = false` so the user sees an "unverified" flag until they review.
 - Retry: 3 attempts with exponential backoff `500L shl (attempt - 1)` (500 ms → 1 s → 2 s) on transient errors only (`503`, `UNAVAILABLE`, `overloaded`, `429`, `RESOURCE_EXHAUSTED`, `deadline`, network errors); total timeout 30 s per call (`TIMEOUT_MS`).
 - Prompt template: `buildCategorizerPrompt(categories, batchJson)` in `data/ai/CategorizerPromptBuilder.kt`. Version pinned via `const val CSV_CATEGORIZER_PROMPT_VERSION = "v1"`. Filters out `supercharge` / `recurring_income` / `deleted` categories from the prompt so the model can't pick them. Domain hints (amount as disambiguator, "Electric/Gas" vs "Transportation/Gas", pure Insurance vs combined property-tax, fallback-to-"Other") live in the prompt body.
@@ -842,7 +842,7 @@ Privacy: data is encrypted in transit (HTTPS); Google's Gemini Developer API ter
 
 ### 11.3 AI Receipt OCR Pipeline (Subscriber, opt-in trigger) — `data/ocr/ReceiptOcrService.kt`
 
-Triggered by an explicit tap on the AI sparkle in the transaction dialog header. The user long-presses one of the photo slots first to mark it as the OCR target. All four calls use **Gemini 2.5 Flash-Lite** via Firebase AI Logic.
+Triggered by an explicit tap on the AI sparkle in the transaction dialog header. The user long-presses one of the photo slots first to mark it as the OCR target. All four calls use **Gemini 2.5 Flash-Lite** via raw HTTP (`GeminiHttpClient` — see §28.12).
 
 **V18 split-pipeline (1 / 3 / 4 calls depending on path):**
 
@@ -871,7 +871,7 @@ Triggered by an explicit tap on the AI sparkle in the transaction dialog header.
 - `reconcilePrices(items, priceCents, totalCents)` — reconciles Call 3's per-item cents against Call 1/1.5's total, tolerating ≤ $0.05 drift. Tax lines (matched by `isTaxLine` — "Sales Tax", "Estimated tax", "Tax", etc.) are preserved exactly so reconciliation drift doesn't bleed into tax.
 - `aggregateCategoryAmounts(items, reconciledPriceCents)` — groups items by their per-item `topChoice` (or `deriveSingleCat` fallback) and sums cents to produce the `List<OcrCategoryAmount>` returned in `OcrResult`.
 
-**Image-bytes path.** `extractFromReceipt` passes the JPEG via `content { blob("image/jpeg", bytes) }` — **NOT** `content { image(bitmap) }`. The latter re-encodes at JPEG q=80 inside the SDK's `encodeBitmapToBase64Png` helper, silently degrading the q=92+ stored receipts. The `blob` form bypasses the re-encode entirely. Confirmed by source inspection of `com.google.ai.client.generativeai.internal.util.ConversionsKt`.
+**Image-bytes path.** `extractFromReceipt` reads `File.readBytes()` and passes raw JPEG bytes through to `GeminiHttpClient`, which Base64-encodes them into the `inline_data.data` field of the request. No Bitmap decode anywhere in the pipeline. Historical context: the prior `com.google.ai.client.generativeai` SDK had a `content { image(bitmap) }` path that silently re-encoded at JPEG q=80, which would have nuked our q=92+ stored receipts. The raw-HTTP path side-stepped this entirely; if you ever wrap another transport library, verify the same. See `memory/feedback_genai_sdk_bitmap_reencode.md`.
 
 ## 12. Category Management
 
@@ -3009,7 +3009,7 @@ Free tier covers BigQuery storage and queries below 1 TiB/month. At BudgeTrak's 
 
 ### 28.12 Gemini API (external)
 
-Two app features call Gemini directly: AI CSV categorization (`AiCategorizerService`) and AI Receipt OCR (`ReceiptOcrService`). Both use the **public Generative AI API** (not Vertex AI), addressed via `https://generativelanguage.googleapis.com` by the `com.google.ai.client.generativeai` SDK.
+Two app features call Gemini directly: AI CSV categorization (`AiCategorizerService`) and AI Receipt OCR (`ReceiptOcrService`). Both use the **public Generative AI API** (not Vertex AI), addressed via `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`. Transport is raw OkHttp via `data/ocr/GeminiHttpClient.kt` — the prior `com.google.ai.client.generativeai:0.9.0` SDK was removed 2026-05-18 because it did not attach Android-app identity headers (see §28.12.2a).
 
 #### 28.12.1 Model selection
 
@@ -3021,20 +3021,31 @@ Key lives in `local.properties` (gitignored) under `GEMINI_API_KEY`. `app/build.
 
 For a fresh dev environment: Google AI Studio → Get API Key → paste into `local.properties` as `GEMINI_API_KEY=…`.
 
-#### 28.12.2a Key restrictions (applied 2026-05-12)
+#### 28.12.2a Key restrictions (applied 2026-05-12, fully effective 2026-05-18)
 
 Although the API key is embedded in the release APK as a `BuildConfig` string constant (anyone decompiling the AAB extracts it in seconds), it's locked down server-side at the Google Cloud API gateway:
 
-- **Application restriction: Android apps.** Three `package + SHA-1` pairs registered: `com.techadvantage.budgetrak` + Play App Signing cert, `com.techadvantage.budgetrak` + Upload key cert, `com.techadvantage.budgetrak.debug` + debug keystore cert. The Gemini SDK auto-attaches `X-Android-Package` + `X-Android-Cert` headers on every call; Google validates server-side. A re-signed APK has a different cert SHA-1 and the gateway rejects it with `403 PERMISSION_DENIED`.
+- **Application restriction: Android apps.** Three `(package, SHA-1)` pairs registered:
+  - `com.techadvantage.budgetrak` + Play App Signing cert (production installs)
+  - `com.techadvantage.budgetrak` + Upload key cert (informational; Play re-signs AABs with the App Signing cert before delivery)
+  - **`com.techadvantage.budgetrak.debug`** + debug keystore cert (sideloaded debug APKs — the `.debug` suffix is critical, see below)
 - **API restriction: Gemini API only** (single-API allowlist, Console name "Gemini API" — formerly "Generative Language API"; same endpoint).
+
+The client attaches `X-Android-Package` + `X-Android-Cert` headers on every call (see §28.12.3 for the transport detail). Google validates server-side. A re-signed APK has a different cert SHA-1 and the gateway rejects it with `403 API_KEY_ANDROID_APP_BLOCKED`.
+
+**The standalone Google AI SDK did not attach these headers.** Until 2026-05-18 OCR + categorization used `com.google.ai.client.generativeai:0.9.0`, which constructs its `GenerativeModel` from just `modelName` + `apiKey` (no `Context`). With no Context the SDK could not read the app's package or signing cert, so it sent neither header. Google's gateway returned `403 API_KEY_ANDROID_APP_BLOCKED` with `androidPackage: <empty>` once strict enforcement of the restriction rolled out. Fix: replaced the SDK with raw OkHttp in `data/ocr/GeminiHttpClient.kt`, which reads the cert SHA-1 via `PackageManager.getPackageInfo(GET_SIGNING_CERTIFICATES)` and attaches both headers manually. See `memory/feedback_android_cert_headers_for_google_apis.md`.
+
+**Debug-package gotcha:** `app/build.gradle.kts` declares `applicationIdSuffix = ".debug"` so debug builds install side-by-side with release. Their runtime package is `com.techadvantage.budgetrak.debug` — the debug-keystore restriction entry must use this `.debug` package, not the production one. Initial 2026-05-12 setup had this wrong; the fix landed 2026-05-18.
 
 Defense scope: key extraction → use elsewhere. Does NOT defend against decompile-and-repackage-as-proxy attacks; that's a Firebase AI Logic or per-user rate-limit problem.
 
-**Rotation gotcha:** Google rolled out a policy after our key's 2026-04-14 creation requiring **all newly-created** Vertex/Gemini keys to be bound to a service account before any API restriction can be applied. Our existing key is grandfathered. If rotated, the new key must first be bound via "Authenticate API calls through a service account" (likely reusing `play-publisher` SA or a dedicated `gemini-client` SA), THEN the Android-app + API restrictions can be re-applied. Documented in `memory/reference_gemini_api_key.md`.
+**Rotation gotcha:** Google rolled out a policy after our key's 2026-04-14 creation requiring **all newly-created** Vertex/Gemini keys to be bound to a service account before any API restriction can be applied. Our existing key is grandfathered. If rotated, the new key must first be bound via "Authenticate API calls through a service account" (likely reusing `play-publisher` SA or a dedicated `gemini-client` SA), THEN the Android-app + API restrictions can be re-applied (don't forget the `.debug` package entry). Documented in `memory/reference_gemini_api_key.md`.
 
 #### 28.12.3 Request shapes
 
-**AI categorization** (`AiCategorizerService`): single text-only call per chunk of ≤ 100 transactions. Schema-constrained JSON output — the SDK enforces `responseMimeType = "application/json"` + a `Schema.obj(...)` that returns a list of `{index, categoryId}` records. Prompt includes the known category list (id + name only, no merchant/amount training data leaks). One model instance, lazily initialized. Retries on transient errors (`503|UNAVAILABLE|overloaded|429|RESOURCE_EXHAUSTED|deadline|fetch failed|network|ECONNRESET|ETIMEDOUT|socket`); silent fallback to the on-device heuristic on hard failure.
+**Transport:** all calls go through `GeminiHttpClient.generate(context, modelName, prompt, schema, imageBytes?, temperature)`. The client builds a JSON body with `contents[0].parts` containing an optional `inline_data` blob (Base64 JPEG, no Bitmap decode) followed by the text prompt, plus a `generationConfig` carrying `responseMimeType = "application/json"`, `responseSchema`, and `temperature`. Headers: `Content-Type: application/json`, `X-Android-Package`, `X-Android-Cert`. The response is unwrapped from `candidates[0].content.parts[*].text` and returned as a single JSON string for the caller to parse. Schemas live in `data/ocr/GeminiSchemas.kt` (OCR pipeline) and inline in `AiCategorizerService` (categorizer).
+
+**AI categorization** (`AiCategorizerService.categorizeBatch(context, transactions, categories)`): single text-only call per chunk of ≤ 100 transactions. Returns a `Map<inputIndex, categoryId>`. Prompt includes the known category list (id + name only, no merchant/amount training-data leaks). Retries on transient errors (`503|UNAVAILABLE|overloaded|429|RESOURCE_EXHAUSTED|deadline|fetch failed|network|ECONNRESET|ETIMEDOUT|socket`) plus any `GeminiHttpClient.HttpError` with status 429 or 500-599; silent fallback to the on-device heuristic on hard failure.
 
 **Receipt OCR** (`ReceiptOcrService`): three or four sequential / parallel calls per receipt:
 
@@ -3050,7 +3061,7 @@ Call 3   (image + item-list → prices):    priceCents per item, only when multi
 
 Why the split: Call 1 produces stable item-name text; Call 2 reasons over text (cheaper, more accurate) with the image as backup. Reconciliation lives in Call 1.5 (text-only) because Flash-Lite still produces single-digit OCR errors at temperature 0; running a text-only sanity pass over the focused transcript catches them.
 
-**Image bytes are passed via `content { blob("image/jpeg", bytes) }`, not `image(bitmap)`.** The SDK's `image(bitmap)` path re-encodes every Bitmap at JPEG quality 80 before sending (`encodeBitmapToBase64Png` in the SDK), which silently degrades the q=92+ receipt JPEGs we store. `blob()` bypasses the re-encode.
+**Image bytes flow:** `File.readBytes()` → raw `ByteArray` → `GeminiHttpClient` → Base64 → `inline_data.data` in the request body. No `Bitmap` decode anywhere. Don't add one; doing so would re-introduce the q=80 re-encode trap that bit us pre-2026-05-18. See `memory/feedback_genai_sdk_bitmap_reencode.md`.
 
 Failure handling: any uncaught exception is caught at the service boundary, recorded via `FirebaseCrashlytics.recordException(e)` with tag `OCR_PIPELINE_FAILURE`, and returned as `Result.failure`. The UI shows a toast and lets the user fall back to manual entry.
 

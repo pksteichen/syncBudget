@@ -2,10 +2,6 @@ package com.techadvantage.budgetrak.data.ocr
 
 import android.content.Context
 import android.util.Log
-import com.google.ai.client.generativeai.GenerativeModel
-import com.google.ai.client.generativeai.type.Schema
-import com.google.ai.client.generativeai.type.content
-import com.google.ai.client.generativeai.type.generationConfig
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.techadvantage.budgetrak.BuildConfig
 import com.techadvantage.budgetrak.data.Category
@@ -72,100 +68,7 @@ object ReceiptOcrService {
     // converts those tail cases into a bounded ~2 s wait.
     private const val CALL1R_TIMEOUT_PAST_C2_MS = 2_000L
 
-    // ── Schemas ────────────────────────────────────────────────────
-
-    // Call 1: header + item name list + focused transcript. Categorisation
-    // lives in Call 2; date/amount reconciliation lives in Call 1.5.
-    private val call1Schema = Schema.obj(
-        name = "Call1Result",
-        description = "Receipt header + purchased item name list",
-        Schema.str("merchant", "Consumer brand on the receipt header"),
-        Schema.str("merchantLegalName", "Optional legal operator entity"),
-        Schema.str("date", "Transaction date in YYYY-MM-DD"),
-        Schema.int("amountCents", "Final total paid, integer cents"),
-        Schema.arr(
-            "itemNames",
-            "Every purchased line, as printed. Skip promos/coupons/discounts/tenders/subtotals. Include tax lines (Sales Tax, Estimated tax, etc.) as their own entry.",
-            Schema.str("itemName", "One receipt line, verbatim")
-        ),
-        Schema.arr(
-            "fullTranscript",
-            "Focused transcript used by the Call 1.5 reconciliation step. Include ONLY lines with a calendar date, a monetary amount, Subtotal/Total/Tax labels, or merchant header. Skip barcodes, policy boilerplate, signatures. 10-30 lines is typical.",
-            Schema.str("line", "One receipt line, verbatim")
-        ),
-        Schema.str("notes", "Optional free-form note")
-    )
-
-    // Call 1.5: text-only reconciliation of merchant + date + amountCents. No image.
-    private val call1rSchema = Schema.obj(
-        name = "Call1rResult",
-        description = "Reconciled merchant + date + amount after cross-checking against the transcript",
-        Schema.str("merchant", "Reconciled consumer-brand merchant name"),
-        Schema.str("date", "Reconciled transaction date in YYYY-MM-DD"),
-        Schema.int("amountCents", "Reconciled final total paid, integer cents"),
-        Schema.str("notes", "Optional one-sentence explanation when values changed")
-    )
-
-    // Call 2: receives image + the item names from Call 1 as text, returns
-    // per-item scored categories + routing hints.
-    private val call2Schema = Schema.obj(
-        name = "Call2Result",
-        description = "Per-item category scores + routing decision",
-        Schema.arr(
-            "items",
-            "Per-item category scoring, SAME ORDER as the input name list",
-            Schema.obj(
-                name = "ItemWithScores",
-                description = "A line item with up to 3 scored category candidates",
-                Schema.str("description", "Item text as printed on the receipt"),
-                Schema.arr(
-                    "scores",
-                    "Up to 3 best-fit categories, descending by score",
-                    Schema.obj(
-                        name = "CatScore",
-                        description = "A category candidate with a 0-100 match score",
-                        Schema.int("categoryId", "Category id from the provided list"),
-                        Schema.int("score", "Match strength 0-100"),
-                        Schema.str("reason", "Brief (≤15 words) justification")
-                    )
-                )
-            )
-        ),
-        Schema.bool("multiCategoryLikely", "True when items' top-1 domains differ"),
-        Schema.int("topChoice", "Best-fit category id for the whole receipt when multiCategoryLikely is false")
-    )
-
-    private val call3Schema = Schema.obj(
-        name = "Call3Result",
-        description = "Prices per line item",
-        Schema.arr(
-            "prices",
-            "Parallel array to the input item list; priceCents per item",
-            Schema.obj(
-                name = "ItemPrice",
-                description = "Price in integer cents",
-                Schema.str("description", "Item text (mirrors input)"),
-                Schema.int("priceCents", "Paid price in cents after line discounts")
-            )
-        )
-    )
-
-    // ── Models ─────────────────────────────────────────────────────
-
-    private val call1Model by lazy { liteModel(call1Schema) }
-    private val call1rModel by lazy { liteModel(call1rSchema) }
-    private val call2Model by lazy { liteModel(call2Schema) }
-    private val call3Model by lazy { liteModel(call3Schema) }
-
-    private fun liteModel(schema: Schema<*>) = GenerativeModel(
-        modelName = "gemini-2.5-flash-lite",
-        apiKey = BuildConfig.GEMINI_API_KEY,
-        generationConfig = generationConfig {
-            responseMimeType = "application/json"
-            responseSchema = schema
-            temperature = 0f
-        }
-    )
+    private const val MODEL_NAME = "gemini-2.5-flash-lite"
 
     // ── Public API ─────────────────────────────────────────────────
 
@@ -192,7 +95,7 @@ object ReceiptOcrService {
             val bytes = file.readBytes()
 
             val result = withTimeout(TIMEOUT_MS) {
-                runPipeline(bytes, categories, preSelectedCategoryIds)
+                runPipeline(context, bytes, categories, preSelectedCategoryIds)
             }
             Result.success(result)
         } catch (ce: CancellationException) {
@@ -233,6 +136,7 @@ object ReceiptOcrService {
     )
 
     private suspend fun runPipeline(
+        context: Context,
         imageBytes: ByteArray,
         allCategories: List<Category>,
         preSelectedCategoryIds: Set<Int>
@@ -245,7 +149,7 @@ object ReceiptOcrService {
         }
 
         // Call 1 — image → header + item names + focused transcript. Always runs.
-        val c1 = runCall1(imageBytes)
+        val c1 = runCall1(context, imageBytes)
 
         // Shortcut: single preselected cat. No need to categorise anything.
         // Skip reconcile too — a preselected receipt is usually a quick-entry
@@ -273,8 +177,8 @@ object ReceiptOcrService {
         // the user — fall back to C1's values, same posture as the
         // pre-existing parse/API-error fallback in `runCall1Reconcile`.
         val (c1r, c2) = coroutineScope {
-            val c2Deferred = async { runCall2(imageBytes, c1.itemNames, promptCats, preselected) }
-            val c1rDeferred = async { runCall1Reconcile(c1) }
+            val c2Deferred = async { runCall2(context, imageBytes, c1.itemNames, promptCats, preselected) }
+            val c1rDeferred = async { runCall1Reconcile(context, c1) }
             val c2Result = c2Deferred.await()
             val c1rResult = kotlinx.coroutines.withTimeoutOrNull(CALL1R_TIMEOUT_PAST_C2_MS) {
                 c1rDeferred.await()
@@ -303,7 +207,7 @@ object ReceiptOcrService {
         }
 
         return if (multiPath) {
-            runMultiCat(imageBytes, c1, c1r, c2, promptCats)
+            runMultiCat(context, imageBytes, c1, c1r, c2, promptCats)
         } else {
             val validSet = promptCats.mapTo(mutableSetOf()) { it.id }
             val otherId = promptCats.firstOrNull { it.tag == "other" }?.id
@@ -316,10 +220,10 @@ object ReceiptOcrService {
         }
     }
 
-    private suspend fun runCall1(imageBytes: ByteArray): Call1Header {
+    private suspend fun runCall1(context: Context, imageBytes: ByteArray): Call1Header {
         if (BuildConfig.DEBUG) Log.d(TAG, "Call1 dispatch (image=${imageBytes.size}B)")
         val startNs = System.nanoTime()
-        val raw = generateWithRetry(call1Model, imageBytes, buildCall1Prompt())
+        val raw = generateWithRetry(context, GeminiSchemas.call1, buildCall1Prompt(), imageBytes)
         if (BuildConfig.DEBUG) {
             val elapsedMs = (System.nanoTime() - startNs) / 1_000_000
             Log.d(TAG, "Call1 response after ${elapsedMs}ms (image=${imageBytes.size}B)")
@@ -351,13 +255,13 @@ object ReceiptOcrService {
      * parse or API error so reconciliation can never make us worse — only
      * silently-better or silently-same.
      */
-    private suspend fun runCall1Reconcile(c1: Call1Header): Call1Reconciled {
+    private suspend fun runCall1Reconcile(context: Context, c1: Call1Header): Call1Reconciled {
         val fallback = Call1Reconciled(c1.merchant, c1.date, c1.amountCents, null)
         if (c1.fullTranscript.isEmpty()) return fallback
         return try {
             if (BuildConfig.DEBUG) Log.d(TAG, "Call1.5 dispatch (transcript=${c1.fullTranscript.size} lines)")
             val startNs = System.nanoTime()
-            val raw = generateTextOnlyWithRetry(call1rModel, buildCall1ReconcilePrompt(c1))
+            val raw = generateWithRetry(context, GeminiSchemas.call1r, buildCall1ReconcilePrompt(c1), imageBytes = null)
             if (BuildConfig.DEBUG) {
                 val elapsedMs = (System.nanoTime() - startNs) / 1_000_000
                 Log.d(TAG, "Call1.5 response after ${elapsedMs}ms")
@@ -386,6 +290,7 @@ object ReceiptOcrService {
     }
 
     private suspend fun runCall2(
+        context: Context,
         imageBytes: ByteArray,
         itemNames: List<String>,
         promptCats: List<Category>,
@@ -393,7 +298,7 @@ object ReceiptOcrService {
     ): Call2Categorization {
         if (BuildConfig.DEBUG) Log.d(TAG, "Call2 dispatch (items=${itemNames.size} cats=${promptCats.size} preselected=$preselected)")
         val startNs = System.nanoTime()
-        val raw = generateWithRetry(call2Model, imageBytes, buildCall2Prompt(itemNames, promptCats, preselected))
+        val raw = generateWithRetry(context, GeminiSchemas.call2, buildCall2Prompt(itemNames, promptCats, preselected), imageBytes)
         if (BuildConfig.DEBUG) {
             val elapsedMs = (System.nanoTime() - startNs) / 1_000_000
             Log.d(TAG, "Call2 response after ${elapsedMs}ms (items=${itemNames.size} cats=${promptCats.size} preselected=$preselected)")
@@ -449,6 +354,7 @@ object ReceiptOcrService {
     }
 
     private suspend fun runMultiCat(
+        context: Context,
         imageBytes: ByteArray,
         c1: Call1Header,
         c1r: Call1Reconciled,
@@ -459,7 +365,7 @@ object ReceiptOcrService {
 
         if (BuildConfig.DEBUG) Log.d(TAG, "Call3 dispatch (items=${items.size})")
         val c3StartNs = System.nanoTime()
-        val c3Json = generateWithRetry(call3Model, imageBytes, buildCall3Prompt(items.map { it.description }))
+        val c3Json = generateWithRetry(context, GeminiSchemas.call3, buildCall3Prompt(items.map { it.description }), imageBytes)
         if (BuildConfig.DEBUG) {
             val elapsedMs = (System.nanoTime() - c3StartNs) / 1_000_000
             Log.d(TAG, "Call3 response after ${elapsedMs}ms (items=${items.size})")
@@ -611,55 +517,31 @@ $listed"""
         msg?.let { transientPattern.containsMatchIn(it) } ?: false
 
     private suspend fun generateWithRetry(
-        model: GenerativeModel,
-        imageBytes: ByteArray,
-        prompt: String
+        context: Context,
+        schema: JSONObject,
+        prompt: String,
+        imageBytes: ByteArray?
     ): String {
         val maxAttempts = 4
         var lastErr: Exception? = null
         for (attempt in 1..maxAttempts) {
             try {
-                val response = model.generateContent(
-                    content {
-                        // blob(...) bypasses the SDK's Bitmap→JPEG re-encode
-                        // (fixed quality 80). See the note in extractFromReceipt.
-                        blob("image/jpeg", imageBytes)
-                        text(prompt)
-                    }
+                return GeminiHttpClient.generate(
+                    context = context,
+                    modelName = MODEL_NAME,
+                    prompt = prompt,
+                    schema = schema,
+                    imageBytes = imageBytes,
+                    temperature = 0f
                 )
-                return response.text ?: throw IllegalStateException("Empty response from model")
             } catch (ce: CancellationException) {
                 throw ce
             } catch (e: Exception) {
                 lastErr = e
-                if (!isTransient(e.message) || attempt == maxAttempts) throw e
+                val transient = isTransient(e.message) ||
+                    (e is GeminiHttpClient.HttpError && (e.status == 429 || e.status in 500..599))
+                if (!transient || attempt == maxAttempts) throw e
                 Log.d(TAG, "Transient error on attempt $attempt/$maxAttempts, retrying: ${e.message?.take(100)}")
-                delay(500L shl (attempt - 1))
-            }
-        }
-        throw lastErr ?: IllegalStateException("retry loop exited without result")
-    }
-
-    /**
-     * Text-only retry variant for Call 1.5 — no image, just prompt. Same
-     * transient regex and backoff curve.
-     */
-    private suspend fun generateTextOnlyWithRetry(
-        model: GenerativeModel,
-        prompt: String
-    ): String {
-        val maxAttempts = 4
-        var lastErr: Exception? = null
-        for (attempt in 1..maxAttempts) {
-            try {
-                val response = model.generateContent(content { text(prompt) })
-                return response.text ?: throw IllegalStateException("Empty response from model")
-            } catch (ce: CancellationException) {
-                throw ce
-            } catch (e: Exception) {
-                lastErr = e
-                if (!isTransient(e.message) || attempt == maxAttempts) throw e
-                Log.d(TAG, "Call1.5 transient on attempt $attempt/$maxAttempts, retrying: ${e.message?.take(100)}")
                 delay(500L shl (attempt - 1))
             }
         }

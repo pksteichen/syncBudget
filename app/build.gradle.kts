@@ -174,8 +174,13 @@ dependencies {
     // promotion — see project_ad_implementation.md for the swap checklist.
     implementation("com.google.android.gms:play-services-ads:23.6.0")
 
-    // Google AI (Gemini) — direct SDK, uses API key from local.properties
-    implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
+    // Gemini OCR — raw HTTP via OkHttp. Direct REST calls let us attach the
+    // X-Android-Package / X-Android-Cert headers Google's API gateway needs
+    // for the Android-app key restriction to actually validate — the
+    // standalone Google AI SDK omits those headers, which made the
+    // restriction silently no-op while still appearing to enforce. Version
+    // aligned with what grpc-okhttp pulls in transitively (was 4.11.0).
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     // WorkManager
     implementation("androidx.work:work-runtime-ktx:2.9.1")

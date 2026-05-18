@@ -77,7 +77,6 @@ import com.techadvantage.budgetrak.data.RecurringExpense
 import com.techadvantage.budgetrak.data.SavingsGoal
 import com.techadvantage.budgetrak.data.SavingsSimulator
 import com.techadvantage.budgetrak.data.Transaction
-import com.techadvantage.budgetrak.data.calculatePerPeriodDeduction
 import com.techadvantage.budgetrak.data.generateSavingsGoalId
 import com.techadvantage.budgetrak.ui.components.CURRENCY_DECIMALS
 import com.techadvantage.budgetrak.ui.components.formatCurrency
@@ -319,7 +318,6 @@ fun SavingsGoalsScreen(
                 val progress = if (goal.targetAmount > 0) {
                     (goal.totalSavedSoFar / goal.targetAmount).toFloat().coerceIn(0f, 1f)
                 } else 0f
-                val deduction = calculatePerPeriodDeduction(goal, budgetPeriod)
                 val contentAlpha = if (goal.isPaused) 0.5f else 1f
 
                 @OptIn(ExperimentalFoundationApi::class)
@@ -359,21 +357,13 @@ fun SavingsGoalsScreen(
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = contentAlpha)
                         )
                         Text(
-                            text = if (goal.targetDate != null) {
-                                S.savingsGoals.targetAmountBy(
-                                    formatCurrency(goal.targetAmount, currencySymbol),
-                                    goal.targetDate.format(dateFormatter)
-                                )
-                            } else {
-                                S.savingsGoals.targetLabel(
-                                    formatCurrency(goal.targetAmount, currencySymbol)
-                                )
-                            },
+                            text = S.savingsGoals.targetLabel(
+                                formatCurrency(goal.targetAmount, currencySymbol)
+                            ),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f * contentAlpha)
                         )
-                        // Show payoff date for fixed-contribution goals
-                        if (!goalReached && !goal.isPaused && goal.targetDate == null && goal.contributionPerPeriod > 0) {
+                        if (!goalReached && !goal.isPaused && goal.contributionPerPeriod > 0) {
                             val remaining = goal.targetAmount - goal.totalSavedSoFar
                             if (remaining > 0) {
                                 val periodsRemaining = ceil(remaining / goal.contributionPerPeriod).toLong()
@@ -404,17 +394,10 @@ fun SavingsGoalsScreen(
                             )
                         } else {
                             Text(
-                                text = if (goal.targetDate != null) {
-                                    S.savingsGoals.contributionLabel(
-                                        formatCurrency(deduction, currencySymbol),
-                                        periodLabel
-                                    )
-                                } else {
-                                    S.savingsGoals.contributionLabel(
-                                        formatCurrency(goal.contributionPerPeriod, currencySymbol),
-                                        periodLabel
-                                    )
-                                },
+                                text = S.savingsGoals.contributionLabel(
+                                    formatCurrency(goal.contributionPerPeriod, currencySymbol),
+                                    periodLabel
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                             )
@@ -485,16 +468,12 @@ fun SavingsGoalsScreen(
     }
 
     editingGoal?.let { goal ->
-        // For existing target-date goals, pre-calculate the current per-period deduction
-        val currentContribution = if (goal.targetDate != null) {
-            calculatePerPeriodDeduction(goal, budgetPeriod)
-        } else goal.contributionPerPeriod
         AddEditSavingsGoalDialog(
             title = S.savingsGoals.editSavingsGoal,
             initialName = goal.name,
             initialTargetAmount = "%.${CURRENCY_DECIMALS[currencySymbol] ?: 2}f".format(goal.targetAmount),
             initialStartingSaved = "",
-            initialContribution = "%.${CURRENCY_DECIMALS[currencySymbol] ?: 2}f".format(currentContribution),
+            initialContribution = "%.${CURRENCY_DECIMALS[currencySymbol] ?: 2}f".format(goal.contributionPerPeriod),
             isAddMode = false,
             existingSaved = goal.totalSavedSoFar,
             budgetPeriod = budgetPeriod,
@@ -506,7 +485,6 @@ fun SavingsGoalsScreen(
                     goal.copy(
                         name = name,
                         targetAmount = targetAmount,
-                        targetDate = null,
                         contributionPerPeriod = contribution
                     )
                 )

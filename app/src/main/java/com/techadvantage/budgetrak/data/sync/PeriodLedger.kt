@@ -10,7 +10,6 @@ import java.time.LocalDateTime
 data class PeriodLedgerEntry(
     val periodStartDate: LocalDateTime,
     val appliedAmount: Double,
-    val corrected: Boolean = false,  // unused — kept for JSON backward compatibility
     // Sync fields
     val deviceId: String = ""
 ) {
@@ -36,7 +35,6 @@ object PeriodLedgerRepository {
             val obj = JSONObject()
             obj.put("periodStartDate", e.periodStartDate.toString())
             obj.put("appliedAmount", e.appliedAmount)
-            obj.put("corrected", e.corrected)
             obj.put("deviceId", e.deviceId)
             jsonArray.put(obj)
         }
@@ -54,7 +52,6 @@ object PeriodLedgerRepository {
                     PeriodLedgerEntry(
                         periodStartDate = periodStartDate,
                         appliedAmount = SafeIO.safeDouble(obj.getDouble("appliedAmount")),
-                        corrected = obj.optBoolean("corrected", false),
                         deviceId = obj.optString("deviceId", "")
                     )
                 )

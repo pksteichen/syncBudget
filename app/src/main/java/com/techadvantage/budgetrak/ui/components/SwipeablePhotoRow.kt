@@ -27,7 +27,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
@@ -643,54 +646,64 @@ fun FullScreenPhotoViewer(
                         translationY = offsetY
                     )
             )
-            // Close button (top-end)
-            IconButton(
-                onClick = handleDismiss,
+            // Controls overlay — inset-padded so buttons stay clear of the
+            // status bar (top) and the gesture/nav bar (bottom). On Android
+            // 16 / One UI 8 the nav bar overlays edge-to-edge content; without
+            // this the bottom-end Delete icon ends up under the back button.
+            Box(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(8.dp)
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.systemBars)
             ) {
-                Icon(
-                    Icons.Filled.Close,
-                    contentDescription = S.common.close,
-                    tint = Color.White,
-                    modifier = Modifier.size(28.dp)
-                )
-            }
-            // Rotate button (top-start)
-            IconButton(
-                onClick = {
-                    rotationSteps = (rotationSteps + 1) % 4
-                    // Reset zoom/pan on rotate
-                    scale = 1f
-                    offsetX = 0f
-                    offsetY = 0f
-                },
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(8.dp)
-            ) {
-                Icon(
-                    Icons.Filled.RotateRight,
-                    contentDescription = S.common.rotate,
-                    tint = Color.White,
-                    modifier = Modifier.size(28.dp)
-                )
-            }
-            // Delete button (bottom-end)
-            if (onDelete != null) {
+                // Close button (top-end)
                 IconButton(
-                    onClick = onDelete,
+                    onClick = handleDismiss,
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(16.dp)
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
                 ) {
                     Icon(
-                        Icons.Filled.Delete,
-                        contentDescription = S.settings.deletePhotoTitle,
-                        tint = Color(0xFFFF6B6B),
+                        Icons.Filled.Close,
+                        contentDescription = S.common.close,
+                        tint = Color.White,
                         modifier = Modifier.size(28.dp)
                     )
+                }
+                // Rotate button (top-start)
+                IconButton(
+                    onClick = {
+                        rotationSteps = (rotationSteps + 1) % 4
+                        // Reset zoom/pan on rotate
+                        scale = 1f
+                        offsetX = 0f
+                        offsetY = 0f
+                    },
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(8.dp)
+                ) {
+                    Icon(
+                        Icons.Filled.RotateRight,
+                        contentDescription = S.common.rotate,
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+                // Delete button (bottom-end)
+                if (onDelete != null) {
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(16.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.Delete,
+                            contentDescription = S.settings.deletePhotoTitle,
+                            tint = Color(0xFFFF6B6B),
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
                 }
             }
         }

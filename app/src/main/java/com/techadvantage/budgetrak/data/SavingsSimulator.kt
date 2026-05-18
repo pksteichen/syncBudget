@@ -56,9 +56,7 @@ object SavingsSimulator {
         // not artificially shift today's spendable. AE and accelerated-RE
         // deductions are intentionally NOT neutralized: those represent real
         // upcoming outflows already shaping this period's budget.
-        val currentSGDed = BudgetCalculator.activeSavingsGoalDeductions(
-            savingsGoals, budgetPeriod, today, resetDayOfWeek
-        )
+        val currentSGDed = BudgetCalculator.activeSavingsGoalDeductions(savingsGoals)
         events.add(CashEvent(today, -(availableCash + currentSGDed), priority = 1))
 
         for (src in incomeSources) {
@@ -259,14 +257,7 @@ object SavingsSimulator {
                 if (goal.totalSavedSoFar >= goal.targetAmount) return@forEachIndexed
                 val remaining = goal.targetAmount - simGoalSaved[i]
                 if (remaining <= 0) return@forEachIndexed
-                val ded = if (goal.targetDate != null) {
-                    if (!boundary.isBefore(goal.targetDate)) return@forEachIndexed
-                    val periods = BudgetCalculator.countPeriodsCompleted(boundary, goal.targetDate, budgetPeriod)
-                    if (periods <= 0) return@forEachIndexed
-                    BudgetCalculator.roundCents(remaining / periods.toDouble())
-                } else {
-                    minOf(goal.contributionPerPeriod, remaining)
-                }
+                val ded = minOf(goal.contributionPerPeriod, remaining)
                 savingsDed += ded
                 simGoalSaved[i] = minOf(simGoalSaved[i] + ded, goal.targetAmount)
             }
@@ -398,7 +389,7 @@ object SavingsSimulator {
         if (savingsGoals.isEmpty()) sb.appendLine("  (none)")
         savingsGoals.forEach { goal ->
             val pauseTag = if (goal.isPaused) " [PAUSED]" else ""
-            val typeTag = if (goal.targetDate != null) "by ${goal.targetDate}" else "${currencySymbol}${fmt(goal.contributionPerPeriod)}/period"
+            val typeTag = "${currencySymbol}${fmt(goal.contributionPerPeriod)}/period"
             sb.appendLine("  • ${goal.name}: ${currencySymbol}${fmt(goal.targetAmount)} ($typeTag)  saved=${currencySymbol}${fmt(goal.totalSavedSoFar)}$pauseTag")
         }
         sb.appendLine()
@@ -427,9 +418,7 @@ object SavingsSimulator {
         }
         sb.appendLine()
 
-        val currentSGDed = BudgetCalculator.activeSavingsGoalDeductions(
-            savingsGoals, budgetPeriod, today, resetDayOfWeek
-        )
+        val currentSGDed = BudgetCalculator.activeSavingsGoalDeductions(savingsGoals)
         val events = mutableListOf<CashEvent>()
         events.add(CashEvent(today, -(availableCash + currentSGDed), priority = 1, label = "Today's spending"))
 
@@ -570,14 +559,7 @@ object SavingsSimulator {
                 if (goal.totalSavedSoFar >= goal.targetAmount) return@forEachIndexed
                 val remaining = goal.targetAmount - simGoalSaved[i]
                 if (remaining <= 0) return@forEachIndexed
-                val ded = if (goal.targetDate != null) {
-                    if (!boundary.isBefore(goal.targetDate)) return@forEachIndexed
-                    val periods = BudgetCalculator.countPeriodsCompleted(boundary, goal.targetDate, budgetPeriod)
-                    if (periods <= 0) return@forEachIndexed
-                    BudgetCalculator.roundCents(remaining / periods.toDouble())
-                } else {
-                    minOf(goal.contributionPerPeriod, remaining)
-                }
+                val ded = minOf(goal.contributionPerPeriod, remaining)
                 savingsDed += ded
                 simGoalSaved[i] = minOf(simGoalSaved[i] + ded, goal.targetAmount)
             }

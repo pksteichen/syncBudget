@@ -886,8 +886,8 @@ fun parseSyncBudgetCsv(reader: BufferedReader, existingIds: Set<Int>): CsvParseR
             if (line.isBlank()) return@forEachLine
             try {
                 val fields = parseCsvLine(line)
-                if (fields.size < 7) {
-                    error = "Line $lineNumber: expected 7 fields, got ${fields.size}"
+                if (fields.size < 8) {
+                    error = "Line $lineNumber: expected at least 8 fields, got ${fields.size}"
                     return@forEachLine
                 }
 
@@ -895,17 +895,10 @@ fun parseSyncBudgetCsv(reader: BufferedReader, existingIds: Set<Int>): CsvParseR
                 val type = TransactionType.valueOf(fields[1].trim())
                 val date = LocalDate.parse(fields[2].trim())
                 val source = fields[3].trim()
-
-                // Detect old format (no description column) vs new format
-                // Old header: id,type,date,source,amount,...  (field[4] is amount, numeric)
-                // New header: id,type,date,source,description,amount,...  (field[4] is description, string)
-                val hasDescription = fields.size > 4 && fields[4].trim().toDoubleOrNull() == null
-                val description = if (hasDescription) fields[4].trim() else ""
-                val offset = if (hasDescription) 1 else 0
-
-                val amount = fields[4 + offset].trim().toDouble()
-                val categoryAmountsStr = fields[5 + offset].trim()
-                val isUserCategorized = fields[6 + offset].trim().toBoolean()
+                val description = fields[4].trim()
+                val amount = fields[5].trim().toDouble()
+                val categoryAmountsStr = fields[6].trim()
+                val isUserCategorized = fields[7].trim().toBoolean()
 
                 val categoryAmounts = if (categoryAmountsStr.isNotEmpty()) {
                     categoryAmountsStr.split(";").mapNotNull { pair ->
@@ -923,23 +916,10 @@ fun parseSyncBudgetCsv(reader: BufferedReader, existingIds: Set<Int>): CsvParseR
                          else generateTransactionId(usedIds)
                 usedIds.add(id)
 
-                // Parse optional sync metadata (backward compatible with old and new formats)
-                val isBudgetIncome = if (fields.size > 7 + offset) fields[7 + offset].trim().toBooleanStrictOrNull() ?: false else false
-                val deviceId = if (fields.size > 8 + offset) fields[8 + offset].trim() else ""
-                val deleted = if (fields.size > 9 + offset) fields[9 + offset].trim().toBooleanStrictOrNull() ?: false else false
-                // Skip old clock columns (10-17) if present, read linking fields after them
-                // Old format had clocks at columns 10+, new format has linking fields at 10+
-                // Detect by checking if column 10 looks like a clock (numeric Long) or linking field
-                val col10 = if (fields.size > 10 + offset) fields[10 + offset].trim() else ""
-                val oldFormat = col10.toLongOrNull() != null && col10.toIntOrNull()?.let { it > 65535 } == true
-                val linkBase = if (oldFormat) {
-                    // Old format: skip clock columns, linking starts after clocks
-                    val clockOffset = if (hasDescription) 1 else 0
-                    18 + offset + clockOffset
-                } else {
-                    // New format: linking fields start right after deleted
-                    10 + offset
-                }
+                val isBudgetIncome = if (fields.size > 8) fields[8].trim().toBooleanStrictOrNull() ?: false else false
+                val deviceId = if (fields.size > 9) fields[9].trim() else ""
+                val deleted = if (fields.size > 10) fields[10].trim().toBooleanStrictOrNull() ?: false else false
+                val linkBase = 11
                 val linkedRecurringExpenseId = if (fields.size > linkBase) fields[linkBase].trim().toIntOrNull() else null
                 val linkedAmortizationEntryId = if (fields.size > linkBase + 1) fields[linkBase + 1].trim().toIntOrNull() else null
                 val linkedIncomeSourceId = if (fields.size > linkBase + 2) fields[linkBase + 2].trim().toIntOrNull() else null

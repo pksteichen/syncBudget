@@ -53,8 +53,8 @@ If a device was offline for N periods:
 3. Call `recomputeCash()`.
 
 ### Savings goal update during catch-up
-- Target-date: `deduction = roundCents(remaining / periodsUntil(periodDate, targetDate))`, add to `totalSavedSoFar`.
-- Fixed-contribution: `deduction = min(contributionPerPeriod, remaining)`.
+- `deduction = min(contributionPerPeriod, remaining)`, round to cents, add to `totalSavedSoFar`.
+- Single goal type as of 2026-05-18 (`targetDate` field + legacy branch removed).
 
 ### RE update during catch-up
 - If period contains the next occurrence: reset `setAsideSoFar = 0`, deactivate any temporary acceleration.
