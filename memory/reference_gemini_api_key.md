@@ -6,9 +6,22 @@ type: reference
 
 # Gemini API key
 
-## Current key (created 2026-04-14)
+## Two keys, two purposes
 
-Project: `sync-23ce9` · Console name: **"Gemini API Key"** · Embedded in the release APK as `BuildConfig.GEMINI_API_KEY` (sourced from `local.properties.GEMINI_API_KEY`; never committed).
+The Gemini project (`sync-23ce9`) has two keys with different restriction profiles. Both call the same `generativelanguage.googleapis.com` endpoint.
+
+| Key | Console name | Application restriction | API restriction | Used by |
+|---|---|---|---|---|
+| **Android app** | "Gemini API Key" | Android apps — 3 `(package, SHA-1)` pairs | Gemini API only | Release + debug APKs via `BuildConfig.GEMINI_API_KEY` ← `local.properties` |
+| **Harness** | (named at provisioning) | None (or IP if you like) | Optional | Node.js OCR test harness via `tools/ocr-harness/.env` |
+
+**Why two keys**: the Android-app cert restriction validates `X-Android-Package` / `X-Android-Cert` headers on every request. A Node.js client on Linux has no Android signing cert to attach, so the harness *cannot* satisfy that restriction regardless of which SDK it uses. The fix is to give the harness its own unrestricted (or IP-restricted) key — the harness key never ships anywhere, so a leak is bounded to "anyone with read access to the dev box's `.env`."
+
+The Android-app key is the one we harden because it ships in every install and is trivially extractable from a decompiled APK.
+
+## Android app key (created 2026-04-14)
+
+Embedded in the release APK as `BuildConfig.GEMINI_API_KEY` (sourced from `local.properties.GEMINI_API_KEY`; never committed).
 
 **Restrictions (current — re-applied 2026-05-18 after raw-HTTP migration):**
 
