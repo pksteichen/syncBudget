@@ -37,6 +37,7 @@ interface AppStrings {
     val budgetCalendarHelp: BudgetCalendarHelpStrings
     val widgetTransaction: WidgetTransactionStrings
     val colors: ColorsStrings
+    val colorsHelp: ColorsHelpStrings
     val ads: InHouseAdStrings
 }
 
@@ -783,6 +784,7 @@ data class DashboardHelpStrings(
     val bullet4: String,
     val budgetLabelTitle: String,
     val budgetLabelBody: String,
+    val budgetPeriodExplTitle: String,
     val budgetPeriodExpl: String,
     val headerBarTitle: String,
     val headerBarBody: String,
@@ -802,8 +804,6 @@ data class DashboardHelpStrings(
     val chartToggleBullet: String,
     val chartIconsTitle: String,
     val chartIconsBody: String,
-    val chartPaletteTitle: String,
-    val chartPaletteBody: String,
     val quickButtonsTitle: String,
     val quickButtonsBody: String,
     val quickAddIncomeDesc: String,
@@ -815,20 +815,11 @@ data class DashboardHelpStrings(
     val superchargeDialogBody: String,
     val howBudgetWorksTitle: String,
     val howBudgetWorksBody: String,
-    val safeBudgetTitle: String,
-    val safeBudgetBody: String,
-    val safeBudgetStep1: String,
-    val safeBudgetStep1Desc: String,
-    val safeBudgetStep2: String,
-    val safeBudgetStep2Desc: String,
-    val safeBudgetStep3: String,
-    val safeBudgetStep3Desc: String,
     val budgetAmountTitle: String,
     val budgetAmountBody: String,
     val budgetSavingsBullet: String,
     val budgetAmortBullet: String,
     val budgetAccelBullet: String,
-    val budgetAmountNote: String,
     val availableCashSectionTitle: String,
     val availableCashSectionBody: String,
     val gettingStartedTitle: String,
@@ -1649,4 +1640,39 @@ data class ColorsStrings(
     val deleteThemeTitle: String,
     val deleteConfirmBody: (String) -> String,
     val sampleDialogBody: String
+)
+
+/**
+ * Help-page copy for the Colors screen (Settings → Colors). Covers the
+ * mode selector, theme/chart-palette picker, the eight themable color
+ * slots + the 12-color chart palette, the edit / undo flow, the HSV
+ * color picker, cloning new themes, deletion rules, and local-only
+ * storage semantics.
+ */
+data class ColorsHelpStrings(
+    val title: String,
+    val overviewTitle: String,
+    val overviewBody: String,
+    val headerTitle: String,
+    val headerBody: String,
+    val backDesc: String,
+    val helpDesc: String,
+    val modeTitle: String,
+    val modeBody: String,
+    val dropdownTitle: String,
+    val dropdownBody: String,
+    val slotTitle: String,
+    val slotBody: String,
+    val chartSlotTitle: String,
+    val chartSlotBody: String,
+    val editTitle: String,
+    val editBody: String,
+    val pickerTitle: String,
+    val pickerBody: String,
+    val newTitle: String,
+    val newBody: String,
+    val deleteTitle: String,
+    val deleteBody: String,
+    val savingTitle: String,
+    val savingBody: String,
 )

@@ -118,6 +118,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 ## i18n / Translation
 - [`feedback_translation_context.md`](feedback_translation_context.md) — four-file ritual, misfile prevention table, parity awk one-liner + hardcoded-string grep checklist (run before /push).
 - [`reference_strings_system.md`](reference_strings_system.md) — system anatomy + drift history (2026-04-10 audit, 2026-05-09 audit fixed 33 missing/22 misfiled/8 stale + 30 hardcoded UI strings).
+- [`feedback_help_page_editor_workflow.md`](feedback_help_page_editor_workflow.md) — user edits help screens via `.md` files in `Download/BudgeTrak/help-edits/`; Claude round-trips edits back into Kotlin + the four strings files.
 
 ## Git Workflow
 - Two branches: `dev` → `main`. Default push: **dev only**.
@@ -133,6 +134,9 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 
 ## Merged features
 - [Custom Themes — color theming](project_custom_themes.md) — 8-role theme + 12-color chart palette, decoupled; built-ins (Default, Bubblegum) + user customs; local-only + survives group-join. Merged into dev 2026-05-19.
+
+## Future / planned
+- [Help Chat assistant](project_help_chat_assistant.md) — in-app Gemini-grounded help chat with KB, daily limit, off-topic refusal, email escape; 7-day Firestore log retention for periodic accuracy/abuse review. Per-chat consent + privacy-policy update required before ship.
 
 ## Important Feedback
 - [Specs vs code: assume spec is wrong first](feedback_specs_vs_code.md) — existing working code usually reflects design choices specs don't capture.

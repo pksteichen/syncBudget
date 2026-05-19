@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -143,6 +144,7 @@ fun ColorsScreen(
     activeChartPalette: ChartPalette,
     onActiveChartPaletteChange: (ChartPalette) -> Unit,
     onBack: () -> Unit,
+    onHelpClick: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val S = LocalStrings.current
@@ -324,6 +326,15 @@ fun ColorsScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = S.common.back,
+                            tint = customColors.headerText
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onHelpClick) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Help,
+                            contentDescription = S.common.help,
                             tint = customColors.headerText
                         )
                     }

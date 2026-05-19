@@ -930,6 +930,10 @@ class MainActivity : ComponentActivity() {
                         activeChartPalette = vm.activeChartPalette,
                         onActiveChartPaletteChange = { vm.activeChartPalette = it },
                         onBack = { vm.currentScreen = "settings" },
+                        onHelpClick = { vm.currentScreen = "colors_help" },
+                    )
+                    "colors_help" -> com.techadvantage.budgetrak.ui.screens.ColorsHelpScreen(
+                        onBack = { vm.currentScreen = "colors" }
                     )
                     "transactions" -> TransactionsScreenBranch(vm, toastState)
                     "savings_goals" -> SavingsGoalsScreen(

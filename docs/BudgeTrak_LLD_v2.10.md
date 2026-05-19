@@ -1944,10 +1944,11 @@ Defense-in-depth writer-membership check on every fan-out lives in `collectRecip
 Owns the app theme, color composition locals, the ad-aware dialog stack, and shared scroll/toast helpers.
 
 **Color composition:**
-- `SyncBudgetColors` data class — semantic palette (headerBackground, headerText, cardBackground, cardText, displayBackground, displayBorder, userCategoryIconTint, accentTint).
+- `SyncBudgetColors` data class — semantic palette (headerBackground, headerText, cardBackground, cardText, **surfaceHeader, surfaceHeaderText**, displayBackground, displayBorder, userCategoryIconTint, accentTint). `surfaceHeader` / `surfaceHeaderText` added 2026-05-17 to drive Window Header colors on dialogs + `DialogPrimaryButton` / `DialogSecondaryButton`.
 - `LocalSyncBudgetColors` — composition local, default dark; overridden per Material scheme by `SyncBudgetTheme`.
 - `LocalAdBannerHeight` — `0.dp` paid users, `50.dp` free users (drives dialog bottom padding).
 - `LocalAppToast` — global `AppToastState` instance for in-dialog toasts.
+- **Derived helpers**: `solariBorderFor(displayBackground)` = `lerp(bg, White, 0.15f)`; `dialogFooterFor(surfaceHeader, surface)` = `lerp(surfaceHeader, surface, 0.85f)`. Both are top-level `fun` in Theme.kt; single source of truth — don't recompute inline.
 
 **Dialogs (rewritten v2.10.20, 2026-05-11 — in-tree overlay system):**
 - `AdAwareDialogState` — holds `mutableStateListOf<AdAwareDialogEntry>` and an `AtomicLong nextSequence`. One instance per `SyncBudgetTheme` call.
@@ -1959,7 +1960,8 @@ Owns the app theme, color composition locals, the ad-aware dialog stack, and sha
 - `AdAwareDatePickerDialog` — Material3 date picker wrapped in `AdAwareDialog`.
 - `DialogStyle` enum — `DEFAULT` (green) / `DANGER` (red) / `WARNING` (orange); drives header + footer colors.
 - `DialogHeader(title, style)` / `DialogFooter(content)` — composables for custom form dialogs that use `AdAwareDialog` directly.
-- `DialogPrimaryButton` (green) / `DialogSecondaryButton` (gray) / `DialogDangerButton` (red) / `DialogWarningButton` (orange) — 500 ms click debounce on primary/danger/warning buttons.
+- `DialogPrimaryButton` (Window Header / Window Header Text) / `DialogSecondaryButton` (muted: `lerp(surfaceHeader, surfaceHeaderText, 0.3f)`) / `DialogDangerButton` (red, locked) / `DialogWarningButton` (orange, locked) — 500 ms click debounce on Primary/Danger/Warning. All five themed button variants (including `ScreenPrimaryButton` below) draw a 0.5dp `BorderStroke` in their content color. `DialogStyle.DEFAULT` header/footer/Primary follow `surfaceHeader`; DANGER/WARNING headers stay convention-locked red/orange.
+- `ScreenPrimaryButton(onClick, modifier, enabled, contentPadding, content)` — page-level filled button using `LocalSyncBudgetColors.current.headerBackground` + `.headerText`. Use for buttons on screens (Settings, BudgetConfig, RecurringExpenses, SavingsGoals, Amortization, Sync, Transactions filter row, ColorsScreen "New theme"). NOT for dialog actions — those use the Dialog* variants so Danger/Warning convention reads correctly regardless of user theme. Exceptions deliberately kept as `OutlinedButton`: `SyncScreen` Dissolve/Leave Group (red Text, danger semantic); `TransactionsScreen` bank-import tab buttons (explicit colors); `MainActivity` dialog backup-folder picker (inside a dialog body); `WidgetTransactionActivity` (separate MaterialTheme outside `SyncBudgetTheme`).
 
 **Why the rewrite:** the old `androidx.compose.ui.window.Dialog`-based system created a separate Android window per dialog; the window's bounds absorbed all taps including those on the visible-but-behind ad bar. AdMob `NativeAdView` couldn't receive clicks during open dialogs. The in-tree overlay places dialog content inside the main Activity window — ad bar lives outside the host's bounds and receives clicks normally. Two intentional holdouts still use raw Compose `Dialog`: `SwipeablePhotoRow` (fullscreen photo viewer) and `WidgetTransactionActivity` (separate Activity without `SyncBudgetTheme`).
 
@@ -1973,14 +1975,14 @@ Owns the app theme, color composition locals, the ad-aware dialog stack, and sha
 
 **`SyncBudgetTheme(darkTheme, content)`** — entry point. Resolves `SyncBudgetColors` for the scheme, provides all four composition locals, applies `SyncBudgetTypography`.
 
-### 8.2 Color.kt (29 lines)
+### 8.2 Color.kt
 
-Raw `Color(0xAARRGGBB)` constants only. Two palettes:
+Raw `Color(0xAARRGGBB)` constants only — defaults for the built-in **Default** theme.
 
 | Token | Dark | Light |
 |---|---|---|
 | Background | `0xFF2A3A2F` | `0xFFBDD5CC` |
-| Surface | `0xFF1A1A1A` | `0xFFFFFFFF` |
+| Surface | `0xFF3A4E42` | `0xFFBFD9E4` |
 | HeaderBackground | `0xFF1E2D23` | `0xFF2C2C2C` |
 | HeaderText | `0xFFE0E0E0` | `0xFFF0E8D8` |
 | Primary | `0xFFE8D5A0` | `0xFF2E5C80` |
@@ -1988,11 +1990,35 @@ Raw `Color(0xAARRGGBB)` constants only. Two palettes:
 | CardBackground | `0xFF1A1A1A` | `0xFF305880` |
 | CardText | `0xFFE8D5A0` | `0xFFFFFFFF` |
 | DisplayBackground | `0xFF383838` | `0xFFD6E5DE` |
-| DisplayBorder | `0xFF4A4A4A` | `0xFFB8CCC2` |
+| SurfaceHeader | `0xFF004E62` | `0xFF497D79` |
+| SurfaceHeaderText | `0xFFE8F5E9` | `0xFFFFFFFF` |
 
-Light theme also defines `LightOnBackground` / `LightOnSurface` (`0xFF1C1B1F`).
+Light theme also defines `LightOnBackground` / `LightOnSurface` (`0xFF1C1B1F`). Solari border is no longer a constant — auto-derived inside `SyncBudgetTheme` via `solariBorderFor(displayBackground)`.
 
-### 8.3 Type.kt (18 lines)
+`IncomeGreen` / `ExpenseRed` constants remain (`#4CAF50` / `#F44336`) but the runtime `SyncBudgetColors` no longer carries them — income/expense colors are convention-locked, see SSD §22a.2.
+
+### 8.3 ThemeProfile.kt
+
+Data classes + built-in catalog for the Custom Themes feature.
+
+- **`ThemeColorSet`** — 8 fields: `cardBackground`, `cardText`, `background`, `surface`, `surfaceHeader`, `surfaceHeaderText`, `onSurface`, `displayBackground`. JSON keys match field names — do NOT rename them (persistence layer).
+- **`ThemeProfile(name, isBuiltIn, light: ThemeColorSet, dark: ThemeColorSet, forkedFrom: String? = null)`** — base theme. `forkedFrom` names the source built-in for lineage-aware undo (a Sunset-forked custom undoes to Sunset's value at the edited slot, not Default's).
+- **`ChartPalette(name, isBuiltIn, chartLight: List<Color> (12), chartDark: List<Color> (12), forkedFrom: String? = null)`** — chart palette. `init` enforces both lists are exactly 12 items.
+- **`BuiltInThemes.ALL`** — list of `ThemeProfile`s. Two members: `DEFAULT` and `BUBBLEGUM` (pink/lavender on light, deep aubergine on dark).
+- **`BuiltInChartPalettes.ALL`** — list of `ChartPalette`s. Three members: `BRIGHT`, `PASTEL`, `SUNSET` (each with separate light + dark 12-color sets).
+
+### 8.4 ColorWheelPicker.kt
+
+HSV color picker — `ColorWheelPicker(color, onColorChange, modifier)` plus a `ColorPickerDialog(title, initial, onDismiss, onSave)` wrapper.
+
+- **Wheel** — angular hue/saturation via `Brush.sweepGradient`, white center via `Brush.radialGradient`, brightness dimmed by overlaying black at `alpha = 1 - value`. Tap or drag the wheel to pick (hue from `atan2`, saturation from distance/radius).
+- **Brightness slider** — `Slider` over a gradient from black to the current full-V hue/sat color.
+- **Hex field** — `OutlinedTextField` with two-way binding; valid hex updates the HSV state and emits the new color upstream.
+- **Dialog wrapper** — uses the standard `AdAwareDialog` + outer `Box` + scrollable body + `PulsingScrollArrows` overlay pattern so the hex field stays reachable when the IME pushes content up.
+
+**State invariant** (fixed 2026-05-19): HSV state vars (`hue`/`sat`/`value`/`hexInput`) are seeded **once** via `remember { color.toHsv() }` — NOT `remember(color) { … }`. Re-keying on `color` recreates the mutable state objects every emit, leaving `HueSatWheel`'s `pointerInput(Unit)` block holding stale references and producing the symptom "brightness snaps back to original value as soon as the wheel is touched after sliding brightness." Don't reintroduce keyed state here.
+
+### 8.5 Type.kt (18 lines)
 
 - `FlipFontFamily = FontFamily.Monospace` — used by every `FlipChar` / `FlipDigit` / `FlipDisplay`.
 - `SyncBudgetTypography` — one `headlineLarge` style (24sp bold, 2sp letter-spacing).
@@ -2050,15 +2076,22 @@ Effects beyond the Compose layer:
 
 ---
 
-## 10. Help Screen Classes (10 total)
+## 10. Help Screen Classes (11 total)
 
-All help screens follow the same pattern: a `Scaffold` with top app bar, a scrolling body composed of shared `HelpComponents` primitives (`HelpSection`, `HelpSubsection`, bullet lists, note cards). They read strings from `LocalStrings.current.*HelpStrings` and never touch the ViewModel.
+All help screens follow the same pattern: a `Scaffold` with top app bar, a scrolling body composed of shared `HelpComponents` primitives. They read strings from `LocalStrings.current.*HelpStrings` and never touch the ViewModel.
 
-Inventory (10 screens, lines per screen): see SSD §23.2.
+Inventory (11 screens, lines per screen): see SSD §23.2. `ColorsHelpScreen` added 2026-05-19 — reached from a help icon in `ColorsScreen`'s top app bar; back returns to `colors` route.
 
-### HelpComponents.kt (165 lines)
+**Editable-source workflow.** Each help screen can be regenerated as a markdown file under `/storage/emulated/0/Download/BudgeTrak/help-edits/<screen-name>-help.md` with `<!-- key: fieldName -->` anchors marking each editable chunk. The user edits prose / reorders chunks / adds `//` notes; Claude round-trips edits back into the Kotlin file + the four strings files. Workflow doc: `memory/feedback_help_page_editor_workflow.md`.
 
-Shared scaffolding used by every help screen: section header, sub-header, bullet row, note-card composables, common paddings and colors.
+### HelpComponents.kt
+
+Shared scaffolding used by every help screen: `HelpSectionTitle`, `HelpSubSectionTitle`, `HelpBodyText` (with `italic` flag), `HelpBulletText`, `HelpNumberedItem`, `HelpDividerLine`, `HelpIconRow` (three overloads).
+
+**`HelpIconRow` overloads:**
+1. `(icon: ImageVector, label, description, tint = onBackground)` — default vector icon at 20dp.
+2. `(painter: Painter, label, description, tint = onBackground)` — drawable resource at 20dp.
+3. `(icon: @Composable () -> Unit, label, description)` — composable slot; for cases where the bullet icon is layered (e.g., dashboard's Add Transaction body + blue plus overlay). Added 2026-05-19.
 
 ---
 
@@ -2184,8 +2217,12 @@ Every repository uses `SafeIO` for atomic writes (temp file → fsync → rename
 | AmortizationRepository | `data/AmortizationRepository.kt` | 60 | amortization_entries.json |
 | SharedSettingsRepository | `data/SharedSettingsRepository.kt` | 134 | shared_settings.json |
 | PeriodLedgerRepository | `data/sync/PeriodLedger.kt` | (of 73) | period_ledger.json |
+| ThemesRepository (object) | `data/ThemesRepository.kt` | 215 | themes.json |
+| ChartPalettesRepository (object) | `data/ThemesRepository.kt` | (shared) | chart_palettes.json |
 
 `SharedSettingsRepository` is slightly different — it's a singleton document (one JSON object), not a list, and participates directly in group sync.
+
+`ThemesRepository` + `ChartPalettesRepository` are both Kotlin `object`s in the same file. They follow the same `load/setSelected/saveUserProfiles` pattern; built-ins are code-resident so the persisted file only carries user-created entries. Selections live in `app_prefs` (`selectedThemeName` / `selectedChartPaletteName`). Backwards-compat parse: `colorSetFromJson(JSONObject, defaults)` silently ignores removed keys and falls back to mode-appropriate `BuiltInThemes.DEFAULT.light`/`.dark` for new keys missing from older saved themes (the `fromJson` caller passes the right defaults per block — don't reintroduce a single-default fallback). One-time `chartPalette` → `selectedChartPaletteName` migration runs inside `ChartPalettesRepository.getSelected`. SSD §22a.4.
 
 ---
 
@@ -2220,9 +2257,9 @@ For exact current line counts run `find app/src/main/java -name "*.kt" | xargs w
 ### Root (`com.techadvantage.budgetrak`) — 3 files
 `MainActivity` (UI shell, navigation, lifecycle, LoadingScreen, BackHandler — §2.2), `MainViewModel` (state + business logic + sync lifecycle + save functions + async load + maintenance + archiving — §2.3), `BudgeTrakApplication` (Application entry, App Check, Crashlytics, FCM helpers — §2.1).
 
-### `data/` — 32 files
+### `data/` — 33 files
 Data classes: `Transaction`, `Category`, `IncomeSource`, `RecurringExpense`, `AmortizationEntry`, `SavingsGoal`, `SharedSettings`, `BudgetPeriod` (enum) — §5.
-Repositories: `TransactionRepository`, `CategoryRepository`, `IncomeSourceRepository`, `RecurringExpenseRepository`, `AmortizationRepository`, `SavingsGoalRepository`, `SharedSettingsRepository` (one per JSON file) — §13.
+Repositories: `TransactionRepository`, `CategoryRepository`, `IncomeSourceRepository`, `RecurringExpenseRepository`, `AmortizationRepository`, `SavingsGoalRepository`, `SharedSettingsRepository`, `ThemesRepository` (hosts both `ThemesRepository` + `ChartPalettesRepository` objects, added 2026-05-19) — §13.
 Utilities: `BudgetCalculator`, `CryptoHelper`, `CsvParser`, `DuplicateDetector`, `AutoCategorizer`, `CategoryIcons`, `SavingsSimulator`, `DefaultCategories`, `FullBackupSerializer`, `BackupManager`, `SafeIO`, `PrefsCompat`, `TitleCaseUtil`, `ExpenseReportGenerator`, `DiagDumpBuilder`, `PublicDownloadWriter` (v2.10.03+), `PeriodRefreshService` — §6.
 
 ### `data/sync/` — 22 files
@@ -2246,14 +2283,14 @@ Sync engine: `EncryptedDocSerializer`, `FirestoreDocService`, `FirestoreDocSync`
 ### `ui/components/` — 6 files
 `FlipChar`, `FlipDigit`, `FlipDisplay`, `PieChartEditor`, `SwipeablePhotoRow`, `InHouseAd` (native ad rendering + in-house fallback; AdMediumDims + applyMediumAdDimsAndColors + bindMediumAdContent + InHouseAds catalog). §3.
 
-### `ui/screens/` — 22 files
-11 main: `MainScreen`, `TransactionsScreen`, `RecurringExpensesScreen`, `AmortizationScreen`, `SavingsGoalsScreen`, `BudgetConfigScreen`, `BudgetCalendarScreen`, `SimulationGraphScreen`, `SyncScreen`, `SettingsScreen`, `QuickStartGuide`. 10 help screens (one per main, except BudgetCalendar/Sync/Simulation share the pattern). 1 shared: `HelpComponents`. §2.4–2.14, §10.
+### `ui/screens/` — 24 files
+12 main: `MainScreen`, `TransactionsScreen`, `RecurringExpensesScreen`, `AmortizationScreen`, `SavingsGoalsScreen`, `BudgetConfigScreen`, `BudgetCalendarScreen`, `SimulationGraphScreen`, `SyncScreen`, `SettingsScreen`, `ColorsScreen` (added 2026-05-17), `QuickStartGuide`. 11 help screens (one per main, except BudgetCalendar/Sync/Simulation share the pattern — and `ColorsHelpScreen` added 2026-05-19). 1 shared: `HelpComponents`. §2.4–2.14, §10.
 
 ### `ui/strings/` — 5 files
-`AppStrings` (interface, 22 data classes, ~1,393 fields), `EnglishStrings`, `SpanishStrings`, `TranslationContext`, `LocalStrings`. §9.
+`AppStrings` (interface, 23 data classes including `ColorsStrings` + `ColorsHelpStrings`, ~1,450 fields), `EnglishStrings`, `SpanishStrings`, `TranslationContext`, `LocalStrings`. §9.
 
-### `ui/theme/` — 3 files
-`Color`, `Theme` (palette, dialogs, scroll arrows, toast), `Type` (`FlipFontFamily`). §8.
+### `ui/theme/` — 5 files
+`Color`, `Theme` (palette, dialogs, scroll arrows, toast, `ScreenPrimaryButton`, `solariBorderFor` / `dialogFooterFor` helpers), `ThemeProfile` (`ThemeColorSet` / `ThemeProfile` / `ChartPalette` data classes + `BuiltInThemes.ALL` + `BuiltInChartPalettes.ALL`, added 2026-05-17), `ColorWheelPicker` (HSV picker + `ColorPickerDialog`, added 2026-05-17), `Type` (`FlipFontFamily`). §8.
 
 ### `widget/` — 3 files
 `BudgetWidgetProvider` (AppWidgetProvider, 5 s throttle, schedules `BackgroundSyncWorker`), `WidgetRenderer` (Canvas bitmap), `WidgetTransactionActivity` (quick-add from widget). §11.
@@ -2279,6 +2316,8 @@ Sync engine: `EncryptedDocSerializer`, `FirestoreDocService`, `FirestoreDocSync`
 | 2.10.28-dev (P3) | May 15 2026 | **§6.20–§6.23 AI / OCR classes added.** `AiCategorizerService` (CSV batch categorizer, `CHUNK_SIZE = 100`, schema-constrained JSON, retry on transient errors, payload omits date for privacy), `CategorizerPromptBuilder` (prompt template + `CSV_CATEGORIZER_PROMPT_VERSION = "v1"`), `ReceiptOcrService` (4-call Gemini Flash-Lite pipeline with all 4 schemas, parallel Call 1.5 / Call 2 under `CALL1R_TIMEOUT_PAST_C2_MS = 2_000L` cap, `deriveMulti` / `reconcilePrices` / `aggregateCategoryAmounts` post-processing, refund-receipt `Int.MIN_VALUE` sentinel, JPEG-blob vs bitmap-re-encode rationale, harness pointer), `OcrResult` (data classes + `OcrState` sealed class with `Offline` distinct from `Failed`). Companion SSD §11.2 + §11.3 augmented with prompt-version + helper-name details. Items 5 + 6 (period-boundary scheduling, inline FCM) already covered substantively in SSD §17.13–§17.15 + LLD §7.14 — no expansion needed. |
 | Doc bump v2.8 → v2.10 | May 15 2026 | **Filename + header + footer bumped.** Doc version independent of app version. v2.10 captures cumulative coverage since v2.8: §6.17–§6.19 Play Billing classes, §6.20–§6.23 AI/OCR classes, §3.7/§3.8 Native ad + XML/drawables, §3.9/§3.9.1 AdAware dialog host + share-blocking registrar. Files renamed `BudgeTrak_{SSD,LLD}_v2.8.md → _v2.10.md`. References in `README.md` and `memory/MEMORY.md` updated. |
 | 2.10.28-dev (P4) | May 15 2026 | **§3.9 AdAware Dialog Host added (+ §3.9.1 LocalShareBlockingDialogRegistrar).** Catalogs `AdAwareDialogState` (activeDialogs `mutableStateListOf` + `AtomicLong nextSequence`), `AdAwareDialogEntry` (identity-based, sequence-ordered), `FallbackAdAwareDialogState` (defensive no-op for `WidgetTransactionActivity`), `LocalAdAwareDialogState`, `LocalShareBlockingDialogRegistrar` (purpose-scoped). Composables: `AdAwareDialog` (DisposableEffect-registered, `rememberUpdatedState`-wrapped callbacks, auto-registers share-blocking), `AdAwareDialogHost` (per-entry `key(entry)` + `BackHandler` + dim layer no-op clickable + `imePadding` content). Share-routing precedence table for `consumePendingSharedImages`. SSD §16.5 expanded with same coverage + new §16.5a covering the share-intent registrar's purpose-scoped invariant. |
+
+| Custom Themes feature | May 17–19 2026 | **§8 expanded for the custom-themes feature.** §8.1 (Theme.kt): `SyncBudgetColors` gains `surfaceHeader` + `surfaceHeaderText`; `solariBorderFor` / `dialogFooterFor` derived helpers documented as single source of truth; `DialogPrimaryButton`/`DialogSecondaryButton` now follow Window Header colors with 0.5dp text-colored border; new `ScreenPrimaryButton` for page-level filled buttons with exception list. §8.2 (Color.kt): updated default Light/Dark constants to baked-in values from user's Default (Custom) at merge time; SurfaceHeader/SurfaceHeaderText constants added; DisplayBorder removed (now derived). §8.3 NEW (ThemeProfile.kt): data classes + built-in catalog (Default + Bubblegum themes, Bright/Pastel/Sunset chart palettes). §8.4 NEW (ColorWheelPicker.kt): HSV picker + `ColorPickerDialog` wrapper; state-invariant note about the no-keyed-state-on-color bugfix. §13 Repository Classes: `ThemesRepository` + `ChartPalettesRepository` objects added with backwards-compat parsing note. §10 Help Screens: bumped to 11 (`ColorsHelpScreen` reached from `ColorsScreen` top app bar); editable-source markdown workflow documented; `HelpIconRow` gains a composable-icon-slot overload. Appendix A: `data/` 32→33, `ui/screens/` 22→24, `ui/theme/` 3→5. SSD §22a is the feature spec; full architectural context in `memory/project_custom_themes.md`. |
 
 ---
 

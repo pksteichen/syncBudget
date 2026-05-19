@@ -391,7 +391,14 @@ fun MainScreen(
                                     "offline" -> Color(0xFFF44336)    // red: no internet
                                     else -> Color(0xFF9E9E9E)
                                 }
-                                val syncColor = if (syncRepairAlert) {
+                                // Tap-to-sync, long-press-to-dismiss-repair, and the
+                                // pink-strobe repair alert are debug-only — sync is
+                                // automatic in production, and the SYNC page already
+                                // has a manual Sync Now button for the rare case it's
+                                // wanted. The syncRepairAlert flag still gets set in
+                                // release; it just has no visible effect.
+                                val devSyncControls = com.techadvantage.budgetrak.BuildConfig.DEBUG
+                                val syncColor = if (devSyncControls && syncRepairAlert) {
                                     val flash = rememberInfiniteTransition(label = "repairFlash")
                                     flash.animateColor(
                                         initialValue = Color(0xFFFF00FF),
@@ -408,11 +415,15 @@ fun MainScreen(
                                     modifier = Modifier
                                         .align(Alignment.BottomStart)
                                         .padding(start = solariInset + 16.dp, bottom = solariInset + 6.dp)
-                                        .combinedClickable(
-                                            enabled = syncStatus != "syncing",
-                                            onClick = { onSyncNow() },
-                                            onLongClick = { onDismissRepairAlert() }
-                                        ),
+                                        .let { m ->
+                                            if (devSyncControls) {
+                                                m.combinedClickable(
+                                                    enabled = syncStatus != "syncing",
+                                                    onClick = { onSyncNow() },
+                                                    onLongClick = { onDismissRepairAlert() }
+                                                )
+                                            } else m
+                                        },
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {

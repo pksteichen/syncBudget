@@ -174,8 +174,12 @@ fun DashboardHelpScreen(
 
             HelpSubSectionTitle(S.dashboardHelp.budgetLabelTitle)
             HelpBodyText(S.dashboardHelp.budgetLabelBody)
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
+            HelpDividerLine()
+
+            // ─── BUDGET CONFIGURATION ───
+            HelpSectionTitle(S.dashboardHelp.budgetPeriodExplTitle)
             HelpBodyText(S.dashboardHelp.budgetPeriodExpl)
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -205,10 +209,12 @@ fun DashboardHelpScreen(
                         modifier = Modifier.size(22.dp)
                     )
                     Spacer(modifier = Modifier.weight(1f))
-                    Text(
-                        S.dashboard.appTitle,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = customColors.headerText
+                    androidx.compose.foundation.Image(
+                        painter = painterResource(id = R.drawable.budgetrak_logo),
+                        contentDescription = S.dashboard.appTitle,
+                        contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                        colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(customColors.headerText),
+                        modifier = Modifier.height(22.dp)
                     )
                     Spacer(modifier = Modifier.weight(1f))
                     Icon(
@@ -240,10 +246,6 @@ fun DashboardHelpScreen(
 
             HelpSubSectionTitle(S.dashboardHelp.chartIconsTitle)
             HelpBodyText(S.dashboardHelp.chartIconsBody)
-            Spacer(modifier = Modifier.height(10.dp))
-
-            HelpSubSectionTitle(S.dashboardHelp.chartPaletteTitle)
-            HelpBodyText(S.dashboardHelp.chartPaletteBody)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()
@@ -294,9 +296,24 @@ fun DashboardHelpScreen(
             }
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpBodyText(S.dashboardHelp.quickAddIncomeDesc)
-            Spacer(modifier = Modifier.height(8.dp))
-
+            HelpIconRow(
+                icon = {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_add_transaction_body),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_add_transaction_plus),
+                        contentDescription = null,
+                        tint = Color(0xFF0D47A1),
+                        modifier = Modifier.fillMaxSize()
+                    )
+                },
+                label = S.common.addTransaction,
+                description = S.dashboardHelp.quickAddIncomeDesc
+            )
             HelpIconRow(Icons.AutoMirrored.Filled.List, S.dashboard.transactions, S.dashboardHelp.navTransactionsDesc)
             HelpIconRow(painterResource(id = R.drawable.ic_coins), S.dashboard.savingsGoals, S.dashboardHelp.navSavingsDesc)
             HelpIconRow(Icons.Filled.Schedule, S.dashboard.amortization, S.dashboardHelp.navAmortizationDesc)
@@ -325,14 +342,6 @@ fun DashboardHelpScreen(
             // ─── SECTION 8: HOW IT ALL WORKS ───
             HelpSectionTitle(S.dashboardHelp.howBudgetWorksTitle)
             HelpBodyText(S.dashboardHelp.howBudgetWorksBody)
-            Spacer(modifier = Modifier.height(8.dp))
-
-            HelpSubSectionTitle(S.dashboardHelp.safeBudgetTitle)
-            HelpBodyText(S.dashboardHelp.safeBudgetBody)
-            Spacer(modifier = Modifier.height(4.dp))
-            HelpNumberedItem(1, S.dashboardHelp.safeBudgetStep1, S.dashboardHelp.safeBudgetStep1Desc)
-            HelpNumberedItem(2, S.dashboardHelp.safeBudgetStep2, S.dashboardHelp.safeBudgetStep2Desc)
-            HelpNumberedItem(3, S.dashboardHelp.safeBudgetStep3, S.dashboardHelp.safeBudgetStep3Desc)
             Spacer(modifier = Modifier.height(10.dp))
 
             HelpSubSectionTitle(S.dashboardHelp.budgetAmountTitle)
@@ -341,11 +350,6 @@ fun DashboardHelpScreen(
             HelpBulletText(S.dashboardHelp.budgetSavingsBullet)
             HelpBulletText(S.dashboardHelp.budgetAmortBullet)
             HelpBulletText(S.dashboardHelp.budgetAccelBullet)
-            Spacer(modifier = Modifier.height(8.dp))
-            HelpBodyText(
-                S.dashboardHelp.budgetAmountNote,
-                italic = true
-            )
             Spacer(modifier = Modifier.height(10.dp))
 
             HelpSubSectionTitle(S.dashboardHelp.availableCashSectionTitle)

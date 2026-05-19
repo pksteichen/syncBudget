@@ -38,10 +38,10 @@ object SpanishStrings : AppStrings {
         applyToPastDeny = "No, solo futuras",
         sourceLabel = "Fuente",
         merchantLabel = "Comercio/Servicio",
-        repeatTypeDays = "D\u00eda",
-        repeatTypeWeeks = "Semana",
+        repeatTypeDays = "Diario",
+        repeatTypeWeeks = "Semanal",
         repeatTypeBiWeekly = "Cada 2 semanas",
-        repeatTypeMonths = "Mes",
+        repeatTypeMonths = "Mensual",
         repeatTypeBiMonthly = "Dos veces al mes",
         repeatTypeAnnual = "Anual",
         budgetPeriodDaily = "Diario",
@@ -732,14 +732,15 @@ object SpanishStrings : AppStrings {
         budgetLabelTitle = "Etiqueta del presupuesto (debajo del n\u00famero)",
         budgetLabelBody = "La etiqueta debajo de los d\u00edgitos muestra tu monto de presupuesto \u2014 por ejemplo, " +
             "\"\$42.50/d\u00eda\" o \"\$297.50/semana\". Esto indica cu\u00e1nto se agrega a " +
-            "tu efectivo disponible en cada per\u00edodo. Si tu presupuesto a\u00fan no est\u00e1 configurado, " +
+            "tu efectivo disponible en cada per\u00edodo. Si tu presupuesto a\u00fan no est\u00e1 configurado o resulta en un n\u00famero negativo, " +
             "muestra \"Sin configurar\".",
+        budgetPeriodExplTitle = "Configuraci\u00f3n del Presupuesto",
         budgetPeriodExpl = "Puedes configurar tu presupuesto para que se actualice a diario, semanalmente o mensualmente, " +
             "y comenzar en el calendario que prefieras. Sin embargo, \u00a1recomendamos encarecidamente un presupuesto diario! " +
             "Un presupuesto diario es mucho m\u00e1s f\u00e1cil de seguir. Los presupuestos a m\u00e1s largo plazo a veces hacen que la " +
-            "persona gaste demasiado al principio y termine corta de dinero. La tecnolog\u00eda detr\u00e1s de nuestro modelo " +
+            "persona gaste demasiado al principio y termine corta de dinero. Nuestro modelo de presupuesto " +
             "promedia tus ingresos y gastos recurrentes mediante una simulaci\u00f3n detallada que proyecta hacia el futuro, " +
-            "y luego calcula exactamente cu\u00e1nto puedes gastar cada d\u00eda (si eliges ese per\u00edodo) para que nunca te pongas " +
+            "y luego calcula exactamente cu\u00e1nto puedes gastar cada d\u00eda para que nunca te pongas " +
             "en n\u00fameros rojos. Incluso si tus ingresos son irregulares y tus facturas est\u00e1n distribuidas a lo largo del " +
             "mes o el a\u00f1o, la app te dar\u00e1 un n\u00famero fijo en el que puedas confiar para mantenerte en control. Consulta " +
             "la p\u00e1gina de Ayuda de Configuraci\u00f3n del Presupuesto para m\u00e1s detalles (y \"C\u00f3mo funciona el presupuesto\" m\u00e1s abajo).",
@@ -750,7 +751,7 @@ object SpanishStrings : AppStrings {
         navBarTitle = "Barra de navegaci\u00f3n",
         navBarBody = "La barra de navegaci\u00f3n inferior da acceso r\u00e1pido a todas las funciones principales:",
         navTransactionsDesc = "Registra y gestiona tus ingresos y gastos. Importa extractos bancarios, busca, filtra y categoriza.",
-        navSavingsDesc = "Planifica y ahorra para gastos futuros u objetivos financieros. Elige una fecha objetivo o una contribuci\u00f3n fija por per\u00edodo.",
+        navSavingsDesc = "Planifica y ahorra para gastos futuros u objetivos financieros.",
         navAmortizationDesc = "Distribuye un gasto grande del pasado a lo largo de varios per\u00edodos para que no golpee tu presupuesto de una sola vez.",
         navRecurringDesc = "Registra facturas, suscripciones y pagos de pr\u00e9stamos para que la calculadora de presupuesto los tenga en cuenta autom\u00e1ticamente.",
         navCalendarDesc = "Ver un calendario que muestra todas tus facturas e ingresos pr\u00f3ximos.",
@@ -760,14 +761,10 @@ object SpanishStrings : AppStrings {
         chartTitleBarTitle = "Barra de t\u00edtulo del gr\u00e1fico",
         chartRangeBullet = "Bot\u00f3n de rango (izquierda) \u2014 alterna entre rangos de tiempo.",
         chartToggleBullet = "Selector de tipo de gr\u00e1fico (derecha) \u2014 alterna entre gr\u00e1fico circular y gr\u00e1fico de barras",
-        chartIconsTitle = "Iconos del gr\u00e1fico circular",
-        chartIconsBody = "Los iconos de categor\u00eda se muestran dentro de sus segmentos del gr\u00e1fico en un color " +
-            "contrastante (blanco sobre segmentos oscuros, negro sobre segmentos claros). Las categor\u00edas " +
-            "con segmentos muy peque\u00f1os (menos del 4% del gasto) tienen sus iconos apilados en el " +
-            "margen izquierdo del gr\u00e1fico en el color del segmento. Toca cualquier icono para ver " +
-            "el nombre y monto de la categor\u00eda.",
-        chartPaletteTitle = "Paleta de gr\u00e1ficos",
-        chartPaletteBody = "Los colores del gr\u00e1fico siguen la paleta de gr\u00e1ficos que elijas en " +
+        chartIconsTitle = "Iconos del gr\u00e1fico circular y de barras",
+        chartIconsBody = "Los iconos de categor\u00eda se muestran dentro de sus segmentos del gr\u00e1fico. " +
+            "Toca cualquier icono para ver el nombre y monto de la categor\u00eda. " +
+            "Los colores del gr\u00e1fico siguen la paleta de gr\u00e1ficos que elijas en " +
             "Ajustes \u2192 Colores. Tres paletas vienen integradas (Vibrante, Pastel, Atardecer), " +
             "y tambi\u00e9n puedes guardar las tuyas. Cada paleta tiene juegos de colores separados " +
             "para los modos claro y oscuro, para que el gr\u00e1fico siga siendo legible en ambos.",
@@ -775,52 +772,39 @@ object SpanishStrings : AppStrings {
         quickButtonsBody = "Debajo del gr\u00e1fico, una fila de iconos da acceso de un toque a las \u00e1reas " +
             "m\u00e1s usadas de la app. De izquierda a derecha: Agregar transacci\u00f3n, Transacciones, " +
             "Metas de Ahorro, Amortizaci\u00f3n, Gastos Recurrentes y Calendario del presupuesto.",
-        quickAddIncomeDesc = "El icono m\u00e1s a la izquierda (recibo con un signo m\u00e1s azul pulsante) abre " +
-            "el di\u00e1logo Agregar transacci\u00f3n en modo Gasto. Cambia a Ingreso con la p\u00edldora en la " +
-            "parte superior del di\u00e1logo. El pulso atrae la mirada a la acci\u00f3n m\u00e1s com\u00fan.",
+        quickAddIncomeDesc = "Abre el di\u00e1logo Agregar transacci\u00f3n en modo Gasto. Cambia a Ingreso con la " +
+            "p\u00edldora en la parte superior del di\u00e1logo. El pulso atrae la mirada a la acci\u00f3n m\u00e1s com\u00fan.",
         quickAddExpenseDesc = "Abre el di\u00e1logo de Agregar gasto. La transacci\u00f3n se guarda y el efectivo disponible disminuye.",
-        quickMatchingNote = "Las transacciones agregadas desde el panel principal pasan por las mismas verificaciones " +
-            "que en la pantalla de Transacciones: detecci\u00f3n de duplicados, coincidencia con gastos recurrentes, " +
-            "coincidencia con amortizaciones y detecci\u00f3n de ingresos presupuestados.",
+        quickMatchingNote = "Las transacciones agregadas pasan por verificaciones: detecci\u00f3n de duplicados, " +
+            "coincidencia con gastos recurrentes, coincidencia con amortizaciones y detecci\u00f3n de ingresos " +
+            "presupuestados para ayudar a mantener todo organizado y preciso. M\u00e1s informaci\u00f3n en la Ayuda de la p\u00e1gina de Transacciones.",
         superchargeTitle = "Potenciar",
         superchargeBody = "El icono de rayo en la esquina inferior derecha del panel principal abre Potenciar. " +
-            "Esta funci\u00f3n te permite hacer contribuciones extra puntuales a tus Metas de Ahorro " +
-            "desde tu efectivo disponible.",
+            "Te permite hacer contribuciones extra puntuales a tus Metas de Ahorro desde tu efectivo disponible.",
         superchargeIconDesc = "Asigna fondos extra a una o m\u00e1s Metas de Ahorro desde tu efectivo disponible actual.",
-        superchargeDialogBody = "En el di\u00e1logo de Potenciar, introduce un monto para cada meta que quieras impulsar. " +
-            "El total se descuenta de tu efectivo disponible y se suma al ahorro acumulado de las metas. " +
-            "Es \u00fatil cuando tienes un excedente y quieres alcanzar una meta m\u00e1s r\u00e1pido.",
+        superchargeDialogBody = "Es \u00fatil cuando tienes un excedente y quieres alcanzar una meta m\u00e1s r\u00e1pido.",
         howBudgetWorksTitle = "C\u00f3mo funciona el presupuesto",
         howBudgetWorksBody = "El motor de presupuesto ejecuta una simulaci\u00f3n de flujo de caja usando tu calendario " +
-            "de ingresos y gastos recurrentes para determinar un monto seguro de gasto por per\u00edodo.",
-        safeBudgetTitle = "Presupuesto seguro",
-        safeBudgetBody = "Es lo m\u00e1ximo que puedes gastar por per\u00edodo (d\u00eda, semana o mes) sin quedarte " +
-            "sin dinero para cubrir tus facturas. El c\u00e1lculo:",
-        safeBudgetStep1 = "Proyecci\u00f3n de ingresos",
-        safeBudgetStep1Desc = "Tus fuentes de ingreso y sus calendarios de repetici\u00f3n se proyectan un a\u00f1o hacia adelante.",
-        safeBudgetStep2 = "Simulaci\u00f3n de gastos",
-        safeBudgetStep2Desc = "Tus gastos recurrentes se proyectan en el mismo per\u00edodo.",
-        safeBudgetStep3 = "Protecci\u00f3n temporal",
-        safeBudgetStep3Desc = "El motor se asegura de que incluso en meses con muchas facturas juntas, el monto del presupuesto cubra todas las obligaciones.",
+            "de ingresos y gastos recurrentes para determinar un monto seguro de gasto por per\u00edodo. " +
+            "El motor se asegura de que incluso en meses con muchas facturas juntas, el monto del presupuesto cubra todas las obligaciones.",
         budgetAmountTitle = "Monto del presupuesto",
-        budgetAmountBody = "Tu presupuesto real por per\u00edodo es el Presupuesto Seguro menos las deducciones activas:",
+        budgetAmountBody = "Tu presupuesto real por per\u00edodo se reduce por las deducciones activas:",
         budgetSavingsBullet = "Deducciones de Metas de Ahorro \u2014 dinero reservado para compras planeadas y objetivos de ahorro",
-        budgetAmortBullet = "Deducciones de Amortizaci\u00f3n \u2014 distribuyendo gastos grandes del pasado a lo largo del tiempo",
+        budgetAmortBullet = "Deducciones de Amortizaci\u00f3n \u2014 distribuyendo gastos grandes que ya pagaste a lo largo de varios per\u00edodos futuros",
         budgetAccelBullet = "Deducciones aceleradas opcionales para nuevos gastos recurrentes \u2014 para asegurarte de tener el dinero disponible para esa primera factura",
-        budgetAmountNote = "Esto asegura que tu dinero para gastar ya est\u00e9 ajustado tanto para gastos grandes futuros como pasados.",
         availableCashSectionTitle = "Efectivo disponible",
-        availableCashSectionBody = "El Efectivo Disponible es el n\u00famero que se muestra en la pantalla Solari. Se calcula " +
+        availableCashSectionBody = "El Efectivo Disponible es el n\u00famero principal que se muestra en la pantalla Solari. Se calcula " +
             "autom\u00e1ticamente a partir de tus cr\u00e9ditos de per\u00edodo, gastos e ingresos extra. " +
             "Con SYNC activado, se mantiene consistente en todos los dispositivos sin intervenci\u00f3n manual. " +
             "El resultado: un solo n\u00famero que te dice exactamente cu\u00e1nto puedes gastar.",
         gettingStartedTitle = "Primeros pasos",
         gettingStartedBody = "Sigue estos pasos para configurar tu presupuesto por primera vez:",
         step1Title = "Abre Ajustes",
-        step1Desc = "Toca el icono de engranaje arriba a la izquierda para configurar tu moneda, preferencias de visualizaci\u00f3n y categor\u00edas de transacciones.",
+        step1Desc = "Toca el icono de Ajustes arriba a la izquierda del Panel para configurar tu moneda, preferencias de visualizaci\u00f3n y categor\u00edas de transacciones.",
         step2Title = "Configura tu presupuesto",
-        step2Desc = "En Ajustes, toca \"Configurar tu presupuesto\" para abrir la Configuraci\u00f3n del presupuesto. Elige un per\u00edodo (Diario es lo recomendado para la mayor\u00eda).",
+        step2Desc = "En Ajustes, toca \"Configurar Presupuesto\" para abrir la Configuraci\u00f3n del presupuesto. Elige un per\u00edodo (Diario es lo recomendado para la mayor\u00eda).",
         step3Title = "Agrega fuentes de ingreso",
-        step3Desc = "En Configuraci\u00f3n del presupuesto, agrega todas tus fuentes de ingreso confiables \u2014 tu salario, ingresos extra regulares, etc. Configura el calendario de repetici\u00f3n de cada una (ej. \"Mes\" el 1 y el 15 para pagos quincenales).",
+        step3Desc = "En Configuraci\u00f3n del presupuesto, agrega todas tus fuentes de ingreso confiables \u2014 tu salario, ingresos extra regulares, etc. Configura el calendario de repetici\u00f3n de cada una (ej. \"Dos veces al mes\" el 1 y el 15 para pagos quincenales). Para pago cada dos semanas, elige repetici\u00f3n \"Semanal\" con 2 \"Semanas entre repeticiones\", luego Elegir fecha de inicio y selecciona tu pr\u00f3ximo pago. Si te pagan los viernes, elige el pr\u00f3ximo viernes y el presupuesto sabr\u00e1 que recibes este pago cada dos semanas en viernes. Si tu pago var\u00eda, no es problema. La app se ajusta cuando ingreses la transacci\u00f3n del pago. M\u00e1s informaci\u00f3n en la Ayuda de Configuraci\u00f3n del Presupuesto.",
         step4Title = "Agrega gastos recurrentes",
         step4Desc = "Ve a Gastos Recurrentes (el icono de sincronizaci\u00f3n en el panel principal) y agrega todas tus facturas regulares: alquiler, servicios, seguros, suscripciones, pagos de pr\u00e9stamos.",
         step5Title = "Empieza a registrar",
@@ -841,7 +825,7 @@ object SpanishStrings : AppStrings {
         tipPlanTitle = "Prep\u00e1rate para lo inesperado",
         tipPlanBody = "Usa las Metas de Ahorro para planificar cosas como llantas, reemplazo de electrodom\u00e9sticos, " +
             "regalos navide\u00f1os o vacaciones. Cuando ahorras un poco en cada per\u00edodo, " +
-            "estos gastos no se convierten en emergencias. La clave de la tranquilidad financiera " +
+            "estos gastos no se convierten en emergencias. La clave del control financiero " +
             "es eliminar las sorpresas.",
         tipPaycheckTitle = "Evita la trampa del d\u00eda de pago",
         tipPaycheckBody = "Muchas personas gastan de m\u00e1s justo despu\u00e9s del d\u00eda de pago y andan cortos antes del siguiente. " +
@@ -858,13 +842,13 @@ object SpanishStrings : AppStrings {
         featureBullet2 = "C\u00e1lculo inteligente del presupuesto que considera ingresos irregulares y el momento de cada gasto",
         featureBullet3 = "Reconocimiento autom\u00e1tico de gastos recurrentes e ingresos desde importaciones bancarias",
         featureBullet4 = "Metas de Ahorro \u2014 ahorra autom\u00e1ticamente para compras grandes y objetivos financieros",
-        featureBullet5 = "Amortizaci\u00f3n \u2014 distribuye compras grandes del pasado a lo largo del tiempo",
-        featureBullet6 = "Divisi\u00f3n de transacciones en m\u00faltiples categor\u00edas con modos de gr\u00e1fico circular, calculadora o porcentaje",
+        featureBullet5 = "Amortizaci\u00f3n \u2014 distribuye compras grandes a lo largo del tiempo",
+        featureBullet6 = "Divisi\u00f3n de transacciones en m\u00faltiples categor\u00edas con modos de gr\u00e1fico circular, calculadora o porcentaje, \u00a1o los suscriptores pueden escanear su recibo y nuestra IA completa la transacci\u00f3n por ti!",
         featureBullet7 = "Respaldo y restauraci\u00f3n cifrada de transacciones",
         featureBullet8 = "Importaci\u00f3n de extractos bancarios con categorizaci\u00f3n autom\u00e1tica",
         featureBullet9 = "Detecci\u00f3n de transacciones duplicadas",
         featureBullet10 = "Categor\u00edas totalmente personalizables con selecci\u00f3n de iconos",
-        featureBullet11 = "Soporte para m\u00faltiples monedas y formatos de fecha con archivado de transacciones",
+        featureBullet11 = "Soporte para m\u00faltiples monedas y formatos de fecha",
         featureBullet12 = "SYNC \u2014 comparte tu presupuesto entre dispositivos del hogar con cifrado de extremo a extremo (suscriptores)",
         featureBullet13 = "\u00a1Fotos! \u2014 adjunta fotos de recibos o de lo que compraste a tus transacciones (usuarios de pago)",
         featureBullet14 = "Widget \u2014 registra tus transacciones y ve tu Efectivo Disponible directamente en la pantalla de inicio (los usuarios gratuitos pueden instalarlo y probarlo, los de pago lo usan ilimitadamente)",
@@ -877,11 +861,14 @@ object SpanishStrings : AppStrings {
             "nadie. Tus respaldos autom\u00e1ticos (Ajustes \u2192 Respaldos) est\u00e1n protegidos por una contrase\u00f1a que t\u00fa eliges, " +
             "con cifrado de extremo a extremo de est\u00e1ndar industrial. Cuando activas SYNC, los datos se comparten entre " +
             "tus dispositivos vinculados con el mismo cifrado de extremo a extremo \u2014 el servidor en la nube solo almacena " +
-            "datos cifrados y no puede leer tus transacciones, montos ni nombres de comercios. Tu dinero, tus datos, tu control.",
+            "datos cifrados y no puede leer tus transacciones, montos ni nombres de comercios. \u00a1Tu dinero, tus datos, tu control! " +
+            "La funci\u00f3n de escaneo de recibos de nivel suscriptor s\u00ed descifra tu imagen del recibo en el servidor en la nube, " +
+            "pero solo para leerla (la mayor\u00eda se eliminan inmediatamente; sin embargo, nuestro proveedor conserva una peque\u00f1a " +
+            "fracci\u00f3n durante 24 h para control de calidad), y luego los datos se cifran de nuevo para enviarlos a tu dispositivo.",
         widgetTitle = "Widget de pantalla de inicio",
         widgetBody = "BudgeTrak incluye un widget de pantalla de inicio que muestra tu efectivo disponible " +
             "en estilo de pantalla Solari, para que puedas consultar tu presupuesto de un vistazo sin abrir la app. " +
-            "Agr\u00e9galo desde el selector de widgets de tu lanzador.",
+            "Agr\u00e9galo desde el selector de widgets de tu dispositivo.",
         widgetSolariDesc = "El widget muestra tu efectivo disponible actual en tarjetas Solari que " +
             "se adaptan autom\u00e1ticamente al modo claro y oscuro. Se escala suavemente al cambiar el tama\u00f1o del widget.",
         widgetButtonsDesc = "Los botones r\u00e1pidos de transacci\u00f3n (+/-) debajo de la pantalla Solari te permiten registrar " +
@@ -909,12 +896,12 @@ object SpanishStrings : AppStrings {
         paidSave = "Sin anuncios \u2014 se oculta el banner en la parte superior de todas las pantallas.",
         paidWidget = "Acceso completo al widget \u2014 transacciones ilimitadas desde el widget de pantalla de inicio y una pantalla Solari limpia, sin el mensaje de actualizaci\u00f3n.",
         paidPhotos = "Adjuntos de transacciones \u2014 adjunta hasta 5 fotos o PDFs (recibos, facturas o lo que quieras) a cada transacci\u00f3n.",
-        paidLoad = "Guardar y Cargar \u2014 exporta transacciones a CSV, Excel o PDF, e importa extractos bancarios desde CSV o Excel.",
-        paidAiCsv = "Categorizaci\u00f3n CSV con IA \u2014 al importar un extracto bancario, Gemini sugiere categor\u00edas para los comercios que a\u00fan no hayamos aprendido.",
+        paidLoad = "Guardar y Cargar \u2014 exporta transacciones a CSV, Excel o PDF, e importa extractos bancarios desde CSV (la mayor\u00eda de los bancos los ofrecen para descargar desde su sitio o app).",
+        paidAiCsv = "Categorizaci\u00f3n CSV con IA \u2014 al importar un extracto bancario, nuestra IA ayuda a sugerir categor\u00edas para los comercios.",
         paidSimulation = "Simulaci\u00f3n de flujo de efectivo \u2014 un gr\u00e1fico interactivo de 18 meses en la p\u00e1gina de Metas de Ahorro que muestra c\u00f3mo calculamos el efectivo que necesitas tener disponible, y te permite experimentar con tasas de ahorro y gasto.",
         paidAdFree = "El nivel Suscriptor (\$4.99/mes) a\u00f1ade dos funciones avanzadas adem\u00e1s de todo lo anterior:",
-        subBulletOcr = "Escaneo de recibos con IA \u2014 toca el icono de chispa para autocompletar comercio, fecha, monto y divisi\u00f3n por categor\u00edas a partir de una foto del recibo (Gemini 2.5 Flash-Lite).",
-        subBulletSync = "Crear y administrar grupos SYNC \u2014 la funci\u00f3n m\u00e1s poderosa de BudgeTrak. Comparte un presupuesto con la familia, un peque\u00f1o negocio o un club. Solo el administrador necesita suscribirse; los dem\u00e1s miembros pueden unirse gratis o comprar la mejora \u00fanica de Usuario de Pago. Nuestros \$4.99/mes son aproximadamente la mitad del costo de los servicios competidores y cubren el costo de operar el rel\u00e9 en la nube cifrado.",
+        subBulletOcr = "Escaneo de recibos con IA \u2014 toca el icono de chispa para autocompletar comercio, fecha, monto y categor\u00eda (\u00a1incluso multicategor\u00eda!) a partir de una foto del recibo. M\u00e1s informaci\u00f3n en la Ayuda de la p\u00e1gina de Transacciones.",
+        subBulletSync = "Crear y administrar grupos SYNC \u2014 \u00a1la funci\u00f3n m\u00e1s poderosa de BudgeTrak! Comparte un presupuesto con la familia, un peque\u00f1o negocio o un club. Solo el administrador necesita suscribirse; los dem\u00e1s miembros pueden unirse gratis o comprar la mejora \u00fanica de Usuario de Pago. Nuestros \$4.99/mes son aproximadamente la mitad del costo de los servicios competidores y cubren el costo de operar el rel\u00e9 en la nube cifrado.",
         subFooterNote = "Los usuarios gratuitos pueden unirse a un grupo SYNC existente sin suscripci\u00f3n. El estado de Suscriptor incluye autom\u00e1ticamente todos los beneficios de Usuario de Pago."
     )
 
@@ -2032,5 +2019,84 @@ object SpanishStrings : AppStrings {
         deleteConfirmBody = { targetName -> "\u00bfEliminar \"$targetName\"? Esta acci\u00f3n no se puede deshacer." },
         sampleDialogBody = "Texto del cuerpo en la superficie del di\u00e1logo. La banda del encabezado de arriba " +
             "ti\u00f1e los botones principales y otros elementos de acento en toda la app.",
+    )
+
+    override val colorsHelp = ColorsHelpStrings(
+        title = "Ayuda de Colores",
+        overviewTitle = "Descripci\u00f3n general",
+        overviewBody = "La p\u00e1gina Colores te permite personalizar el aspecto de BudgeTrak. Puedes " +
+            "editar el tema de colores (encabezados de p\u00e1gina, fondo, di\u00e1logos, texto, pantalla " +
+            "Solari) y la paleta de gr\u00e1ficos (los 12 colores usados en gr\u00e1ficos circulares y de " +
+            "barras). Los temas y paletas integrados son de solo lectura: editar cualquier color crea " +
+            "autom\u00e1ticamente una copia personalizada que puedes renombrar, guardar y alternar libremente.",
+        headerTitle = "Barra superior",
+        headerBody = "La barra superior ofrece navegaci\u00f3n y acceso a la ayuda:",
+        backDesc = "Vuelve a la p\u00e1gina de Ajustes.",
+        helpDesc = "Abre esta p\u00e1gina de ayuda.",
+        modeTitle = "Selector de modo",
+        modeBody = "El primer men\u00fa desplegable elige qu\u00e9 est\u00e1s editando. Hay cuatro modos: " +
+            "Colores en Modo Claro, Colores en Modo Oscuro, Colores de Gr\u00e1ficos (Claro) y Colores " +
+            "de Gr\u00e1ficos (Oscuro). Cada par claro/oscuro te permite configurar una apariencia " +
+            "diferente para el aspecto correspondiente del sistema. La vista previa en vivo en la " +
+            "parte inferior de la p\u00e1gina se muestra en el modo seleccionado, as\u00ed que puedes editar " +
+            "tu tema oscuro aunque tu dispositivo est\u00e9 en modo claro.",
+        dropdownTitle = "Tema / Paleta de gr\u00e1ficos",
+        dropdownBody = "El segundo men\u00fa es sensible al contexto: en un modo base lista los temas " +
+            "(por defecto \"Default\" y \"Bubblegum\"); en un modo de gr\u00e1fico lista las paletas (por " +
+            "defecto \"Bright\", \"Pastel\", \"Sunset\"). Los integrados aparecen marcados con " +
+            "\" (Integrado)\" tras su nombre y no se pueden modificar ni eliminar. En el momento en " +
+            "que editas cualquier campo de un integrado, BudgeTrak crea silenciosamente una copia " +
+            "personalizada llamada \"<original> (Custom)\" para que el original quede intacto. Despu\u00e9s " +
+            "puedes usar \"Nuevo tema\" / \"Nueva paleta\" para clonar y renombrar, y \"Eliminar\" para " +
+            "quitar entradas personalizadas.",
+        slotTitle = "Ajuste de color",
+        slotBody = "En los modos base, el tercer men\u00fa elige qu\u00e9 color est\u00e1s editando. Los ocho campos son:\n\n" +
+            "\u2022 Encabezado \u2014 fondo de la barra superior en cada pantalla, m\u00e1s la barra de iconos " +
+            "inferior del panel y las zonas de la barra de estado y navegaci\u00f3n del sistema\n" +
+            "\u2022 Texto del encabezado \u2014 texto e iconos que se muestran sobre el color del Encabezado\n" +
+            "\u2022 Fondo de p\u00e1gina \u2014 fondo principal de cada pantalla\n" +
+            "\u2022 Encabezado de ventana \u2014 banda coloreada en la parte superior de los di\u00e1logos y popups\n" +
+            "\u2022 Texto del encabezado de ventana \u2014 texto e iconos en la banda del Encabezado de " +
+            "ventana, m\u00e1s los botones de acci\u00f3n de los di\u00e1logos (el bot\u00f3n Cancelar at\u00e9nuado deriva de estos dos)\n" +
+            "\u2022 Fondo de ventana \u2014 color del cuerpo de los di\u00e1logos y popups\n" +
+            "\u2022 Texto general \u2014 color de texto del cuerpo predeterminado en toda la app\n" +
+            "\u2022 Fondo de Solari \u2014 color del marco alrededor de la pantalla flip del panel. " +
+            "El borde de Solari se aclara autom\u00e1ticamente hacia el blanco, as\u00ed que no hay un campo aparte.",
+        chartSlotTitle = "Posici\u00f3n del gr\u00e1fico",
+        chartSlotBody = "En los modos de gr\u00e1fico, la tercera fila muestra los 12 colores de la paleta " +
+            "como peque\u00f1as muestras. Toca una para seleccionarla (un borde m\u00e1s grueso marca la " +
+            "seleccionada) y luego toca el l\u00e1piz para editarla. Los gr\u00e1ficos circulares y de barras " +
+            "asignan el segmento m\u00e1s grande a la posici\u00f3n 1, el siguiente a la 2, y as\u00ed, por lo que " +
+            "las primeras posiciones tienen el mayor impacto visual.",
+        editTitle = "Editar un color",
+        editBody = "El cuadrado coloreado debajo del men\u00fa muestra el valor actual del campo o " +
+            "segmento del gr\u00e1fico seleccionado. Toca el cuadrado o el l\u00e1piz para abrir el selector " +
+            "de color. Aparece un \u00edcono de deshacer junto al l\u00e1piz cuando has cambiado un color " +
+            "respecto a su valor integrado; t\u00f3calo para restaurar ese campo al predeterminado. El " +
+            "deshacer es consciente del linaje: una paleta personalizada derivada de Sunset deshace " +
+            "a la versi\u00f3n de Sunset en ese campo, no a Bright.",
+        pickerTitle = "Selector de color",
+        pickerBody = "El selector de color muestra una rueda HSV (arrastra o toca para fijar matiz y " +
+            "saturaci\u00f3n), un deslizador de Brillo debajo y un campo Hex al final para escribir " +
+            "c\u00f3digos exactos. La vista previa del color actual aparece a la izquierda del campo Hex. " +
+            "Toca Guardar para aplicar o Cancelar para descartar. El selector se desplaza cuando se " +
+            "abre el teclado, as\u00ed que el campo Hex siempre est\u00e1 al alcance.",
+        newTitle = "Nuevo tema / Nueva paleta",
+        newBody = "El bot\u00f3n \"Nuevo tema\" o \"Nueva paleta\" al final de la p\u00e1gina clona el tema " +
+            "o paleta seleccionado bajo un nuevo nombre que t\u00fa eliges. \u00datil para mantener varias " +
+            "variaciones lado a lado sin perder el trabajo anterior. Los nombres deben ser \u00fanicos " +
+            "(sin distinguir may\u00fasculas/min\u00fasculas). El clon hereda los valores del original; puedes " +
+            "editarlo como cualquier otra entrada personalizada.",
+        deleteTitle = "Eliminar",
+        deleteBody = "Aparece un bot\u00f3n Eliminar rojo junto a \"Nuevo tema\" / \"Nueva paleta\" solo " +
+            "cuando la entrada seleccionada es personalizada (los integrados nunca se pueden " +
+            "eliminar). Eliminar borra la entrada permanentemente. Si la entrada eliminada era la " +
+            "selecci\u00f3n activa, la selecci\u00f3n activa vuelve al integrado predeterminado correspondiente.",
+        savingTitle = "Guardado y almacenamiento",
+        savingBody = "Cada edici\u00f3n se guarda autom\u00e1ticamente en este dispositivo. Los temas y " +
+            "paletas se guardan localmente: se incluyen en tus respaldos cifrados (Ajustes \u2192 Respaldos) " +
+            "pero deliberadamente NO se comparten entre los dispositivos de un grupo SYNC. As\u00ed puedes " +
+            "usar un aspecto diferente en cada uno de tus dispositivos mientras compartes los mismos " +
+            "datos de presupuesto.",
     )
 }

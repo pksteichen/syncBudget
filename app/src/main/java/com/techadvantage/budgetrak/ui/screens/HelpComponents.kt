@@ -156,6 +156,41 @@ internal fun HelpIconRow(
     }
 }
 
+/**
+ * HelpIconRow overload with a composable icon slot — for cases where the
+ * bullet icon is a layered drawable that can't be expressed as a single
+ * ImageVector/Painter (e.g., the dashboard's Add Transaction icon which
+ * stacks a receipt-body drawable with a blue-plus overlay).
+ */
+@Composable
+internal fun HelpIconRow(
+    icon: @Composable () -> Unit,
+    label: String,
+    description: String,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(vertical = 3.dp)
+    ) {
+        androidx.compose.foundation.layout.Box(
+            modifier = Modifier.size(20.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            icon()
+        }
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            buildAnnotatedString {
+                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(label) }
+                append(" \u2014 $description")
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+            lineHeight = 20.sp
+        )
+    }
+}
+
 @Composable
 internal fun HelpDividerLine() {
     HorizontalDivider(

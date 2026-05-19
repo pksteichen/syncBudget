@@ -41,6 +41,7 @@
 20. Data Models
 21. Persistence Strategy
 22. PieChartEditor Component
+22a. Custom Themes
 23. Help System
 24. Error Handling
 25. Android Manifest Configuration
@@ -2043,15 +2044,99 @@ Touch captured via `pointerInput`; angle from center via `atan2`; handle positio
 
 ### 22.4 Color Palettes
 
-Four palettes with paired light/dark variants (8 total): Bright, Pastel, Sunset, Earthy.
+Three built-in palettes with paired light/dark variants (6 color sets total): Bright, Pastel, Sunset. The user can save additional custom palettes via the Colors page — see §22a. Each palette holds exactly 12 colors per mode; the pie/bar chart assigns the largest wedge to slot 1, second-largest to slot 2, and so on.
 
-## 23. Help System
+## 22a. Custom Themes (v2.10+, merged 2026-05-19)
+
+User-customizable color themes and chart palettes. Settings → Colors opens a dedicated editor where the user picks one of four edit modes (Light Mode / Dark Mode / Chart Light / Chart Dark), selects a theme or palette to edit, and changes individual color "slots" via an HSV color picker. Editing any slot on a built-in silently forks a custom copy named `"<original> (Custom)"`. Custom entries can be renamed via "New theme" / "New palette" (which clones-with-rename) and removed via "Delete" — built-ins are immutable and undeletable.
+
+### 22a.1 Themable color roles
+
+Eight roles per light/dark mode in `ThemeColorSet`:
+
+| Field | Picker label | Drives |
+|-------|--------------|--------|
+| `cardBackground` | Header | Top app bar + dashboard icon bar + status/nav bar inset; also `MaterialTheme.colorScheme.primary` so all "primary"-tinted UI follows it |
+| `cardText` | Header Text | Icons + text on the Header color; also the dashboard icon bar's icon tint |
+| `background` | Page Background | Each screen's overall page background |
+| `surface` | Window Background | Body fill of dialogs and popups (Material's `surface`) |
+| `surfaceHeader` | Window Header | Colored band at the top of dialogs/popups; also fills `DialogPrimaryButton` |
+| `surfaceHeaderText` | Window Header Text | Text/icons on the Window Header band; also `DialogPrimaryButton`'s content color |
+| `onSurface` | General Text | Default body-text color (Material's `onSurface`) |
+| `displayBackground` | Solari Background | Frame color around the dashboard's Solari flip display |
+
+Auto-derived inside `SyncBudgetTheme` (no slots needed):
+- `MaterialTheme.colorScheme.primary` = `cs.cardBackground`; `onPrimary` derived from `cardBackground.luminance()` (black if >0.5, else white).
+- Solari border = `solariBorderFor(displayBackground)` = `lerp(bg, White, 0.15f)` — a small lift toward white for a "lifted" edge.
+- Dialog footer band = `dialogFooterFor(surfaceHeader, surface)` = `lerp(surfaceHeader, surface, 0.85f)` — subtle tinted strip paired with the user's Window Header.
+- `DialogSecondaryButton` container = `lerp(surfaceHeader, surfaceHeaderText, 0.3f)` — muted-header tint so Cancel reads as a less-prominent sibling of Primary.
+
+### 22a.2 Locked colors (intentionally non-themable)
+
+Convention- or policy-locked, never driven by the user's theme:
+- **Income green / Expense red** — Western finance convention; reinforced by text labels everywhere they appear so the UI still parses for red-green-colorblind users. Revisit if/when shipping an East-Asian locale (CN/JP/KR finance UX inverts: red=up, green=down).
+- **Sync-indicator states** (green/blue/yellow/red/grey) — convention.
+- **Dialog Danger (red) / Warning (orange)** — convention; only `DialogStyle.DEFAULT` follows `surfaceHeader`. DANGER/WARNING headers stay hard-coded red/orange, and `DialogDangerButton`/`DialogWarningButton` are locked.
+- **AdMob "Ad" badge yellow (#FFCC00) + black stroke** — AdMob policy.
+- **Native-ad overlay backdrop (#B3000000)** — readability backstop.
+- **UpgradeBadge yellow/black in InHouseAd** — mirrors Ad badge.
+
+### 22a.3 Built-ins
+
+Themes: **Default** (light blue cards on greenish-blue page; dark charcoal cards on dark green page) and **Bubblegum** (light hot-pink cards on pale peach page; dark deep-aubergine on dark mauve). Defined in `BuiltInThemes.ALL` in `ThemeProfile.kt`.
+
+Chart palettes: **Bright**, **Pastel**, **Sunset** (defined in `BuiltInChartPalettes.ALL`).
+
+### 22a.4 Persistence
+
+- **Themes** → `themes.json` in `filesDir`. Holds user-created `ThemeProfile` entries only (built-ins live in code).
+- **Chart palettes** → `chart_palettes.json` in `filesDir`. Same pattern.
+- **Active selections** → `app_prefs` keys `selectedThemeName` + `selectedChartPaletteName`. One-time migration from the legacy `chartPalette` pref runs inside `ChartPalettesRepository.getSelected`.
+- **Lineage** — optional `forkedFrom: String?` on both `ThemeProfile` and `ChartPalette` names the source built-in. Drives the undo icon's "restore to default" target so a Sunset-forked custom undoes to Sunset's value, not Bright's.
+- **Backwards-compat parsing** — `colorSetFromJson` silently ignores removed keys (`primary`, `displayBorder`, `incomeGreen`, `expenseRed`) for older user-saved themes. New `surfaceHeader` / `surfaceHeaderText` fields fall back to `BuiltInThemes.DEFAULT.light` / `.dark` values via `fromJson` passing the mode-appropriate defaults — don't reintroduce the single-default fallback bug.
+- **Backup behavior** — themes and palettes are included in full-backup mode but deliberately NOT in joinSnapshot, so they stay local-only and survive group-join. Different SYNC devices can use different looks while sharing the same budget data.
+
+### 22a.5 Button system
+
+`Theme.kt` defines the page-level button helper used outside dialogs:
+
+- **`ScreenPrimaryButton`** — filled button with `containerColor = headerBackground`, `contentColor = headerText`, 8dp rounded shape, 0.5dp text-colored border. Used on every page (Settings, BudgetConfig, RecurringExpenses, SavingsGoals, Amortization, Sync, Transactions filter row, ColorsScreen "New theme") in place of the prior `OutlinedButton` style.
+
+Dialog buttons (in `Theme.kt`):
+- **`DialogPrimaryButton`** — filled with `surfaceHeader` / `surfaceHeaderText`; 500 ms click debounce.
+- **`DialogSecondaryButton`** — muted-header lerp (see §22a.1).
+- **`DialogDangerButton`** — `#C62828` / white, convention-locked.
+- **`DialogWarningButton`** — `#E65100` / white, convention-locked.
+
+All five themed buttons share a 0.5dp `BorderStroke` in their content color.
+
+Exceptions intentionally NOT converted to `ScreenPrimaryButton`:
+- `SyncScreen` Dissolve Group / Leave Group — `OutlinedButton` with red Text (danger semantic).
+- `TransactionsScreen` bank-import tab buttons — already pass explicit `ButtonDefaults.outlinedButtonColors`.
+- `MainActivity` dialog backup-folder picker — inside a dialog body.
+- `WidgetTransactionActivity` — uses its own MaterialTheme outside the `SyncBudgetTheme` tree.
+
+### 22a.6 ColorWheelPicker (`ui/theme/ColorWheelPicker.kt`)
+
+HSV color picker dialog. Renders an angular hue/saturation wheel via `Canvas` + `Brush.sweepGradient` and `Brush.radialGradient` for the white center; a Brightness slider beneath the wheel; a hex input field with live two-way binding. The dialog uses the standard `AdAwareDialog` + scrollable body + `PulsingScrollArrows` pattern so the hex field stays reachable when the IME opens.
+
+**State-management note** (fixed 2026-05-19): the HSV state vars (`hue` / `sat` / `value` / `hexInput`) are seeded **once** from the initial color via `remember { … }` — NOT `remember(color) { … }`. Re-keying on `color` recreates the mutable state objects on every emit, leaving `HueSatWheel`'s `pointerInput(Unit)` block holding stale references to the previous state and causing the brightness slider's value to snap back to the originally-loaded one as soon as the wheel was touched. Don't reintroduce keyed state here.
+
+### 22a.7 ColorsScreen (`ui/screens/ColorsScreen.kt`)
+
+The editor itself. Standard screen chrome (`CenterAlignedTopAppBar` with back arrow + help icon, Scaffold, LazyColumn, 24dp outer padding, 16dp item spacing).
+
+**In-page preview wrapper** — the page body wraps its Scaffold in a nested `MaterialTheme` + `CompositionLocalProvider(LocalSyncBudgetColors provides …)` using `currentTheme` + `previewDark` (driven by Mode, not system theme). The page renders in the theme being edited even if the device is in the opposite mode. Tool dialogs (picker / new / delete) intentionally compose against the OUTER theme so they remain readable mid-edit.
+
+Slot labels and all other in-screen copy are localized via `AppStrings.colors` (`ColorsStrings` data class, 36 fields).
+
+
 
 ### 23.1 Architecture
 
 Each major screen has a dedicated help screen accessible from a help icon in its top app bar. Help screens are pure Composables built on shared blocks from `HelpComponents.kt` (165 lines).
 
-### 23.2 Help Screen Inventory
+### 23.2 Help Screen Inventory (11 screens)
 
 | Help Screen | Lines |
 |-------------|-------|
@@ -2062,6 +2147,7 @@ Each major screen has a dedicated help screen accessible from a help icon in its
 | RecurringExpensesHelpScreen | 325 |
 | SavingsGoalsHelpScreen | 300 |
 | AmortizationHelpScreen | 271 |
+| ColorsHelpScreen | 148 |
 | SyncHelpScreen | 116 |
 | SimulationGraphHelpScreen | 88 |
 | BudgetCalendarHelpScreen | 87 |
@@ -3121,6 +3207,7 @@ Estimates from 2026-04 (40 K groups, 100 K devices, 5 sessions/day, 2 changes/se
 | 2.10.16 | May 9 2026 | **Banner ads → Native Advanced, video-aware refresh + mute discipline** (versionCode 32; first attempt at versionCode 31 uploaded the AAB but Play rejected the publish-edit because the Spanish `whatsnew-es-419` notes were 515 chars, over Play's 500-char limit — Spanish trimmed and versionCode bumped for the second dispatch). After a 4-iteration arc through anchored adaptive / custom `AdSize(width, height)` / fixed `AdSize.LEADERBOARD`-or-`BANNER` constants confirmed every banner approach had a letterbox or clipping failure mode in at least one device class, switched to `NativeAdView` + `AdLoader.forNativeAd`. Native sidesteps the issue entirely: app renders the layout, AdMob delivers asset data (headline / icon / image / CTA / advertiser / body / `MediaView`). Two custom XML templates: `native_ad_small.xml` (single-row card, 64 dp slot, `widthDp < 400`), `native_ad_medium.xml` (horizontal card — text column left + 160×120 dp `MediaView` right, 144 dp slot, `widthDp ≥ 400`). Mandatory yellow "Ad" badge per AdMob policy + FTC native-ad disclosure. Theme-driven colors via `LocalSyncBudgetColors.current.headerText` and a runtime `GradientDrawable` from `MaterialTheme.colorScheme.primary` for the CTA so it follows light/dark. 60 s refresh `LaunchedEffect` keyed on `(nativeAdEnabled, isMediumTier, isAppActiveCompose)` — pauses backgrounded, resumes on foreground (effect re-keys + immediate fresh load). Video discipline: `NativeAdOptions.Builder().setVideoOptions(VideoOptions.Builder().setStartMuted(true))` locks muted start locally (AdMob also defaults muted, this is belt-and-suspenders); separate `DisposableEffect` `ON_STOP` lifecycle observer calls `nativeAd?.mediaContent?.videoController?.mute(true)` so a user who unmuted before backgrounding sees the ad re-muted on return; `MediaView`'s speaker mute/unmute icon overlay is auto-rendered by AdMob (policy requirement, no app code). `com.google.android.gms:play-services-ads-native-templates` artifact does not exist on Maven (404 on both `repo1.maven.org` and `dl.google.com/.../maven2`) — Google ships its native templates as GitHub-sample source code only, so BudgeTrak ships custom layouts instead. Manifest-merger fix on `AD_SERVICES_CONFIG` retained from v2.10.09 (`feedback_admob_manifest_merger.md`). Production-promotion checklist now requires **two** Native Advanced ad units (one for the small phone template, one for the medium tablet template) per `memory/project_ad_implementation.md`. |
 | 2.10.10–2.10.23 | May 9–12 2026 | **Play Billing Layer 1 + Layer 2 + Dashboard Help rewrite + appInstanceId in diag dump + Gemini API key restriction.** Play Billing Layer 1 (v2.10.10, vc 25): `data/billing/BillingService.kt` wraps Play Billing Library 7+ for the two products (`paid_upgrade` $9.99 one-time, `subscriber` $4.99/mo); `MainViewModel.refreshBillingState` derives `isPaidUser` / `isSubscriber` / `subscriptionExpiry` from `BillingClient.queryPurchasesAsync`, with 7-day TTL on stale results (`lastSuccessfulBillingCheck` pref) and debug-build override checkboxes; pairs with existing 7-day SYNC admin grace period. Dashboard Help dialog overlay + feature parity (v2.10.20, vc 36). Help-page Paid/Subscriber section rewrite + bullet reorder (v2.10.21, vc 37) — `paidPhotos` mentions PDFs, parallel `HelpSubSectionTitle` for Paid + Subscriber subsections. Layer 2 server-side purchase verification (v2.10.22, vc 38; §28.7.7, §27.2a) — Gen 2 callable `verifyPurchase` reads Play Developer API authoritative purchase state; `data/billing/EntitlementVerifier.kt` wraps with 24h SharedPreferences cache; `MainViewModel.reconcileEntitlement` overrides local Layer 1 `PURCHASED` with server `REFUNDED`; closes the 24h+ Console-admin refund propagation lag. **appInstanceId in diag dump** (v2.10.22): `BudgeTrakApplication.appInstanceId` cached async on startup from `FirebaseAnalytics.appInstanceId`; `DiagDumpBuilder.build` surfaces it under `DeviceId:` so dump files self-identify their GA4 `user_pseudo_id` for BigQuery correlation. **Gemini API key restriction** (2026-05-12; §28.12.2a) — Android-app cert restriction (Play Signing + Upload + debug keystore) + Gemini-only API restriction applied at Google Cloud API gateway. Reference memory `reference_gemini_api_key.md` documents rotation gotcha (new keys require SA binding). v2.10.23 (vc 39): doc + memory updates for the above; main branch promoted to match dev. |
 | 2.10.04 | May 3 2026 | **Restore-list merge fix + first end-to-end CI publish + side-by-side debug install + Play Integrity setup post-mortem.** (versionCode 19, first AAB published via CI auto-publish to Play Console internal testing track.) Restore dialog (`MainActivity.kt`) now merges the SAF tree-URI listing with `BackupManager.listAvailableBackups()` (was choosing one or the other); fixes orphan `.enc` files dropping off the restore list as soon as the user creates their first own auto-backup. CI workflow (`.github/workflows/release.yml`) gains a `release_status` workflow_dispatch input (default `draft` while the app is in Google's "Draft app" state pre-12/14-closed-test gate; flip to `completed` once production access is granted). New `whatsNew/whatsnew-en-US` + `whatsnew-es-419` notes refreshed for v2.10.04 and trimmed under the 500-char Play API limit (es-419 was 555). Side-by-side debug install: debug buildType gets `applicationIdSuffix = ".debug"` + `versionNameSuffix = "-debug"` so debug-keystore-signed sideloads coexist with the Play-Store-signed release on the same device; second Firebase Android app entry registered for `com.techadvantage.budgetrak.debug`; pinned debug token UUID registered under both app entries' Manage-debug-tokens lists; `app/google-services.json` carries both packages. **Play Integrity setup post-mortem (§28.6.5):** documented the four mandatory Console steps after a six-hour debug session in which release-build group creation kept failing with `PERMISSION_DENIED` while debug builds worked fine. Root cause: the Play app signing key SHA-256 wasn't registered in Firebase Project settings; only the upload-key SHA-1 was. Play strips the upload signature and re-signs the installable APK with its own key, so the runtime fingerprint Play Integrity attests is different from the upload-key fingerprint, and Firebase's App Check verifier silently rejects every token. `firebase-config-reference.txt` §5b rewritten with the verified-working configuration. |
+| Custom Themes feature | May 17–19 2026 | **§22a Custom Themes added; §22.4 corrected; §23.2 inventory updated.** Eight-role `ThemeColorSet` (cardBackground / cardText / background / surface / surfaceHeader / surfaceHeaderText / onSurface / displayBackground) with auto-derived `MaterialTheme.colorScheme.primary`, Solari border (`solariBorderFor`), dialog footer band (`dialogFooterFor`), and DialogSecondaryButton tint. Two built-in themes (Default + Bubblegum). Three built-in chart palettes (Bright/Pastel/Sunset; §22.4 corrected to drop nonexistent "Earthy" + add user-saved). Editable via `ColorsScreen` reached from Settings → Colors, with `ColorsHelpScreen` reached via a help icon in the top app bar (11th help screen in §23.2 inventory). `ScreenPrimaryButton` introduced for page-level filled buttons (Header color); ~30 OutlinedButton sites migrated. Status bar + nav bar inset extend `headerBackground` under the system bars. 0.5dp text-colored border on all five themed buttons. Sync indicator's tap-to-sync + long-press-dismiss-repair + pink-strobe-on-repair-alert now gated by `BuildConfig.DEBUG` — release builds drop those affordances (manual sync is still available via the SYNC page's Sync Now button). Persistence: `themes.json` + `chart_palettes.json` in `filesDir`; selections in `app_prefs` under `selectedThemeName` / `selectedChartPaletteName`; bundled into full backup but NOT joinSnapshot so they stay device-local. One-time legacy pref migration from old `chartPalette` key. Lineage-aware undo via optional `forkedFrom` on profiles. Dashboard Help refresh: navigation-bar section folded into the new "Dashboard Icon Bar" section with all six icons (Add Transaction layered drawable + 5 nav icons); pie-chart help illustration uses Sunset light palette colors; old Safe Budget Amount subsection + Chart Palette subsection removed (content consolidated). Repeat-type dropdown labels renamed "Day"/"Week"/"Month" → "Daily"/"Weekly"/"Monthly". Per-screen help-page editor workflow (markdown round-trip in `/Download/BudgeTrak/help-edits/`) — see `memory/feedback_help_page_editor_workflow.md`. Feature memory: `memory/project_custom_themes.md`. Merged into `dev` 2026-05-19. |
 
 ---
 

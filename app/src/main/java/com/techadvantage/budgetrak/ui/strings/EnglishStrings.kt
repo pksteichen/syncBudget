@@ -38,10 +38,10 @@ object EnglishStrings : AppStrings {
         applyToPastDeny = "No, future only",
         sourceLabel = "Source",
         merchantLabel = "Merchant/Service",
-        repeatTypeDays = "Day",
-        repeatTypeWeeks = "Week",
+        repeatTypeDays = "Daily",
+        repeatTypeWeeks = "Weekly",
         repeatTypeBiWeekly = "Every 2 Weeks",
-        repeatTypeMonths = "Month",
+        repeatTypeMonths = "Monthly",
         repeatTypeBiMonthly = "Twice per Month",
         repeatTypeAnnual = "Annual",
         budgetPeriodDaily = "Daily",
@@ -734,14 +734,15 @@ object EnglishStrings : AppStrings {
         budgetLabelTitle = "Budget Label (Below the Number)",
         budgetLabelBody = "The label beneath the digits shows your budget amount \u2014 for example, " +
             "\"\$42.50/day\" or \"\$297.50/week\". This tells you how much is added to " +
-            "your available cash each period. If your budget is not yet configured, " +
+            "your available cash each period. If your budget is not yet configured or results in a negative number, " +
             "it shows \"Not configured\".",
+        budgetPeriodExplTitle = "Budget Configuration",
         budgetPeriodExpl = "You can configure your budget to update daily, weekly, or monthly, and to start " +
             "on your custom schedule. However, we strongly encourage a daily budget! A daily budget is much " +
             "easier to follow. Longer term budgets sometimes result in a person spending too much early on " +
-            "and ending up short. The technology behind our budgeting model averages out your income and " +
+            "and ending up short. Our budgeting model averages out your income and " +
             "recurring expenses using a detailed simulation far into the future, and then calculates exactly " +
-            "how much you can spend each day (if you choose) to keep from going negative. Even if your income " +
+            "how much you can spend each day to keep from going negative. Even if your income " +
             "is erratic and your bills are spread out throughout the month or year, the app will give you a " +
             "fixed number you can rely on to keep you in control. See the Budget Configuration Help page for " +
             "more details (and How the Budget Works below).",
@@ -752,11 +753,7 @@ object EnglishStrings : AppStrings {
         navBarTitle = "Navigation Bar",
         navBarBody = "The bottom navigation bar provides quick access to all major features:",
         navTransactionsDesc = "Record and manage your income and expenses. Import bank statements, search, filter, and categorize.",
-        navSavingsDesc = "Plan and save for future expenses or financial targets. Choose a fixed per-period contribution, " +
-            "and you can even use a target date to calculate it automatically. While subscribers can access a detailed " +
-            "chart on this page that shows your future cash flow (which can be modified to simulate cash accumulation " +
-            "over time at other spending levels), free users also have access to the most important number \u2014 how much " +
-            "do you need to have saved right now to pay your future bills?",
+        navSavingsDesc = "Plan and save for future expenses or financial targets.",
         navAmortizationDesc = "Spread a recent large expense across multiple budget periods so it doesn't hit your budget all at once.",
         navRecurringDesc = "Register bills, subscriptions, and loan payments so the budget calculator accounts for them automatically.",
         navCalendarDesc = "View a calendar showing all your upcoming bills and income.",
@@ -766,14 +763,10 @@ object EnglishStrings : AppStrings {
         chartTitleBarTitle = "Chart Title Bar",
         chartRangeBullet = "Range button (left) \u2014 cycles through time ranges.",
         chartToggleBullet = "Chart type toggle (right) \u2014 switch between pie chart and bar chart views",
-        chartIconsTitle = "Pie Chart Icons",
-        chartIconsBody = "Category icons are displayed inside their pie wedges in a contrasting color " +
-            "(white on dark wedges, black on light wedges) for readability. Categories with " +
-            "very small slices (less than 4% of spending) have their icons stacked along the " +
-            "left margin of the chart in the wedge's color. Tap any icon to see the category " +
-            "name and amount.",
-        chartPaletteTitle = "Chart Palette",
-        chartPaletteBody = "The colors used in the chart follow the chart palette you pick in " +
+        chartIconsTitle = "Pie Chart & Bar Graph Icons",
+        chartIconsBody = "Category icons are displayed inside their pie wedges. " +
+            "Tap any icon to see the category name and amount. " +
+            "The colors used in the chart follow the chart palette you pick in " +
             "Settings \u2192 Colors. Three palettes ship built-in (Bright, Pastel, Sunset), " +
             "and you can also save your own. Each palette has separate light- and dark-mode " +
             "color sets so the chart stays readable in both modes.",
@@ -781,41 +774,29 @@ object EnglishStrings : AppStrings {
         quickButtonsBody = "Below the chart, a row of icons gives one-tap access to the most-used " +
             "areas of the app. From left to right: Add Transaction, Transactions, Savings Goals, " +
             "Amortization, Recurring Expenses, and Budget Calendar.",
-        quickAddIncomeDesc = "The leftmost icon (receipt with a pulsing blue plus) opens the Add " +
-            "Transaction dialog in Expense mode. Toggle to Income via the pill at the top of the " +
-            "dialog. The pulse draws your eye to the most common action.",
+        quickAddIncomeDesc = "Opens the Add Transaction dialog in Expense mode. Toggle to Income via " +
+            "the pill at the top of the dialog. The pulse draws your eye to the most common action.",
         quickAddExpenseDesc = "Opens the Add Expense dialog. The transaction is saved and available cash decreases.",
-        quickMatchingNote = "Transactions added from the dashboard go through the same matching checks as " +
-            "the Transactions screen: duplicate detection, recurring expense matching, " +
-            "amortization matching, and budget income detection.",
+        quickMatchingNote = "Transactions added go through matching checks: duplicate detection, " +
+            "recurring expense matching, amortization matching, and budget income detection to help " +
+            "keep things organized and accurate. Read more about this in the Transactions page Help.",
         superchargeTitle = "Supercharge",
         superchargeBody = "The bolt icon in the lower-right corner of the Solari board opens Supercharge. " +
-            "This feature lets you make extra one-time contributions to your Savings Goals " +
+            "This lets you make extra one-time contributions to your Savings Goals " +
             "from your available cash.",
         superchargeIconDesc = "Allocate extra funds to one or more Savings Goals from your current available cash.",
-        superchargeDialogBody = "In the Supercharge dialog, enter an amount for each goal you want to boost. " +
-            "The total is deducted from your available cash and added to the goals' saved amounts. " +
-            "This is useful when you have surplus cash and want to reach a goal faster.",
+        superchargeDialogBody = "This is useful when you have surplus cash and want to reach a goal faster.",
         howBudgetWorksTitle = "How the Budget Works",
         howBudgetWorksBody = "The budget engine runs a cash flow simulation using your income schedule and " +
-            "recurring expenses to determine a safe spending amount for each budget period.",
-        safeBudgetTitle = "Safe Budget Amount",
-        safeBudgetBody = "This is the maximum you can spend per period (day, week, or month) without " +
-            "running out of money to cover your bills. The calculation:",
-        safeBudgetStep1 = "Income projection",
-        safeBudgetStep1Desc = "Your income sources and their repeat schedules are projected forward one year.",
-        safeBudgetStep2 = "Expense simulation",
-        safeBudgetStep2Desc = "Your recurring expenses are projected over the same period.",
-        safeBudgetStep3 = "Timing safety",
-        safeBudgetStep3Desc = "The engine ensures that even in months with clustered bills, the budget amount covers all obligations.",
+            "recurring expenses to determine a safe spending amount for each budget period. " +
+            "The engine ensures that even in months with clustered bills, the budget amount covers all obligations.",
         budgetAmountTitle = "Budget Amount",
-        budgetAmountBody = "Your actual per-period budget is the Safe Budget Amount minus any active deductions:",
+        budgetAmountBody = "Your actual per-period budget is reduced by any active deductions:",
         budgetSavingsBullet = "Savings Goal deductions \u2014 money set aside for planned purchases and savings targets",
-        budgetAmortBullet = "Amortization deductions \u2014 spreading past large expenses over time",
+        budgetAmortBullet = "Amortization deductions \u2014 spreading large expenses that you've already paid for over several future periods",
         budgetAccelBullet = "Optional Accelerated deductions for new recurring expenses \u2014 to make sure you have the money available for that first bill",
-        budgetAmountNote = "This ensures your spending money is already adjusted for both upcoming and past large expenses.",
         availableCashSectionTitle = "Available Cash",
-        availableCashSectionBody = "Available Cash is the number shown on the Solari display. It is automatically " +
+        availableCashSectionBody = "Available Cash is the main number shown on the Solari display. It is automatically " +
             "computed from your budget period credits, expenses, and extra income. " +
             "With a SYNC group enabled (subscribers), it stays consistent across all devices without manual intervention. " +
             "The result: a single number that tells all of you exactly how much you can spend.",
@@ -823,11 +804,11 @@ object EnglishStrings : AppStrings {
         gettingStartedBody = "The Quick Start Guide may have already taken you through these steps (or you can start it on the Settings page), " +
             "but otherwise follow these steps to set up your budget for the first time:",
         step1Title = "Open Settings",
-        step1Desc = "Tap the gear icon in the top left to configure your currency, display preferences, and transaction categories.",
+        step1Desc = "Tap the Settings icon in the top left of the Dashboard to configure your currency, display preferences, and transaction categories.",
         step2Title = "Configure Your Budget",
-        step2Desc = "In Settings, tap \"Configure Your Budget\" to open Budget Configuration. Choose a budget period (Daily is recommended for most people).",
+        step2Desc = "In Settings, tap \"Configure Budget\" to open Budget Configuration. Choose a budget period (Daily is recommended for most people).",
         step3Title = "Add Income Sources",
-        step3Desc = "In Budget Configuration, add all reliable income sources \u2014 your salary, regular side income, etc. Set the repeat schedule for each (e.g., \"Month\" on the 1st and 15th for bi-monthly pay).",
+        step3Desc = "In Budget Configuration, add all reliable income sources \u2014 your salary, regular side income, etc. Set the repeat schedule for each (e.g., \"Twice per Month\" on the 1st and 15th for bi-monthly pay). For pay every two weeks, set \"Weekly\" repeat, and 2 \"Weeks Between Repeats\", then Pick Start Date and pick your next paycheck. If you get paid on Fridays, pick the next Friday, and the Budget will now know that you get this pay every two weeks on Friday. If your pay varies, no problem. The app adjusts for this when you enter the paycheck transaction. Read more about this in the Budget Configuration page Help.",
         step4Title = "Add Recurring Expenses",
         step4Desc = "Navigate to Recurring Expenses (the sync icon on the dashboard) and add all your regular bills: rent, utilities, insurance, subscriptions, loan payments.",
         step5Title = "Start Tracking",
@@ -848,14 +829,14 @@ object EnglishStrings : AppStrings {
             "Free users should enter bank transactions as they are made via credit/debit cards, and should also " +
             "remember to enter those auto-pay transactions and direct deposits that show up in your bank's website. " +
             "Use the calendar to know when to expect these, so you don't forget. It's also not a bad idea for " +
-            "subscribers to manually enter credit/debit purchases even if you plan to use CSV import, as banks " +
+            "subscribers to manually enter purchases even if you plan to use CSV import, as banks " +
             "are usually a few days behind, and having the transactions in the app sooner makes your Available Cash " +
             "number more accurate sooner. The import feature will help you identify duplicates, so you don't " +
             "end up with the same transaction twice.",
         tipPlanTitle = "Plan for the Unexpected",
         tipPlanBody = "Use Savings Goals to plan for things like car tires, appliance " +
             "replacements, holiday gifts, or vacations. When you save a little each period, " +
-            "these expenses don't become emergencies. The key to financial peace is " +
+            "these expenses don't become emergencies. The key to financial control is " +
             "eliminating surprises.",
         tipPaycheckTitle = "Avoid the Paycheck Trap",
         tipPaycheckBody = "Many people overspend right after payday and scramble before the next one. " +
@@ -872,13 +853,13 @@ object EnglishStrings : AppStrings {
         featureBullet2 = "Smart budget calculation that accounts for irregular income and expense timing",
         featureBullet3 = "Automatic recurring expense and income recognition from bank imports (subscribers)",
         featureBullet4 = "Savings Goals \u2014 save for big purchases and financial targets automatically",
-        featureBullet5 = "Amortization \u2014 spread large past purchases over time",
-        featureBullet6 = "Multi-category transaction splitting with pie chart, calculator, or percentage modes",
+        featureBullet5 = "Amortization \u2014 spread large purchases over time",
+        featureBullet6 = "Multi-category transaction splitting with pie chart, calculator, or percentage modes, or subscribers can scan their receipt and our AI fills in the transaction for you!",
         featureBullet7 = "Encrypted transaction backup and restore for all users!",
         featureBullet8 = "Bank statement import with auto-categorization (subscribers)",
         featureBullet9 = "Duplicate transaction detection",
         featureBullet10 = "Fully customizable categories with icon selection",
-        featureBullet11 = "Multiple currency and date format support with transaction archiving",
+        featureBullet11 = "Multiple currency and date format support",
         featureBullet12 = "SYNC \u2014 share your budget across household devices with end-to-end encryption (subscribers)",
         featureBullet13 = "Photos! \u2014 attach photos of receipts or what you bought to transactions (paid users)",
         featureBullet14 = "Widget \u2014 enter your transactions and see your Available Cash right on your home screen (free users can install and try it, paid users get unlimited use)",
@@ -891,11 +872,14 @@ object EnglishStrings : AppStrings {
             "anyone. Your automatic backups (Settings \u2192 Backups) are protected by a password you choose, using " +
             "industry-standard end-to-end encryption. When you enable SYNC, data is shared between your linked " +
             "devices with the same end-to-end encryption \u2014 the cloud server stores only encrypted data and cannot " +
-            "read your transactions, amounts, or merchant names. Your money, your data, your control.",
+            "read your transactions, amounts, or merchant names. Your money, your data, your control! The subscriber " +
+            "level receipt scanning feature does decrypt your receipt image at the cloud server, but only to read it " +
+            "(most are then deleted immediately, however our provider does store a small fraction for 24hrs for quality " +
+            "control), and then the data is encrypted again for transmission back to your device.",
         widgetTitle = "Home Screen Widget",
         widgetBody = "BudgeTrak includes a home screen widget that displays your available cash " +
             "in a Solari flip-display style, so you can check your budget at a glance without opening the app. " +
-            "Add it from your launcher's widget picker.",
+            "Add it from your device's widget picker.",
         widgetSolariDesc = "The widget shows your current available cash on Solari-style flip cards that " +
             "automatically adapt to light and dark mode. It scales smoothly as you resize the widget.",
         widgetButtonsDesc = "Quick transaction buttons (+/-) below the Solari display let you record income " +
@@ -923,12 +907,12 @@ object EnglishStrings : AppStrings {
         paidSave = "Ad-free \u2014 the banner at the top of every screen is hidden.",
         paidWidget = "Full widget access \u2014 unlimited home-screen widget transactions and a clean Solari display without the upgrade overlay.",
         paidPhotos = "Transaction attachments \u2014 attach up to 5 photos or PDFs (receipts, invoices, whatever you want) to any transaction.",
-        paidLoad = "Save & Load \u2014 export transactions to CSV, Excel, or PDF, and import bank statements from CSV or Excel.",
-        paidAiCsv = "AI CSV Categorization \u2014 on bank-statement imports, Gemini suggests categories for any merchants we haven't already learned.",
+        paidLoad = "Save & Load \u2014 export transactions to CSV, Excel, or PDF, and import bank statements from CSV (most banks provide these for download from their website or app).",
+        paidAiCsv = "AI CSV Categorization \u2014 on bank-statement imports, our AI assists in suggesting categories for merchants.",
         paidSimulation = "Cash Flow Simulation \u2014 an interactive 18-month chart on the Savings Goals page that shows how we calculate your required cash-on-hand, and lets you experiment with savings and spending rates.",
         paidAdFree = "The Subscriber tier (\$4.99/month) adds two advanced features on top of everything above:",
-        subBulletOcr = "AI Receipt Scanning \u2014 tap the sparkle icon to auto-fill merchant, date, amount, and category splits from a receipt photo (Gemini 2.5 Flash-Lite).",
-        subBulletSync = "Create & administer SYNC groups \u2014 BudgeTrak's most powerful feature. Share one budget with family, a small business, or a club. Only the admin needs to subscribe; other members can join free or buy the one-time Paid upgrade. Our \$4.99/month is about half of competing services and covers the cost of running the encrypted cloud relay.",
+        subBulletOcr = "AI Receipt Scanning \u2014 tap the sparkle icon to auto-fill merchant, date, amount, and category (even multi-category!) from a receipt photo. Read more about this in the Transaction page Help.",
+        subBulletSync = "Create & administer SYNC groups \u2014 BudgeTrak's most powerful feature! Share one budget with family, a small business, or a club. Only the admin needs to subscribe; other members can join free or buy the one-time Paid upgrade. Our \$4.99/month is about half of competing services and covers the cost of running the encrypted cloud relay.",
         subFooterNote = "Free users can join an existing SYNC group without a subscription. Subscriber status automatically includes every Paid User benefit."
     )
 
@@ -2048,5 +2032,79 @@ object EnglishStrings : AppStrings {
         deleteConfirmBody = { targetName -> "Delete \"$targetName\"? This cannot be undone." },
         sampleDialogBody = "Body text on the dialog surface. The header band above " +
             "tints primary buttons and other accent UI throughout the app.",
+    )
+
+    override val colorsHelp = ColorsHelpStrings(
+        title = "Colors Help",
+        overviewTitle = "Overview",
+        overviewBody = "The Colors page lets you customize the look of BudgeTrak. You can edit the " +
+            "color theme (page headers, page background, dialog chrome, body text, Solari display) " +
+            "and the chart palette (the 12 colors used in pie and bar charts). Built-in themes and " +
+            "chart palettes are read-only \u2014 editing any color automatically creates a custom copy " +
+            "you can rename, save, and switch between freely.",
+        headerTitle = "Header Bar",
+        headerBody = "The header provides navigation and help access:",
+        backDesc = "Return to the Settings page.",
+        helpDesc = "Opens this help page.",
+        modeTitle = "Mode Selector",
+        modeBody = "The first dropdown chooses what you're editing. There are four modes: " +
+            "Light Mode Colors, Dark Mode Colors, Chart Colors (Light), and Chart Colors (Dark). " +
+            "Each light/dark pair lets you set up a different look for the corresponding system " +
+            "appearance. The live preview at the bottom of the page renders in whichever mode you " +
+            "have selected, so you can edit your dark theme even while your device is in light mode.",
+        dropdownTitle = "Theme / Chart Palette",
+        dropdownBody = "The second dropdown is context-sensitive: in a base mode it lists themes " +
+            "(by default \"Default\" and \"Bubblegum\"); in a chart mode it lists chart palettes " +
+            "(by default \"Bright\", \"Pastel\", \"Sunset\"). Built-ins are marked with \" (Built-in)\" " +
+            "after their name and can't be modified or deleted. The moment you edit any slot on a " +
+            "built-in, BudgeTrak silently forks it into a new custom copy named \"<original> (Custom)\" " +
+            "so the original stays intact. You can later use \"New theme\" / \"New palette\" to clone " +
+            "and rename, and \"Delete\" to remove custom entries.",
+        slotTitle = "Color Setting",
+        slotBody = "In base modes, the third dropdown picks which color you're editing. The eight slots are:\n\n" +
+            "\u2022 Header \u2014 background of the top app bar on every screen, plus the dashboard's " +
+            "bottom icon bar and the system status / nav bar areas\n" +
+            "\u2022 Header Text \u2014 text and icons that sit on top of the Header color\n" +
+            "\u2022 Page Background \u2014 main background of every screen\n" +
+            "\u2022 Window Header \u2014 colored band at the top of dialogs and popups\n" +
+            "\u2022 Window Header Text \u2014 text and icons on the Window Header band, plus dialog " +
+            "action buttons (the muted Cancel button derives from these two)\n" +
+            "\u2022 Window Background \u2014 body color of dialogs and popups\n" +
+            "\u2022 General Text \u2014 default body-text color throughout the app\n" +
+            "\u2022 Solari Background \u2014 frame color around the flip display on the dashboard. " +
+            "The Solari border is automatically lifted toward white, so there's no separate slot.",
+        chartSlotTitle = "Chart Slot",
+        chartSlotBody = "In chart modes, the third row shows the 12 colors in the palette as small " +
+            "swatches. Tap a swatch to select it (a thicker outline marks the selected one), then tap " +
+            "the pencil to edit. Pie and bar charts assign the largest wedge to slot 1, second-largest " +
+            "to slot 2, and so on, so the first few slots have the most visual impact.",
+        editTitle = "Editing a Color",
+        editBody = "The colored square below the dropdown shows the current value for the selected " +
+            "slot or chart wedge. Tap the square or the pencil to open the color picker. An undo " +
+            "icon appears next to the pencil whenever you've changed a color from its built-in " +
+            "default; tap it to restore that slot back to the default. Undo is lineage-aware \u2014 " +
+            "a Sunset-forked custom palette undoes to Sunset's value at that slot, not to Bright's.",
+        pickerTitle = "Color Picker",
+        pickerBody = "The color picker shows an HSV color wheel (drag or tap to set hue and " +
+            "saturation), a Brightness slider beneath it, and a Hex field at the bottom for typing " +
+            "exact codes. The current color preview sits to the left of the Hex field. Tap Save to " +
+            "apply, or Cancel to discard. The picker scrolls when the on-screen keyboard opens, so " +
+            "the Hex field stays reachable.",
+        newTitle = "New Theme / New Palette",
+        newBody = "The \"New theme\" or \"New palette\" button at the bottom of the page clones the " +
+            "currently selected theme or palette under a new name you provide. Useful for keeping " +
+            "several variations side by side without losing earlier work. Names must be unique " +
+            "(case-insensitive). The clone inherits the source's color values; you can edit it like " +
+            "any other custom entry.",
+        deleteTitle = "Delete",
+        deleteBody = "A red Delete button appears next to \"New theme\" / \"New palette\" only when " +
+            "the currently selected entry is a custom one (built-ins can never be deleted). Deleting " +
+            "drops the entry permanently. If the deleted entry was the active selection, the active " +
+            "selection falls back to the corresponding built-in default.",
+        savingTitle = "Saving and Storage",
+        savingBody = "Every edit saves automatically to this device. Themes and chart palettes are " +
+            "stored locally \u2014 they're included in your encrypted backups (Settings \u2192 Backups) " +
+            "but are deliberately NOT shared between SYNC group devices. That way you can use a " +
+            "different look on each of your devices while still sharing the same budget data.",
     )
 }
