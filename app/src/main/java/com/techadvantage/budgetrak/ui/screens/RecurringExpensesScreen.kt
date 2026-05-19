@@ -79,6 +79,7 @@ import com.techadvantage.budgetrak.ui.components.CURRENCY_DECIMALS
 import com.techadvantage.budgetrak.ui.strings.LocalStrings
 import com.techadvantage.budgetrak.ui.theme.LocalAppToast
 import com.techadvantage.budgetrak.ui.theme.LocalSyncBudgetColors
+import com.techadvantage.budgetrak.ui.theme.ScreenPrimaryButton
 import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrows
 import com.techadvantage.budgetrak.ui.theme.ScrollableDropdownContent
 import androidx.compose.foundation.background
@@ -170,7 +171,7 @@ fun RecurringExpensesScreen(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 val buttonFontSize = with(LocalDensity.current) { 14.dp.toSp() }
-                OutlinedButton(
+                ScreenPrimaryButton(
                     onClick = { showAddDialog = true },
                     modifier = Modifier.fillMaxWidth(),
                     contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
@@ -785,7 +786,7 @@ private fun AddEditExpenseDialog(
                                     Modifier.border(1.dp, Color.Red, RoundedCornerShape(4.dp))
                                 else Modifier
                             ) {
-                                OutlinedButton(
+                                DialogPrimaryButton(
                                     onClick = { showDatePicker = true },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
@@ -815,7 +816,7 @@ private fun AddEditExpenseDialog(
                                     Modifier.border(1.dp, Color.Red, RoundedCornerShape(4.dp))
                                 else Modifier
                             ) {
-                                OutlinedButton(
+                                DialogPrimaryButton(
                                     onClick = { showDatePicker = true },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
@@ -840,7 +841,7 @@ private fun AddEditExpenseDialog(
                                     Modifier.border(1.dp, Color.Red, RoundedCornerShape(4.dp))
                                 else Modifier
                             ) {
-                                OutlinedButton(
+                                DialogPrimaryButton(
                                     onClick = { showDatePicker = true },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
@@ -878,7 +879,7 @@ private fun AddEditExpenseDialog(
                                     Modifier.border(1.dp, Color.Red, RoundedCornerShape(4.dp))
                                 else Modifier
                             ) {
-                                OutlinedButton(
+                                DialogPrimaryButton(
                                     onClick = { showDatePicker = true },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
@@ -930,7 +931,7 @@ private fun AddEditExpenseDialog(
                                     Modifier.border(1.dp, Color.Red, RoundedCornerShape(4.dp))
                                 else Modifier
                             ) {
-                                OutlinedButton(
+                                DialogPrimaryButton(
                                     onClick = { showDatePicker = true },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {

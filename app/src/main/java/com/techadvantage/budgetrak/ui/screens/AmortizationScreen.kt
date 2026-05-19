@@ -80,6 +80,7 @@ import com.techadvantage.budgetrak.ui.components.CURRENCY_DECIMALS
 import com.techadvantage.budgetrak.ui.theme.LocalAppToast
 import com.techadvantage.budgetrak.ui.strings.LocalStrings
 import com.techadvantage.budgetrak.ui.theme.LocalSyncBudgetColors
+import com.techadvantage.budgetrak.ui.theme.ScreenPrimaryButton
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -207,7 +208,7 @@ fun AmortizationScreen(
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
                 val buttonFontSize = with(LocalDensity.current) { 14.dp.toSp() }
-                OutlinedButton(
+                ScreenPrimaryButton(
                     onClick = { showAddDialog = true },
                     modifier = Modifier.fillMaxWidth(),
                     contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
@@ -573,7 +574,7 @@ internal fun AddEditAmortizationDialog(
                         colors = textFieldColors,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    OutlinedButton(
+                    DialogPrimaryButton(
                         onClick = { showDatePicker = true },
                         modifier = Modifier.fillMaxWidth()
                     ) {

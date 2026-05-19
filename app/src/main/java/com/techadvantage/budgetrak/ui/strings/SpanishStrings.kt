@@ -123,10 +123,6 @@ object SpanishStrings : AppStrings {
         weekStartWeeklyNote = "Para presupuestos semanales, esto se configura en D\u00eda de reinicio en Configuraci\u00f3n del presupuesto.",
         sunday = "Domingo",
         monday = "Lunes",
-        chartPalette = "Paleta de gr\u00e1ficos",
-        bright = "Vibrante",
-        pastel = "Pastel",
-        sunset = "Atardecer",
         matchDays = "D\u00edas de coincidencia\u00A0(\u2060\u00b1\u2060N\u2060)",
         matchPercent = "Porcentaje de coincidencia\u00A0(\u2060\u00b1\u2060%\u2060)",
         matchDollar = "Monto de coincidencia\u00A0(\u2060\u00b1\u2060\$\u2060)",
@@ -771,13 +767,17 @@ object SpanishStrings : AppStrings {
             "margen izquierdo del gr\u00e1fico en el color del segmento. Toca cualquier icono para ver " +
             "el nombre y monto de la categor\u00eda.",
         chartPaletteTitle = "Paleta de gr\u00e1ficos",
-        chartPaletteBody = "Los colores del gr\u00e1fico se pueden cambiar en Ajustes en \"Paleta de gr\u00e1ficos\". " +
-            "Hay tres paletas disponibles: Vibrante, Pastel y Atardecer. Cada paleta se ajusta " +
-            "autom\u00e1ticamente para el modo claro y oscuro.",
-        quickButtonsTitle = "Botones r\u00e1pidos de transacci\u00f3n",
-        quickButtonsBody = "Debajo del gr\u00e1fico, dos botones grandes te permiten agregar transacciones r\u00e1pidamente " +
-            "sin salir del panel principal:",
-        quickAddIncomeDesc = "Abre el di\u00e1logo de Agregar ingreso. La transacci\u00f3n se guarda y el efectivo disponible aumenta.",
+        chartPaletteBody = "Los colores del gr\u00e1fico siguen la paleta de gr\u00e1ficos que elijas en " +
+            "Ajustes \u2192 Colores. Tres paletas vienen integradas (Vibrante, Pastel, Atardecer), " +
+            "y tambi\u00e9n puedes guardar las tuyas. Cada paleta tiene juegos de colores separados " +
+            "para los modos claro y oscuro, para que el gr\u00e1fico siga siendo legible en ambos.",
+        quickButtonsTitle = "Barra de iconos del panel",
+        quickButtonsBody = "Debajo del gr\u00e1fico, una fila de iconos da acceso de un toque a las \u00e1reas " +
+            "m\u00e1s usadas de la app. De izquierda a derecha: Agregar transacci\u00f3n, Transacciones, " +
+            "Metas de Ahorro, Amortizaci\u00f3n, Gastos Recurrentes y Calendario del presupuesto.",
+        quickAddIncomeDesc = "El icono m\u00e1s a la izquierda (recibo con un signo m\u00e1s azul pulsante) abre " +
+            "el di\u00e1logo Agregar transacci\u00f3n en modo Gasto. Cambia a Ingreso con la p\u00edldora en la " +
+            "parte superior del di\u00e1logo. El pulso atrae la mirada a la acci\u00f3n m\u00e1s com\u00fan.",
         quickAddExpenseDesc = "Abre el di\u00e1logo de Agregar gasto. La transacci\u00f3n se guarda y el efectivo disponible disminuye.",
         quickMatchingNote = "Las transacciones agregadas desde el panel principal pasan por las mismas verificaciones " +
             "que en la pantalla de Transacciones: detecci\u00f3n de duplicados, coincidencia con gastos recurrentes, " +
@@ -967,15 +967,18 @@ object SpanishStrings : AppStrings {
         weekStartTitle = "La semana empieza el",
         weekStartBody = "Elige si la semana comienza el domingo o el lunes. Esto afecta la agrupaci\u00f3n " +
             "semanal del gr\u00e1fico de gastos y los c\u00e1lculos del per\u00edodo semanal del presupuesto.",
-        chartPaletteTitle = "Paleta de gr\u00e1ficos",
-        chartPaletteBody = "Elige la paleta de colores para los gr\u00e1ficos circulares y de barras en toda la app. " +
-            "Hay tres opciones:",
+        chartPaletteTitle = "Colores",
+        chartPaletteBody = "El bot\u00f3n Colores abre una p\u00e1gina donde puedes cambiar el tema de la app " +
+            "(encabezado de p\u00e1gina, texto, encabezado de di\u00e1logo, fondo de di\u00e1logo, pantalla Solari) " +
+            "y la paleta de gr\u00e1ficos usada en los gr\u00e1ficos circulares y de barras. Los temas y " +
+            "paletas integrados son de solo lectura: editar cualquier campo crea autom\u00e1ticamente una " +
+            "copia personalizada que puedes renombrar. Tres paletas de gr\u00e1ficos vienen integradas:",
         paletteBright = "Vibrante \u2014 colores vivos y saturados para m\u00e1ximo contraste",
         palettePastel = "Pastel \u2014 tonos m\u00e1s suaves y atenuados para una apariencia m\u00e1s delicada",
-        paletteSunset = "Atardecer \u2014 tonos c\u00e1lidos terrosos inspirados en una paleta de atardecer (predeterminada)",
-        paletteNote = "Cada paleta se ajusta autom\u00e1ticamente para el modo claro y oscuro. La paleta " +
-            "se aplica al gr\u00e1fico de gastos del panel principal, al editor de gr\u00e1fico circular de transacciones " +
-            "y a todas las dem\u00e1s visualizaciones de gr\u00e1ficos.",
+        paletteSunset = "Atardecer \u2014 tonos c\u00e1lidos terrosos inspirados en una paleta de atardecer",
+        paletteNote = "Cada tema y paleta guarda juegos de colores separados para los modos claro y " +
+            "oscuro, as\u00ed que todo sigue autom\u00e1ticamente el tema del sistema. El \u00edcono de deshacer " +
+            "junto a cada muestra de color restaura ese campo a su valor predeterminado.",
         matchingTitle = "Configuraci\u00f3n de coincidencias",
         matchingBody = "Estos ajustes controlan c\u00f3mo la app detecta transacciones duplicadas y las asocia " +
             "con gastos recurrentes, entradas de amortizaci\u00f3n y fuentes de ingreso del presupuesto:",
@@ -1987,5 +1990,47 @@ object SpanishStrings : AppStrings {
         simulationBody = "Proyecta saldos hasta 18 meses adelante y simula escenarios al instante.",
         ocrHeadline = "Toca para escanear",
         ocrBody = "La IA lee cada recibo y rellena fecha, comercio, monto y categor\u00eda.",
+    )
+
+    override val colors = ColorsStrings(
+        title = "Colores",
+        modeLight = "Colores en Modo Claro",
+        modeDark = "Colores en Modo Oscuro",
+        modeChartLight = "Colores de Gr\u00e1ficos (Claro)",
+        modeChartDark = "Colores de Gr\u00e1ficos (Oscuro)",
+        slotHeader = "Encabezado",
+        slotHeaderText = "Texto del encabezado",
+        slotPageBackground = "Fondo de p\u00e1gina",
+        slotWindowHeader = "Encabezado de ventana",
+        slotWindowHeaderText = "Texto del encabezado de ventana",
+        slotWindowBackground = "Fondo de ventana",
+        slotGeneralText = "Texto general",
+        slotSolariBackground = "Fondo de Solari",
+        dropdownChartPalette = "Paleta de gr\u00e1ficos",
+        dropdownTheme = "Tema",
+        builtInSuffix = " (Integrado)",
+        modeLabel = "Modo",
+        colorSettingLabel = "Ajuste de color",
+        chartSlotLabel = "Posici\u00f3n del gr\u00e1fico",
+        editColor = "Editar color",
+        restoreDefault = "Restaurar predeterminado",
+        newPalette = "Nueva paleta",
+        newTheme = "Nuevo tema",
+        tip = "Consejo: editar un tema o paleta integrado crea una copia personalizada autom\u00e1ticamente. " +
+            "Los integrados no se pueden modificar ni eliminar. Toca el \u00edcono de deshacer para restaurar " +
+            "un color a su valor predeterminado.",
+        samplePieChart = "Gr\u00e1fico circular de muestra",
+        sampleDialog = "Di\u00e1logo de muestra",
+        pickColor = "Elige un color",
+        newChartPaletteDialogTitle = "Nueva paleta de gr\u00e1ficos",
+        newThemeDialogTitle = "Nuevo tema",
+        cloneUnderNewName = { sourceName -> "Duplicar \"$sourceName\" con un nuevo nombre:" },
+        nameLabel = "Nombre",
+        create = "Crear",
+        deletePaletteTitle = "\u00bfEliminar paleta?",
+        deleteThemeTitle = "\u00bfEliminar tema?",
+        deleteConfirmBody = { targetName -> "\u00bfEliminar \"$targetName\"? Esta acci\u00f3n no se puede deshacer." },
+        sampleDialogBody = "Texto del cuerpo en la superficie del di\u00e1logo. La banda del encabezado de arriba " +
+            "ti\u00f1e los botones principales y otros elementos de acento en toda la app.",
     )
 }

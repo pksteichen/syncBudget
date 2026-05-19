@@ -45,52 +45,13 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import com.techadvantage.budgetrak.data.BudgetCalculator
 import com.techadvantage.budgetrak.data.Category
 import com.techadvantage.budgetrak.ui.components.CURRENCY_SUFFIX_SYMBOLS
+import com.techadvantage.budgetrak.ui.theme.BuiltInChartPalettes
+import com.techadvantage.budgetrak.ui.theme.ChartPalette
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
-
-private val PIE_COLORS_BRIGHT_LIGHT = listOf(
-    Color(0xFF4CAF50), Color(0xFF2196F3), Color(0xFFF44336), Color(0xFFFF9800),
-    Color(0xFF9C27B0), Color(0xFF00BCD4), Color(0xFFFFEB3B), Color(0xFF795548),
-    Color(0xFFE91E63), Color(0xFF607D8B), Color(0xFF8BC34A), Color(0xFF3F51B5)
-)
-private val PIE_COLORS_BRIGHT_DARK = listOf(
-    Color(0xFF1B5E20), Color(0xFF0D47A1), Color(0xFF7F1D1D), Color(0xFF8B3A00),
-    Color(0xFF4A148C), Color(0xFF004D40), Color(0xFF8C6D00), Color(0xFF3E2723),
-    Color(0xFF6A0035), Color(0xFF263238), Color(0xFF33691E), Color(0xFF1A237E)
-)
-private val PIE_COLORS_PASTEL_LIGHT = listOf(
-    Color(0xFFA5D6A7), Color(0xFF90CAF9), Color(0xFFEF9A9A), Color(0xFFFFCC80),
-    Color(0xFFCE93D8), Color(0xFF80DEEA), Color(0xFFFFF59D), Color(0xFFBCAAA4),
-    Color(0xFFF48FB1), Color(0xFFB0BEC5), Color(0xFFC5E1A5), Color(0xFF9FA8DA)
-)
-private val PIE_COLORS_PASTEL_DARK = listOf(
-    Color(0xFF2E5E30), Color(0xFF1E4976), Color(0xFF6D3434), Color(0xFF7A5020),
-    Color(0xFF5A3070), Color(0xFF1A5055), Color(0xFF6B5E1A), Color(0xFF4A3530),
-    Color(0xFF6B2845), Color(0xFF37474F), Color(0xFF3A5420), Color(0xFF2A3570)
-)
-private val PIE_COLORS_SUNSET_LIGHT = listOf(
-    Color(0xFF4D1D46), Color(0xFFDC7049), Color(0xFFEBB865), Color(0xFF35506E),
-    Color(0xFF8F5050), Color(0xFF563060), Color(0xFF313967), Color(0xFFC25D5D),
-    Color(0xFFD4956A), Color(0xFF2D6B6B), Color(0xFF7A5A3A), Color(0xFF8B7BA8)
-)
-private val PIE_COLORS_SUNSET_DARK = listOf(
-    Color(0xFF2E1129), Color(0xFF8A4530), Color(0xFF8A6D2E), Color(0xFF1E3045),
-    Color(0xFF5A3232), Color(0xFF331C39), Color(0xFF1C2140), Color(0xFF7A3A3A),
-    Color(0xFF7A5540), Color(0xFF1A4040), Color(0xFF4A3622), Color(0xFF524968)
-)
-
-@Composable
-private fun pieColors(chartPalette: String): List<Color> {
-    val isDark = isSystemInDarkTheme()
-    return when (chartPalette) {
-        "Pastel" -> if (isDark) PIE_COLORS_PASTEL_DARK else PIE_COLORS_PASTEL_LIGHT
-        "Sunset" -> if (isDark) PIE_COLORS_SUNSET_DARK else PIE_COLORS_SUNSET_LIGHT
-        else -> if (isDark) PIE_COLORS_BRIGHT_DARK else PIE_COLORS_BRIGHT_LIGHT
-    }
-}
 
 /** Clockwise sweep from [from] to [to] in degrees, always >= 0. */
 private fun sweepBetween(from: Float, to: Float): Float {
@@ -176,12 +137,12 @@ fun PieChartEditor(
     currencySymbol: String,
     categoryAmounts: Map<Int, Double>,
     onAmountsChanged: (Map<Int, Double>) -> Unit,
-    chartPalette: String = "Bright"
+    chartPalette: ChartPalette = BuiltInChartPalettes.DEFAULT
 ) {
     val n = categories.size
     if (n < 2 || totalAmount <= 0) return
 
-    val colors = pieColors(chartPalette)
+    val colors = if (isSystemInDarkTheme()) chartPalette.chartDark else chartPalette.chartLight
 
     val handleAngles = remember { mutableStateListOf<Float>() }
     var draggedIndex by remember { mutableIntStateOf(-1) }

@@ -65,7 +65,6 @@ object FullBackupSerializer {
             localPrefs.put("digitCount", prefs.getInt("digitCount", 3))
             localPrefs.put("showDecimals", prefs.getBoolean("showDecimals", false))
             localPrefs.put("dateFormatPattern", prefs.getString("dateFormatPattern", "yyyy-MM-dd"))
-            localPrefs.put("chartPalette", prefs.getString("chartPalette", "Sunset"))
             localPrefs.put("appLanguage", prefs.getString("appLanguage", "en"))
             localPrefs.put("budgetPeriod", prefs.getString("budgetPeriod", "DAILY"))
             localPrefs.put("resetHour", prefs.getInt("resetHour", 0))
@@ -81,7 +80,14 @@ object FullBackupSerializer {
             localPrefs.put("incomeMode", prefs.getString("incomeMode", "FIXED"))
             localPrefs.put("autoCapitalize", prefs.getBoolean("autoCapitalize", true))
             localPrefs.put("showWidgetLogo", prefs.getBoolean("showWidgetLogo", true))
+            localPrefs.put("selectedThemeName", prefs.getString("selectedThemeName", "Default"))
+            localPrefs.put("selectedChartPaletteName", prefs.getString("selectedChartPaletteName", "Bright"))
             json.put("localPrefs", localPrefs)
+
+            // Custom color themes + chart palettes — backup only (not joinSnapshot,
+            // so they stay local-only and survive group-join unchanged).
+            readFileArray("themes.json")?.let { json.put("themes", it) }
+            readFileArray("chart_palettes.json")?.let { json.put("chartPalettes", it) }
         }
 
         return json.toString()
@@ -237,6 +243,8 @@ object FullBackupSerializer {
         writeArray("savingsGoals", "future_expenditures.json")
         writeArray("periodLedger", "period_ledger.json")
         writeArray("archivedTransactions", "archived_transactions.json")
+        writeArray("themes", "themes.json")
+        writeArray("chartPalettes", "chart_palettes.json")
 
         // Restore shared settings
         if (json.has("sharedSettings")) {
@@ -267,7 +275,6 @@ object FullBackupSerializer {
                 putInt("digitCount", lp.optInt("digitCount", 3))
                 putBoolean("showDecimals", lp.optBoolean("showDecimals", false))
                 putString("dateFormatPattern", lp.optString("dateFormatPattern", "yyyy-MM-dd"))
-                putString("chartPalette", lp.optString("chartPalette", "Sunset"))
                 putString("appLanguage", lp.optString("appLanguage", "en"))
                 putString("budgetPeriod", lp.optString("budgetPeriod", "DAILY"))
                 putInt("resetHour", lp.optInt("resetHour", 0))
@@ -283,6 +290,14 @@ object FullBackupSerializer {
                 putString("incomeMode", lp.optString("incomeMode", "FIXED"))
                 putBoolean("autoCapitalize", lp.optBoolean("autoCapitalize", true))
                 putBoolean("showWidgetLogo", lp.optBoolean("showWidgetLogo", true))
+                putString("selectedThemeName", lp.optString("selectedThemeName", "Default"))
+                // Pre-custom-themes backups stored the chart palette under "chartPalette";
+                // fall back to that so a restore from an older backup keeps the user's choice.
+                val legacyChartPalette = lp.optString("chartPalette", "")
+                putString(
+                    "selectedChartPaletteName",
+                    lp.optString("selectedChartPaletteName", legacyChartPalette.ifBlank { "Bright" })
+                )
                 apply()
             }
         }

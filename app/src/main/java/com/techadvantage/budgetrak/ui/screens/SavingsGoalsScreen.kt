@@ -83,6 +83,7 @@ import com.techadvantage.budgetrak.ui.components.formatCurrency
 import com.techadvantage.budgetrak.ui.strings.LocalStrings
 import com.techadvantage.budgetrak.ui.theme.LocalAppToast
 import com.techadvantage.budgetrak.ui.theme.LocalSyncBudgetColors
+import com.techadvantage.budgetrak.ui.theme.ScreenPrimaryButton
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.text.font.FontWeight
@@ -271,7 +272,7 @@ fun SavingsGoalsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    OutlinedButton(
+                    ScreenPrimaryButton(
                         onClick = { showAddDialog = true },
                         modifier = Modifier.weight(1f),
                         contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
@@ -288,7 +289,7 @@ fun SavingsGoalsScreen(
                         )
                     }
                     val canViewChart = isPaidUser || isSubscriber
-                    OutlinedButton(
+                    ScreenPrimaryButton(
                         onClick = {
                             if (canViewChart) onViewChart()
                             else toastState.show(S.settings.upgradeToAccess)
@@ -711,7 +712,7 @@ private fun AddEditSavingsGoalDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
                     // Helper: calculate contribution from a target date
-                    OutlinedButton(
+                    DialogPrimaryButton(
                         onClick = { showDatePicker = true },
                         modifier = Modifier.fillMaxWidth()
                     ) {

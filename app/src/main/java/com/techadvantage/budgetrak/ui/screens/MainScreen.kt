@@ -88,6 +88,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
 import androidx.compose.ui.unit.sp
 import com.techadvantage.budgetrak.ui.theme.AdAwareDialog
+import com.techadvantage.budgetrak.ui.theme.BuiltInChartPalettes
+import com.techadvantage.budgetrak.ui.theme.ChartPalette
 import com.techadvantage.budgetrak.ui.theme.DialogStyle
 import com.techadvantage.budgetrak.ui.theme.DialogPrimaryButton
 import com.techadvantage.budgetrak.ui.theme.DialogSecondaryButton
@@ -139,100 +141,6 @@ private enum class SpendingRange(val label: String) {
     ROLLING_365("365 Days")
 }
 
-private val PIE_COLORS_LIGHT = listOf(
-    Color(0xFF4CAF50),
-    Color(0xFF2196F3),
-    Color(0xFFF44336),
-    Color(0xFFFF9800),
-    Color(0xFF9C27B0),
-    Color(0xFF00BCD4),
-    Color(0xFFFFEB3B),
-    Color(0xFF795548),
-    Color(0xFFE91E63),
-    Color(0xFF607D8B),
-    Color(0xFF8BC34A),
-    Color(0xFF3F51B5)
-)
-
-// Low-luminance muted colors for dark mode
-private val PIE_COLORS_DARK = listOf(
-    Color(0xFF1B5E20),
-    Color(0xFF0D47A1),
-    Color(0xFF7F1D1D),
-    Color(0xFF8B3A00),
-    Color(0xFF4A148C),
-    Color(0xFF004D40),
-    Color(0xFF8C6D00),
-    Color(0xFF3E2723),
-    Color(0xFF6A0035),
-    Color(0xFF263238),
-    Color(0xFF33691E),
-    Color(0xFF1A237E)
-)
-
-// Pastel palette for light mode
-private val PIE_COLORS_PASTEL_LIGHT = listOf(
-    Color(0xFFA5D6A7), // green
-    Color(0xFF90CAF9), // blue
-    Color(0xFFEF9A9A), // red
-    Color(0xFFFFCC80), // orange
-    Color(0xFFCE93D8), // purple
-    Color(0xFF80DEEA), // teal
-    Color(0xFFFFF59D), // yellow
-    Color(0xFFBCAAA4), // brown
-    Color(0xFFF48FB1), // pink
-    Color(0xFFB0BEC5), // gray
-    Color(0xFFC5E1A5), // lime
-    Color(0xFF9FA8DA)  // indigo
-)
-
-// Pastel palette for dark mode
-private val PIE_COLORS_PASTEL_DARK = listOf(
-    Color(0xFF2E5E30), // green
-    Color(0xFF1E4976), // blue
-    Color(0xFF6D3434), // red
-    Color(0xFF7A5020), // orange
-    Color(0xFF5A3070), // purple
-    Color(0xFF1A5055), // teal
-    Color(0xFF6B5E1A), // yellow
-    Color(0xFF4A3530), // brown
-    Color(0xFF6B2845), // pink
-    Color(0xFF37474F), // gray
-    Color(0xFF3A5420), // lime
-    Color(0xFF2A3570)  // indigo
-)
-
-// Sunset palette for light mode
-private val PIE_COLORS_SUNSET_LIGHT = listOf(
-    Color(0xFF4D1D46), // plum
-    Color(0xFFDC7049), // burnt orange
-    Color(0xFFEBB865), // golden yellow
-    Color(0xFF35506E), // steel blue
-    Color(0xFF8F5050), // dusty rose
-    Color(0xFF563060), // purple
-    Color(0xFF313967), // navy
-    Color(0xFFC25D5D), // coral
-    Color(0xFFD4956A), // peach
-    Color(0xFF2D6B6B), // teal
-    Color(0xFF7A5A3A), // sienna
-    Color(0xFF8B7BA8)  // lavender
-)
-
-// Sunset palette for dark mode
-private val PIE_COLORS_SUNSET_DARK = listOf(
-    Color(0xFF2E1129), // plum
-    Color(0xFF8A4530), // burnt orange
-    Color(0xFF8A6D2E), // golden yellow
-    Color(0xFF1E3045), // steel blue
-    Color(0xFF5A3232), // dusty rose
-    Color(0xFF331C39), // purple
-    Color(0xFF1C2140), // navy
-    Color(0xFF7A3A3A), // coral
-    Color(0xFF7A5540), // peach
-    Color(0xFF1A4040), // teal
-    Color(0xFF4A3622), // sienna
-    Color(0xFF524968)  // lavender
-)
 
 private data class PieWedge(
     val categoryId: Int,
@@ -293,7 +201,7 @@ fun MainScreen(
     onAddTransaction: () -> Unit = {},
     onSupercharge: (Map<Int, Double>, Map<Int, SuperchargeMode>) -> Unit = { _, _ -> },
     weekStartDay: DayOfWeek = DayOfWeek.SUNDAY,
-    chartPalette: String = "Bright",
+    chartPalette: ChartPalette = BuiltInChartPalettes.DEFAULT,
     dateFormatPattern: String = "yyyy-MM-dd",
     budgetPeriod: BudgetPeriod = BudgetPeriod.DAILY,
     syncStatus: String = "off",
@@ -612,18 +520,19 @@ fun MainScreen(
                 // toolbar — opening the unified TransactionDialog in EXPENSE
                 // mode by default; user toggles to INCOME via header pill.
                 val dashAddPulse = rememberInfiniteTransition(label = "dashAddTxnPulse")
-                val dashPlusAlpha by dashAddPulse.animateFloat(
-                    initialValue = 0.35f,
-                    targetValue = 1f,
+                val dashPlusColor by dashAddPulse.animateColor(
+                    initialValue = Color(0xFF0D47A1),
+                    targetValue = Color.White,
                     animationSpec = infiniteRepeatable(
                         animation = tween(900, easing = FastOutSlowInEasing),
                         repeatMode = RepeatMode.Reverse
                     ),
-                    label = "dashAddTxnPulseAlpha"
+                    label = "dashAddTxnPulseColor"
                 )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .background(customColors.headerBackground)
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
@@ -633,31 +542,31 @@ fun MainScreen(
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_add_transaction_body),
                                 contentDescription = null,
-                                tint = customColors.accentTint,
+                                tint = customColors.headerText,
                                 modifier = Modifier.fillMaxSize()
                             )
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_add_transaction_plus),
                                 contentDescription = S.common.addTransaction,
-                                tint = Color(0xFF0D47A1).copy(alpha = dashPlusAlpha),
+                                tint = dashPlusColor,
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
                     }
                     IconButton(onClick = { onNavigate("transactions") }, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.AutoMirrored.Filled.List, S.dashboard.transactions, tint = customColors.accentTint, modifier = Modifier.size(32.dp))
+                        Icon(Icons.AutoMirrored.Filled.List, S.dashboard.transactions, tint = customColors.headerText, modifier = Modifier.size(32.dp))
                     }
                     IconButton(onClick = { onNavigate("savings_goals") }, modifier = Modifier.size(48.dp)) {
-                        Icon(painter = painterResource(id = R.drawable.ic_coins), contentDescription = S.dashboard.savingsGoals, tint = customColors.accentTint, modifier = Modifier.size(32.dp))
+                        Icon(painter = painterResource(id = R.drawable.ic_coins), contentDescription = S.dashboard.savingsGoals, tint = customColors.headerText, modifier = Modifier.size(32.dp))
                     }
                     IconButton(onClick = { onNavigate("amortization") }, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Filled.Schedule, S.dashboard.amortization, tint = customColors.accentTint, modifier = Modifier.size(32.dp))
+                        Icon(Icons.Filled.Schedule, S.dashboard.amortization, tint = customColors.headerText, modifier = Modifier.size(32.dp))
                     }
                     IconButton(onClick = { onNavigate("recurring_expenses") }, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Filled.Sync, S.dashboard.recurringExpenses, tint = customColors.accentTint, modifier = Modifier.size(32.dp))
+                        Icon(Icons.Filled.Sync, S.dashboard.recurringExpenses, tint = customColors.headerText, modifier = Modifier.size(32.dp))
                     }
                     IconButton(onClick = { onNavigate("budget_calendar") }, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Filled.DateRange, S.dashboard.budgetCalendar, tint = customColors.accentTint, modifier = Modifier.size(32.dp))
+                        Icon(Icons.Filled.DateRange, S.dashboard.budgetCalendar, tint = customColors.headerText, modifier = Modifier.size(32.dp))
                     }
                 }
             }
@@ -689,7 +598,7 @@ private fun SpendingPieChart(
     onRangeChange: (SpendingRange) -> Unit,
     currencySymbol: String,
     weekStartDay: DayOfWeek = DayOfWeek.SUNDAY,
-    chartPalette: String = "Bright",
+    chartPalette: ChartPalette = BuiltInChartPalettes.DEFAULT,
     showBarChart: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -750,13 +659,7 @@ private fun SpendingPieChart(
         large + small
     }
 
-    // Select color palette based on theme and user preference
-    val isDark = isSystemInDarkTheme()
-    val chartColors = when (chartPalette) {
-        "Pastel" -> if (isDark) PIE_COLORS_PASTEL_DARK else PIE_COLORS_PASTEL_LIGHT
-        "Sunset" -> if (isDark) PIE_COLORS_SUNSET_DARK else PIE_COLORS_SUNSET_LIGHT
-        else -> if (isDark) PIE_COLORS_DARK else PIE_COLORS_LIGHT
-    }
+    val chartColors = if (isSystemInDarkTheme()) chartPalette.chartDark else chartPalette.chartLight
 
     // Build wedge data with rotation so small wedges center at 9:00 (180°)
     // Use pieEntries for pie chart (capped small categories), sortedEntries for bar chart

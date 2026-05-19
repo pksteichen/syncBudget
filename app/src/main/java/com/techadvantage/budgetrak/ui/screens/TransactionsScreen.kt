@@ -118,6 +118,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.offset
+import androidx.compose.animation.animateColor
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -135,6 +136,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.ColumnScope
 import com.techadvantage.budgetrak.ui.theme.AdAwareDialog
+import com.techadvantage.budgetrak.ui.theme.BuiltInChartPalettes
+import com.techadvantage.budgetrak.ui.theme.ChartPalette
 import com.techadvantage.budgetrak.ui.theme.DialogStyle
 import com.techadvantage.budgetrak.ui.theme.DialogPrimaryButton
 import com.techadvantage.budgetrak.ui.theme.DialogSecondaryButton
@@ -148,6 +151,7 @@ import com.techadvantage.budgetrak.ui.theme.dialogFooterColor
 import com.techadvantage.budgetrak.ui.theme.dialogSectionLabelColor
 import com.techadvantage.budgetrak.ui.theme.LocalAppToast
 import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrows
+import com.techadvantage.budgetrak.ui.theme.ScreenPrimaryButton
 import com.techadvantage.budgetrak.ui.theme.ScrollableDropdownContent
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -287,7 +291,7 @@ fun TransactionsScreen(
     onUpdateTransaction: (Transaction) -> Unit,
     onDeleteTransaction: (Transaction) -> Unit,
     onDeleteTransactions: (Set<Int>) -> Unit,
-    chartPalette: String = "Bright",
+    chartPalette: ChartPalette = BuiltInChartPalettes.DEFAULT,
     onBack: () -> Unit,
     onHelpClick: () -> Unit = {},
     showAttribution: Boolean = false,
@@ -834,7 +838,7 @@ fun TransactionsScreen(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                OutlinedButton(
+                ScreenPrimaryButton(
                     onClick = {
                         viewFilter = when (viewFilter) {
                             ViewFilter.ALL -> ViewFilter.EXPENSES
@@ -847,9 +851,6 @@ fun TransactionsScreen(
                         }
                         scrollToTopTrigger++
                     },
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.onBackground
-                    ),
                     contentPadding = PaddingValues(horizontal = 7.dp, vertical = 3.dp)
                 ) {
                     Text(
@@ -868,7 +869,7 @@ fun TransactionsScreen(
 
                 Spacer(modifier = Modifier.width(2.dp))
 
-                OutlinedButton(
+                ScreenPrimaryButton(
                     onClick = {
                         sortMode = when (sortMode) {
                             SortMode.DATE_DESC -> SortMode.DATE_ASC
@@ -879,9 +880,6 @@ fun TransactionsScreen(
                         }
                         scrollToTopTrigger++
                     },
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.onBackground
-                    ),
                     contentPadding = PaddingValues(horizontal = 7.dp, vertical = 3.dp)
                 ) {
                     Text(
@@ -898,7 +896,7 @@ fun TransactionsScreen(
 
                 Spacer(modifier = Modifier.width(2.dp))
 
-                OutlinedButton(
+                ScreenPrimaryButton(
                     onClick = {
                         dateRange = when (dateRange) {
                             DateRange.SIX_MONTHS -> DateRange.ONE_YEAR
@@ -909,9 +907,6 @@ fun TransactionsScreen(
                         if (dateRange == DateRange.ALL) onRequestArchived()
                         scrollToTopTrigger++
                     },
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.onBackground
-                    ),
                     contentPadding = PaddingValues(horizontal = 7.dp, vertical = 3.dp)
                 ) {
                     Text(
@@ -929,17 +924,17 @@ fun TransactionsScreen(
                 // in EXPENSE mode by default (most common); user toggles
                 // to INCOME via the EXPENSE/INCOME pill in the dialog header.
                 // Two-layer drawable so the plus circle can pulse independently
-                // of the receipt body — body stays static, plus fades a deep
-                // blue between 35% and 100% alpha as a call-to-action cue.
+                // of the receipt body — body stays static, plus pulses between
+                // deep blue and white as a call-to-action cue.
                 val addPulse = rememberInfiniteTransition(label = "addTxnPulse")
-                val plusAlpha by addPulse.animateFloat(
-                    initialValue = 0.35f,
-                    targetValue = 1f,
+                val plusColor by addPulse.animateColor(
+                    initialValue = Color(0xFF0D47A1),
+                    targetValue = Color.White,
                     animationSpec = infiniteRepeatable(
                         animation = tween(900, easing = FastOutSlowInEasing),
                         repeatMode = RepeatMode.Reverse
                     ),
-                    label = "addTxnPulseAlpha"
+                    label = "addTxnPulseColor"
                 )
                 IconButton(
                     onClick = { showAddTransaction = true },
@@ -955,7 +950,7 @@ fun TransactionsScreen(
                         Icon(
                             painter = painterResource(id = R.drawable.ic_add_transaction_plus),
                             contentDescription = S.common.addTransaction,
-                            tint = Color(0xFF0D47A1).copy(alpha = plusAlpha),
+                            tint = plusColor,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -3043,7 +3038,7 @@ fun TransactionDialog(
     dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd"),
     isExpense: Boolean = false,
     editTransaction: Transaction? = null,
-    chartPalette: String = "Bright",
+    chartPalette: ChartPalette = BuiltInChartPalettes.DEFAULT,
     recurringExpenses: List<RecurringExpense> = emptyList(),
     amortizationEntries: List<AmortizationEntry> = emptyList(),
     incomeSources: List<IncomeSource> = emptyList(),
@@ -4274,7 +4269,7 @@ fun TransactionDialog(
                                 val fixedFontSize = with(LocalDensity.current) { 13.dp.toSp() }
                                 val fixedIconSize = 18.dp / LocalDensity.current.fontScale
                                 if (recurringExpenses.isNotEmpty()) {
-                                    OutlinedButton(
+                                    DialogPrimaryButton(
                                         onClick = { showLinkRecurringPicker = true },
                                         modifier = Modifier.weight(1f),
                                         contentPadding = linkPadding
@@ -4285,7 +4280,7 @@ fun TransactionDialog(
                                     }
                                 }
                                 if (amortizationEntries.isNotEmpty() || onAddAmortization != null) {
-                                    OutlinedButton(
+                                    DialogPrimaryButton(
                                         onClick = {
                                             if (amortizationEntries.isNotEmpty()) {
                                                 showLinkAmortizationPicker = true
@@ -4302,7 +4297,7 @@ fun TransactionDialog(
                                     }
                                 }
                                 if (savingsGoals.isNotEmpty()) {
-                                    OutlinedButton(
+                                    DialogPrimaryButton(
                                         onClick = { showLinkSavingsGoalPicker = true },
                                         modifier = Modifier.weight(1f),
                                         contentPadding = linkPadding
@@ -4334,7 +4329,7 @@ fun TransactionDialog(
                                 }
                             }
                         } else if (incomeSources.isNotEmpty()) {
-                            OutlinedButton(
+                            DialogPrimaryButton(
                                 onClick = { showLinkIncomePicker = true },
                                 modifier = Modifier.fillMaxWidth()
                             ) {

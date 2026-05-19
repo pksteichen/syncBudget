@@ -131,6 +131,9 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 ## Specifications
 - [Budget Calculation](spec_budget_calculation.md), [Data Model](spec_data_model.md), [Period Refresh](spec_period_refresh.md), [UI Architecture](spec_ui_architecture.md), [Transaction Flows](spec_transaction_flows.md), [CSV Import](spec_csv_import.md), [Group Management](spec_group_management.md), [Receipt Photos](spec_receipt_photos.md), [Dashboard](spec_dashboard.md), [Simulation](spec_simulation.md), [Recurring + Savings](spec_recurring_and_savings.md), [Backup](spec_backup.md), [Diagnostics](spec_diagnostics.md).
 
+## Feature branches
+- [feature/custom-themes — color theming](project_custom_themes_branch.md) — 10-role theme + 12-color chart palette, decoupled; built-ins + user customs; local-only + survives group-join. Not shipped; PieChartEditor wiring + Income/Expense call-site migration deferred.
+
 ## Important Feedback
 - [Specs vs code: assume spec is wrong first](feedback_specs_vs_code.md) — existing working code usually reflects design choices specs don't capture.
 - [Verify code state before proposing changes](feedback_verify_before_proposing.md) — BudgeTrak exceeds any single context window; grep before architecting.
@@ -156,6 +159,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [Play Billing Layer 2.5 — deferred anti-forge design](project_play_billing_layer_2_5.md) — App-Check-gated `entitlements/{uid}` doc to make `isPaidUser` server-authoritative; defer until evidence of piracy.
 - [JIT extraction lambda overhead](feedback_jit_extraction.md).
 - [Compose state-seed order + LaunchedEffect cancellation](feedback_compose_state_seed_order.md) — seed VM fields before the visibility flag; hoist long work to viewModelScope.
+- [OutlinedTextField swallows .clickable](feedback_compose_textfield_swallows_clicks.md) — TextField absorbs pointer events even when readOnly; wrap in Box + transparent overlay to route taps.
 - [Receipt pruning design](feedback_receipt_pruning_design.md) — cloud 14-day and local prune age are independent.
 - [No flag-clock bump on imageLedger creation](feedback_image_ledger_no_create_bump.md) — peers discover via transaction sync; prune fires inline at every download site; don't re-add the bump.
 - [Firebase rules — source of truth + audit findings](reference_firebase_rules.md) — firestore.rules / storage.rules / database.rules.json committed; `node tools/fetch-rules.js` refreshes from live project.

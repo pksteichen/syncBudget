@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
@@ -67,6 +68,7 @@ import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -76,15 +78,34 @@ import com.techadvantage.budgetrak.ui.strings.AppStrings
 import com.techadvantage.budgetrak.ui.strings.EnglishStrings
 import com.techadvantage.budgetrak.ui.strings.LocalStrings
 
+/**
+ * Solari border derived from the user's Solari background — a small lerp
+ * toward white so the border reads as a "lifted" edge on whatever color
+ * the user picked. Single source of truth for everywhere a border around
+ * the Solari display is drawn.
+ */
+fun solariBorderFor(displayBackground: Color): Color =
+    androidx.compose.ui.graphics.lerp(displayBackground, Color.White, 0.15f)
+
+/**
+ * Dialog/popup footer band derived from the user's Window Header — lerped
+ * heavily toward the Window Background so the footer reads as a subtle
+ * tinted strip beneath the body, paired with the header above.
+ */
+fun dialogFooterFor(surfaceHeader: Color, surface: Color): Color =
+    androidx.compose.ui.graphics.lerp(surfaceHeader, surface, 0.85f)
+
 data class SyncBudgetColors(
     val headerBackground: Color,
     val headerText: Color,
     val cardBackground: Color,
     val cardText: Color,
+    val surfaceHeader: Color,
+    val surfaceHeaderText: Color,
     val displayBackground: Color,
     val displayBorder: Color,
     val userCategoryIconTint: Color,
-    val accentTint: Color
+    val accentTint: Color,
 )
 
 val LocalSyncBudgetColors = staticCompositionLocalOf {
@@ -93,10 +114,12 @@ val LocalSyncBudgetColors = staticCompositionLocalOf {
         headerText = DarkHeaderText,
         cardBackground = DarkCardBackground,
         cardText = DarkCardText,
+        surfaceHeader = DarkSurfaceHeader,
+        surfaceHeaderText = DarkSurfaceHeaderText,
         displayBackground = DarkDisplayBackground,
-        displayBorder = DarkDisplayBorder,
+        displayBorder = solariBorderFor(DarkDisplayBackground),
         userCategoryIconTint = LightCardBackground,
-        accentTint = DarkCardText
+        accentTint = DarkCardText,
     )
 }
 
@@ -108,9 +131,8 @@ enum class DialogStyle { DEFAULT, DANGER, WARNING }
 
 @Composable
 fun dialogHeaderColor(style: DialogStyle = DialogStyle.DEFAULT): Color {
-    val isDark = isSystemInDarkTheme()
     return when (style) {
-        DialogStyle.DEFAULT -> if (isDark) Color(0xFF1B5E20) else Color(0xFF2E7D32)
+        DialogStyle.DEFAULT -> LocalSyncBudgetColors.current.surfaceHeader
         DialogStyle.DANGER -> Color(0xFFB71C1C)
         DialogStyle.WARNING -> Color(0xFFE65100)
     }
@@ -119,7 +141,7 @@ fun dialogHeaderColor(style: DialogStyle = DialogStyle.DEFAULT): Color {
 @Composable
 fun dialogHeaderTextColor(style: DialogStyle = DialogStyle.DEFAULT): Color {
     return when (style) {
-        DialogStyle.DEFAULT -> if (isSystemInDarkTheme()) Color(0xFFE8F5E9) else Color.White
+        DialogStyle.DEFAULT -> LocalSyncBudgetColors.current.surfaceHeaderText
         DialogStyle.DANGER -> Color(0xFFFFEBEE)
         DialogStyle.WARNING -> Color(0xFFFFF3E0)
     }
@@ -127,7 +149,8 @@ fun dialogHeaderTextColor(style: DialogStyle = DialogStyle.DEFAULT): Color {
 
 @Composable
 fun dialogFooterColor(): Color {
-    return if (isSystemInDarkTheme()) Color(0xFF1A3A1A) else Color(0xFFE8F5E9)
+    val c = LocalSyncBudgetColors.current
+    return dialogFooterFor(c.surfaceHeader, MaterialTheme.colorScheme.surface)
 }
 
 @Composable
@@ -135,7 +158,7 @@ fun dialogSectionLabelColor(): Color {
     return if (isSystemInDarkTheme()) Color(0xFF81C784) else Color(0xFF2E7D32)
 }
 
-/** Green filled primary button for dialogs. */
+/** Filled primary affirmative button for dialogs — follows Window Header colors. */
 private val CompactButtonPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
 
 @Composable
@@ -146,6 +169,7 @@ fun DialogPrimaryButton(
     contentPadding: PaddingValues = CompactButtonPadding,
     content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit
 ) {
+    val c = LocalSyncBudgetColors.current
     var lastClickTime by remember { mutableStateOf(0L) }
     Button(
         onClick = {
@@ -156,15 +180,58 @@ fun DialogPrimaryButton(
         enabled = enabled,
         shape = RoundedCornerShape(8.dp),
         contentPadding = contentPadding,
+        border = BorderStroke(0.5.dp, c.surfaceHeaderText),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (isSystemInDarkTheme()) Color(0xFF388E3C) else Color(0xFF2E7D32),
-            contentColor = Color.White
+            containerColor = c.surfaceHeader,
+            contentColor = c.surfaceHeaderText,
+            disabledContainerColor = c.surfaceHeader.copy(alpha = 0.38f),
+            disabledContentColor = c.surfaceHeaderText.copy(alpha = 0.38f),
         ),
         content = content
     )
 }
 
-/** Gray filled secondary button for dialogs. */
+/**
+ * Filled page-level button that follows the user's Header background + Header
+ * Text colors. Use for buttons on screens (Settings, BudgetConfig, Sync, etc.).
+ *
+ * Not for dialog actions — those use [DialogPrimaryButton] / [DialogSecondaryButton] /
+ * [DialogDangerButton] / [DialogWarningButton], which are convention-locked
+ * green/gray/red/orange so danger and warning still read as such regardless of
+ * the user's theme.
+ */
+@Composable
+fun ScreenPrimaryButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
+    content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit
+) {
+    val customColors = LocalSyncBudgetColors.current
+    Button(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        shape = RoundedCornerShape(8.dp),
+        contentPadding = contentPadding,
+        border = BorderStroke(0.5.dp, customColors.headerText),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = customColors.headerBackground,
+            contentColor = customColors.headerText,
+            disabledContainerColor = customColors.headerBackground.copy(alpha = 0.38f),
+            disabledContentColor = customColors.headerText.copy(alpha = 0.38f),
+        ),
+        content = content
+    )
+}
+
+/**
+ * Muted-header secondary button for dialogs (Cancel and similar). Container
+ * is the Window Header color blended 50% with the dialog body surface so it
+ * reads as a less-prominent sibling of [DialogPrimaryButton] while still
+ * sharing the user's theme family.
+ */
 @Composable
 fun DialogSecondaryButton(
     onClick: () -> Unit,
@@ -173,15 +240,24 @@ fun DialogSecondaryButton(
     contentPadding: PaddingValues = CompactButtonPadding,
     content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit
 ) {
+    val c = LocalSyncBudgetColors.current
+    val container = androidx.compose.ui.graphics.lerp(
+        c.surfaceHeader,
+        c.surfaceHeaderText,
+        0.3f,
+    )
     Button(
         onClick = onClick,
         modifier = modifier,
         enabled = enabled,
         shape = RoundedCornerShape(8.dp),
         contentPadding = contentPadding,
+        border = BorderStroke(0.5.dp, c.surfaceHeaderText),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (isSystemInDarkTheme()) Color(0xFF3A3A3A) else Color(0xFFE0E0E0),
-            contentColor = if (isSystemInDarkTheme()) Color(0xFFCCCCCC) else Color(0xFF555555)
+            containerColor = container,
+            contentColor = c.surfaceHeaderText,
+            disabledContainerColor = container.copy(alpha = 0.38f),
+            disabledContentColor = c.surfaceHeaderText.copy(alpha = 0.38f),
         ),
         content = content
     )
@@ -311,6 +387,7 @@ fun DialogDangerButton(
         modifier = modifier,
         enabled = enabled,
         shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(0.5.dp, Color.White),
         colors = ButtonDefaults.buttonColors(
             containerColor = Color(0xFFC62828),
             contentColor = Color.White
@@ -336,6 +413,7 @@ fun DialogWarningButton(
         modifier = modifier,
         enabled = enabled,
         shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(0.5.dp, Color.White),
         colors = ButtonDefaults.buttonColors(
             containerColor = Color(0xFFE65100),
             contentColor = Color.White
@@ -802,33 +880,49 @@ fun SyncBudgetTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     strings: AppStrings = EnglishStrings,
     adBannerHeight: Dp = 0.dp,
+    profile: ThemeProfile = BuiltInThemes.DEFAULT,
     contentScale: Float = 1.0f,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
-    val customColors = if (darkTheme) {
-        SyncBudgetColors(
-            headerBackground = DarkCardBackground,
-            headerText = DarkCardText,
-            cardBackground = DarkCardBackground,
-            cardText = DarkCardText,
-            displayBackground = DarkDisplayBackground,
-            displayBorder = DarkDisplayBorder,
-            userCategoryIconTint = LightCardBackground,
-            accentTint = DarkCardText
+    val cs = if (darkTheme) profile.dark else profile.light
+    // MaterialTheme.colorScheme.primary is sourced from the Header (cardBackground)
+    // slot so all "primary"-tinted UI (CTA buttons, AdMob upgrade pills, etc.)
+    // follows the header color the user picks. onPrimary is derived from the
+    // header's luminance to keep text legible on whatever the user chose.
+    val derivedOnPrimary = if (cs.cardBackground.luminance() > 0.5f) Color.Black else Color.White
+    val colorScheme = if (darkTheme) {
+        darkColorScheme(
+            primary = cs.cardBackground,
+            onPrimary = derivedOnPrimary,
+            background = cs.background,
+            surface = cs.surface,
+            onBackground = cs.onSurface,
+            onSurface = cs.onSurface
         )
     } else {
-        SyncBudgetColors(
-            headerBackground = LightCardBackground,
-            headerText = LightCardText,
-            cardBackground = LightCardBackground,
-            cardText = LightCardText,
-            displayBackground = LightDisplayBackground,
-            displayBorder = LightDisplayBorder,
-            userCategoryIconTint = LightCardBackground,
-            accentTint = LightCardBackground
+        lightColorScheme(
+            primary = cs.cardBackground,
+            onPrimary = derivedOnPrimary,
+            primaryContainer = Color(0xFF4A3270),
+            onPrimaryContainer = Color(0xFFE8DEF8),
+            background = cs.background,
+            surface = cs.surface,
+            onBackground = cs.onSurface,
+            onSurface = cs.onSurface
         )
     }
+    val customColors = SyncBudgetColors(
+        headerBackground = cs.cardBackground,
+        headerText = cs.cardText,
+        cardBackground = cs.cardBackground,
+        cardText = cs.cardText,
+        surfaceHeader = cs.surfaceHeader,
+        surfaceHeaderText = cs.surfaceHeaderText,
+        displayBackground = cs.displayBackground,
+        displayBorder = solariBorderFor(cs.displayBackground),
+        userCategoryIconTint = LightCardBackground,
+        accentTint = if (darkTheme) cs.cardText else cs.cardBackground,
+    )
 
     val appToastState = remember { AppToastState() }
     val adAwareDialogState = remember { AdAwareDialogState() }
