@@ -1274,7 +1274,12 @@ class MainActivity : ComponentActivity() {
                     "dashboard_help" -> DashboardHelpScreen(
                         onBack = { vm.currentScreen = "main" },
                         scrollTarget = vm.dashboardHelpScrollTo,
-                        onScrollTargetConsumed = { vm.dashboardHelpScrollTo = null }
+                        onScrollTargetConsumed = { vm.dashboardHelpScrollTo = null },
+                        helpChatConsent = vm.helpChatConsent,
+                        onGrantHelpChatConsent = {
+                            vm.helpChatConsent = true
+                            vm.prefs.edit().putBoolean("helpChatConsent", true).apply()
+                        },
                     )
                     "settings_help" -> SettingsHelpScreen(
                         onBack = { vm.currentScreen = "settings" }
@@ -1382,7 +1387,12 @@ class MainActivity : ComponentActivity() {
                                 vm.dashboardHelpScrollTo = null
                             },
                             scrollTarget = vm.dashboardHelpScrollTo,
-                            onScrollTargetConsumed = { vm.dashboardHelpScrollTo = null }
+                            onScrollTargetConsumed = { vm.dashboardHelpScrollTo = null },
+                            helpChatConsent = vm.helpChatConsent,
+                            onGrantHelpChatConsent = {
+                                vm.helpChatConsent = true
+                                vm.prefs.edit().putBoolean("helpChatConsent", true).apply()
+                            },
                         )
                     }
                 }
@@ -2318,6 +2328,11 @@ class MainActivity : ComponentActivity() {
                     com.google.firebase.analytics.FirebaseAnalytics.getInstance(this)
                         .setAnalyticsCollectionEnabled(newValue)
                 } catch (_: Exception) {}
+            },
+            helpChatConsent = vm.helpChatConsent,
+            onHelpChatConsentChange = { newValue ->
+                vm.helpChatConsent = newValue
+                vm.prefs.edit().putBoolean("helpChatConsent", newValue).apply()
             },
             categories = vm.activeCategories,
             transactions = vm.activeTransactions,

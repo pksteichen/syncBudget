@@ -167,6 +167,8 @@ object TranslationContext {
         "privacySection" to "Section heading on the Settings screen for privacy-related controls. Single word, noun.",
         "crashReports" to "Checkbox label to toggle whether the app sends anonymous crash reports to the developers via Firebase Crashlytics. Phrase 'Send crash reports'.",
         "crashReportsDesc" to "Short helper text shown under the crash reports checkbox. Briefly explains what the toggle does and reassures the user that no financial information is sent. Should encourage users to leave the toggle on, but kept friendly and non-pressuring.",
+        "helpChatConsent" to "Checkbox label for the Help Chat data-processing consent. Default unchecked on install; auto-checks when the user taps Accept on the consent dialog the first time they open the chat. Unchecking revokes consent and causes the consent dialog to re-appear on next chat use. Phrase should mention transmitting/storing messages per the Privacy Policy and the dual purpose (answering questions + quality assurance / feedback review).",
+        "helpChatConsentDesc" to "Helper text under the Help Chat consent checkbox. Explains that the toggle is REQUIRED to use the chat at all, that messages are sent anonymously to the AI service for replies, and that transcripts may be stored for up to 7 days for accuracy/abuse review.",
         "categories" to "Section header for the list of transaction categories (like Food, Transport, etc.). Noun, plural.",
         "charted" to "Column header in the categories table. Means 'included in the spending chart/graph'. Past participle of 'to chart' (to plot on a graph) — not navigation charts.",
         "widget" to "Column header in the categories table. Controls whether a category appears in the home screen widget's quick transaction dialog.",
@@ -1677,5 +1679,26 @@ object TranslationContext {
         "deleteBody" to "Help text describing the Delete behaviour: only shows for customs; permanently drops the entry; active selection falls back to the corresponding built-in default if the deleted entry was active.",
         "savingTitle" to "Help section title for storage semantics (local-only, backup-included, not synced).",
         "savingBody" to "Help text explaining auto-save, local-only storage, inclusion in encrypted backups, and deliberate non-sharing across SYNC group devices so each device can have its own look."
+    )
+
+    // ── Help Chat Strings ──
+
+    val helpChat = mapOf(
+        "openIconDesc" to "Accessibility description (contentDescription) for the chatbot icon in the top app bar of the Dashboard Help screen — tapping it opens the in-app Help Chat dialog.",
+        "title" to "Dialog title shown in the colored header of the Help Chat dialog.",
+        "inputHint" to "Placeholder hint text inside the 3-line input field at the bottom of the Help Chat dialog. Encourages the user to type a question. Use the localized ellipsis (\\u2026).",
+        "emptyBody" to "Body text shown in the chat history area when there are no messages yet — briefly describes what the chatbot is for and mentions Email as a fallback.",
+        "btnEmail" to "Label for the Email action button in the Help Chat dialog footer. Opens an email-support fallback (wired later).",
+        "btnExit" to "Label for the Exit action button in the Help Chat dialog footer. Dismisses the dialog without clearing the chat history — equivalent to the system back button. History persists locally and re-populates on next open.",
+        "btnClear" to "Label for the Clear/Restart action button in the Help Chat dialog footer. Uploads the current chat to Firebase (anonymous, 7-day TTL) and clears the local buffer, starting a fresh chat with a new chat ID.",
+        "btnSend" to "Label for the Send action button in the Help Chat dialog footer. Submits the current input to the chatbot.",
+        "youLabel" to "Short label prefixed to user-authored chat messages in the history (e.g. \"You: …\"). Used in the v1 UI shell; later AI phase may switch to bubble UI without label.",
+        "botLabel" to "Short label prefixed to bot-authored chat messages in the history (e.g. \"Bot: …\"). Used in the v1 UI shell; later AI phase may switch to bubble UI without label.",
+        "consentTitle" to "Title of the one-time consent dialog shown the first time the user opens the Help Chat (or any time after they've revoked consent). Use a colon or em-dash separator and the word 'Consent' so the legal nature is obvious — this is the regulator-facing screen.",
+        "consentBody" to "Body of the Help Chat consent dialog. MUST cover: (1) typed messages are sent to a third-party AI service (Gemini, name it), (2) anonymous transcripts may be stored on our servers up to 7 days for accuracy + abuse review, (3) no account/financial/contact info is sent, (4) accepting confirms they've reviewed the Privacy Policy and agree, (5) consent can be revoked any time in Settings → Privacy. Use \\n\\n for paragraph breaks. Use \\u2192 for the arrow.",
+        "consentLink" to "Clickable link text inside the consent dialog that opens the Privacy Policy URL in the user's browser. Short, descriptive phrase — e.g. 'View Privacy Policy'.",
+        "consentUrl" to "Absolute https URL of the Privacy Policy. SAME value in all locales — Pages site is monolingual today. Do not translate.",
+        "consentCancel" to "Label for the Cancel button on the Help Chat consent dialog. Tapping returns the user to the help page without enabling chat or recording consent.",
+        "consentAccept" to "Label for the Accept button on the Help Chat consent dialog. Tapping persists consent (sets the Settings → Privacy checkbox) and opens the chat dialog."
     )
 }

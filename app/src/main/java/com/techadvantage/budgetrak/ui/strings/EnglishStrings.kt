@@ -150,6 +150,8 @@ object EnglishStrings : AppStrings {
         privacySection = "Privacy",
         crashReports = "Send crash reports and anonymous usage data",
         crashReportsDesc = "Help us catch and fix bugs by sharing anonymous crash and usage data. No financial information is sent.",
+        helpChatConsent = "Allow Chatbot to transmit and store your messages per the Privacy Policy to answer your questions and for quality assurance and feedback review",
+        helpChatConsentDesc = "Required to use the in-app Help Chat. Your typed messages are sent anonymously to our AI service to generate replies, and transcripts may be stored on our servers for up to 7 days for accuracy and abuse review.",
         categories = "Categories",
         charted = "Charted",
         widget = "Widget",
@@ -2106,5 +2108,28 @@ object EnglishStrings : AppStrings {
             "stored locally \u2014 they're included in your encrypted backups (Settings \u2192 Backups) " +
             "but are deliberately NOT shared between SYNC group devices. That way you can use a " +
             "different look on each of your devices while still sharing the same budget data.",
+    )
+
+    override val helpChat = HelpChatStrings(
+        openIconDesc = "Open Help Chat",
+        title = "Help Chat",
+        inputHint = "Ask a question about BudgeTrak\u2026",
+        emptyBody = "Ask anything about how BudgeTrak works. Answers come from a chatbot trained on the help pages \u2014 if it can't help, use Email to reach support.",
+        btnEmail = "Email",
+        btnExit = "Exit",
+        btnClear = "Clear",
+        btnSend = "Send",
+        youLabel = "You",
+        botLabel = "Bot",
+        consentTitle = "Help Chat \u2014 Consent",
+        consentBody = "To answer your questions, the Help Chat sends your typed messages to a third-party AI service (Google Gemini). " +
+            "Anonymous transcripts may also be stored on our servers for up to 7 days so we can review accuracy and check for abuse. " +
+            "No account information, financial data, or contact details are sent.\n\n" +
+            "By tapping Accept, you confirm you have reviewed the Privacy Policy and agree to this processing. " +
+            "You can revoke consent any time in Settings \u2192 Privacy.",
+        consentLink = "View Privacy Policy",
+        consentUrl = "https://techadvantagesupport.github.io/privacy",
+        consentCancel = "Cancel",
+        consentAccept = "Accept",
     )
 }

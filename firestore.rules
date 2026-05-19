@@ -60,6 +60,25 @@ service cloud.firestore {
       }
     }
 
+    // Help Chat transcripts. Anonymous: doc ID is a 128-bit UUID generated
+    // on-device; we deliberately do NOT bind the doc to the writer's uid so
+    // periodic human review can read transcripts without correlating them
+    // to specific users. Security model rests on:
+    //   • `list` forbidden — no one can enumerate the collection
+    //   • UUID doc ID — brute-force lookup of another user's chatId is
+    //     computationally infeasible (2^128 keyspace)
+    //   • TTL policy on `expireAt` field — clients write expireAt = now +
+    //     7 days on every upload; Firestore auto-deletes when that
+    //     timestamp falls in the past (TTL config lives outside the rules)
+    //   • App Check — gates writes to legitimate app installs only
+    // No delete rule — the TTL policy handles cleanup; clients never delete.
+    match /helpChatLogs/{chatId} {
+      allow get: if request.auth != null;
+      allow list: if false;
+      allow create, update: if request.auth != null;
+      allow delete: if false;
+    }
+
     match /pairing_codes/{code} {
       allow create: if request.auth != null
         && request.resource.data.keys().hasAll(['groupId', 'encryptedKey', 'expiresAt'])

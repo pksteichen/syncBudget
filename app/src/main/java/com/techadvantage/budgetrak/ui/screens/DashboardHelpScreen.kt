@@ -42,8 +42,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,16 +57,22 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.painterResource
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
 import com.techadvantage.budgetrak.R
+import com.techadvantage.budgetrak.data.HelpChatUploader
 import com.techadvantage.budgetrak.ui.strings.LocalStrings
 import com.techadvantage.budgetrak.ui.theme.LocalSyncBudgetColors
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardHelpScreen(
     onBack: () -> Unit,
     scrollTarget: String? = null,
-    onScrollTargetConsumed: () -> Unit = {}
+    onScrollTargetConsumed: () -> Unit = {},
+    helpChatConsent: Boolean = false,
+    onGrantHelpChatConsent: () -> Unit = {},
 ) {
     val customColors = LocalSyncBudgetColors.current
     val S = LocalStrings.current
@@ -75,6 +83,13 @@ fun DashboardHelpScreen(
     // pattern used in TransactionsHelpScreen for the preselect-cats anchor.
     var upgradesAnchorY by remember { mutableIntStateOf(-1) }
     val scrollState = rememberScrollState()
+
+    var showHelpChat by remember { mutableStateOf(false) }
+    var showHelpChatConsent by remember { mutableStateOf(false) }
+    // Hoist the upload scope to screen level so the fire-and-forget
+    // launch survives the dialog's disposal on dismiss.
+    val helpChatScope = rememberCoroutineScope()
+    val helpChatContext = LocalContext.current
 
     // When a deep-link target arrives (e.g. tap on an offline in-house ad),
     // wait for the anchor to be laid out, then animate-scroll to it and
@@ -102,6 +117,19 @@ fun DashboardHelpScreen(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = S.common.back,
                             tint = customColors.headerText
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = {
+                        if (helpChatConsent) showHelpChat = true
+                        else showHelpChatConsent = true
+                    }) {
+                        androidx.compose.foundation.Image(
+                            painter = painterResource(R.drawable.ic_chatbot),
+                            contentDescription = S.helpChat.openIconDesc,
+                            colorFilter = ColorFilter.tint(customColors.headerText),
+                            modifier = Modifier.size(28.dp)
                         )
                     }
                 },
@@ -509,6 +537,28 @@ fun DashboardHelpScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
         }
+    }
+
+    if (showHelpChat) {
+        HelpChatDialog(onDismissRequest = {
+            // Fire-and-forget upload of the (possibly dirty) buffer before
+            // we dismiss. uploadIfStale internally no-ops when nothing has
+            // changed since the last successful upload or when offline /
+            // unauthenticated. Failures log in DEBUG only.
+            helpChatScope.launch { HelpChatUploader.uploadIfStale(helpChatContext) }
+            showHelpChat = false
+        })
+    }
+
+    if (showHelpChatConsent) {
+        HelpChatConsentDialog(
+            onCancel = { showHelpChatConsent = false },
+            onAccept = {
+                onGrantHelpChatConsent()
+                showHelpChatConsent = false
+                showHelpChat = true
+            },
+        )
     }
 }
 

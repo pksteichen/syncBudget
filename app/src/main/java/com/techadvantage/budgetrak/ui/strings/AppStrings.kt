@@ -38,6 +38,7 @@ interface AppStrings {
     val widgetTransaction: WidgetTransactionStrings
     val colors: ColorsStrings
     val colorsHelp: ColorsHelpStrings
+    val helpChat: HelpChatStrings
     val ads: InHouseAdStrings
 }
 
@@ -200,6 +201,8 @@ data class SettingsStrings(
     val privacySection: String,
     val crashReports: String,
     val crashReportsDesc: String,
+    val helpChatConsent: String,
+    val helpChatConsentDesc: String,
     val categories: String,
     val charted: String,
     val widget: String,
@@ -1675,4 +1678,29 @@ data class ColorsHelpStrings(
     val deleteBody: String,
     val savingTitle: String,
     val savingBody: String,
+)
+
+/**
+ * UI text for the in-app Help Chat dialog launched from the chatbot icon on
+ * the Dashboard Help screen. Backend wiring (Gemini, KB asset, daily limits,
+ * per-chat consent, Firestore logging) is added in later phases — this
+ * shell only covers the visible UI.
+ */
+data class HelpChatStrings(
+    val openIconDesc: String,
+    val title: String,
+    val inputHint: String,
+    val emptyBody: String,
+    val btnEmail: String,
+    val btnExit: String,
+    val btnClear: String,
+    val btnSend: String,
+    val youLabel: String,
+    val botLabel: String,
+    val consentTitle: String,
+    val consentBody: String,
+    val consentLink: String,
+    val consentUrl: String,
+    val consentCancel: String,
+    val consentAccept: String,
 )

@@ -150,6 +150,8 @@ object SpanishStrings : AppStrings {
         privacySection = "Privacidad",
         crashReports = "Enviar informes de errores y datos de uso an\u00f3nimos",
         crashReportsDesc = "Ay\u00fadanos a detectar y corregir errores compartiendo datos an\u00f3nimos de fallos y de uso. No se env\u00eda ninguna informaci\u00f3n financiera.",
+        helpChatConsent = "Permitir que el chatbot transmita y almacene tus mensajes seg\u00fan la Pol\u00edtica de Privacidad para responder a tus preguntas y para control de calidad y revisi\u00f3n de comentarios",
+        helpChatConsentDesc = "Necesario para usar el Chat de Ayuda dentro de la app. Tus mensajes se env\u00edan de forma an\u00f3nima a nuestro servicio de IA para generar respuestas, y las transcripciones pueden almacenarse en nuestros servidores hasta 7 d\u00edas para revisi\u00f3n de precisi\u00f3n y abuso.",
         categories = "Categor\u00edas",
         charted = "Gr\u00e1fica",
         widget = "Widget",
@@ -2098,5 +2100,28 @@ object SpanishStrings : AppStrings {
             "pero deliberadamente NO se comparten entre los dispositivos de un grupo SYNC. As\u00ed puedes " +
             "usar un aspecto diferente en cada uno de tus dispositivos mientras compartes los mismos " +
             "datos de presupuesto.",
+    )
+
+    override val helpChat = HelpChatStrings(
+        openIconDesc = "Abrir chat de ayuda",
+        title = "Chat de ayuda",
+        inputHint = "Haz una pregunta sobre BudgeTrak\u2026",
+        emptyBody = "Preg\u00fantale lo que quieras sobre c\u00f3mo funciona BudgeTrak. Las respuestas vienen de un chatbot entrenado con las p\u00e1ginas de ayuda; si no puede ayudarte, usa Correo para contactar con soporte.",
+        btnEmail = "Correo",
+        btnExit = "Salir",
+        btnClear = "Borrar",
+        btnSend = "Enviar",
+        youLabel = "T\u00fa",
+        botLabel = "Bot",
+        consentTitle = "Chat de ayuda \u2014 Consentimiento",
+        consentBody = "Para responder a tus preguntas, el Chat de Ayuda env\u00eda tus mensajes a un servicio externo de IA (Google Gemini). " +
+            "Las transcripciones an\u00f3nimas tambi\u00e9n pueden almacenarse en nuestros servidores hasta 7 d\u00edas para revisar la precisi\u00f3n y detectar abusos. " +
+            "No se env\u00eda informaci\u00f3n de cuenta, datos financieros ni datos de contacto.\n\n" +
+            "Al tocar Aceptar, confirmas que has revisado la Pol\u00edtica de Privacidad y aceptas este procesamiento. " +
+            "Puedes revocar el consentimiento en cualquier momento en Ajustes \u2192 Privacidad.",
+        consentLink = "Ver Pol\u00edtica de Privacidad",
+        consentUrl = "https://techadvantagesupport.github.io/privacy",
+        consentCancel = "Cancelar",
+        consentAccept = "Aceptar",
     )
 }
