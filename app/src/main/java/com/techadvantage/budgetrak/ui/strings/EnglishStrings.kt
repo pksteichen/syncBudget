@@ -773,13 +773,17 @@ object EnglishStrings : AppStrings {
             "left margin of the chart in the wedge's color. Tap any icon to see the category " +
             "name and amount.",
         chartPaletteTitle = "Chart Palette",
-        chartPaletteBody = "The colors used in the chart can be changed in Settings under \"Chart Palette\". " +
-            "Three palettes are available: Bright, Pastel, and Sunset. Each palette automatically " +
-            "adjusts for light and dark mode.",
-        quickButtonsTitle = "Quick Transaction Buttons",
-        quickButtonsBody = "Below the chart, two large buttons let you quickly add transactions without " +
-            "leaving the dashboard:",
-        quickAddIncomeDesc = "Opens the Add Income dialog. The transaction is saved and available cash increases.",
+        chartPaletteBody = "The colors used in the chart follow the chart palette you pick in " +
+            "Settings \u2192 Colors. Three palettes ship built-in (Bright, Pastel, Sunset), " +
+            "and you can also save your own. Each palette has separate light- and dark-mode " +
+            "color sets so the chart stays readable in both modes.",
+        quickButtonsTitle = "Dashboard Icon Bar",
+        quickButtonsBody = "Below the chart, a row of icons gives one-tap access to the most-used " +
+            "areas of the app. From left to right: Add Transaction, Transactions, Savings Goals, " +
+            "Amortization, Recurring Expenses, and Budget Calendar.",
+        quickAddIncomeDesc = "The leftmost icon (receipt with a pulsing blue plus) opens the Add " +
+            "Transaction dialog in Expense mode. Toggle to Income via the pill at the top of the " +
+            "dialog. The pulse draws your eye to the most common action.",
         quickAddExpenseDesc = "Opens the Add Expense dialog. The transaction is saved and available cash decreases.",
         quickMatchingNote = "Transactions added from the dashboard go through the same matching checks as " +
             "the Transactions screen: duplicate detection, recurring expense matching, " +
@@ -978,15 +982,18 @@ object EnglishStrings : AppStrings {
         weekStartBody = "Choose whether the week begins on Sunday or Monday. This affects the spending " +
             "chart's weekly grouping and the calendar. Weekly budget period reset days are configured " +
             "in Budget Configuration.",
-        chartPaletteTitle = "Chart Palette",
-        chartPaletteBody = "Choose the color palette used for pie charts and bar charts throughout the app. " +
-            "Three options are available:",
+        chartPaletteTitle = "Colors",
+        chartPaletteBody = "The Colors button opens a dedicated page where you can change the app's " +
+            "theme (page header, text, dialog header, dialog body, Solari display) and the chart " +
+            "palette used for pie and bar charts. Built-in themes and palettes are read-only \u2014 " +
+            "editing any slot automatically forks a custom copy you can rename. Three chart " +
+            "palettes ship built-in:",
         paletteBright = "Bright \u2014 vivid, saturated colors for maximum contrast",
         palettePastel = "Pastel \u2014 softer, muted tones for a gentler look",
-        paletteSunset = "Sunset \u2014 warm earth tones inspired by a sunset palette (default)",
-        paletteNote = "Each palette automatically adjusts for light and dark mode. The palette " +
-            "applies to the dashboard spending chart, the transaction pie chart editor, " +
-            "and all other chart displays.",
+        paletteSunset = "Sunset \u2014 warm earth tones inspired by a sunset palette",
+        paletteNote = "Each theme and palette stores separate light- and dark-mode color sets, so " +
+            "everything tracks the system theme automatically. The undo icon next to each color " +
+            "swatch restores that slot to its built-in default.",
         matchingTitle = "Matching Configuration",
         matchingBody = "These settings control how the app detects duplicate transactions and matches " +
             "transactions to recurring expenses, amortization entries, and budget income sources:",

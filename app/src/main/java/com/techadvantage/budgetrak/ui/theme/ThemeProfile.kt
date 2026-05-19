@@ -98,7 +98,38 @@ object BuiltInThemes {
         dark = DEFAULT_DARK,
     )
 
-    val ALL = listOf(DEFAULT)
+    // ── Bubblegum ─────────────────────────────────────────────────
+    // Pink/lavender theme — light mode leans hot-pink + lavender accents,
+    // dark mode goes deep aubergine. Seeded from a user-saved custom theme.
+    private val BUBBLEGUM_LIGHT = ThemeColorSet(
+        cardBackground = Color(0xFFFF75E3),
+        cardText = Color(0xFFFAFFF1),
+        background = Color(0xFFFCD6CB),
+        surface = Color(0xFFBBDEE4),
+        surfaceHeader = Color(0xFFCB74F3),
+        surfaceHeaderText = Color(0xFFFFFFFF),
+        onSurface = Color(0xFF1C1B1F),
+        displayBackground = Color(0xFFC6C3D1),
+    )
+    private val BUBBLEGUM_DARK = ThemeColorSet(
+        cardBackground = Color(0xFF540049),
+        cardText = Color(0xFFE8D5A0),
+        background = Color(0xFF3A2B2F),
+        surface = Color(0xFF4E3F42),
+        surfaceHeader = Color(0xFF3E1B51),
+        surfaceHeaderText = Color(0xFFB5D8AA),
+        onSurface = Color(0xFFE8D5A0),
+        displayBackground = Color(0xFF383838),
+    )
+
+    val BUBBLEGUM = ThemeProfile(
+        name = "Bubblegum",
+        isBuiltIn = true,
+        light = BUBBLEGUM_LIGHT,
+        dark = BUBBLEGUM_DARK,
+    )
+
+    val ALL = listOf(DEFAULT, BUBBLEGUM)
 }
 
 object BuiltInChartPalettes {

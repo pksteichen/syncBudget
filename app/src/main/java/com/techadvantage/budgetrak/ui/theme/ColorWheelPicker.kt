@@ -15,9 +15,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
@@ -239,7 +241,7 @@ private fun HueSatWheel(
     }
 }
 
-/** Wrap the wheel in an AdAwareDialog with green header + Save/Cancel footer. */
+/** Wrap the wheel in an AdAwareDialog with themed header + Save/Cancel footer. */
 @Composable
 fun ColorPickerDialog(
     title: String,
@@ -248,6 +250,7 @@ fun ColorPickerDialog(
     onSave: (Color) -> Unit,
 ) {
     var current by remember { mutableStateOf(initial) }
+    val bodyScrollState = rememberScrollState()
     AdAwareDialog(onDismissRequest = onDismiss) {
         Surface(
             modifier = Modifier.fillMaxWidth(0.92f),
@@ -255,21 +258,32 @@ fun ColorPickerDialog(
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp,
         ) {
-            Column {
-                DialogHeader(title = title)
-                Box(modifier = Modifier.padding(16.dp)) {
-                    ColorWheelPicker(color = current, onColorChange = { current = it })
-                }
-                DialogFooter {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
+            // Outer Box hosts PulsingScrollArrows alongside the Column —
+            // matches AdAwareAlertDialog's structure so the hex-input
+            // OutlinedTextField stays reachable when the IME pushes content up.
+            Box {
+                Column {
+                    DialogHeader(title = title)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .verticalScroll(bodyScrollState)
+                            .padding(16.dp),
                     ) {
-                        DialogSecondaryButton(onClick = onDismiss) { Text("Cancel") }
-                        Spacer(Modifier.width(8.dp))
-                        DialogPrimaryButton(onClick = { onSave(current) }) { Text("Save") }
+                        ColorWheelPicker(color = current, onColorChange = { current = it })
+                    }
+                    DialogFooter {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                        ) {
+                            DialogSecondaryButton(onClick = onDismiss) { Text("Cancel") }
+                            Spacer(Modifier.width(8.dp))
+                            DialogPrimaryButton(onClick = { onSave(current) }) { Text("Save") }
+                        }
                     }
                 }
+                PulsingScrollArrows(scrollState = bodyScrollState)
             }
         }
     }

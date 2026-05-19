@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
@@ -226,40 +227,6 @@ fun DashboardHelpScreen(
 
             HelpDividerLine()
 
-            // ─── SECTION 4: NAVIGATION BAR ───
-            HelpSectionTitle(S.dashboardHelp.navBarTitle)
-            HelpBodyText(S.dashboardHelp.navBarBody)
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Visual nav bar mockup
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .border(1.dp, dimColor.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
-                    .padding(horizontal = 16.dp, vertical = 10.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.List, contentDescription = null, tint = textColor, modifier = Modifier.size(28.dp))
-                    Icon(painter = painterResource(id = R.drawable.ic_coins), contentDescription = null, tint = textColor, modifier = Modifier.size(28.dp))
-                    Icon(Icons.Filled.Schedule, contentDescription = null, tint = textColor, modifier = Modifier.size(28.dp))
-                    Icon(Icons.Filled.Sync, contentDescription = null, tint = textColor, modifier = Modifier.size(28.dp))
-                }
-            }
-            Spacer(modifier = Modifier.height(10.dp))
-
-            HelpIconRow(Icons.AutoMirrored.Filled.List, S.dashboard.transactions, S.dashboardHelp.navTransactionsDesc)
-            HelpIconRow(painterResource(id = R.drawable.ic_coins), S.dashboard.savingsGoals, S.dashboardHelp.navSavingsDesc)
-            HelpIconRow(Icons.Filled.Schedule, S.dashboard.amortization, S.dashboardHelp.navAmortizationDesc)
-            HelpIconRow(Icons.Filled.Sync, S.dashboard.recurringExpenses, S.dashboardHelp.navRecurringDesc)
-            HelpIconRow(Icons.Filled.CalendarMonth, S.dashboard.budgetCalendar, S.dashboardHelp.navCalendarDesc)
-            Spacer(modifier = Modifier.height(16.dp))
-
-            HelpDividerLine()
 
             // ─── SECTION 5: SPENDING CHART ───
             HelpSectionTitle(S.dashboardHelp.spendingChartTitle)
@@ -281,32 +248,60 @@ fun DashboardHelpScreen(
 
             HelpDividerLine()
 
-            // ─── SECTION 6: QUICK TRANSACTION BUTTONS ───
+            // ─── SECTION 6: DASHBOARD ICON BAR ───
             HelpSectionTitle(S.dashboardHelp.quickButtonsTitle)
             HelpBodyText(S.dashboardHelp.quickButtonsBody)
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Visual button mockup
+            // Icon-bar mockup using light Default theme colors (Header bg +
+            // Header Text icons) so the help illustration is canonical
+            // regardless of which theme the user has selected.
+            val iconBarBg = Color(0xFF305880)   // LightCardBackground
+            val iconBarFg = Color(0xFFFFFFFF)   // LightCardText
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(10.dp))
-                    .border(1.dp, dimColor.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
-                    .padding(horizontal = 32.dp, vertical = 10.dp)
+                    .background(iconBarBg)
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Filled.Add, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(48.dp))
-                    Icon(Icons.Filled.Remove, contentDescription = null, tint = Color(0xFFF44336), modifier = Modifier.size(48.dp))
+                    // Add Transaction (layered: body + blue plus overlay).
+                    Box(modifier = Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_add_transaction_body),
+                            contentDescription = null,
+                            tint = iconBarFg,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_add_transaction_plus),
+                            contentDescription = null,
+                            tint = Color(0xFF0D47A1),
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    Icon(Icons.AutoMirrored.Filled.List, contentDescription = null, tint = iconBarFg, modifier = Modifier.size(32.dp))
+                    Icon(painter = painterResource(id = R.drawable.ic_coins), contentDescription = null, tint = iconBarFg, modifier = Modifier.size(32.dp))
+                    Icon(Icons.Filled.Schedule, contentDescription = null, tint = iconBarFg, modifier = Modifier.size(32.dp))
+                    Icon(Icons.Filled.Sync, contentDescription = null, tint = iconBarFg, modifier = Modifier.size(32.dp))
+                    Icon(Icons.Filled.DateRange, contentDescription = null, tint = iconBarFg, modifier = Modifier.size(32.dp))
                 }
             }
             Spacer(modifier = Modifier.height(10.dp))
 
-            HelpIconRow(Icons.Filled.Add, S.dashboard.addIncome, S.dashboardHelp.quickAddIncomeDesc, Color(0xFF4CAF50))
-            HelpIconRow(Icons.Filled.Remove, S.dashboard.addExpense, S.dashboardHelp.quickAddExpenseDesc, Color(0xFFF44336))
+            HelpBodyText(S.dashboardHelp.quickAddIncomeDesc)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            HelpIconRow(Icons.AutoMirrored.Filled.List, S.dashboard.transactions, S.dashboardHelp.navTransactionsDesc)
+            HelpIconRow(painterResource(id = R.drawable.ic_coins), S.dashboard.savingsGoals, S.dashboardHelp.navSavingsDesc)
+            HelpIconRow(Icons.Filled.Schedule, S.dashboard.amortization, S.dashboardHelp.navAmortizationDesc)
+            HelpIconRow(Icons.Filled.Sync, S.dashboard.recurringExpenses, S.dashboardHelp.navRecurringDesc)
+            HelpIconRow(Icons.Filled.DateRange, S.dashboard.budgetCalendar, S.dashboardHelp.navCalendarDesc)
             Spacer(modifier = Modifier.height(8.dp))
             HelpBodyText(
                 S.dashboardHelp.quickMatchingNote,

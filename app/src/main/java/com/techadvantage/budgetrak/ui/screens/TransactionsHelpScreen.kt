@@ -610,27 +610,27 @@ fun TransactionsHelpScreen(
                     val arcSize = Size(radius * 2, radius * 2)
                     val topLeft = Offset(center.x - radius, center.y - radius)
 
-                    // Slice 1: 55% - Green (filled)
+                    // Slice 1: 55% — Sunset plum (filled)
                     drawArc(
-                        color = Color(0xFF4CAF50),
+                        color = Color(0xFF4D1D46),
                         startAngle = -90f,
                         sweepAngle = 198f,
                         useCenter = true,
                         topLeft = topLeft,
                         size = arcSize
                     )
-                    // Slice 2: 30% - Blue (filled)
+                    // Slice 2: 30% — Sunset burnt orange (filled)
                     drawArc(
-                        color = Color(0xFF2196F3),
+                        color = Color(0xFFDC7049),
                         startAngle = 108f,
                         sweepAngle = 108f,
                         useCenter = true,
                         topLeft = topLeft,
                         size = arcSize
                     )
-                    // Slice 3: 15% - Orange (filled)
+                    // Slice 3: 15% — Sunset golden yellow (filled)
                     drawArc(
-                        color = Color(0xFFFF9800),
+                        color = Color(0xFFEBB865),
                         startAngle = 216f,
                         sweepAngle = 54f,
                         useCenter = true,
@@ -682,11 +682,11 @@ fun TransactionsHelpScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center
             ) {
-                PieLegendItem(Color(0xFF4CAF50), "Food 55%")
+                PieLegendItem(Color(0xFF4D1D46), "Food 55%")
                 Spacer(modifier = Modifier.width(12.dp))
-                PieLegendItem(Color(0xFF2196F3), "Shopping 30%")
+                PieLegendItem(Color(0xFFDC7049), "Shopping 30%")
                 Spacer(modifier = Modifier.width(12.dp))
-                PieLegendItem(Color(0xFFFF9800), "Other 15%")
+                PieLegendItem(Color(0xFFEBB865), "Other 15%")
             }
             Spacer(modifier = Modifier.height(6.dp))
             BodyText(
