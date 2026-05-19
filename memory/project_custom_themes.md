@@ -1,13 +1,13 @@
 ---
-name: feature/custom-themes branch — color theming feature
-description: Long-lived feature branch off dev adding user-customizable color themes + chart palettes; scope, locked-color rationale, page button system, and what's deferred
+name: Custom Themes feature — color theming architecture
+description: User-customizable color themes + chart palettes (themable roles, locked-color rationale, page button system, derivation helpers). Originated on the feature/custom-themes branch; merged into dev 2026-05-19.
 type: project
 originSessionId: 97a3a389-349e-430a-a999-28f81c785774
 ---
-# feature/custom-themes branch
+# Custom Themes feature
 
-## Status (2026-05-18)
-Working APK in `Download/BudgeTrak.apk`. Not pushed for release — branch is exploratory, no release dispatch.
+## Status (2026-05-19)
+Merged into `dev` via merge commit `650c5f8` (no-ff). The `feature/custom-themes` branch was deleted locally and on origin. The architecture below is now live on dev — references to "the feature branch" are historical.
 
 ## Architecture decisions
 
@@ -80,5 +80,5 @@ Add-transaction + icon (both dashboard icon bar and Transactions toolbar) pulses
 ## Deferred
 - **Migrate hardcoded `0xFF4CAF50` / `0xFFF44336` literals** to a semantic helper if income/expense ever becomes themable. For now they stay hardcoded — see East-Asia-locale note above.
 
-## Why not merge to dev yet
-User wants to soak-test before committing to ship. Branch may be abandoned if the feature feels wrong; merging would force unwind. Release workflow is dispatch-only so no accidental publish.
+## Release path
+Architecture is on `dev` after the 2026-05-19 merge. Ship like any other dev work: promote dev → main and dispatch `release.yml --ref main` per the standard release pipeline (see `feedback_ci_manual_dispatch.md`). No special handling needed; users already on a prior release see the new built-in themes (Default with updated light/dark surface + surfaceHeader, plus Bubblegum) on their first launch of the new build.

@@ -131,8 +131,8 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 ## Specifications
 - [Budget Calculation](spec_budget_calculation.md), [Data Model](spec_data_model.md), [Period Refresh](spec_period_refresh.md), [UI Architecture](spec_ui_architecture.md), [Transaction Flows](spec_transaction_flows.md), [CSV Import](spec_csv_import.md), [Group Management](spec_group_management.md), [Receipt Photos](spec_receipt_photos.md), [Dashboard](spec_dashboard.md), [Simulation](spec_simulation.md), [Recurring + Savings](spec_recurring_and_savings.md), [Backup](spec_backup.md), [Diagnostics](spec_diagnostics.md).
 
-## Feature branches
-- [feature/custom-themes — color theming](project_custom_themes_branch.md) — 10-role theme + 12-color chart palette, decoupled; built-ins + user customs; local-only + survives group-join. Not shipped; PieChartEditor wiring + Income/Expense call-site migration deferred.
+## Merged features
+- [Custom Themes — color theming](project_custom_themes.md) — 8-role theme + 12-color chart palette, decoupled; built-ins (Default, Bubblegum) + user customs; local-only + survives group-join. Merged into dev 2026-05-19.
 
 ## Important Feedback
 - [Specs vs code: assume spec is wrong first](feedback_specs_vs_code.md) — existing working code usually reflects design choices specs don't capture.
