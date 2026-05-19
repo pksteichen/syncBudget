@@ -1617,4 +1617,45 @@ object TranslationContext {
         "ocrHeadline" to "Banner headline for AI-powered receipt OCR feature, 1 line ≤25 chars. Conveys the scan action. Subscriber-only.",
         "ocrBody" to "Banner body for OCR: AI reads each receipt and fills in date/merchant/amount/category. Up to 3 lines, target ~80 chars."
     )
+
+    // ── Colors Strings ──
+
+    val colors = mapOf(
+        "title" to "Screen title for the Colors page where users customize app color themes and chart palettes.",
+        "modeLight" to "Mode dropdown option: edit the colors used in Light Mode (the system-light theme). Noun phrase, label only.",
+        "modeDark" to "Mode dropdown option: edit the colors used in Dark Mode (the system-dark theme). Noun phrase, label only.",
+        "modeChartLight" to "Mode dropdown option: edit the 12-color chart palette used in Light Mode. Parenthetical disambiguates which mode.",
+        "modeChartDark" to "Mode dropdown option: edit the 12-color chart palette used in Dark Mode.",
+        "slotHeader" to "Slot label for the color used in page headers (top app bar background). Short noun label.",
+        "slotHeaderText" to "Slot label for the text/icon color shown on top of the Header color (e.g., title text in the top app bar).",
+        "slotPageBackground" to "Slot label for the color filling each screen's overall page background.",
+        "slotWindowHeader" to "Slot label for the color used in dialog/popup headers (the colored band at the top of a dialog).",
+        "slotWindowHeaderText" to "Slot label for the text color on top of the Window Header band — pairs with Window Header.",
+        "slotWindowBackground" to "Slot label for the body fill color of dialogs/popups (what 'surface' is in Material 3). Pairs visually with Window Header.",
+        "slotGeneralText" to "Slot label for the default body-text color across the app — paragraph text, list-item text, form labels.",
+        "slotSolariBackground" to "Slot label for the color of the Solari flip-display frame on the dashboard. 'Solari' is the brand name of the flip-board style — do not translate.",
+        "dropdownChartPalette" to "Label on the second dropdown when the Mode is set to a Chart mode — picks which chart palette to edit.",
+        "dropdownTheme" to "Label on the second dropdown when the Mode is set to a base (non-chart) mode — picks which theme to edit.",
+        "builtInSuffix" to "Suffix appended to the name of a theme or palette that ships with the app (vs. a user-created one). Includes leading space, e.g., ' (Built-in)'.",
+        "modeLabel" to "Label on the first dropdown (mode selector). Single word, short.",
+        "colorSettingLabel" to "Label on the slot dropdown (which color role to edit) in non-chart modes.",
+        "chartSlotLabel" to "Inline label above the 12-swatch chart slot selector in Chart modes. Means 'which chart slot are you editing'.",
+        "editColor" to "Accessibility content description for the pencil icon that opens the color picker.",
+        "restoreDefault" to "Accessibility content description for the undo icon that restores the slot's lineage-default color.",
+        "newPalette" to "Button label to clone the current chart palette under a new name. Imperative/short.",
+        "newTheme" to "Button label to clone the current theme under a new name. Imperative/short.",
+        "tip" to "Help-text paragraph explaining that editing a built-in auto-forks a custom copy, built-ins are immutable, and the undo icon restores defaults.",
+        "samplePieChart" to "Preview caption shown above the 12-wedge sample pie chart in Chart modes.",
+        "sampleDialog" to "Preview caption shown above the inline sample dialog in base (non-chart) modes.",
+        "pickColor" to "Title of the color-picker dialog that opens when the user taps a swatch or pencil icon.",
+        "newChartPaletteDialogTitle" to "Dialog title when creating a new chart palette via the New palette button.",
+        "newThemeDialogTitle" to "Dialog title when creating a new theme via the New theme button.",
+        "cloneUnderNewName" to "Dialog body explaining the new theme/palette will clone the current one. Lambda: 'sourceName' is the name being cloned, displayed in quotes.",
+        "nameLabel" to "Form field label for the new theme/palette name input.",
+        "create" to "Button label that confirms creating the new theme/palette. Imperative/short.",
+        "deletePaletteTitle" to "Confirmation dialog title when deleting a user-created chart palette. Question form.",
+        "deleteThemeTitle" to "Confirmation dialog title when deleting a user-created theme. Question form.",
+        "deleteConfirmBody" to "Confirmation dialog body warning the deletion is irreversible. Lambda: 'targetName' is the name being deleted, displayed in quotes.",
+        "sampleDialogBody" to "Body-text shown inside the inline sample dialog preview — explains what the Window Header color affects throughout the app."
+    )
 }

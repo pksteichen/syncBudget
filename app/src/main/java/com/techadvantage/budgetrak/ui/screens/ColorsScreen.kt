@@ -64,25 +64,52 @@ import com.techadvantage.budgetrak.ui.theme.ScrollableDropdownContent
 import com.techadvantage.budgetrak.ui.theme.ThemeColorSet
 import com.techadvantage.budgetrak.ui.theme.ThemeProfile
 
-private enum class EditMode(val label: String, val isChart: Boolean) {
-    LIGHT("Light Mode Colors", false),
-    DARK("Dark Mode Colors", false),
-    CHART_LIGHT("Chart Colors (Light)", true),
-    CHART_DARK("Chart Colors (Dark)", true),
+private enum class EditMode(val isChart: Boolean) {
+    LIGHT(false),
+    DARK(false),
+    CHART_LIGHT(true),
+    CHART_DARK(true),
 }
 
-private data class Slot(val key: String, val label: String)
+@Composable
+private fun EditMode.label(): String {
+    val S = LocalStrings.current
+    return when (this) {
+        EditMode.LIGHT -> S.colors.modeLight
+        EditMode.DARK -> S.colors.modeDark
+        EditMode.CHART_LIGHT -> S.colors.modeChartLight
+        EditMode.CHART_DARK -> S.colors.modeChartDark
+    }
+}
+
+private data class Slot(val key: String)
 
 private val BASE_SLOTS = listOf(
-    Slot("cardBackground", "Header"),
-    Slot("cardText", "Header Text"),
-    Slot("background", "Page Background"),
-    Slot("surfaceHeader", "Window Header"),
-    Slot("surfaceHeaderText", "Window Header Text"),
-    Slot("surface", "Window Background"),
-    Slot("onSurface", "Body Text"),
-    Slot("displayBackground", "Solari Background"),
+    Slot("cardBackground"),
+    Slot("cardText"),
+    Slot("background"),
+    Slot("surfaceHeader"),
+    Slot("surfaceHeaderText"),
+    Slot("surface"),
+    Slot("onSurface"),
+    Slot("displayBackground"),
 )
+
+@Composable
+private fun Slot.label(): String {
+    val S = LocalStrings.current
+    return when (key) {
+        "cardBackground" -> S.colors.slotHeader
+        "cardText" -> S.colors.slotHeaderText
+        "background" -> S.colors.slotPageBackground
+        "surfaceHeader" -> S.colors.slotWindowHeader
+        "surfaceHeaderText" -> S.colors.slotWindowHeaderText
+        "surface" -> S.colors.slotWindowBackground
+        "onSurface" -> S.colors.slotGeneralText
+        "displayBackground" -> S.colors.slotSolariBackground
+        else -> key
+    }
+}
 
 private fun ThemeColorSet.get(key: String): Color = when (key) {
     "cardBackground" -> cardBackground
@@ -233,11 +260,11 @@ fun ColorsScreen(
         }
     }
 
-    val dropdownLabel = if (mode.isChart) "Chart Palette" else "Theme"
+    val dropdownLabel = if (mode.isChart) S.colors.dropdownChartPalette else S.colors.dropdownTheme
     val dropdownName = if (mode.isChart) {
-        currentPalette.name + if (currentPalette.isBuiltIn) " (Built-in)" else ""
+        currentPalette.name + if (currentPalette.isBuiltIn) S.colors.builtInSuffix else ""
     } else {
-        currentTheme.name + if (currentTheme.isBuiltIn) " (Built-in)" else ""
+        currentTheme.name + if (currentTheme.isBuiltIn) S.colors.builtInSuffix else ""
     }
 
     // Preview: page renders in the theme/mode being edited so user sees their
@@ -287,7 +314,7 @@ fun ColorsScreen(
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = "Colors",
+                        text = S.colors.title,
                         style = MaterialTheme.typography.titleLarge,
                         color = customColors.headerText
                     )
@@ -323,10 +350,10 @@ fun ColorsScreen(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     OutlinedTextField(
-                        value = mode.label,
+                        value = mode.label(),
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Mode") },
+                        label = { Text(S.colors.modeLabel) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(modeExpanded) },
                         modifier = Modifier.fillMaxWidth().menuAnchor(),
                     )
@@ -336,7 +363,7 @@ fun ColorsScreen(
                     ) {
                         EditMode.values().forEach { m ->
                             DropdownMenuItem(
-                                text = { Text(m.label) },
+                                text = { Text(m.label()) },
                                 onClick = { mode = m; modeExpanded = false },
                             )
                         }
@@ -367,7 +394,7 @@ fun ColorsScreen(
                             if (mode.isChart) {
                                 allPalettes.forEach { p ->
                                     DropdownMenuItem(
-                                        text = { Text(p.name + if (p.isBuiltIn) " (Built-in)" else "") },
+                                        text = { Text(p.name + if (p.isBuiltIn) S.colors.builtInSuffix else "") },
                                         onClick = {
                                             currentPalette = p
                                             onActiveChartPaletteChange(p)
@@ -379,7 +406,7 @@ fun ColorsScreen(
                             } else {
                                 allThemes.forEach { p ->
                                     DropdownMenuItem(
-                                        text = { Text(p.name + if (p.isBuiltIn) " (Built-in)" else "") },
+                                        text = { Text(p.name + if (p.isBuiltIn) S.colors.builtInSuffix else "") },
                                         onClick = {
                                             currentTheme = p
                                             onActiveThemeChange(p)
@@ -403,10 +430,10 @@ fun ColorsScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         OutlinedTextField(
-                            value = BASE_SLOTS[slotIndex].label,
+                            value = BASE_SLOTS[slotIndex].label(),
                             onValueChange = {},
                             readOnly = true,
-                            label = { Text("Color Setting") },
+                            label = { Text(S.colors.colorSettingLabel) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(slotExpanded) },
                             modifier = Modifier.fillMaxWidth().menuAnchor(),
                         )
@@ -417,7 +444,7 @@ fun ColorsScreen(
                             ScrollableDropdownContent {
                                 BASE_SLOTS.forEachIndexed { i, slot ->
                                     DropdownMenuItem(
-                                        text = { Text(slot.label) },
+                                        text = { Text(slot.label()) },
                                         onClick = { slotIndex = i; slotExpanded = false },
                                     )
                                 }
@@ -426,7 +453,7 @@ fun ColorsScreen(
                     }
                 } else {
                     Column {
-                        Text("Chart slot", style = MaterialTheme.typography.labelLarge)
+                        Text(S.colors.chartSlotLabel, style = MaterialTheme.typography.labelLarge)
                         Spacer(Modifier.height(8.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -464,7 +491,7 @@ fun ColorsScreen(
                     IconButton(onClick = { pickerOpen = true }) {
                         Icon(
                             imageVector = Icons.Filled.Edit,
-                            contentDescription = "Edit color",
+                            contentDescription = S.colors.editColor,
                             tint = MaterialTheme.colorScheme.onBackground,
                         )
                     }
@@ -472,7 +499,7 @@ fun ColorsScreen(
                         IconButton(onClick = { applyColor(defaultSlotColor) }) {
                             Icon(
                                 imageVector = Icons.Filled.Undo,
-                                contentDescription = "Restore default",
+                                contentDescription = S.colors.restoreDefault,
                                 tint = MaterialTheme.colorScheme.onBackground,
                             )
                         }
@@ -484,20 +511,18 @@ fun ColorsScreen(
             item {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     com.techadvantage.budgetrak.ui.theme.ScreenPrimaryButton(onClick = { newName = ""; newDialog = true }) {
-                        Text(if (mode.isChart) "New palette" else "New theme")
+                        Text(if (mode.isChart) S.colors.newPalette else S.colors.newTheme)
                     }
                     val canDelete = if (mode.isChart) !currentPalette.isBuiltIn else !currentTheme.isBuiltIn
                     if (canDelete) {
-                        DialogDangerButton(onClick = { deleteConfirm = true }) { Text("Delete") }
+                        DialogDangerButton(onClick = { deleteConfirm = true }) { Text(S.common.delete) }
                     }
                 }
             }
 
             item {
                 Text(
-                    "Tip: editing a built-in theme or palette creates a custom copy automatically. " +
-                        "Built-ins can never be modified or deleted. Tap the undo icon to restore a " +
-                        "color to its Default value.",
+                    S.colors.tip,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -507,7 +532,7 @@ fun ColorsScreen(
             item {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    if (mode.isChart) "Sample Pie Chart" else "Sample Dialog",
+                    if (mode.isChart) S.colors.samplePieChart else S.colors.sampleDialog,
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onBackground,
                 )
@@ -525,7 +550,7 @@ fun ColorsScreen(
 
     if (pickerOpen) {
         ColorPickerDialog(
-            title = "Pick a color",
+            title = S.colors.pickColor,
             initial = currentSlotColor,
             onDismiss = { pickerOpen = false },
             onSave = { picked ->
@@ -546,21 +571,21 @@ fun ColorsScreen(
                 tonalElevation = 6.dp,
             ) {
                 Column {
-                    DialogHeader(if (mode.isChart) "New chart palette" else "New theme")
+                    DialogHeader(if (mode.isChart) S.colors.newChartPaletteDialogTitle else S.colors.newThemeDialogTitle)
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Clone \"$sourceName\" under a new name:")
+                        Text(S.colors.cloneUnderNewName(sourceName))
                         Spacer(Modifier.height(8.dp))
                         OutlinedTextField(
                             value = newName,
                             onValueChange = { newName = it },
-                            label = { Text("Name") },
+                            label = { Text(S.colors.nameLabel) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
                     DialogFooter {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                            DialogSecondaryButton(onClick = { newDialog = false }) { Text("Cancel") }
+                            DialogSecondaryButton(onClick = { newDialog = false }) { Text(S.common.cancel) }
                             Spacer(Modifier.width(8.dp))
                             DialogPrimaryButton(
                                 enabled = newName.isNotBlank() &&
@@ -587,7 +612,7 @@ fun ColorsScreen(
                                     }
                                     newDialog = false
                                 },
-                            ) { Text("Create") }
+                            ) { Text(S.colors.create) }
                         }
                     }
                 }
@@ -599,8 +624,8 @@ fun ColorsScreen(
         val targetName = if (mode.isChart) currentPalette.name else currentTheme.name
         AdAwareAlertDialog(
             onDismissRequest = { deleteConfirm = false },
-            title = { Text(if (mode.isChart) "Delete palette?" else "Delete theme?") },
-            text = { Text("Delete \"$targetName\"? This cannot be undone.") },
+            title = { Text(if (mode.isChart) S.colors.deletePaletteTitle else S.colors.deleteThemeTitle) },
+            text = { Text(S.colors.deleteConfirmBody(targetName)) },
             style = DialogStyle.DANGER,
             confirmButton = {
                 DialogDangerButton(onClick = {
@@ -620,10 +645,10 @@ fun ColorsScreen(
                         ThemesRepository.setSelected(context, BuiltInThemes.DEFAULT.name)
                     }
                     deleteConfirm = false
-                }) { Text("Delete") }
+                }) { Text(S.common.delete) }
             },
             dismissButton = {
-                DialogSecondaryButton(onClick = { deleteConfirm = false }) { Text("Cancel") }
+                DialogSecondaryButton(onClick = { deleteConfirm = false }) { Text(S.common.cancel) }
             },
         )
     }
@@ -636,6 +661,7 @@ fun ColorsScreen(
  */
 @Composable
 private fun SampleDialog() {
+    val S = LocalStrings.current
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -643,20 +669,19 @@ private fun SampleDialog() {
         tonalElevation = 6.dp,
     ) {
         Column {
-            DialogHeader(title = "Sample Dialog")
+            DialogHeader(title = S.colors.sampleDialog)
             Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
                 Text(
-                    "Body text on the dialog surface. The header band above " +
-                        "tints primary buttons and other accent UI throughout the app.",
+                    S.colors.sampleDialogBody,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
             }
             DialogFooter {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    DialogSecondaryButton(onClick = {}) { Text("Cancel") }
+                    DialogSecondaryButton(onClick = {}) { Text(S.common.cancel) }
                     Spacer(Modifier.width(8.dp))
-                    DialogPrimaryButton(onClick = {}) { Text("OK") }
+                    DialogPrimaryButton(onClick = {}) { Text(S.common.ok) }
                 }
             }
         }

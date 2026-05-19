@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
@@ -179,6 +180,7 @@ fun DialogPrimaryButton(
         enabled = enabled,
         shape = RoundedCornerShape(8.dp),
         contentPadding = contentPadding,
+        border = BorderStroke(0.5.dp, c.surfaceHeaderText),
         colors = ButtonDefaults.buttonColors(
             containerColor = c.surfaceHeader,
             contentColor = c.surfaceHeaderText,
@@ -213,6 +215,7 @@ fun ScreenPrimaryButton(
         enabled = enabled,
         shape = RoundedCornerShape(8.dp),
         contentPadding = contentPadding,
+        border = BorderStroke(0.5.dp, customColors.headerText),
         colors = ButtonDefaults.buttonColors(
             containerColor = customColors.headerBackground,
             contentColor = customColors.headerText,
@@ -223,7 +226,12 @@ fun ScreenPrimaryButton(
     )
 }
 
-/** Gray filled secondary button for dialogs. */
+/**
+ * Muted-header secondary button for dialogs (Cancel and similar). Container
+ * is the Window Header color blended 50% with the dialog body surface so it
+ * reads as a less-prominent sibling of [DialogPrimaryButton] while still
+ * sharing the user's theme family.
+ */
 @Composable
 fun DialogSecondaryButton(
     onClick: () -> Unit,
@@ -232,15 +240,24 @@ fun DialogSecondaryButton(
     contentPadding: PaddingValues = CompactButtonPadding,
     content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit
 ) {
+    val c = LocalSyncBudgetColors.current
+    val container = androidx.compose.ui.graphics.lerp(
+        c.surfaceHeader,
+        c.surfaceHeaderText,
+        0.3f,
+    )
     Button(
         onClick = onClick,
         modifier = modifier,
         enabled = enabled,
         shape = RoundedCornerShape(8.dp),
         contentPadding = contentPadding,
+        border = BorderStroke(0.5.dp, c.surfaceHeaderText),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (isSystemInDarkTheme()) Color(0xFF3A3A3A) else Color(0xFFE0E0E0),
-            contentColor = if (isSystemInDarkTheme()) Color(0xFFCCCCCC) else Color(0xFF555555)
+            containerColor = container,
+            contentColor = c.surfaceHeaderText,
+            disabledContainerColor = container.copy(alpha = 0.38f),
+            disabledContentColor = c.surfaceHeaderText.copy(alpha = 0.38f),
         ),
         content = content
     )
@@ -370,6 +387,7 @@ fun DialogDangerButton(
         modifier = modifier,
         enabled = enabled,
         shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(0.5.dp, Color.White),
         colors = ButtonDefaults.buttonColors(
             containerColor = Color(0xFFC62828),
             contentColor = Color.White
@@ -395,6 +413,7 @@ fun DialogWarningButton(
         modifier = modifier,
         enabled = enabled,
         shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(0.5.dp, Color.White),
         colors = ButtonDefaults.buttonColors(
             containerColor = Color(0xFFE65100),
             contentColor = Color.White

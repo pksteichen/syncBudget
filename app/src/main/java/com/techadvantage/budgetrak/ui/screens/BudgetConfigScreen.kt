@@ -37,6 +37,7 @@ import com.techadvantage.budgetrak.ui.theme.DialogHeader
 import com.techadvantage.budgetrak.ui.theme.DialogFooter
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.DatePicker
 import com.techadvantage.budgetrak.ui.theme.AdAwareDatePickerDialog
 import androidx.compose.material3.DropdownMenuItem
@@ -311,7 +312,11 @@ fun BudgetConfigScreen(
                         Checkbox(
                             checked = isManualBudgetEnabled,
                             onCheckedChange = onManualBudgetToggle,
-                            enabled = !isLocked
+                            enabled = !isLocked,
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = MaterialTheme.colorScheme.primary,
+                                uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                            )
                         )
                         if (isLocked) Box(Modifier.matchParentSize().clickable { toastState.show(S.settings.administratorOnly) })
                     }
@@ -391,31 +396,27 @@ fun BudgetConfigScreen(
                 ) {
                     // Income mode toggle (cycles on tap)
                     Box(modifier = Modifier.weight(1f)) {
-                    Surface(
-                        onClick = {
-                            val idx = modes.indexOf(incomeMode)
-                            var nextIdx = (idx + 1) % modes.size
-                            if (modes[nextIdx] == "ACTUAL_ADJUST" && isManualBudgetEnabled) {
-                                nextIdx = (nextIdx + 1) % modes.size
-                            }
-                            onIncomeModeChange(modes[nextIdx])
-                        },
-                        enabled = !isLocked,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
-                        shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = currentLabel,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (isLocked) MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
-                                   else MaterialTheme.colorScheme.primary,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp)
-                        )
-                    }
-                    if (isLocked) Box(Modifier.matchParentSize().clickable { toastState.show(S.settings.administratorOnly) })
+                        ScreenPrimaryButton(
+                            onClick = {
+                                val idx = modes.indexOf(incomeMode)
+                                var nextIdx = (idx + 1) % modes.size
+                                if (modes[nextIdx] == "ACTUAL_ADJUST" && isManualBudgetEnabled) {
+                                    nextIdx = (nextIdx + 1) % modes.size
+                                }
+                                onIncomeModeChange(modes[nextIdx])
+                            },
+                            enabled = !isLocked,
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp),
+                        ) {
+                            Text(
+                                text = currentLabel,
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                        if (isLocked) Box(Modifier.matchParentSize().clickable { toastState.show(S.settings.administratorOnly) })
                     }
                     // Add income source button (available to all members)
                     ScreenPrimaryButton(

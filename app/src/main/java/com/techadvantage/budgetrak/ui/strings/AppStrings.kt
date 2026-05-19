@@ -36,6 +36,7 @@ interface AppStrings {
     val budgetCalendar: BudgetCalendarStrings
     val budgetCalendarHelp: BudgetCalendarHelpStrings
     val widgetTransaction: WidgetTransactionStrings
+    val colors: ColorsStrings
     val ads: InHouseAdStrings
 }
 
@@ -1604,4 +1605,48 @@ data class BudgetCalendarHelpStrings(
     val tipsTitle: String,
     val tip1: String,
     val tip2: String
+)
+
+/**
+ * Copy for the Colors screen (user-customizable color themes + chart palettes).
+ * Includes slot labels that appear in the picker, mode dropdown options,
+ * dialog titles, and sample-preview captions.
+ */
+data class ColorsStrings(
+    val title: String,
+    val modeLight: String,
+    val modeDark: String,
+    val modeChartLight: String,
+    val modeChartDark: String,
+    val slotHeader: String,
+    val slotHeaderText: String,
+    val slotPageBackground: String,
+    val slotWindowHeader: String,
+    val slotWindowHeaderText: String,
+    val slotWindowBackground: String,
+    val slotGeneralText: String,
+    val slotSolariBackground: String,
+    val dropdownChartPalette: String,
+    val dropdownTheme: String,
+    val builtInSuffix: String,
+    val modeLabel: String,
+    val colorSettingLabel: String,
+    val chartSlotLabel: String,
+    val editColor: String,
+    val restoreDefault: String,
+    val newPalette: String,
+    val newTheme: String,
+    val tip: String,
+    val samplePieChart: String,
+    val sampleDialog: String,
+    val pickColor: String,
+    val newChartPaletteDialogTitle: String,
+    val newThemeDialogTitle: String,
+    val cloneUnderNewName: (String) -> String,
+    val nameLabel: String,
+    val create: String,
+    val deletePaletteTitle: String,
+    val deleteThemeTitle: String,
+    val deleteConfirmBody: (String) -> String,
+    val sampleDialogBody: String
 )

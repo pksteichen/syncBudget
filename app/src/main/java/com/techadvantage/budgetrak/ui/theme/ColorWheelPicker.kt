@@ -58,11 +58,16 @@ fun ColorWheelPicker(
     onColorChange: (Color) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val hsv = remember(color) { color.toHsv() }
-    var hue by remember(color) { mutableFloatStateOf(hsv[0]) }
-    var sat by remember(color) { mutableFloatStateOf(hsv[1]) }
-    var value by remember(color) { mutableFloatStateOf(hsv[2]) }
-    var hexInput by remember(color) { mutableStateOf(color.toHex()) }
+    // State seeded once from the initial color. Re-keying on `color` would
+    // recreate the underlying mutable state objects on every emit, leaving
+    // HueSatWheel's pointerInput holding stale references to the previous
+    // value/sat/hue — which made the brightness slider's last value snap
+    // back to the originally-loaded one as soon as the wheel was touched.
+    val initialHsv = remember { color.toHsv() }
+    var hue by remember { mutableFloatStateOf(initialHsv[0]) }
+    var sat by remember { mutableFloatStateOf(initialHsv[1]) }
+    var value by remember { mutableFloatStateOf(initialHsv[2]) }
+    var hexInput by remember { mutableStateOf(color.toHex()) }
 
     fun emit(h: Float, s: Float, v: Float) {
         val c = Color.hsv(h.coerceIn(0f, 360f), s.coerceIn(0f, 1f), v.coerceIn(0f, 1f))

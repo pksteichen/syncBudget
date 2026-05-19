@@ -1984,4 +1984,46 @@ object SpanishStrings : AppStrings {
         ocrHeadline = "Toca para escanear",
         ocrBody = "La IA lee cada recibo y rellena fecha, comercio, monto y categor\u00eda.",
     )
+
+    override val colors = ColorsStrings(
+        title = "Colores",
+        modeLight = "Colores en Modo Claro",
+        modeDark = "Colores en Modo Oscuro",
+        modeChartLight = "Colores de Gr\u00e1ficos (Claro)",
+        modeChartDark = "Colores de Gr\u00e1ficos (Oscuro)",
+        slotHeader = "Encabezado",
+        slotHeaderText = "Texto del encabezado",
+        slotPageBackground = "Fondo de p\u00e1gina",
+        slotWindowHeader = "Encabezado de ventana",
+        slotWindowHeaderText = "Texto del encabezado de ventana",
+        slotWindowBackground = "Fondo de ventana",
+        slotGeneralText = "Texto general",
+        slotSolariBackground = "Fondo de Solari",
+        dropdownChartPalette = "Paleta de gr\u00e1ficos",
+        dropdownTheme = "Tema",
+        builtInSuffix = " (Integrado)",
+        modeLabel = "Modo",
+        colorSettingLabel = "Ajuste de color",
+        chartSlotLabel = "Posici\u00f3n del gr\u00e1fico",
+        editColor = "Editar color",
+        restoreDefault = "Restaurar predeterminado",
+        newPalette = "Nueva paleta",
+        newTheme = "Nuevo tema",
+        tip = "Consejo: editar un tema o paleta integrado crea una copia personalizada autom\u00e1ticamente. " +
+            "Los integrados no se pueden modificar ni eliminar. Toca el \u00edcono de deshacer para restaurar " +
+            "un color a su valor predeterminado.",
+        samplePieChart = "Gr\u00e1fico circular de muestra",
+        sampleDialog = "Di\u00e1logo de muestra",
+        pickColor = "Elige un color",
+        newChartPaletteDialogTitle = "Nueva paleta de gr\u00e1ficos",
+        newThemeDialogTitle = "Nuevo tema",
+        cloneUnderNewName = { sourceName -> "Duplicar \"$sourceName\" con un nuevo nombre:" },
+        nameLabel = "Nombre",
+        create = "Crear",
+        deletePaletteTitle = "\u00bfEliminar paleta?",
+        deleteThemeTitle = "\u00bfEliminar tema?",
+        deleteConfirmBody = { targetName -> "\u00bfEliminar \"$targetName\"? Esta acci\u00f3n no se puede deshacer." },
+        sampleDialogBody = "Texto del cuerpo en la superficie del di\u00e1logo. La banda del encabezado de arriba " +
+            "ti\u00f1e los botones principales y otros elementos de acento en toda la app.",
+    )
 }

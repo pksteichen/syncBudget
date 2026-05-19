@@ -2000,4 +2000,46 @@ object EnglishStrings : AppStrings {
         ocrHeadline = "Tap to scan receipts",
         ocrBody = "AI reads each receipt and fills in date, merchant, amount, and category.",
     )
+
+    override val colors = ColorsStrings(
+        title = "Colors",
+        modeLight = "Light Mode Colors",
+        modeDark = "Dark Mode Colors",
+        modeChartLight = "Chart Colors (Light)",
+        modeChartDark = "Chart Colors (Dark)",
+        slotHeader = "Header",
+        slotHeaderText = "Header Text",
+        slotPageBackground = "Page Background",
+        slotWindowHeader = "Window Header",
+        slotWindowHeaderText = "Window Header Text",
+        slotWindowBackground = "Window Background",
+        slotGeneralText = "General Text",
+        slotSolariBackground = "Solari Background",
+        dropdownChartPalette = "Chart Palette",
+        dropdownTheme = "Theme",
+        builtInSuffix = " (Built-in)",
+        modeLabel = "Mode",
+        colorSettingLabel = "Color Setting",
+        chartSlotLabel = "Chart slot",
+        editColor = "Edit color",
+        restoreDefault = "Restore default",
+        newPalette = "New palette",
+        newTheme = "New theme",
+        tip = "Tip: editing a built-in theme or palette creates a custom copy automatically. " +
+            "Built-ins can never be modified or deleted. Tap the undo icon to restore a " +
+            "color to its Default value.",
+        samplePieChart = "Sample Pie Chart",
+        sampleDialog = "Sample Dialog",
+        pickColor = "Pick a color",
+        newChartPaletteDialogTitle = "New chart palette",
+        newThemeDialogTitle = "New theme",
+        cloneUnderNewName = { sourceName -> "Clone \"$sourceName\" under a new name:" },
+        nameLabel = "Name",
+        create = "Create",
+        deletePaletteTitle = "Delete palette?",
+        deleteThemeTitle = "Delete theme?",
+        deleteConfirmBody = { targetName -> "Delete \"$targetName\"? This cannot be undone." },
+        sampleDialogBody = "Body text on the dialog surface. The header band above " +
+            "tints primary buttons and other accent UI throughout the app.",
+    )
 }

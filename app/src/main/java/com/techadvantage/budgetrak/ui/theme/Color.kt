@@ -17,7 +17,7 @@ val DarkSurfaceHeaderText = Color(0xFFE8F5E9)    // Pale green text on dialog he
 
 // Light theme
 val LightBackground = Color(0xFFBDD5CC)          // Medium greenish-blue page
-val LightSurface = Color(0xFFFFFFFF)
+val LightSurface = Color(0xFFBFD9E4)             // Pale blue cards/dialogs body
 val LightHeaderBackground = Color(0xFF2C2C2C)
 val LightHeaderText = Color(0xFFF0E8D8)
 val LightPrimary = Color(0xFF2E5C80)
@@ -27,7 +27,7 @@ val LightOnSurface = Color(0xFF1C1B1F)
 val LightCardBackground = Color(0xFF305880)      // Lighter blue cards
 val LightCardText = Color(0xFFFFFFFF)            // White text
 val LightDisplayBackground = Color(0xFFD6E5DE)   // Light greenish Solari frame
-val LightSurfaceHeader = Color(0xFF2E7D32)       // Light dialog/popup header
+val LightSurfaceHeader = Color(0xFF497D79)       // Muted teal dialog/popup header
 val LightSurfaceHeaderText = Color(0xFFFFFFFF)   // White text on light dialog header
 
 // Semantic income/expense (shared light + dark today; themable via SyncBudgetColors).
