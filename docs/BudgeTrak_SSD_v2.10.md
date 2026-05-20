@@ -43,6 +43,7 @@
 22. PieChartEditor Component
 22a. Custom Themes
 23. Help System
+23a. Help Chat Assistant
 24. Error Handling
 25. Android Manifest Configuration
 26. Code Statistics
@@ -2132,9 +2133,11 @@ Slot labels and all other in-screen copy are localized via `AppStrings.colors` (
 
 
 
+## 23. Help System
+
 ### 23.1 Architecture
 
-Each major screen has a dedicated help screen accessible from a help icon in its top app bar. Help screens are pure Composables built on shared blocks from `HelpComponents.kt` (165 lines).
+Each major screen has a dedicated help screen accessible from a help icon in its top app bar. Help screens are pure Composables built on shared blocks from `HelpComponents.kt`.
 
 ### 23.2 Help Screen Inventory (11 screens)
 
@@ -2155,6 +2158,212 @@ Each major screen has a dedicated help screen accessible from a help icon in its
 ### 23.3 Shared Help Components
 
 `HelpComponents.kt` provides section headers, bullet lists with icons, tip/note callouts, key-value rows, and numbered step lists.
+
+Also exports the **Help Chat opener** infrastructure (see §23a): `HelpChatHost`, `HelpChatTopBarAction`, and the `LocalHelpChatOpener` CompositionLocal. Every help screen calls `HelpChatTopBarAction()` from its `CenterAlignedTopAppBar.actions` slot to surface the chatbot icon.
+
+## 23a. Help Chat Assistant
+
+### 23a.1 Overview & Motivation
+
+In-app conversational help built on Gemini 2.5 Flash-Lite. Goals:
+- Deflect support email volume for the "how does X work?" / "why is my number Y?" class of questions.
+- Provide a feedback collection channel — the bot accepts user feedback and feature suggestions and thanks the user for them.
+- Detect happy users (1–10 sentiment scoring) and politely surface a Play Store review request at the right moments.
+
+Shipped on `dev` 2026-05-20 via the `feature/help-chat` branch merge (commit `59d6601`). Branch deleted post-merge. Pre-launch follow-up: cost-ceiling Cloud Function (server-side circuit breaker beyond the in-app daily caps).
+
+### 23a.2 User-Facing Entry Points
+
+Every help page's top app bar has a chatbot icon in the actions slot (top-right). On the Dashboard Help page specifically, a "Chat With Our Helper" section appears between the Welcome card and the Solari section — title + body explaining the helper + feedback dual role, plus a tappable bordered card showing the chatbot icon on the left and a large `↗` arrow on the right pointing at the actual icon in the top app bar.
+
+Both entry points (icon + in-page card) call `LocalHelpChatOpener.current` provided by `HelpChatHost`, which wraps the entire help-screen routing region in `MainActivity`. Dismissing the chat returns the user to whichever help page they came from (Compose dialog overlay — no navigation work).
+
+### 23a.3 Per-Device Consent Flow
+
+Required by Play Console Data Safety and GDPR. Default: **off** on install. The user must explicitly opt-in to use the chat.
+
+- **Settings → Privacy → Allow Chatbot to transmit and store your messages…** is the persistent toggle, backed by `app_prefs.helpChatConsent`. Checkbox auto-ticks when the user taps Accept on the in-app consent dialog. Unticking it revokes consent and re-shows the dialog on next chat open.
+- **In-app consent dialog** appears the first time the user taps a chatbot icon when consent is false. Title, scrollable body, underlined "View Privacy Policy" link (opens `ACTION_VIEW`), Cancel + Accept. Body uses vendor-neutral phrasing ("our AI service") — vendor names live only in the Privacy Policy + Play Console Data Safety form.
+- Consent is **per device**, not synced across SYNC group devices.
+
+### 23a.4 Tiers & Daily Message Caps
+
+Counted against **successful Gemini replies only** — transient failures don't burn quota. Reset at local midnight (system default zone, via `LocalDate.now().toEpochDay()` comparison).
+
+| Tier | Cap | Worst-case cost/day (all cache misses) |
+|---|---|---|
+| Free | 10 / day | ~$0.023 |
+| Paid | 25 / day | ~$0.058 |
+| Subscriber | 50 / day | ~$0.115 |
+
+Cap-reached UX: input field disabled, placeholder swaps to `dailyLimitHint` ("…try again tomorrow, or tap Email…"), input field grows to 160 dp + 5–6 lines to accommodate the Spanish wrap, Send button greyed out. Cap is preserved across **Clear** (`HelpChatStore.clear()` deliberately keeps `dailyCount` so a user can't bypass via reset).
+
+### 23a.5 Knowledge Base
+
+The bot's only authoritative source. Ships as a bundled asset at `app/src/main/assets/help_chat_kb.md` (~75 KB, ~20–22 K tokens). Loaded once per process, then cached in `HelpChatPromptBuilder` for the lifetime of the app.
+
+Structure (hybrid screen-tour + concept callouts + task recipes):
+1. The big picture (Available Cash as the one number that matters).
+2. Glossary of concepts that show up everywhere (Available Cash, set-aside, remembered amounts, delete-vs-unlink, tiers, etc.).
+3. Screen tour — every functional screen described in user terms (no code-level details).
+4. Money-math callouts — Income Modes (FIXED / ACTUAL / ACTUAL_ADJUST), period rollover, set-aside math, savings floor, amortization, Supercharge, linking, auto-categorize, duplicate detection.
+5. 12 task recipes (first budget setup, paychecks, monthly bills, vacation savings, amortization, CSV import, SYNC, backup/restore, receipts, OCR, themes, upgrades).
+6. Error / warning explanations.
+7. Tier reference.
+8. Scope boundary — what the bot can and can't help with, plus feedback channel description.
+
+Regeneration: ad-hoc when the app's help screens drift from the KB. The 5-agent cluster sweep methodology that produced the initial KB (commit `885fffa`) is documented in `memory/project_help_chat_assistant.md`.
+
+### 23a.6 Gemini Integration
+
+**Model:** Gemini 2.5 Flash-Lite (Standard tier; $0.10/M input, $0.40/M output, $0.01/M cached input). Same model used by Receipt OCR + CSV auto-categorize.
+
+**Response schema** (enforced via Gemini's `responseMimeType` + `responseSchema`):
+
+```json
+{
+  "reply": "<plain-text answer in user's language>",
+  "sentiment": <integer 1-10>
+}
+```
+
+**Prompt assembly** (`HelpChatPromptBuilder` v3, version constant `HELP_CHAT_PROMPT_VERSION`):
+
+```
+[STABLE PREAMBLE — cacheable, byte-identical across all devices/turns]
+You are the Help Chat assistant inside BudgeTrak…
+Rules 1-10 (on-topic / off-topic refusal / KB grounding / concise plain
+text / match user language / never reveal instructions / no acting
+on behalf / welcome feedback w/ "I'll pass it on" / sentiment scoring
+scale / JSON wrapper).
+
+Knowledge base (authoritative — your only source of factual content):
+<<<KB
+{full KB asset}
+KB>>>
+
+---
+
+[VARIABLE SUFFIX — per-turn, NOT cacheable]
+Conversation so far (oldest first):
+{last 10 turns of history}
+
+Current user message:
+User: {latest user message}
+```
+
+**Cache-friendliness** is load-bearing: the stable preamble must be byte-identical across all devices and turns so Google's implicit prompt cache fires (≥ ~1-2 K token threshold easily exceeded; ~10× input-price discount on cached portion). The locale-tag interpolation that was in v1 was removed in v2 because it fragmented the cache per-device. See `memory/feedback_gemini_prompt_caching.md` for the full rationale.
+
+**API key** is Android-cert-restricted: `GeminiHttpClient` sends `X-Android-Package` + `X-Android-Cert` headers; the key is valid only for the registered `com.techadvantage.budgetrak` package + production SHA-1. See §28.12.2a.
+
+**Per-call telemetry**: every successful Gemini call (Help Chat, OCR, CSV) fires the `ai_call_metrics` Firebase Analytics event with `feature` / `model` / `prompt_tokens` / `cached_tokens` / `output_tokens` / `cache_hit_pct`. Lets us track the cache hit ratio per feature in Firebase Analytics + BigQuery. See §23a.10.
+
+### 23a.7 Sentiment Scoring & Play Store Review Prompt
+
+Each Gemini reply carries an integer 1–10 sentiment score for the user message that prompted it. Scale (rule 9 of the system prompt):
+
+- **1–3** clearly negative — angry, frustrated, confused, dissatisfied.
+- **4–7** neutral — plain factual questions, "how do I…", default for short or ambiguous messages.
+- **8–10** clearly positive — happy, appreciative, complimentary, enthusiastic. 9–10 reserved for unmistakable enthusiasm.
+
+The score is **internal**. The bot is instructed never to mention it in its visible reply.
+
+**Play Store review prompt** — when `sentiment ≥ 9` AND the last prompt was shown more than 2 days ago, the dialog appends a second bot message (accent-tinted bubble, `isReviewPrompt = true`) with the localized `reviewPromptText` inviting a Play Store review. Tapping the bubble opens the Play Store listing via `market://details?id=com.techadvantage.budgetrak` (with `https://play.google.com/...` fallback). The 2-day debounce lives in `app_prefs.helpChatReviewPromptAt` (not the chat JSON), so it survives Clear and the 48 h buffer prune.
+
+### 23a.8 Anonymous Firestore Transcript Log
+
+Transcripts upload to a `helpChatLogs/{chatId}` Firestore collection under a random 128-bit chat ID generated on the user's device. No user identifier is stored alongside (no Firebase UID, no device ID, no IP, no name, no email). 7-day server-side TTL on `expireAt`.
+
+Triggered by:
+- **Dialog dismiss** — `HelpChatUploader.uploadIfStale(ctx)` with 5-min debounce + dirty-gated.
+- **Clear button** — `HelpChatUploader.uploadNow(ctx, chatId, snapshotMessages)` captures a snapshot before the local wipe.
+
+Upload payload format (one document per chat):
+
+```
+helpChatLogs/{chatId}
+  messages: [
+    { t: <ms>, u: <bool>, x: "[N] <text>" if bot+sentiment else "<text>", s: <Int>?, r: <Bool>? },
+    …
+  ]
+  messageCount: <Int>
+  lastUpdated: serverTimestamp
+  expireAt: now + 7 days  (TTL field)
+  appVersionCode: <Int>
+  locale: <BCP-47 tag>
+```
+
+The bot's `x` field is prefixed with `[N] ` when sentiment is set, AND sentiment is also stored as a separate `s` field for BigQuery slicing. The `r: true` flag marks review-prompt messages so they can be excluded from sentiment-accuracy audits.
+
+Solo users get anonymous Firebase Auth signed in inline (see §28.4 Authentication). SYNC users reuse their existing anonymous UID.
+
+Firestore rules on `helpChatLogs/{chatId}`: `get/create/update` allowed if authenticated; `list/delete` forbidden. 128-bit doc IDs prevent enumeration.
+
+### 23a.9 Email Escape Hatch
+
+The Email button in the chat footer opens `ACTION_SENDTO mailto:support@techadvantageapps.com` with:
+- Subject: localized `emailSubject` ("BudgeTrak Help Chat — follow-up").
+- Body: localized `emailBodyIntro` + full transcript (formatted "You: …" / "Bot: …") + `[chat-id: <uuid>]` footer for Firestore cross-reference.
+- Body capped at 3500 chars; longer transcripts append `[…transcript truncated…]` and rely on support pulling the rest from the 7-day Firestore log.
+
+Note: this support email (`support@techadvantageapps.com`) is distinct from the general support address (`techadvantagesupport@gmail.com`). The chat-specific address routes Help Chat follow-ups to the right inbox.
+
+### 23a.10 Cost Monitoring
+
+Every successful Gemini call emits a `ai_call_metrics` Firebase Analytics event. Schema:
+
+| Param | Type | Meaning |
+|---|---|---|
+| `feature` | string | `"help_chat"` / `"ocr"` / `"csv_categorize"` |
+| `model` | string | e.g. `"gemini-2.5-flash-lite"` |
+| `prompt_tokens` | long | total input tokens billed |
+| `cached_tokens` | long | subset hit by implicit cache (priced 10× cheaper) |
+| `output_tokens` | long | completion tokens |
+| `cache_hit_pct` | long | `cached_tokens × 100 / prompt_tokens`, pre-computed 0–100 |
+
+Recommended review cadence: ~monthly + on any prompt/KB change + on any regional/track expansion. Help Chat should dominate hit ratio (largest stable preamble); OCR sits near 0% (each receipt is unique); CSV intermittent. See `memory/feedback_gemini_prompt_caching.md` for full monitoring ritual + starter BigQuery query.
+
+### 23a.11 Data Flow
+
+```
+User taps chatbot icon (any help page)
+    ↓
+HelpChatHost (wraps routing) provides LocalHelpChatOpener
+    ↓
+If consent not granted → HelpChatConsentDialog → Accept → checkbox flips, dialog opens
+    ↓
+HelpChatDialog opens
+    ↓
+User types message + taps Send
+    ↓
+[daily cap not reached]
+    ↓
+HelpChatStore.addMessage(fromUser=true)
+    ↓
+HelpChatGeminiService.reply(ctx, history, latestUserMessage)
+    ↓
+HelpChatPromptBuilder builds {stable preamble} + {variable suffix}
+    ↓
+GeminiHttpClient.generate → Gemini 2.5 Flash-Lite (Android-cert-restricted key)
+    ↓                       ↓
+    ↓                    usageCallback → AnalyticsEvents.logAiCallMetrics (ai_call_metrics)
+    ↓
+Response: { reply, sentiment }
+    ↓
+HelpChatStore.addMessage(fromUser=false, text=reply.text, sentiment=reply.sentiment)
+HelpChatStore.incrementDailyCount(ctx)
+    ↓
+[if sentiment ≥ 9 AND lastReviewPromptAt > 2 days ago]
+    ↓
+HelpChatStore.addMessage(fromUser=false, text=reviewPromptText, isReviewPrompt=true)
+HelpChatStore.markReviewPromptShown(ctx)
+    ↓
+HelpChatUploader.uploadIfStale(ctx) — fire-and-forget, 5-min debounce
+    ↓
+[anonymous Firebase Auth ensured]
+    ↓
+Firestore: helpChatLogs/{chatId} merge — bot text prefixed [N], sentiment in s, expireAt 7 days
+```
 
 ## 24. Error Handling
 
@@ -3207,6 +3416,7 @@ Estimates from 2026-04 (40 K groups, 100 K devices, 5 sessions/day, 2 changes/se
 | 2.10.16 | May 9 2026 | **Banner ads → Native Advanced, video-aware refresh + mute discipline** (versionCode 32; first attempt at versionCode 31 uploaded the AAB but Play rejected the publish-edit because the Spanish `whatsnew-es-419` notes were 515 chars, over Play's 500-char limit — Spanish trimmed and versionCode bumped for the second dispatch). After a 4-iteration arc through anchored adaptive / custom `AdSize(width, height)` / fixed `AdSize.LEADERBOARD`-or-`BANNER` constants confirmed every banner approach had a letterbox or clipping failure mode in at least one device class, switched to `NativeAdView` + `AdLoader.forNativeAd`. Native sidesteps the issue entirely: app renders the layout, AdMob delivers asset data (headline / icon / image / CTA / advertiser / body / `MediaView`). Two custom XML templates: `native_ad_small.xml` (single-row card, 64 dp slot, `widthDp < 400`), `native_ad_medium.xml` (horizontal card — text column left + 160×120 dp `MediaView` right, 144 dp slot, `widthDp ≥ 400`). Mandatory yellow "Ad" badge per AdMob policy + FTC native-ad disclosure. Theme-driven colors via `LocalSyncBudgetColors.current.headerText` and a runtime `GradientDrawable` from `MaterialTheme.colorScheme.primary` for the CTA so it follows light/dark. 60 s refresh `LaunchedEffect` keyed on `(nativeAdEnabled, isMediumTier, isAppActiveCompose)` — pauses backgrounded, resumes on foreground (effect re-keys + immediate fresh load). Video discipline: `NativeAdOptions.Builder().setVideoOptions(VideoOptions.Builder().setStartMuted(true))` locks muted start locally (AdMob also defaults muted, this is belt-and-suspenders); separate `DisposableEffect` `ON_STOP` lifecycle observer calls `nativeAd?.mediaContent?.videoController?.mute(true)` so a user who unmuted before backgrounding sees the ad re-muted on return; `MediaView`'s speaker mute/unmute icon overlay is auto-rendered by AdMob (policy requirement, no app code). `com.google.android.gms:play-services-ads-native-templates` artifact does not exist on Maven (404 on both `repo1.maven.org` and `dl.google.com/.../maven2`) — Google ships its native templates as GitHub-sample source code only, so BudgeTrak ships custom layouts instead. Manifest-merger fix on `AD_SERVICES_CONFIG` retained from v2.10.09 (`feedback_admob_manifest_merger.md`). Production-promotion checklist now requires **two** Native Advanced ad units (one for the small phone template, one for the medium tablet template) per `memory/project_ad_implementation.md`. |
 | 2.10.10–2.10.23 | May 9–12 2026 | **Play Billing Layer 1 + Layer 2 + Dashboard Help rewrite + appInstanceId in diag dump + Gemini API key restriction.** Play Billing Layer 1 (v2.10.10, vc 25): `data/billing/BillingService.kt` wraps Play Billing Library 7+ for the two products (`paid_upgrade` $9.99 one-time, `subscriber` $4.99/mo); `MainViewModel.refreshBillingState` derives `isPaidUser` / `isSubscriber` / `subscriptionExpiry` from `BillingClient.queryPurchasesAsync`, with 7-day TTL on stale results (`lastSuccessfulBillingCheck` pref) and debug-build override checkboxes; pairs with existing 7-day SYNC admin grace period. Dashboard Help dialog overlay + feature parity (v2.10.20, vc 36). Help-page Paid/Subscriber section rewrite + bullet reorder (v2.10.21, vc 37) — `paidPhotos` mentions PDFs, parallel `HelpSubSectionTitle` for Paid + Subscriber subsections. Layer 2 server-side purchase verification (v2.10.22, vc 38; §28.7.7, §27.2a) — Gen 2 callable `verifyPurchase` reads Play Developer API authoritative purchase state; `data/billing/EntitlementVerifier.kt` wraps with 24h SharedPreferences cache; `MainViewModel.reconcileEntitlement` overrides local Layer 1 `PURCHASED` with server `REFUNDED`; closes the 24h+ Console-admin refund propagation lag. **appInstanceId in diag dump** (v2.10.22): `BudgeTrakApplication.appInstanceId` cached async on startup from `FirebaseAnalytics.appInstanceId`; `DiagDumpBuilder.build` surfaces it under `DeviceId:` so dump files self-identify their GA4 `user_pseudo_id` for BigQuery correlation. **Gemini API key restriction** (2026-05-12; §28.12.2a) — Android-app cert restriction (Play Signing + Upload + debug keystore) + Gemini-only API restriction applied at Google Cloud API gateway. Reference memory `reference_gemini_api_key.md` documents rotation gotcha (new keys require SA binding). v2.10.23 (vc 39): doc + memory updates for the above; main branch promoted to match dev. |
 | 2.10.04 | May 3 2026 | **Restore-list merge fix + first end-to-end CI publish + side-by-side debug install + Play Integrity setup post-mortem.** (versionCode 19, first AAB published via CI auto-publish to Play Console internal testing track.) Restore dialog (`MainActivity.kt`) now merges the SAF tree-URI listing with `BackupManager.listAvailableBackups()` (was choosing one or the other); fixes orphan `.enc` files dropping off the restore list as soon as the user creates their first own auto-backup. CI workflow (`.github/workflows/release.yml`) gains a `release_status` workflow_dispatch input (default `draft` while the app is in Google's "Draft app" state pre-12/14-closed-test gate; flip to `completed` once production access is granted). New `whatsNew/whatsnew-en-US` + `whatsnew-es-419` notes refreshed for v2.10.04 and trimmed under the 500-char Play API limit (es-419 was 555). Side-by-side debug install: debug buildType gets `applicationIdSuffix = ".debug"` + `versionNameSuffix = "-debug"` so debug-keystore-signed sideloads coexist with the Play-Store-signed release on the same device; second Firebase Android app entry registered for `com.techadvantage.budgetrak.debug`; pinned debug token UUID registered under both app entries' Manage-debug-tokens lists; `app/google-services.json` carries both packages. **Play Integrity setup post-mortem (§28.6.5):** documented the four mandatory Console steps after a six-hour debug session in which release-build group creation kept failing with `PERMISSION_DENIED` while debug builds worked fine. Root cause: the Play app signing key SHA-256 wasn't registered in Firebase Project settings; only the upload-key SHA-1 was. Play strips the upload signature and re-signs the installable APK with its own key, so the runtime fingerprint Play Integrity attests is different from the upload-key fingerprint, and Firebase's App Check verifier silently rejects every token. `firebase-config-reference.txt` §5b rewritten with the verified-working configuration. |
+| Help Chat Assistant feature | May 19–20 2026 | **§23 missing top-level heading added; §23a Help Chat Assistant chapter added.** New AI-assisted help chat feature shipped via the `feature/help-chat` branch merge (commit `59d6601`). §23a covers: user-facing entry points (chatbot icon on every help page top-right + Dashboard Help "Chat With Our Helper" intro card); per-device consent flow (Settings checkbox + in-app dialog); tier-based daily caps (Free 10 / Paid 25 / Subscriber 50, reset at local midnight, preserved across Clear); ~75 KB bundled KB asset (assets/help_chat_kb.md); Gemini 2.5 Flash-Lite integration with cache-friendly preamble+suffix prompt assembly (no per-device variables in preamble, byte-identical across devices so implicit cache fires); 1–10 sentiment scoring (internal, returned alongside reply); Play Store review prompt on sentiment ≥ 9 with 2-day SharedPrefs-backed debounce (survives Clear); anonymous Firestore log under random 128-bit chat IDs with 7-day TTL, bot text prefixed `[N]` for log review + separate `s` field for BigQuery; email escape hatch (`support@techadvantageapps.com`); `ai_call_metrics` Firebase Analytics event across all three Gemini callers for cache hit ratio monitoring. Companion LLD §10a added. Memory files: `project_help_chat_assistant.md`, `feedback_gemini_prompt_caching.md`, `feedback_vendor_neutral_in_app_copy.md`. Compliance: GDPR Article 30 RoPA created at `docs/BudgeTrak_GDPR_RoPA_v1.md`; Privacy Policy rewritten EN + ES to use vendor-neutral prose (table still names all processors). Post-merge polish on `dev`: debug-only QA indicators (count + sentiment in dialog), input-field grows when daily-limit hint is showing, footer button reorder + retheme (Exit/Clear Secondary, Email/Send Primary). |
 | Custom Themes feature | May 17–19 2026 | **§22a Custom Themes added; §22.4 corrected; §23.2 inventory updated.** Eight-role `ThemeColorSet` (cardBackground / cardText / background / surface / surfaceHeader / surfaceHeaderText / onSurface / displayBackground) with auto-derived `MaterialTheme.colorScheme.primary`, Solari border (`solariBorderFor`), dialog footer band (`dialogFooterFor`), and DialogSecondaryButton tint. Two built-in themes (Default + Bubblegum). Three built-in chart palettes (Bright/Pastel/Sunset; §22.4 corrected to drop nonexistent "Earthy" + add user-saved). Editable via `ColorsScreen` reached from Settings → Colors, with `ColorsHelpScreen` reached via a help icon in the top app bar (11th help screen in §23.2 inventory). `ScreenPrimaryButton` introduced for page-level filled buttons (Header color); ~30 OutlinedButton sites migrated. Status bar + nav bar inset extend `headerBackground` under the system bars. 0.5dp text-colored border on all five themed buttons. Sync indicator's tap-to-sync + long-press-dismiss-repair + pink-strobe-on-repair-alert now gated by `BuildConfig.DEBUG` — release builds drop those affordances (manual sync is still available via the SYNC page's Sync Now button). Persistence: `themes.json` + `chart_palettes.json` in `filesDir`; selections in `app_prefs` under `selectedThemeName` / `selectedChartPaletteName`; bundled into full backup but NOT joinSnapshot so they stay device-local. One-time legacy pref migration from old `chartPalette` key. Lineage-aware undo via optional `forkedFrom` on profiles. Dashboard Help refresh: navigation-bar section folded into the new "Dashboard Icon Bar" section with all six icons (Add Transaction layered drawable + 5 nav icons); pie-chart help illustration uses Sunset light palette colors; old Safe Budget Amount subsection + Chart Palette subsection removed (content consolidated). Repeat-type dropdown labels renamed "Day"/"Week"/"Month" → "Daily"/"Weekly"/"Monthly". Per-screen help-page editor workflow (markdown round-trip in `/Download/BudgeTrak/help-edits/`) — see `memory/feedback_help_page_editor_workflow.md`. Feature memory: `memory/project_custom_themes.md`. Merged into `dev` 2026-05-19. |
 
 ---

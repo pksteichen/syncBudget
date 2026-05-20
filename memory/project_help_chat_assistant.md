@@ -21,6 +21,11 @@ originSessionId: ca028513-626b-45e8-ad1c-a1863966bd91
 - `1b7fcb5` + `c6c14a1` vendor-neutral in-app copy (consent, review prompt, AI CSV help)
 - `6151734` GDPR Article 30 Record of Processing Activities (`docs/BudgeTrak_GDPR_RoPA_v1.md`)
 
+**Post-merge polish on `dev`** (committed directly to dev after the merge, all small UX fixes from on-device QA):
+- `de265f7` debug-only QA indicators inside `HelpChatDialog`: a one-line status above the input field (`Debug · X of Y today · last review: <relative-time>`) and a `[N]` sentiment suffix on the "Bot" label. Both gated on `BuildConfig.DEBUG`, stripped at compile time from release builds.
+- `4c908e5` input field grows from 88 dp → 160 dp when the daily-limit hint is showing — Spanish runs ~5 lines, would clip in the normal 3-line height. Field is disabled in that state so the extra room costs nothing UX-wise.
+- `778aeeb` footer button reorder + retheme: `Exit | Clear | Email .................. Send`. Exit + Clear stayed Secondary ("Cancel and similar"); Email bumped from Secondary → Primary so it reads as an active affirmative action alongside Send; Send unchanged.
+
 ## Goal
 An in-app help chat that answers configuration / budgeting / how-to / error-message questions, grounded on a hand-curated knowledge base. Reduces support email volume; provides 24/7 instant guidance.
 

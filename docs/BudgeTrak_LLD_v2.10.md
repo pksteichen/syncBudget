@@ -2093,6 +2093,336 @@ Shared scaffolding used by every help screen: `HelpSectionTitle`, `HelpSubSectio
 2. `(painter: Painter, label, description, tint = onBackground)` — drawable resource at 20dp.
 3. `(icon: @Composable () -> Unit, label, description)` — composable slot; for cases where the bullet icon is layered (e.g., dashboard's Add Transaction body + blue plus overlay). Added 2026-05-19.
 
+**Help Chat opener helpers** (added 2026-05-20, see §10a):
+- `LocalHelpChatOpener: ProvidableCompositionLocal<() -> Unit>` — default no-op for callers outside `HelpChatHost`.
+- `HelpChatHost(helpChatConsent, onGrantHelpChatConsent, content)` — owns the show-chat / show-consent state machine, provides the opener, renders the dialogs.
+- `HelpChatTopBarAction()` — the standardized chatbot icon for any help page's `actions = { … }` slot.
+
+---
+
+## 10a. Help Chat Classes
+
+In-app Gemini-powered help chat. Shipped 2026-05-20 via the `feature/help-chat` → `dev` merge (commit `59d6601`). SSD chapter: §23a.
+
+**File inventory** (new since the 2026-05-15 doc bump):
+
+| File | Lines | Role |
+|---|---|---|
+| `ui/screens/HelpChatDialog.kt` | ~370 | Main chat UI (AdAware fill-screen dialog), `ChatMessageRow` renderer, `launchEmail` + `openPlayStoreListing` helpers. |
+| `ui/screens/HelpChatConsentDialog.kt` | ~110 | One-time consent dialog (title, scrollable body, underlined Privacy Policy link, Cancel + Accept). |
+| `data/HelpChatStore.kt` | ~290 | Single `object` holding the in-memory chat state + JSON persistence + daily-cap state + review-prompt debounce helpers. |
+| `data/HelpChatUploader.kt` | ~150 | Anonymous Firestore upload of transcripts (debounced + dirty-gated; bot text prefixed `[N]`; sentiment stored as separate `s` field). |
+| `data/ai/HelpChatPromptBuilder.kt` | ~110 | Builds `preamble + suffix` Gemini prompt; loads KB asset lazily; version constant `HELP_CHAT_PROMPT_VERSION`. |
+| `data/ai/HelpChatGeminiService.kt` | ~140 | Single-turn Gemini caller; parses `{ reply, sentiment }`; transient-error retry; wires `usageCallback` to `AnalyticsEvents.logAiCallMetrics`. |
+| `assets/help_chat_kb.md` | 1744 lines, ~75 KB | The bundled knowledge base (the bot's only authoritative source). |
+| `res/drawable/ic_chatbot.png` | n/a | Chatbot icon used in help-page top app bars. |
+
+Helpers added to existing files: `LocalHelpChatOpener` / `HelpChatHost` / `HelpChatTopBarAction` in `ui/screens/HelpComponents.kt`; `logAiCallMetrics` in `data/telemetry/AnalyticsEvents.kt`; `usageCallback: (UsageMetadata) -> Unit` parameter + `extractUsageMetadata` helper in `data/ocr/GeminiHttpClient.kt`.
+
+### 10a.1 `HelpChatDialog.kt`
+
+`AdAwareDialog` filling the visible vertical space. Layout (top → bottom):
+
+```
+Column {
+    DialogHeader(title = S.helpChat.title)
+    Box (weight=1) {
+        Column verticalScroll(historyScroll) {
+            if (messages.empty) Text(emptyBody)
+            else messages.forEach { ChatMessageRow(it, ...) }
+            if (isThinking) ChatMessageRow(temporary "Thinking…" bot bubble)
+        }
+        PulsingScrollArrows(historyScroll)
+    }
+
+    // Debug builds only:
+    if (BuildConfig.DEBUG) {
+        HorizontalDivider
+        Text("Debug · $dailyCount of $dailyCap today · last review: $relativeAge",
+             style = labelSmall, alpha = 0.55f)
+    }
+
+    HorizontalDivider
+    Box {
+        OutlinedTextField(input,
+            enabled = !limitReached,
+            heightIn = if (limitReached) 160.dp else 88.dp,
+            minLines = if (limitReached) 5 else 3,
+            maxLines = if (limitReached) 6 else 3,
+            placeholder = if (limitReached) dailyLimitHint else inputHint)
+    }
+
+    HorizontalDivider
+    Row (footer) {
+        DialogSecondaryButton(Exit)
+        DialogSecondaryButton(Clear)
+        DialogPrimaryButton(Email)
+        Spacer.weight(1f)
+        DialogPrimaryButton(Send, enabled = canSend)
+    }
+}
+```
+
+**Send handler** (the only complex callback):
+
+1. If `input.isBlank()` or `isThinking` → no-op.
+2. `input = ""`, `isThinking = true`.
+3. `HelpChatStore.addMessage(fromUser = true, text = trimmed)`.
+4. `result = HelpChatGeminiService.reply(ctx, history = currentMessages, latestUserMessage = trimmed)`.
+5. On success:
+   - `HelpChatStore.addMessage(fromUser = false, text = reply.text, sentiment = reply.sentiment)`.
+   - `HelpChatStore.incrementDailyCount(ctx)`.
+   - If `HelpChatStore.shouldShowReviewPrompt(ctx, reply.sentiment)`: `addMessage(fromUser = false, text = reviewPromptText, isReviewPrompt = true)` + `markReviewPromptShown(ctx)`.
+6. On failure: `addMessage(fromUser = false, text = errorReply)`. **No daily count increment** — transient failures don't burn quota.
+7. `isThinking = false`.
+8. `HelpChatUploader.uploadIfStale(ctx)` — fire-and-forget.
+
+**Clear handler** captures a snapshot of `chatId` + `messages` BEFORE calling `HelpChatStore.clear(ctx)`, so the snapshot can be uploaded via `HelpChatUploader.uploadNow(ctx, snapshotId, snapshotMsgs)` while the local buffer wipes. Failures log only in `BuildConfig.DEBUG`.
+
+**ChatMessageRow** — renders user bubbles on the right (theme `surfaceHeader` background), bot bubbles on the left (`surfaceVariant`), and review-prompt bubbles (`isReviewPrompt = true`) with an accent-tinted background (`primary @ 18% alpha`) + a `Modifier.clickable` that calls `openPlayStoreListing`. In debug builds, bot labels carry a `[N]` suffix where N is the sentiment score; user labels and label-less review prompts never show a score.
+
+**`openPlayStoreListing`** — strips `.debug` suffix from `context.packageName` so debug builds also link to the production listing. Tries `market://details?id=…` first; falls back to `https://play.google.com/store/apps/details?id=…` on failure (devices without the Play app).
+
+**`launchEmail`** — `ACTION_SENDTO mailto:support@techadvantageapps.com` with subject + body prefilled. Body builds the full transcript (`You: …` / `Bot: …` per turn) + a final `[chat-id: <uuid>]` line for Firestore cross-reference. Body capped at 3500 chars; longer transcripts append `[…transcript truncated…]`.
+
+### 10a.2 `HelpChatConsentDialog.kt`
+
+Modal `AdAwareDialog` (one-time, on first chat open with consent = false). Title from `S.helpChat.consentTitle`, scrollable body from `S.helpChat.consentBody` (vendor-neutral phrasing; "our AI service" not "Google Gemini"), underlined "View Privacy Policy" link (opens `Intent.ACTION_VIEW` on `S.helpChat.consentUrl`), Cancel + Accept buttons. Accept calls the host's `onGrantHelpChatConsent` callback (which flips `vm.helpChatConsent = true` + persists to `app_prefs.helpChatConsent`).
+
+### 10a.3 `HelpChatStore.kt`
+
+Single Kotlin `object` (process-singleton) holding the chat state. Backed by JSON file at `filesDir/help_chat.json`.
+
+**Data class**:
+
+```kotlin
+data class HelpChatMessage(
+    val timestamp: Long,
+    val fromUser: Boolean,
+    val text: String,
+    val sentiment: Int? = null,         // 1-10, set on bot messages from successful Gemini replies
+    val isReviewPrompt: Boolean = false, // set on the Play Store review-prompt bot message
+)
+```
+
+**StateFlows**:
+- `messages: StateFlow<List<HelpChatMessage>>`
+- `chatId: StateFlow<String?>` (UUID v4, generated on first message)
+- `lastUploadAt: StateFlow<Long>` (5-min debounce gate)
+- `_lastUploadedCount: MutableStateFlow<Int>` (dirty-tracking; `isDirty() = messages.size > _lastUploadedCount.value`)
+- `dailyCount: StateFlow<Int>`
+- `_dailyResetEpochDay: MutableStateFlow<Long>` (last `LocalDate.now().toEpochDay()` on which `dailyCount` was reset to 0)
+
+**Persistence file format** (compact field names):
+
+```json
+{
+  "chatId": "<uuid>",
+  "messages": [
+    { "t": <ms>, "u": <bool>, "x": "<text>", "s": <Int>?, "r": <Bool>? },
+    …
+  ],
+  "lastUploadAt": <ms>,
+  "lastUploadedCount": <Int>,
+  "dailyCount": <Int>,
+  "dailyResetEpochDay": <Long>
+}
+```
+
+Loaded lazily on first `load(context)`. Messages older than 48 h are pruned at load time. Save is `kotlinx.coroutines.sync.Mutex` serialized; persist runs on `Dispatchers.IO`.
+
+**Daily-cap constants**:
+
+```kotlin
+const val DAILY_CAP_FREE = 10
+const val DAILY_CAP_PAID = 25
+const val DAILY_CAP_SUBSCRIBER = 50
+
+fun getDailyCap(context): Int {
+    val prefs = context.getSharedPreferences("app_prefs", MODE_PRIVATE)
+    return when {
+        prefs.getBoolean("isSubscriber", false) -> DAILY_CAP_SUBSCRIBER
+        prefs.getBoolean("isPaidUser", false)   -> DAILY_CAP_PAID
+        else                                    -> DAILY_CAP_FREE
+    }
+}
+```
+
+**Day rollover** (`maybeResetCounterLocked()`): compare `LocalDate.now().toEpochDay()` to stored `_dailyResetEpochDay`; if different, reset `_dailyCount = 0` and stamp the new day. Called inside every `remainingToday` / `canSendToday` / `incrementDailyCount` invocation under the mutex.
+
+**Review-prompt threshold + debounce**:
+
+```kotlin
+const val SENTIMENT_REVIEW_THRESHOLD = 9
+private const val REVIEW_PROMPT_DEBOUNCE_MS = 2L * 24 * 60 * 60 * 1000
+private const val REVIEW_PROMPT_PREF_KEY = "helpChatReviewPromptAt"
+
+fun shouldShowReviewPrompt(context, sentiment): Boolean =
+    sentiment >= SENTIMENT_REVIEW_THRESHOLD &&
+    (now - prefs.getLong(REVIEW_PROMPT_PREF_KEY, 0L)) > REVIEW_PROMPT_DEBOUNCE_MS
+
+fun markReviewPromptShown(context) { prefs.edit().putLong(KEY, now).apply() }
+fun lastReviewPromptAt(context): Long  // debug-only getter for the dialog status line
+```
+
+Debounce timestamp lives in **`app_prefs`** (not the chat JSON) so it survives `clear()` and the 48 h prune.
+
+**`clear(context)`** — wipes `messages` + `chatId` + upload-tracking, but **deliberately preserves `dailyCount`** so a user can't bypass the daily cap by Clear-ing.
+
+### 10a.4 `HelpChatUploader.kt`
+
+Pushes the transcript to Firestore `helpChatLogs/{chatId}` via `SetOptions.merge()`. Two entry points:
+
+```kotlin
+suspend fun uploadIfStale(context): Boolean  // 5-min debounce + dirty-gated
+suspend fun uploadNow(context, chatId, messages): Boolean  // unconditional, used by Clear
+```
+
+**Payload construction** (the only non-obvious part — log-side prefix):
+
+```kotlin
+"messages" to messages.map { m ->
+    val displayText = if (!m.fromUser && m.sentiment != null) "[${m.sentiment}] ${m.text}" else m.text
+    buildMap<String, Any> {
+        put("t", m.timestamp)
+        put("u", m.fromUser)
+        put("x", displayText)
+        m.sentiment?.let { put("s", it) }
+        if (m.isReviewPrompt) put("r", true)
+    }
+}
+```
+
+The `[N]` prefix is for at-a-glance Firestore-console log review; the separate `s` field is for BigQuery slicing. The `r: true` flag marks the review-prompt bot message so it can be filtered out of sentiment-accuracy audits.
+
+**TTL field**: `expireAt = now + 7 days`, recomputed on every upload (active chats refresh the window; idle chats auto-expire). Firestore TTL policy on `helpChatLogs.expireAt` is configured in `firestore.rules` companion.
+
+**Anonymous Firebase Auth** signed in inline (15 s timeout) if `auth.currentUser == null`. SYNC users reuse their existing anon UID.
+
+All failure paths swallow exceptions silently in release builds; debug builds `Log.w` only. Telemetry must never fail the call site.
+
+### 10a.5 `HelpChatPromptBuilder.kt`
+
+Builds the Gemini prompt as an explicit two-part assembly (load-bearing for cache-friendliness — see SSD §23a.6 and `memory/feedback_gemini_prompt_caching.md`):
+
+```kotlin
+const val HELP_CHAT_PROMPT_VERSION = "v3"
+private const val MAX_HISTORY_TURNS = 10
+private const val KB_ASSET = "help_chat_kb.md"
+
+@Volatile private var cachedKb: String? = null
+private fun loadKb(context): String { /* read once, cache */ }
+
+fun buildHelpChatPrompt(context, history, latestUserMessage): String {
+    val kb = loadKb(context)
+    val tail = history.takeLast(MAX_HISTORY_TURNS)
+    val historyBlock = tail.joinToString("\n") {
+        "${if (it.fromUser) "User" else "Assistant"}: ${it.text}"
+    }
+    val preamble = """You are the Help Chat assistant inside BudgeTrak…
+Rules 1-10…
+Knowledge base (authoritative — your only source of factual content):
+<<<KB
+$kb
+KB>>>
+
+---
+"""
+    val suffix = """
+Conversation so far (oldest first):
+$historyBlock
+
+Current user message:
+User: $latestUserMessage"""
+    return preamble + suffix
+}
+```
+
+**No per-device variables in the preamble.** v1 of the prompt interpolated `Locale.getDefault().toLanguageTag()` into rule 5 (language-matching), which fragmented the implicit cache per-device. v2 dropped the locale interpolation; v3 added the sentiment-scoring rule and broadened on-topic scope to include user feedback. The preamble is now byte-identical across every device and every turn — required for Google's implicit prompt cache to fire.
+
+### 10a.6 `HelpChatGeminiService.kt`
+
+Single-turn Gemini service. Same pattern as `AiCategorizerService`: raw HTTP via `GeminiHttpClient`, JSON-schema response, transient-error retry.
+
+```kotlin
+data class HelpChatReply(val text: String, val sentiment: Int)
+
+suspend fun reply(context, history, latestUserMessage): Result<HelpChatReply>
+
+private const val MODEL_NAME = "gemini-2.5-flash-lite"
+private const val TEMPERATURE = 0.2f
+private const val TIMEOUT_MS = 30_000L
+private const val NEUTRAL_SENTIMENT = 5
+```
+
+**Response schema**:
+
+```kotlin
+val schema = JSONObject()
+    .put("type", "OBJECT")
+    .put("properties", JSONObject()
+        .put("reply", JSONObject().put("type", "STRING").put("description", "Plain-text answer in the user's language"))
+        .put("sentiment", JSONObject().put("type", "INTEGER").put("description", "1-10 score for the latest user message")))
+    .put("required", JSONArray(listOf("reply", "sentiment")))
+```
+
+**Sentiment parsing** (defensive):
+
+```kotlin
+val rawSentiment = obj.opt("sentiment")
+val sentiment = when (rawSentiment) {
+    is Number -> rawSentiment.toInt().coerceIn(1, 10)
+    else      -> NEUTRAL_SENTIMENT
+}
+```
+
+**Retry**: 3 attempts on transient errors (regex matches `503 / UNAVAILABLE / overloaded / 429 / RESOURCE_EXHAUSTED / deadline / fetch failed / network / ECONNRESET / ETIMEDOUT / socket`, or HTTP 429/5xx). Exponential backoff `500L shl (attempt-1)`.
+
+**Telemetry callback** passed to `GeminiHttpClient.generate(usageCallback = …)`:
+
+```kotlin
+usageCallback = { usage ->
+    AnalyticsEvents.logAiCallMetrics(
+        context = context,
+        feature = "help_chat",
+        model = MODEL_NAME,
+        usage = usage,
+    )
+}
+```
+
+(Receipt OCR + CSV Categorize wire their own usage callbacks with feature labels `"ocr"` and `"csv_categorize"` respectively. The shared `GeminiHttpClient.UsageMetadata` data class carries `promptTokens / cachedTokens / outputTokens / totalTokens`, parsed defensively by `extractUsageMetadata` from the Gemini response body's `usageMetadata` block.)
+
+### 10a.7 Integration with `MainActivity`
+
+The entire help-screen routing region of `MainActivity.setContent` is wrapped in:
+
+```kotlin
+HelpChatHost(
+    helpChatConsent = vm.helpChatConsent,
+    onGrantHelpChatConsent = {
+        vm.helpChatConsent = true
+        vm.prefs.edit().putBoolean("helpChatConsent", true).apply()
+    },
+) {
+    key(vm.dataReloadVersion) {
+        when (vm.currentScreen) { /* all routes */ }
+    }
+    // upgrade-help overlay
+    if (vm.upgradesHelpOverlayShowing) { AdAwareDialog { … DashboardHelpScreen(…) } }
+    // transactions-help overlay
+    if (vm.transactionsHelpOverlayShowing) { AdAwareDialog { … TransactionsHelpScreen(…) } }
+}
+```
+
+This single wrap covers every help-screen entry point — both the normal routing and the two overlay variants — so any of them gets the same opener instance and dialog state. Help screens themselves call `HelpChatTopBarAction()` from their `CenterAlignedTopAppBar.actions` slot to surface the icon; the in-page demo card on Dashboard Help calls `LocalHelpChatOpener.current` directly.
+
+### 10a.8 Strings
+
+`HelpChatStrings` data class in `AppStrings` (16 fields): `openIconDesc`, `title`, `inputHint`, `emptyBody`, `btnEmail/Exit/Clear/Send`, `youLabel`, `botLabel`, `thinkingLabel`, `errorReply`, `dailyLimitHint`, `emailSubject`, `emailBodyIntro`, `reviewPromptText`, `consentTitle`, `consentBody`, `consentLink`, `consentUrl`, `consentCancel`, `consentAccept`. Also `SettingsStrings.helpChatConsent` + `helpChatConsentDesc` for the Settings → Privacy checkbox. Dashboard Help intro section adds `chatbotIntroTitle`, `chatbotIntroBody`, `chatbotIntroDemoCaption` to `DashboardHelpStrings`.
+
+All vendor-neutral per `memory/feedback_vendor_neutral_in_app_copy.md` — no "Gemini" / "Google" mentions in user-facing copy. Vendor names live only in the Privacy Policy and Play Console Data Safety form.
+
 ---
 
 ## 11. Widget Classes (`widget/`)
@@ -2295,6 +2625,9 @@ Sync engine: `EncryptedDocSerializer`, `FirestoreDocService`, `FirestoreDocSync`
 ### `widget/` — 3 files
 `BudgetWidgetProvider` (AppWidgetProvider, 5 s throttle, schedules `BackgroundSyncWorker`), `WidgetRenderer` (Canvas bitmap), `WidgetTransactionActivity` (quick-add from widget). §11.
 
+### Help Chat (`data/`, `data/ai/`, `ui/screens/`, `assets/`) — 6 files + 1 asset
+`data/HelpChatStore.kt` (state object + JSON persistence + daily-cap + review-prompt debounce), `data/HelpChatUploader.kt` (anonymous Firestore upload, 5-min debounce + dirty-gated), `data/ai/HelpChatPromptBuilder.kt` (preamble+suffix prompt assembly + KB loader), `data/ai/HelpChatGeminiService.kt` (single-turn Gemini caller, sentiment parsing, telemetry callback), `ui/screens/HelpChatDialog.kt` (chat UI + email + Play Store openers + debug-build QA indicators), `ui/screens/HelpChatConsentDialog.kt` (one-time consent dialog), `assets/help_chat_kb.md` (~75 KB knowledge base). Shared opener helpers (`HelpChatHost`, `HelpChatTopBarAction`, `LocalHelpChatOpener`) in `ui/screens/HelpComponents.kt`. §10a.
+
 ---
 
 ## 15. Document Revision History
@@ -2312,6 +2645,7 @@ Sync engine: `EncryptedDocSerializer`, `FirestoreDocService`, `FirestoreDocSync`
 | 2.10.10–2.10.23 | May 9–12 2026 | **Play Billing Layers 1+2 + Help-page rewrite + appInstanceId in diag dump + Gemini API key restriction.** Play Billing Layer 1 (v2.10.10): new `data/billing/` package — `BillingService.kt` (Play Billing Library 7+ wrapper), `BillingProducts.kt` (`paid_upgrade`, `subscriber`, `SUB_PERIOD_MS`). `MainViewModel.refreshBillingStateWithState` derives `isPaidUser`/`isSubscriber`/`subscriptionExpiry` from `BillingClient.queryPurchasesAsync` with 7-day TTL on stale; `restorePurchases` button writes diagnostic dump to `/Download/BudgeTrak/support/billing_dump.txt`. Dashboard Help dialog overlay parity (v2.10.20). Help-page Paid/Subscriber rewrite — `paidPhotos` mentions PDFs, parallel `HelpSubSectionTitle` for both subsections (v2.10.21; EN + ES). Play Billing Layer 2 server-side verification (v2.10.22): new `data/billing/EntitlementVerifier.kt` (Cloud Functions callable wrapper, 24h SharedPreferences cache); `MainViewModel.reconcileEntitlement(local, verify, token)` returns Verified→true, Refunded→false (override local PURCHASED), Unreachable→cached-server-or-local; `subscriptionExpiry` prefers Developer-API `expiryTimeMillis` when verified; billing dump gains "Layer 2 server verification" block. **appInstanceId in DiagDumpBuilder** (v2.10.22; §6.15): `BudgeTrakApplication.appInstanceId` cached async from `FirebaseAnalytics.appInstanceId` on `onCreate`; surfaced under `DeviceId:` in every dump so per-device dumps correlate to GA4 BigQuery rows. **Firebase Functions SDK** added to `app/build.gradle.kts` (`com.google.firebase:firebase-functions-ktx`, BOM-managed). Gemini API key restriction applied at Google Cloud API gateway 2026-05-12 (no code change — server-side enforcement). v2.10.23 (vc 39): doc + memory sync. |
 | 2.10.07–2.10.09 | May 7–8 2026 | **SYNC pending-edit clobber fix + sync hardenings + 5-member group cap + AdMob real integration.** v2.10.07: foreign inbound now drops on conflict — every collection branch in `SyncMergeProcessor.processBatch` early-returns `if (event.isConflict) { conflictDetected = true; continue }`. The old transaction-only `isUserCategorized=false` workaround + `conflictedTransactionsToPushBack` plumbing in `MainViewModel`/`BackgroundSyncWorker` removed. Plus four `FirestoreDocSync` hardenings: `pushRecord` sets `localPendingEdits` BEFORE the Firestore I/O (closes the smaller same-shape race during the push duration); per-collection `cursorWriteLock` + `advanceCursor` helper makes load-compare-save atomic; `isListening` guards in both listener handlers drop late callbacks racing with `stopListeners()`; cursor advance skips failed-deserialization docs. v2.10.08: `SyncScreen` Generate Pairing Code button toasts `memberLimitReached` when `devices.size >= 5` instead of generating; `GroupManager.joinGroup`, after registering membership (required to read the devices subcollection), fetches device count and rolls back membership + local prefs if `>= 5` (server-side rule deferred — see `memory/project_member_limit_server_rule.md`). v2.10.09: real AdMob banner (TEST IDs) replaces the placeholder — adaptive sizing via `getCurrentOrientationAnchoredAdaptiveBannerAdSize`, `windowInsetsPadding(statusBars.union(displayCutout))` + `Modifier.background(headerBackground)` for the decorative top strip behind the cutout, AdView `setBackgroundColor(topBarColor.toArgb())` so letterbox areas blend with the strip, `WindowCompat.getInsetsController(...).isAppearanceLightStatusBars = false` for white status-bar icons in both themes, `tools:replace="android:resource"` on `<property AD_SERVICES_CONFIG>` to resolve the `play-services-ads` ↔ `play-services-measurement-api` manifest-merger conflict. Production-swap checklist in `memory/project_ad_implementation.md`. |
 | 2.10.28-dev | May 15 2026 | **§3.7 InHouseAd + §3.8 native-ad XML/drawables added.** Documents the medium-tier native ad system that landed on dev today: `AdMediumDims` data class + `computeAdMediumDims(widthDp)` continuous-scale formula (`s = widthDp/400`, no upper clamp; replaces deleted `values-w600dp/` + `values-w800dp/` qualifiers); shared rendering via `applyMediumAdDimsAndColors` + `bindMediumAdContent` + sealed `AdMediumContent.AdMob/InHouse` so the AdMob path and the in-house Compose mirror both inflate the same `native_ad_medium.xml`; `rememberImageVectorBitmap` rasterizer for Material `ImageVector` → `Bitmap`. `ui/components/` count corrected 5 → 6 (`InHouseAd.kt` was previously absent from the inventory). Companion SSD §16a chapter added. |
+| Help Chat Assistant feature | May 19–20 2026 | **§10a Help Chat Classes added; §10 HelpComponents.kt section extended.** New AI-assisted help-chat feature shipped via the `feature/help-chat` → `dev` merge (commit `59d6601`). §10a covers all 6 new files + 1 asset: `HelpChatDialog` (chat UI + email/Play-Store launchers + debug QA indicators), `HelpChatConsentDialog` (one-time consent), `HelpChatStore` (StateFlow-backed state + JSON persistence at `filesDir/help_chat.json` with compact field names + daily-cap math + 2-day SharedPrefs review-prompt debounce), `HelpChatUploader` (Firestore upload to `helpChatLogs/{chatId}` with `[N]`-prefixed bot text + separate `s` sentiment field for BigQuery + 7-day TTL via `expireAt`), `HelpChatPromptBuilder` v3 (preamble+suffix two-part assembly so the cacheable prefix stays byte-identical across all devices/turns — no per-device variables, locale interpolation removed in v2), `HelpChatGeminiService` (single-turn Gemini caller, `{reply, sentiment}` schema, defensive sentiment clamping 1-10, 3-attempt transient retry, telemetry callback). New shared helpers (`HelpChatHost` / `HelpChatTopBarAction` / `LocalHelpChatOpener`) added to `HelpComponents.kt` — every help screen now calls `HelpChatTopBarAction()` from its `actions` slot to surface the chatbot icon. `GeminiHttpClient.generate` extended with optional `usageCallback: (UsageMetadata) -> Unit` parameter + `extractUsageMetadata` helper; all three Gemini callers (Help Chat / OCR / CSV Categorize) wire it to `AnalyticsEvents.logAiCallMetrics` (`ai_call_metrics` event). MainActivity's `setContent` wraps the entire help-screen routing region (main routing + 2 overlay variants) in a single `HelpChatHost` so any help screen + the consent + chat dialogs share one opener instance and one state machine. Companion SSD §23a chapter added. |
 | 2.10.28-dev (P2) | May 15 2026 | **§6.17–§6.19 Play Billing classes added.** `BillingProducts` (IDs + `SUB_PERIOD_MS`), `BillingService` (Play Billing Library 7+ wrapper: `BillingState` data class, `queryAll` / `queryRawPurchases` / `launchPaidUpgrade` / `launchSubscribe` / `acknowledge` + `ensureConnected` Mutex), `EntitlementVerifier` (Layer 2 Cloud-Function-callable wrapper: `VerifyResult.Verified/Refunded/Unreachable` sealed class, 24 h SharedPreferences cache, 15 s call timeout). File inventory adds `data/billing/` (3 files). Companion SSD §16b chapter added. |
 | 2.10.28-dev (P3) | May 15 2026 | **§6.20–§6.23 AI / OCR classes added.** `AiCategorizerService` (CSV batch categorizer, `CHUNK_SIZE = 100`, schema-constrained JSON, retry on transient errors, payload omits date for privacy), `CategorizerPromptBuilder` (prompt template + `CSV_CATEGORIZER_PROMPT_VERSION = "v1"`), `ReceiptOcrService` (4-call Gemini Flash-Lite pipeline with all 4 schemas, parallel Call 1.5 / Call 2 under `CALL1R_TIMEOUT_PAST_C2_MS = 2_000L` cap, `deriveMulti` / `reconcilePrices` / `aggregateCategoryAmounts` post-processing, refund-receipt `Int.MIN_VALUE` sentinel, JPEG-blob vs bitmap-re-encode rationale, harness pointer), `OcrResult` (data classes + `OcrState` sealed class with `Offline` distinct from `Failed`). Companion SSD §11.2 + §11.3 augmented with prompt-version + helper-name details. Items 5 + 6 (period-boundary scheduling, inline FCM) already covered substantively in SSD §17.13–§17.15 + LLD §7.14 — no expansion needed. |
 | Doc bump v2.8 → v2.10 | May 15 2026 | **Filename + header + footer bumped.** Doc version independent of app version. v2.10 captures cumulative coverage since v2.8: §6.17–§6.19 Play Billing classes, §6.20–§6.23 AI/OCR classes, §3.7/§3.8 Native ad + XML/drawables, §3.9/§3.9.1 AdAware dialog host + share-blocking registrar. Files renamed `BudgeTrak_{SSD,LLD}_v2.8.md → _v2.10.md`. References in `README.md` and `memory/MEMORY.md` updated. |
