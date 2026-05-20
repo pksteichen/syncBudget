@@ -720,6 +720,15 @@ object SpanishStrings : AppStrings {
             "que puedes gastar ahora mismo sin poner en riesgo tus facturas, metas de ahorro ni " +
             "compromisos financieros. Pi\u00e9nsalo como la respuesta a la pregunta que todos se hacen: " +
             "\"\u00bfCu\u00e1nto me puedo permitir gastar hoy?\"",
+        chatbotIntroTitle = "Chatea con nuestro asistente",
+        chatbotIntroBody = "Toca el \u00edcono del chatbot en la esquina superior derecha de cualquier p\u00e1gina " +
+            "de ayuda para empezar una conversaci\u00f3n. El asistente puede responder preguntas sobre c\u00f3mo " +
+            "funciona BudgeTrak, explicar por qu\u00e9 un n\u00famero en tu pantalla se ve as\u00ed, y guiarte " +
+            "paso a paso en las tareas comunes.\n\n" +
+            "Tambi\u00e9n es un buen lugar para contarnos qu\u00e9 te encanta de BudgeTrak o qu\u00e9 te " +
+            "gustar\u00eda que hiciera. Las sugerencias y comentarios se env\u00edan al equipo de " +
+            "desarrollo para su revisi\u00f3n.",
+        chatbotIntroDemoCaption = "Toca aqu\u00ed arriba \u2197",
         solariDisplayTitle = "La pantalla Solari",
         solariDisplayBody = "La pieza central de la app es la pantalla tipo Solari \u2014 inspirada en los " +
             "tableros de solapas de las estaciones de tren y aeropuertos. Muestra dos datos clave:",

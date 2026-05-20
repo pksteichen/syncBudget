@@ -2,6 +2,7 @@ package com.techadvantage.budgetrak.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -181,6 +182,61 @@ fun DashboardHelpScreen(
                         lineHeight = 18.sp
                     )
                 }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDividerLine()
+
+            // ─── HELP CHAT ASSISTANT (introduction) ───
+            // Sits between the Welcome card and the Solari section to put
+            // the chatbot entry-point on every user's first scroll. The
+            // visual strip mirrors the icon that lives in the top-right
+            // of the app bar and points at it with a large up-right arrow.
+            HelpSectionTitle(S.dashboardHelp.chatbotIntroTitle)
+            HelpBodyText(S.dashboardHelp.chatbotIntroBody)
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(accentColor.copy(alpha = 0.07f))
+                    .border(1.dp, accentColor.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
+                    .clickable {
+                        if (helpChatConsent) showHelpChat = true
+                        else showHelpChatConsent = true
+                    }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Big chatbot icon — mirrors the one in the top app bar
+                // so users connect the two visually.
+                androidx.compose.foundation.Image(
+                    painter = painterResource(R.drawable.ic_chatbot),
+                    contentDescription = S.helpChat.openIconDesc,
+                    colorFilter = ColorFilter.tint(accentColor),
+                    modifier = Modifier.size(56.dp),
+                )
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Text(
+                    text = S.dashboardHelp.chatbotIntroDemoCaption,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = accentColor,
+                )
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                // Large text-colored arrow pointing up-right toward the
+                // actual chatbot icon in the app bar.
+                Text(
+                    text = "\u2197",  // U+2197 NORTH EAST ARROW
+                    fontSize = 64.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = accentColor,
+                )
             }
             Spacer(modifier = Modifier.height(16.dp))
 

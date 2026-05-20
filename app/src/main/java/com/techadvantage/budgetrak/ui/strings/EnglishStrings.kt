@@ -721,6 +721,13 @@ object EnglishStrings : AppStrings {
             "you can spend right now without jeopardizing your bills, savings goals, or " +
             "financial commitments. Think of it as the answer to the question everyone asks: " +
             "\"How much can I afford to spend?\"",
+        chatbotIntroTitle = "Chat With Our Helper",
+        chatbotIntroBody = "Tap the chatbot icon at the top-right of any help page to start a conversation. " +
+            "The assistant can answer questions about how BudgeTrak works, explain why a number on your " +
+            "screen looks the way it does, and walk you through common tasks step-by-step.\n\n" +
+            "It's also a great place to tell us what you love about BudgeTrak \u2014 or what you wish " +
+            "it did. Feature suggestions and feedback are passed along to the development team for review.",
+        chatbotIntroDemoCaption = "Tap up here \u2197",
         solariDisplayTitle = "The Solari Display",
         solariDisplayBody = "The centerpiece of the dashboard is the Solari-style flip display \u2014 inspired by the " +
             "split-flap departure boards found in train stations and airports. It shows two " +
