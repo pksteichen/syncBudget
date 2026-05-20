@@ -58,13 +58,9 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.painterResource
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.platform.LocalContext
 import com.techadvantage.budgetrak.R
-import com.techadvantage.budgetrak.data.HelpChatUploader
 import com.techadvantage.budgetrak.ui.strings.LocalStrings
 import com.techadvantage.budgetrak.ui.theme.LocalSyncBudgetColors
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,8 +68,6 @@ fun DashboardHelpScreen(
     onBack: () -> Unit,
     scrollTarget: String? = null,
     onScrollTargetConsumed: () -> Unit = {},
-    helpChatConsent: Boolean = false,
-    onGrantHelpChatConsent: () -> Unit = {},
 ) {
     val customColors = LocalSyncBudgetColors.current
     val S = LocalStrings.current
@@ -85,12 +79,10 @@ fun DashboardHelpScreen(
     var upgradesAnchorY by remember { mutableIntStateOf(-1) }
     val scrollState = rememberScrollState()
 
-    var showHelpChat by remember { mutableStateOf(false) }
-    var showHelpChatConsent by remember { mutableStateOf(false) }
-    // Hoist the upload scope to screen level so the fire-and-forget
-    // launch survives the dialog's disposal on dismiss.
-    val helpChatScope = rememberCoroutineScope()
-    val helpChatContext = LocalContext.current
+    // Help Chat opener provided by HelpChatHost (wraps the routing in
+    // MainActivity). Used both by the top-bar chatbot icon and by the
+    // in-page "Chat With Our Helper" demo row below the Welcome card.
+    val helpChatOpener = LocalHelpChatOpener.current
 
     // When a deep-link target arrives (e.g. tap on an offline in-house ad),
     // wait for the anchor to be laid out, then animate-scroll to it and
@@ -121,19 +113,7 @@ fun DashboardHelpScreen(
                         )
                     }
                 },
-                actions = {
-                    IconButton(onClick = {
-                        if (helpChatConsent) showHelpChat = true
-                        else showHelpChatConsent = true
-                    }) {
-                        androidx.compose.foundation.Image(
-                            painter = painterResource(R.drawable.ic_chatbot),
-                            contentDescription = S.helpChat.openIconDesc,
-                            colorFilter = ColorFilter.tint(customColors.headerText),
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-                },
+                actions = { HelpChatTopBarAction() },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = customColors.headerBackground
                 )
@@ -202,10 +182,7 @@ fun DashboardHelpScreen(
                     .clip(RoundedCornerShape(10.dp))
                     .background(accentColor.copy(alpha = 0.07f))
                     .border(1.dp, accentColor.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
-                    .clickable {
-                        if (helpChatConsent) showHelpChat = true
-                        else showHelpChatConsent = true
-                    }
+                    .clickable { helpChatOpener() }
                     .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -594,28 +571,9 @@ fun DashboardHelpScreen(
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
-
-    if (showHelpChat) {
-        HelpChatDialog(onDismissRequest = {
-            // Fire-and-forget upload of the (possibly dirty) buffer before
-            // we dismiss. uploadIfStale internally no-ops when nothing has
-            // changed since the last successful upload or when offline /
-            // unauthenticated. Failures log in DEBUG only.
-            helpChatScope.launch { HelpChatUploader.uploadIfStale(helpChatContext) }
-            showHelpChat = false
-        })
-    }
-
-    if (showHelpChatConsent) {
-        HelpChatConsentDialog(
-            onCancel = { showHelpChatConsent = false },
-            onAccept = {
-                onGrantHelpChatConsent()
-                showHelpChatConsent = false
-                showHelpChat = true
-            },
-        )
-    }
+    // HelpChatDialog + HelpChatConsentDialog are now rendered by
+    // HelpChatHost (wraps the routing block in MainActivity) so they
+    // appear over whichever help page the user opened the chat from.
 }
 
 @Composable
