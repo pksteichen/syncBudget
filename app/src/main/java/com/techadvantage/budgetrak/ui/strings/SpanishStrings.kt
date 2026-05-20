@@ -2127,6 +2127,7 @@ object SpanishStrings : AppStrings {
         dailyLimitHint = "Has alcanzado el l\u00edmite diario del chat. Vuelve a intentarlo ma\u00f1ana o pulsa Correo para contactar con soporte. Los usuarios Pago y Suscriptores tienen m\u00e1s mensajes al d\u00eda.",
         emailSubject = "Chat de ayuda de BudgeTrak \u2014 seguimiento",
         emailBodyIntro = "He tenido una conversaci\u00f3n con el Chat de ayuda de BudgeTrak y me gustar\u00eda un seguimiento de una persona. Transcripci\u00f3n a continuaci\u00f3n.",
+        reviewPromptText = "\u00a1Gracias de nuevo por tus palabras! Si tienes un momento, \u00bfconsiderar\u00edas dejarle a BudgeTrak una rese\u00f1a en Play Store? Las rese\u00f1as positivas nos ayudan a llegar a m\u00e1s personas a las que la app les pueda servir. Toca este mensaje para abrir la ficha.",
         consentTitle = "Chat de ayuda \u2014 Consentimiento",
         consentBody = "Para responder a tus preguntas, el Chat de Ayuda env\u00eda tus mensajes a un servicio externo de IA (Google Gemini). " +
             "Las transcripciones an\u00f3nimas tambi\u00e9n pueden almacenarse en nuestros servidores hasta 7 d\u00edas para revisar la precisi\u00f3n y detectar abusos. " +

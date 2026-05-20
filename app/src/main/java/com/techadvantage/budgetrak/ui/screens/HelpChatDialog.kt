@@ -3,6 +3,7 @@ package com.techadvantage.budgetrak.ui.screens
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -240,6 +241,7 @@ fun HelpChatDialog(
                                 if (trimmed.isNotEmpty() && !isThinking) {
                                     val ctx = context
                                     val errorReply = S.helpChat.errorReply
+                                    val reviewPromptText = S.helpChat.reviewPromptText
                                     input = ""
                                     isThinking = true
                                     scope.launch {
@@ -251,16 +253,46 @@ fun HelpChatDialog(
                                             history = HelpChatStore.messages.value,
                                             latestUserMessage = trimmed,
                                         )
-                                        val replyText = result.getOrElse { errorReply }
-                                        HelpChatStore.addMessage(
-                                            ctx, fromUser = false, text = replyText,
-                                        )
-                                        // Only successful Gemini replies
-                                        // count against the daily cap —
-                                        // transient failures don't burn
-                                        // the user's quota.
-                                        if (result.isSuccess) {
+                                        val reply = result.getOrNull()
+                                        if (reply != null) {
+                                            HelpChatStore.addMessage(
+                                                context = ctx,
+                                                fromUser = false,
+                                                text = reply.text,
+                                                sentiment = reply.sentiment,
+                                            )
+                                            // Only successful Gemini
+                                            // replies count against the
+                                            // daily cap — transient
+                                            // failures don't burn quota.
                                             HelpChatStore.incrementDailyCount(ctx)
+
+                                            // If the user just gave us
+                                            // strong positive feedback
+                                            // AND we haven't asked them
+                                            // for a review in the last
+                                            // 2 days, append a tappable
+                                            // Play Store request as a
+                                            // SECOND bot message. The
+                                            // model didn't write this
+                                            // text — it's a localized
+                                            // template — so it doesn't
+                                            // carry a sentiment score.
+                                            if (HelpChatStore.shouldShowReviewPrompt(ctx, reply.sentiment)) {
+                                                HelpChatStore.addMessage(
+                                                    context = ctx,
+                                                    fromUser = false,
+                                                    text = reviewPromptText,
+                                                    isReviewPrompt = true,
+                                                )
+                                                HelpChatStore.markReviewPromptShown(ctx)
+                                            }
+                                        } else {
+                                            HelpChatStore.addMessage(
+                                                context = ctx,
+                                                fromUser = false,
+                                                text = errorReply,
+                                            )
                                         }
                                         isThinking = false
                                         // Fire-and-forget upload: debounced
@@ -283,33 +315,77 @@ fun HelpChatDialog(
 @Composable
 private fun ChatMessageRow(msg: HelpChatMessage, youLabel: String, botLabel: String) {
     val customColors = LocalSyncBudgetColors.current
+    val context = LocalContext.current
     val isUser = msg.fromUser
+    val isReview = msg.isReviewPrompt
+    // Review-prompt bubble uses an accent-tinted background so users
+    // perceive it as a distinct CTA, and the whole surface is clickable
+    // — tapping anywhere on the bubble opens the Play Store listing.
+    val surfaceColor = when {
+        isUser   -> customColors.surfaceHeader
+        isReview -> MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+        else     -> MaterialTheme.colorScheme.surfaceVariant
+    }
+    val textColor = when {
+        isUser   -> customColors.surfaceHeaderText
+        else     -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
     ) {
+        val surfaceMod = Modifier
+            .wrapContentHeight()
+            .then(
+                if (isReview) {
+                    Modifier.clickable { openPlayStoreListing(context) }
+                } else {
+                    Modifier
+                }
+            )
         Surface(
             shape = RoundedCornerShape(12.dp),
-            color = if (isUser) customColors.surfaceHeader
-                    else MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier.wrapContentHeight(),
+            color = surfaceColor,
+            modifier = surfaceMod,
         ) {
             Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                 Text(
                     text = if (isUser) youLabel else botLabel,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
-                    color = if (isUser) customColors.surfaceHeaderText
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = textColor,
                 )
                 Text(
                     text = msg.text,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = if (isUser) customColors.surfaceHeaderText
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = textColor,
                 )
             }
         }
+    }
+}
+
+/**
+ * Open the BudgeTrak Play Store listing for a user-requested review.
+ * Tries the Play app deep link first (`market://...`); falls back to
+ * the https listing if the Play app isn't installed (rare on stock
+ * Android, common on degoogled devices). Debug builds strip the
+ * `.debug` package suffix so the link points at the production listing.
+ */
+private fun openPlayStoreListing(context: android.content.Context) {
+    val packageName = context.packageName.removeSuffix(".debug")
+    val marketUri = Uri.parse("market://details?id=$packageName")
+    val webUri = Uri.parse("https://play.google.com/store/apps/details?id=$packageName")
+
+    val marketIntent = Intent(Intent.ACTION_VIEW, marketUri).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    val opened = runCatching { context.startActivity(marketIntent) }.isSuccess
+    if (!opened) {
+        val webIntent = Intent(Intent.ACTION_VIEW, webUri).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        runCatching { context.startActivity(webIntent) }
     }
 }
 

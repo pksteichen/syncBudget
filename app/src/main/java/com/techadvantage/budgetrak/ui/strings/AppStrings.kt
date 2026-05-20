@@ -1705,6 +1705,7 @@ data class HelpChatStrings(
     val dailyLimitHint: String,
     val emailSubject: String,
     val emailBodyIntro: String,
+    val reviewPromptText: String,
     val consentTitle: String,
     val consentBody: String,
     val consentLink: String,

@@ -18,6 +18,21 @@ data class HelpChatMessage(
     val timestamp: Long,
     val fromUser: Boolean,
     val text: String,
+    /**
+     * 1-10 sentiment score the Gemini model assigned to the USER message
+     * that prompted this BOT reply (1=very negative, 10=very positive).
+     * Only set on bot messages produced by a successful Gemini call;
+     * null on user messages, error-replies, and review-prompt messages.
+     * Used for review-prompt gating and stored as metadata in the
+     * uploaded log so we can audit Gemini's sentiment judgment.
+     */
+    val sentiment: Int? = null,
+    /**
+     * True for the bot-authored Play Store review request inserted after
+     * a 9-10 sentiment turn (2-day debounce). The dialog renders these
+     * as a tappable surface that opens the Play Store listing.
+     */
+    val isReviewPrompt: Boolean = false,
 )
 
 /**
@@ -41,6 +56,16 @@ object HelpChatStore {
     const val DAILY_CAP_FREE = 10
     const val DAILY_CAP_PAID = 25
     const val DAILY_CAP_SUBSCRIBER = 50
+
+    // Review-prompt config. When the model scores a user message at
+    // SENTIMENT_REVIEW_THRESHOLD or above AND the last in-chat review
+    // prompt was shown more than REVIEW_PROMPT_DEBOUNCE_MS ago, the
+    // dialog appends a tappable Play Store review request as a second
+    // bot message. The debounce lives in SharedPrefs (not the chat
+    // JSON) so it survives Clear and the 48-hour buffer prune.
+    const val SENTIMENT_REVIEW_THRESHOLD = 9
+    private const val REVIEW_PROMPT_DEBOUNCE_MS = 2L * 24 * 60 * 60 * 1000  // 2 days
+    private const val REVIEW_PROMPT_PREF_KEY = "helpChatReviewPromptAt"
 
     private val _messages = MutableStateFlow<List<HelpChatMessage>>(emptyList())
     val messages: StateFlow<List<HelpChatMessage>> = _messages.asStateFlow()
@@ -120,6 +145,27 @@ object HelpChatStore {
         }
     }
 
+    /**
+     * True iff the model's sentiment score meets the review-prompt
+     * threshold AND the last in-chat review prompt was shown more than
+     * 2 days ago. The debounce uses `app_prefs` (not the chat JSON) so
+     * the user can't bypass it by Clear-ing the chat.
+     */
+    fun shouldShowReviewPrompt(context: Context, sentiment: Int): Boolean {
+        if (sentiment < SENTIMENT_REVIEW_THRESHOLD) return false
+        val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        val last = prefs.getLong(REVIEW_PROMPT_PREF_KEY, 0L)
+        return (System.currentTimeMillis() - last) > REVIEW_PROMPT_DEBOUNCE_MS
+    }
+
+    /** Stamps "now" as the last time the in-chat review prompt was shown. */
+    fun markReviewPromptShown(context: Context) {
+        context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .putLong(REVIEW_PROMPT_PREF_KEY, System.currentTimeMillis())
+            .apply()
+    }
+
     private val mutex = Mutex()
     @Volatile private var loaded: Boolean = false
 
@@ -151,11 +197,17 @@ object HelpChatStore {
                         val m = arr.optJSONObject(i) ?: continue
                         val t = m.optLong("t", 0L)
                         if (t < cutoff) continue
+                        // `s` (sentiment) and `r` (isReviewPrompt) are
+                        // optional fields added after v1; older messages
+                        // load with the data-class defaults (null / false).
+                        val sentiment = if (m.has("s")) m.optInt("s", 5).coerceIn(1, 10) else null
                         add(
                             HelpChatMessage(
                                 timestamp = t,
                                 fromUser = m.optBoolean("u", false),
                                 text = m.optString("x", ""),
+                                sentiment = sentiment,
+                                isReviewPrompt = m.optBoolean("r", false),
                             )
                         )
                     }
@@ -192,13 +244,21 @@ object HelpChatStore {
         }
     }
 
-    suspend fun addMessage(context: Context, fromUser: Boolean, text: String) {
+    suspend fun addMessage(
+        context: Context,
+        fromUser: Boolean,
+        text: String,
+        sentiment: Int? = null,
+        isReviewPrompt: Boolean = false,
+    ) {
         mutex.withLock {
             if (_chatId.value == null) _chatId.value = UUID.randomUUID().toString()
             _messages.value = _messages.value + HelpChatMessage(
                 timestamp = System.currentTimeMillis(),
                 fromUser = fromUser,
                 text = text,
+                sentiment = sentiment,
+                isReviewPrompt = isReviewPrompt,
             )
             withContext(Dispatchers.IO) { persistLocked(context) }
         }
@@ -251,6 +311,8 @@ object HelpChatStore {
                     put("t", m.timestamp)
                     put("u", m.fromUser)
                     put("x", m.text)
+                    m.sentiment?.let { put("s", it) }
+                    if (m.isReviewPrompt) put("r", true)
                 }
             )
         }

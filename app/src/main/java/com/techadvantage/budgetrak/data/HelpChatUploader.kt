@@ -106,12 +106,27 @@ object HelpChatUploader {
         // clock kept for human-readable diagnostics; not TTL-driving.
         val expireAt = Timestamp(java.util.Date(System.currentTimeMillis() + TTL_DAYS_MS))
         val payload = mapOf(
+            // For bot messages with a sentiment score, prefix the text
+            // field with `[N] ` so at-a-glance Firestore console review
+            // shows the score next to the reply it produced. Also keep
+            // the score as a separate field (`s`) for queryability in
+            // BigQuery — "show me all 9-10 turns from the last week"
+            // is exactly the kind of audit we want. The "r" field flags
+            // the Play Store review-prompt bot messages so we can
+            // exclude them from sentiment analysis if needed.
             "messages" to messages.map { m ->
-                mapOf(
-                    "t" to m.timestamp,
-                    "u" to m.fromUser,
-                    "x" to m.text,
-                )
+                val displayText = if (!m.fromUser && m.sentiment != null) {
+                    "[${m.sentiment}] ${m.text}"
+                } else {
+                    m.text
+                }
+                buildMap<String, Any> {
+                    put("t", m.timestamp)
+                    put("u", m.fromUser)
+                    put("x", displayText)
+                    m.sentiment?.let { put("s", it) }
+                    if (m.isReviewPrompt) put("r", true)
+                }
             },
             "messageCount" to messages.size,
             "lastUpdated" to FieldValue.serverTimestamp(),
