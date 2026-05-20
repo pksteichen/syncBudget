@@ -1723,6 +1723,21 @@ questions like:
 - "How do I share a budget with my family?"
 - "What happens when I delete a recurring expense?"
 
+It's also a great place to share **feedback** about BudgeTrak. Tell
+the bot:
+- What you love about a feature (so we know what's working).
+- What frustrates you or feels confusing (so we can fix the rough
+  edges).
+- Features or improvements you wish existed (so we know what to
+  build next).
+
+Conversations are saved briefly so the development team can review
+them. The bot won't promise that any specific change will be made,
+but your feedback genuinely reaches the people who decide what to
+work on next. When you share feedback, the bot will thank you,
+acknowledge what you said so you know it understood, and let you
+know the team will see it.
+
 It can't help with:
 - General personal-finance advice (whether to invest, what bank to
   use, tax questions).
