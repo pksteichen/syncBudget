@@ -71,8 +71,12 @@ An in-app help chat that answers configuration / budgeting / how-to / error-mess
 - `launchEmail` private helper in `HelpChatDialog.kt` opens `ACTION_SENDTO mailto:support@techadvantageapps.com` (NOTE: `techadvantageapps.com`, NOT the global `techadvantagesupport@gmail.com` — this is the Help Chat-specific support address) with prefilled subject (`emailSubject` string) and body (`emailBodyIntro` + transcript + `[chat-id: <uuid>]` footer for Firestore cross-reference).
 - Body capped at 3500 chars; longer chats append `[…transcript truncated…]` and rely on support pulling the rest from the 7-day Firestore log.
 
-### Stub knowledge base
-- `app/src/main/assets/help_chat_kb.md` — placeholder content covering Available Cash, period reset, SYNC basics, tiers, common errors, and the off-topic-refusal rule. Real KB still TODO (see below).
+### Comprehensive knowledge base
+- `app/src/main/assets/help_chat_kb.md` — ~75 KB (1744 lines, ~21 K input tokens) replacing the original stub on 2026-05-19 (commit `885fffa`).
+- Structure: big picture → glossary (Available Cash, set-aside, remembered amount, delete-vs-unlink, tiers) → screen tour of all 12 functional screens → money-math callouts (income modes, period rollover, set-aside math, savings floor, amortization, Supercharge, linking, auto-categorize, duplicate detection) → 12 step-by-step task recipes → error/warning explanations → tier reference → scope boundary.
+- Synthesized from 5 parallel Explore-agent cluster sweeps (Dashboard/Sim/Calendar, Transactions/Amortization/CSV, RE/IS/SG, Settings/BudgetConfig/Backup, SYNC/Receipts/Widget/Themes/Billing). Each agent read code + help screen + matching memory specs + SSD/LLD sections, returned a UI inventory, money-math callouts, and a drift list.
+- Drift fixes (BI_WEEKLY misrepresentation + SECURESYNC_CSV display-name clarification) landed in separate commits per source file (`7493a96` memory, `d5d3a09` LLD, `9418a41` SSD).
+- KB is English-only — the system prompt's language-matching rule handles Spanish queries via in-context translation.
 
 ### Strings
 - Added `thinkingLabel`, `errorReply`, `dailyLimitHint`, `emailSubject`, `emailBodyIntro` (5-string addition across the 4-file ritual). `emptyBody` reworded to drop "trained on the help pages" claim until the real KB lands.
@@ -81,12 +85,17 @@ An in-app help chat that answers configuration / budgeting / how-to / error-mess
 
 ## 🚧 TODO before merge to dev
 
-### Comprehensive knowledge base
-- Replace stub at `app/src/main/assets/help_chat_kb.md`. Build from `EnglishStrings` help blocks + a handwritten supplement covering paid-vs-subscriber tiers, common error remedies, SYNC setup.
-- Bilingual question? — leaning toward English-only KB with prompt-driven translation for Spanish queries. The current prompt already includes a language-matching rule, so an English-only KB should work.
-
 ### Cost ceiling Cloud Function
 - Checks total daily Gemini calls against a project-level quota; serves a static "service temporarily unavailable, please email" past the threshold. Daily caps in the app are the first defense; this is the second.
+- Particularly relevant now that the comprehensive KB makes each turn ~5–8 K input tokens (~$0.0006–$0.0008/turn at Standard pricing). A runaway loop or prompt-injection that echoes the KB back could each cost ~$0.10; the server guard catches what the daily caps miss.
+
+### Manual QA on-device
+- Solo user flow: consent → chat → upload → 7-day TTL sweep.
+- SYNC user flow: consent → existing auth → upload.
+- Daily-cap rollover: hit Free cap (10), verify Send disabled + placeholder swap; advance device clock by 1 day; verify cap resets.
+- Email escape: confirm `mailto:support@techadvantageapps.com` opens with transcript + chat-id footer prefilled.
+- Off-topic refusal: ask non-BudgeTrak question; verify polite refusal + email pointer.
+- Comprehensive-KB validation: ask questions across income modes, delete-vs-unlink, set-aside math, SYNC member limit, etc.; verify answers are grounded in the KB.
 
 ### Tests + manual QA
 - Solo user flow: consent → anonymous sign-in → upload → 7-day TTL sweep.
