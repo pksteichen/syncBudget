@@ -532,7 +532,16 @@ $listed"""
                     prompt = prompt,
                     schema = schema,
                     imageBytes = imageBytes,
-                    temperature = 0f
+                    temperature = 0f,
+                    usageCallback = { usage ->
+                        com.techadvantage.budgetrak.data.telemetry.AnalyticsEvents
+                            .logAiCallMetrics(
+                                context = context,
+                                feature = "ocr",
+                                model = MODEL_NAME,
+                                usage = usage,
+                            )
+                    },
                 )
             } catch (ce: CancellationException) {
                 throw ce

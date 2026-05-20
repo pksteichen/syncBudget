@@ -7,6 +7,7 @@ import com.techadvantage.budgetrak.BuildConfig
 import com.techadvantage.budgetrak.data.Category
 import com.techadvantage.budgetrak.data.Transaction
 import com.techadvantage.budgetrak.data.ocr.GeminiHttpClient
+import com.techadvantage.budgetrak.data.telemetry.AnalyticsEvents
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
@@ -111,7 +112,15 @@ object AiCategorizerService {
                     prompt = prompt,
                     schema = schema,
                     imageBytes = null,
-                    temperature = 0f
+                    temperature = 0f,
+                    usageCallback = { usage ->
+                        AnalyticsEvents.logAiCallMetrics(
+                            context = context,
+                            feature = "csv_categorize",
+                            model = MODEL_NAME,
+                            usage = usage,
+                        )
+                    },
                 )
             } catch (ce: CancellationException) {
                 throw ce

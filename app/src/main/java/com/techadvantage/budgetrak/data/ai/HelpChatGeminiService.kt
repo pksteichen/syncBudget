@@ -6,6 +6,7 @@ import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.techadvantage.budgetrak.BuildConfig
 import com.techadvantage.budgetrak.data.HelpChatMessage
 import com.techadvantage.budgetrak.data.ocr.GeminiHttpClient
+import com.techadvantage.budgetrak.data.telemetry.AnalyticsEvents
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
@@ -90,6 +91,14 @@ object HelpChatGeminiService {
                     schema = schema,
                     imageBytes = null,
                     temperature = TEMPERATURE,
+                    usageCallback = { usage ->
+                        AnalyticsEvents.logAiCallMetrics(
+                            context = context,
+                            feature = "help_chat",
+                            model = MODEL_NAME,
+                            usage = usage,
+                        )
+                    },
                 )
             } catch (ce: CancellationException) {
                 throw ce
