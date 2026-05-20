@@ -18,9 +18,14 @@ import org.json.JSONObject
  * [AiCategorizerService] pattern: raw HTTP via [GeminiHttpClient],
  * JSON-schema response, transient-error retry.
  *
- * The model returns `{ "reply": "..." }`; off-topic refusals are
- * produced inside `reply` per the system prompt, so the caller treats
- * every successful response uniformly.
+ * The model returns `{ "reply": "...", "sentiment": <int 1-10> }`.
+ * `reply` is the user-visible answer (off-topic refusals come back inside
+ * `reply` per the system prompt, so the caller treats every successful
+ * response uniformly). `sentiment` is a behind-the-scenes 1-10 score the
+ * model assigns to the LATEST user message (1 = very negative,
+ * 10 = very positive) — used internally for review-prompt gating
+ * (HelpChatDialog) and stored as metadata in the Firestore log so we
+ * can audit how well Gemini is judging tone.
  */
 object HelpChatGeminiService {
     private const val TAG = "HelpChatGeminiService"
@@ -28,14 +33,28 @@ object HelpChatGeminiService {
     private const val MODEL_NAME = "gemini-2.5-flash-lite"
     private const val TEMPERATURE = 0.2f
 
+    /** Default sentiment when the model omits the field or returns junk. */
+    private const val NEUTRAL_SENTIMENT = 5
+
+    /** A successful Help Chat turn: the assistant's user-visible reply
+     *  plus the 1-10 sentiment score the model assigned to the user
+     *  message that triggered this turn. */
+    data class HelpChatReply(
+        val text: String,
+        val sentiment: Int,
+    )
+
     private val schema: JSONObject = JSONObject()
         .put("type", "OBJECT")
-        .put("description", "Help Chat assistant reply")
+        .put("description", "Help Chat assistant reply + sentiment score")
         .put("properties", JSONObject()
             .put("reply", JSONObject()
                 .put("type", "STRING")
-                .put("description", "Plain-text answer in the user's language")))
-        .put("required", JSONArray(listOf("reply")))
+                .put("description", "Plain-text answer in the user's language"))
+            .put("sentiment", JSONObject()
+                .put("type", "INTEGER")
+                .put("description", "Sentiment score for the LATEST user message: 1=very negative, 5=neutral, 10=very positive")))
+        .put("required", JSONArray(listOf("reply", "sentiment")))
 
     private val transientPattern = Regex(
         "503|UNAVAILABLE|overloaded|429|RESOURCE_EXHAUSTED|deadline|fetch failed|network|ECONNRESET|ETIMEDOUT|socket",
@@ -52,7 +71,7 @@ object HelpChatGeminiService {
         context: Context,
         history: List<HelpChatMessage>,
         latestUserMessage: String,
-    ): Result<String> {
+    ): Result<HelpChatReply> {
         return try {
             if (BuildConfig.GEMINI_API_KEY.isBlank()) {
                 return Result.failure(IllegalStateException("GEMINI_API_KEY missing"))
@@ -62,12 +81,20 @@ object HelpChatGeminiService {
             val jsonText = withTimeout(TIMEOUT_MS) {
                 generateWithRetry(context, prompt)
             }
-            val reply = JSONObject(jsonText).optString("reply").trim()
-            if (reply.isEmpty()) {
-                Result.failure(IllegalStateException("Empty reply field"))
-            } else {
-                Result.success(reply)
+            val obj = JSONObject(jsonText)
+            val replyText = obj.optString("reply").trim()
+            if (replyText.isEmpty()) {
+                return Result.failure(IllegalStateException("Empty reply field"))
             }
+            // Parse + clamp sentiment defensively. The model is asked for
+            // 1-10; we accept anything in that range and snap out-of-range
+            // values to the boundary. Missing/non-integer → neutral.
+            val rawSentiment = obj.opt("sentiment")
+            val sentiment = when (rawSentiment) {
+                is Number -> rawSentiment.toInt().coerceIn(1, 10)
+                else -> NEUTRAL_SENTIMENT
+            }
+            Result.success(HelpChatReply(text = replyText, sentiment = sentiment))
         } catch (ce: CancellationException) {
             throw ce
         } catch (e: Exception) {

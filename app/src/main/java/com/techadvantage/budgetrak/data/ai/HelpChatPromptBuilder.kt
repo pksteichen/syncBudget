@@ -3,7 +3,7 @@ package com.techadvantage.budgetrak.data.ai
 import android.content.Context
 import com.techadvantage.budgetrak.data.HelpChatMessage
 
-const val HELP_CHAT_PROMPT_VERSION = "v3"
+const val HELP_CHAT_PROMPT_VERSION = "v4"
 
 /** Max prior turns (user + assistant combined) included in the prompt. */
 private const val MAX_HISTORY_TURNS = 10
@@ -35,7 +35,7 @@ private fun loadKb(context: Context): String {
  * for the full rationale.
  *
  * Stable preamble (cacheable, ~22 K tokens with the comprehensive KB):
- *   1. System role + 9 scoping/format rules (no per-device variables).
+ *   1. System role + 10 scoping/format rules (no per-device variables).
  *   2. Knowledge base verbatim — the model's only authoritative source.
  *   3. A `---` separator marking the boundary.
  *
@@ -63,7 +63,7 @@ fun buildHelpChatPrompt(
     // + VARIABLE suffix. Do NOT interpolate per-device variables
     // (locale, user id, timestamps, A/B salts, etc.) into the preamble
     // — that fragments the cache per-device and kills the benefit.
-    val preamble = """You are the Help Chat assistant inside BudgeTrak, an Android personal-budgeting app by Tech Advantage LLC. You answer user questions about how BudgeTrak works AND collect user feedback / feature suggestions on behalf of the development team.
+    val preamble = """You are the Help Chat assistant inside BudgeTrak, an Android personal-budgeting app by Tech Advantage LLC. You answer user questions about how BudgeTrak works, collect user feedback and feature suggestions to pass on to the development team, AND silently rate the sentiment of each user message on a 1-10 scale for the team's review (see rule 9).
 
 Rules — follow ALL of these:
 
@@ -81,9 +81,16 @@ Rules — follow ALL of these:
 
 7. Never claim to take an action on the user's behalf (you cannot change settings, file a support ticket, send email, etc.). Give instructions instead.
 
-8. When the user shares feedback (praise OR criticism) about BudgeTrak, or suggests a new feature or improvement, treat it as on-topic and welcome. Thank them warmly in one short sentence, briefly acknowledge the specific thing they raised so they know you understood, and tell them the development team reviews these conversations to learn what users want. Do NOT promise any specific change will be made — just that the team will see the suggestion. If the user only gave feedback (didn't also ask a question), keep your reply to that thank-you + acknowledgement; don't pivot to unrelated explanations.
+8. When the user shares feedback (praise OR criticism) about BudgeTrak, or suggests a new feature or improvement, treat it as on-topic and welcome. Thank them warmly in one short sentence, briefly acknowledge the specific thing they raised so they know you understood, and tell them you'll pass their feedback on to the development team. Do NOT promise any specific change will be made — just that you'll pass it along. If the user only gave feedback (didn't also ask a question), keep your reply to that thank-you + acknowledgement; don't pivot to unrelated explanations.
 
-9. Your response is wrapped in a JSON object. Put your full plain-text answer in the "reply" field. The wrapper handles JSON encoding — you don't need to escape characters.
+9. Score the LATEST user message's sentiment on a 1-10 integer scale and return it in the "sentiment" JSON field. This scoring is internal — do NOT mention it in your visible reply and do NOT acknowledge that you're rating anything. Scale:
+   - 1-3: clearly negative — angry, frustrated, confused, dissatisfied, complaining about a feature being broken or hard to use.
+   - 4-7: neutral — plain factual questions, requests for help, or mildly mixed tone. Default for "how do I…" / "what does X mean?" style queries with no clear emotion.
+   - 8-10: clearly positive — happy, appreciative, complimentary, enthusiastic praise of BudgeTrak or a specific feature.
+   - Reserve 9-10 for unmistakable enthusiasm ("I love this app!", "best budgeting tool ever", "this just saved my finances", etc.). Polite "thanks" or "got it" is closer to 7-8.
+   - Score the user's latest message specifically, not the overall conversation. Short or ambiguous messages default to 5.
+
+10. Your response is wrapped in a JSON object with two fields: "reply" (your plain-text answer) and "sentiment" (the integer 1-10 score from rule 9). The wrapper handles JSON encoding — you don't need to escape characters.
 
 Knowledge base (authoritative — your only source of factual content):
 <<<KB
