@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.techadvantage.budgetrak.BuildConfig
 import com.techadvantage.budgetrak.data.HelpChatMessage
 import com.techadvantage.budgetrak.data.HelpChatStore
 import com.techadvantage.budgetrak.data.HelpChatUploader
@@ -154,6 +155,30 @@ fun HelpChatDialog(
                         scrollState = historyScroll,
                         topPadding = 4.dp,
                         bottomPadding = 4.dp,
+                    )
+                }
+
+                // Debug-only QA status line: today's count vs cap, and
+                // how long ago the in-chat Play Store review prompt last
+                // fired (or "never"). Stripped from release builds at
+                // compile time via the BuildConfig.DEBUG conditional.
+                if (BuildConfig.DEBUG) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    val lastReviewMs = remember(dailyCount) {
+                        HelpChatStore.lastReviewPromptAt(context)
+                    }
+                    val lastReviewText = remember(lastReviewMs) {
+                        if (lastReviewMs == 0L) "never"
+                        else formatRelativeAge(System.currentTimeMillis() - lastReviewMs)
+                    }
+                    Text(
+                        text = "Debug · $dailyCount of $dailyCap today · last review: $lastReviewText",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surface)
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
                     )
                 }
 
@@ -349,8 +374,17 @@ private fun ChatMessageRow(msg: HelpChatMessage, youLabel: String, botLabel: Str
             modifier = surfaceMod,
         ) {
             Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                // In debug builds, bot labels get a `[N]` suffix where N
+                // is the Gemini-assigned sentiment score (1-10) for the
+                // user message that prompted this reply. Stripped from
+                // release builds. User messages never show a score.
+                val displayLabel = when {
+                    isUser -> youLabel
+                    BuildConfig.DEBUG && msg.sentiment != null -> "$botLabel [${msg.sentiment}]"
+                    else -> botLabel
+                }
                 Text(
-                    text = if (isUser) youLabel else botLabel,
+                    text = displayLabel,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = textColor,
@@ -362,6 +396,20 @@ private fun ChatMessageRow(msg: HelpChatMessage, youLabel: String, botLabel: Str
                 )
             }
         }
+    }
+}
+
+/**
+ * Compact relative-age formatter for the debug-only "last review:"
+ * status line. Returns "Xs / Xm / Xh / Xd ago" depending on magnitude.
+ */
+private fun formatRelativeAge(ms: Long): String {
+    val seconds = ms / 1000
+    return when {
+        seconds < 60     -> "${seconds}s ago"
+        seconds < 3600   -> "${seconds / 60}m ago"
+        seconds < 86400  -> "${seconds / 3600}h ago"
+        else             -> "${seconds / 86400}d ago"
     }
 }
 

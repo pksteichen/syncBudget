@@ -158,6 +158,16 @@ object HelpChatStore {
         return (System.currentTimeMillis() - last) > REVIEW_PROMPT_DEBOUNCE_MS
     }
 
+    /**
+     * Epoch-millis timestamp of the last time the in-chat review prompt
+     * was shown (0 if never). Exposed for debug-build UI displays only;
+     * release-build code should use [shouldShowReviewPrompt] which
+     * already reads + compares this value internally.
+     */
+    fun lastReviewPromptAt(context: Context): Long =
+        context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+            .getLong(REVIEW_PROMPT_PREF_KEY, 0L)
+
     /** Stamps "now" as the last time the in-chat review prompt was shown. */
     fun markReviewPromptShown(context: Context) {
         context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
