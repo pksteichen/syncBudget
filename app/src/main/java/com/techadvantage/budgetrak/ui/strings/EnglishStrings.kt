@@ -2133,9 +2133,9 @@ object EnglishStrings : AppStrings {
         dailyLimitHint = "You've reached today's chat limit. Try again tomorrow, or tap Email to reach support. Paid users and Subscribers get more chats per day.",
         emailSubject = "BudgeTrak Help Chat \u2014 follow-up",
         emailBodyIntro = "I had a chat with the BudgeTrak Help Chat and would like a follow-up from a human. Transcript below.",
-        reviewPromptText = "Thanks again for the kind words! If you have a moment, would you consider leaving BudgeTrak a review on the Play Store? Positive reviews help us reach new people who could benefit from the app. Tap this message to open the listing.",
+        reviewPromptText = "If you have a moment, would you consider leaving BudgeTrak a review on the Play Store? Positive reviews help us reach new people who could benefit from the app. Tap this message to open the listing.",
         consentTitle = "Help Chat \u2014 Consent",
-        consentBody = "To answer your questions, the Help Chat sends your typed messages to a third-party AI service (Google Gemini). " +
+        consentBody = "To answer your questions, the Help Chat sends your typed messages to our AI service. " +
             "Anonymous transcripts may also be stored on our servers for up to 7 days so we can review accuracy and check for abuse. " +
             "No account information, financial data, or contact details are sent.\n\n" +
             "By tapping Accept, you confirm you have reviewed the Privacy Policy and agree to this processing. " +
