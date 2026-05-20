@@ -1,12 +1,25 @@
 ---
-name: Help Chat assistant — feature in progress
-description: AI-powered in-app help chat (Gemini), grounded on a curated knowledge base, with daily limit + off-topic refusal + email escape. UI shell + persistence + Firestore upload + Gemini wiring + daily caps + email escape + comprehensive KB (~75 KB) all shipped on feature/help-chat 2026-05-19; only cost-ceiling Cloud Function + manual QA remain before merge to dev.
+name: Help Chat assistant — shipped to dev 2026-05-20
+description: AI-powered in-app help chat grounded in a comprehensive user-focused knowledge base, with daily caps, off-topic refusal, email escape, sentiment scoring, and a 2-day-debounced Play Store review prompt on sentiment ≥ 9. Merged into dev as commit 59d6601 (Merge feature/help-chat). The feature/help-chat branch has been deleted. Remaining follow-up: cost-ceiling Cloud Function (server-side circuit breaker) + on-device manual QA on dev before next release dispatch.
 type: project
 originSessionId: ca028513-626b-45e8-ad1c-a1863966bd91
 ---
 # Help Chat assistant — progress + TODO
 
-Branch: `feature/help-chat` (off `dev`). Tip: `2b8af8c` — memory checkpoint for the comprehensive KB. Recent code commits: `885fffa` comprehensive KB (~75 KB, 1744 lines), `2f44e40` Gemini Send + daily caps + email, `7493a96`/`d5d3a09`/`9418a41` BI_WEEKLY drift fixes (memory + LLD + SSD), `38b73cd` merge of v2.10.30 from dev, `473d746` UI shell. Keep the branch periodically rebased on or merged from dev so subsequent releases don't accumulate drift.
+**Status:** Merged into `dev` on 2026-05-20 as commit `59d6601`. The `feature/help-chat` branch has been deleted locally and on origin. Source-of-truth from this point is `dev`.
+
+**Significant commits in the merge** (oldest → newest, branch history preserved via `--no-ff`):
+- `473d746` UI shell + per-device consent flow + Firestore upload pipeline (anonymous 7-day TTL)
+- `885fffa` comprehensive user-focused KB (~75 KB / 1744 lines), synthesized from 5 parallel Explore-agent cluster sweeps
+- `7493a96` / `d5d3a09` / `9418a41` drift fixes (memory spec / LLD / SSD) for BI_WEEKLY hidden from new-entry dropdowns + SECURESYNC_CSV display name
+- `2f44e40` Gemini Send wiring + daily caps + email escape (`support@techadvantageapps.com`)
+- `5136a6d` HelpChatPromptBuilder v2 — implicit-cache-friendly preamble+suffix assembly, locale interpolation dropped
+- `cfe5e3e` per-call usage telemetry (`ai_call_metrics` Analytics event across all 3 Gemini callers)
+- `7f97783` + `8ed01c3` + `4641018` sentiment scoring (1-10) + tappable Play Store review prompt (sentiment ≥ 9, 2-day debounce) + KB feedback-channel rewording
+- `f65d1d4` Dashboard Help intro section ("Chat With Our Helper") above the Solari section with the up-right arrow visual
+- `e4e7492` shared HelpChatHost — chatbot icon now on every help page's top app bar
+- `1b7fcb5` + `c6c14a1` vendor-neutral in-app copy (consent, review prompt, AI CSV help)
+- `6151734` GDPR Article 30 Record of Processing Activities (`docs/BudgeTrak_GDPR_RoPA_v1.md`)
 
 ## Goal
 An in-app help chat that answers configuration / budgeting / how-to / error-message questions, grounded on a hand-curated knowledge base. Reduces support email volume; provides 24/7 instant guidance.
