@@ -1,12 +1,12 @@
 ---
 name: Help Chat assistant — feature in progress
-description: AI-powered in-app help chat (Gemini), grounded on a curated knowledge base, with daily limit + off-topic refusal + email escape. UI shell + persistence + Firestore upload (anonymous, 7-day TTL) + Gemini wiring + daily caps + email escape shipped on feature/help-chat 2026-05-19; comprehensive KB + cost-ceiling Cloud Function still TODO before merge to dev.
+description: AI-powered in-app help chat (Gemini), grounded on a curated knowledge base, with daily limit + off-topic refusal + email escape. UI shell + persistence + Firestore upload + Gemini wiring + daily caps + email escape + comprehensive KB (~75 KB) all shipped on feature/help-chat 2026-05-19; only cost-ceiling Cloud Function + manual QA remain before merge to dev.
 type: project
 originSessionId: ca028513-626b-45e8-ad1c-a1863966bd91
 ---
 # Help Chat assistant — progress + TODO
 
-Branch: `feature/help-chat` (off `dev`). Tip: `2f44e40` — Gemini Send + daily caps + email escape (2026-05-19 evening). Earlier checkpoints: `38b73cd` merge of v2.10.30 from dev, `473d746` UI shell, `208669a` + `1a617c8` memory updates. Keep the branch periodically rebased on or merged from dev so subsequent releases don't accumulate drift.
+Branch: `feature/help-chat` (off `dev`). Tip: `2b8af8c` — memory checkpoint for the comprehensive KB. Recent code commits: `885fffa` comprehensive KB (~75 KB, 1744 lines), `2f44e40` Gemini Send + daily caps + email, `7493a96`/`d5d3a09`/`9418a41` BI_WEEKLY drift fixes (memory + LLD + SSD), `38b73cd` merge of v2.10.30 from dev, `473d746` UI shell. Keep the branch periodically rebased on or merged from dev so subsequent releases don't accumulate drift.
 
 ## Goal
 An in-app help chat that answers configuration / budgeting / how-to / error-message questions, grounded on a hand-curated knowledge base. Reduces support email volume; provides 24/7 instant guidance.
