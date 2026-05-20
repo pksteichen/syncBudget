@@ -1,12 +1,12 @@
 ---
 name: Help Chat assistant — feature in progress
-description: AI-powered in-app help chat (Gemini), grounded on a curated knowledge base, with daily limit + off-topic refusal + email escape. UI shell + persistence + Firestore upload (anonymous, 7-day TTL) shipped on feature/help-chat 2026-05-19; Gemini wiring + KB + daily-limit logic still TODO.
+description: AI-powered in-app help chat (Gemini), grounded on a curated knowledge base, with daily limit + off-topic refusal + email escape. UI shell + persistence + Firestore upload (anonymous, 7-day TTL) + Gemini wiring + daily caps + email escape shipped on feature/help-chat 2026-05-19; comprehensive KB + cost-ceiling Cloud Function still TODO before merge to dev.
 type: project
+originSessionId: ca028513-626b-45e8-ad1c-a1863966bd91
 ---
-
 # Help Chat assistant — progress + TODO
 
-Branch: `feature/help-chat` (off `dev`). Tip: `38b73cd` — a merge of dev's v2.10.30 release (Android 15 edge-to-edge cleanup) into the branch on 2026-05-19; the Help Chat code shipped in `473d746` + memory updates in `208669a` are preserved through the merge. Keep the branch periodically rebased on or merged from dev so subsequent releases don't accumulate drift.
+Branch: `feature/help-chat` (off `dev`). Tip: `2f44e40` — Gemini Send + daily caps + email escape (2026-05-19 evening). Earlier checkpoints: `38b73cd` merge of v2.10.30 from dev, `473d746` UI shell, `208669a` + `1a617c8` memory updates. Keep the branch periodically rebased on or merged from dev so subsequent releases don't accumulate drift.
 
 ## Goal
 An in-app help chat that answers configuration / budgeting / how-to / error-message questions, grounded on a hand-curated knowledge base. Reduces support email volume; provides 24/7 instant guidance.
@@ -54,30 +54,39 @@ An in-app help chat that answers configuration / budgeting / how-to / error-mess
 
 ---
 
-## 🚧 TODO before merge to dev
+## ✅ Shipped 2026-05-19 evening (commit `2f44e40`)
 
 ### Gemini integration
-- Wire `HelpChatGeminiService` (raw HTTP, mirroring the existing OCR/CSV pattern in `data/ai/`). Reuse the Android-cert-restricted API key (see `reference_gemini_api_key.md`).
-- System prompt: strict scoping, KB-grounded, off-topic refusal with email escape pointer. Temperature 0.1–0.2. Model: Gemini 2.5 Flash-Lite.
-- On Send: append user message → call Gemini with `system + KB + chatHistory + lastUserMessage` → append assistant reply → persist + trigger uploadIfStale.
-- Error handling: network failure → show inline retry; API quota exceeded → soft block + email escape.
-
-### Knowledge base asset
-- Single markdown file in `app/src/main/assets/help_chat_kb.md`. Build step (or manual checkpoint) regenerates from `EnglishStrings` help blocks + a handwritten supplement covering paid-vs-subscriber tiers, common error remedies, SYNC setup.
-- Bilingual question? — leaning toward English-only KB with translation prompt for Spanish queries. Decide before launch.
+- `data/ai/HelpChatGeminiService.kt` — raw HTTP via existing `GeminiHttpClient`, mirrors `AiCategorizerService` pattern. Model `gemini-2.5-flash-lite`, temperature 0.2, JSON schema `{ reply: string }`. Transient retry (429/5xx, network), 30 s timeout, Crashlytics on terminal failure.
+- `data/ai/HelpChatPromptBuilder.kt` — system prompt with strict on-topic scoping, off-topic refusal + email-escape pointer, language matching (`Locale.getDefault().toLanguageTag()` hint + latest-user-message signal), 10-turn history window, KB injected verbatim between `<<<KB ... KB>>>` markers.
+- Send wiring in `HelpChatDialog`: append user msg → "Thinking…" bot row → call service → append real reply (or `errorReply` on failure) → bump daily count (success only) → `uploadIfStale`. Send disabled while in-flight.
 
 ### Daily-limit logic
-- `helpChatCount` + `helpChatResetDay` prefs. Reset at local midnight (reuse period-refresh logic).
-- Caps: Free 10/day, Paid 25/day, Subscriber 50/day (tunable; can lower if cost grows).
-- Cap exceeded → soft block in the input row with an "Email support" CTA pointing at the existing Email button.
+- `HelpChatStore` gained `dailyCount` + `dailyResetEpochDay` (`LocalDate.now().toEpochDay()`), persisted in the same `help_chat.json`. Caps: **Free 10 / Paid 25 / Subscriber 50** as `DAILY_CAP_*` constants.
+- `getDailyCap(context)` reads `isPaidUser`/`isSubscriber` directly from `app_prefs` (no VM plumbing). `canSendToday` / `remainingToday` / `incrementDailyCount` rotate the counter at local midnight.
+- Counter survives Clear (no bypass via reset) and survives the 48 h message prune (no free reply by waiting).
+- Cap-reached UX: input disabled, placeholder swaps to `dailyLimitHint` ("…try tomorrow, or tap Email. Paid users and Subscribers get more chats per day"), Send greyed out.
 
-### Email escape hatch (currently toast stub)
-- Wire the Email button to `ACTION_SENDTO` mailto:techadvantagesupport@gmail.com with:
-  - Subject prefilled with chat session topic (last user message excerpt or chatId).
-  - Body prefilled with the chat transcript so context isn't lost.
+### Email escape hatch (replaces toast stub)
+- `launchEmail` private helper in `HelpChatDialog.kt` opens `ACTION_SENDTO mailto:support@techadvantageapps.com` (NOTE: `techadvantageapps.com`, NOT the global `techadvantagesupport@gmail.com` — this is the Help Chat-specific support address) with prefilled subject (`emailSubject` string) and body (`emailBodyIntro` + transcript + `[chat-id: <uuid>]` footer for Firestore cross-reference).
+- Body capped at 3500 chars; longer chats append `[…transcript truncated…]` and rely on support pulling the rest from the 7-day Firestore log.
 
-### Cost ceiling guard
-- Cloud Function checking total daily Gemini calls against a project-level quota; cuts off + serves a static "service temporarily unavailable, please email" message past the threshold.
+### Stub knowledge base
+- `app/src/main/assets/help_chat_kb.md` — placeholder content covering Available Cash, period reset, SYNC basics, tiers, common errors, and the off-topic-refusal rule. Real KB still TODO (see below).
+
+### Strings
+- Added `thinkingLabel`, `errorReply`, `dailyLimitHint`, `emailSubject`, `emailBodyIntro` (5-string addition across the 4-file ritual). `emptyBody` reworded to drop "trained on the help pages" claim until the real KB lands.
+
+---
+
+## 🚧 TODO before merge to dev
+
+### Comprehensive knowledge base
+- Replace stub at `app/src/main/assets/help_chat_kb.md`. Build from `EnglishStrings` help blocks + a handwritten supplement covering paid-vs-subscriber tiers, common error remedies, SYNC setup.
+- Bilingual question? — leaning toward English-only KB with prompt-driven translation for Spanish queries. The current prompt already includes a language-matching rule, so an English-only KB should work.
+
+### Cost ceiling Cloud Function
+- Checks total daily Gemini calls against a project-level quota; serves a static "service temporarily unavailable, please email" past the threshold. Daily caps in the app are the first defense; this is the second.
 
 ### Tests + manual QA
 - Solo user flow: consent → anonymous sign-in → upload → 7-day TTL sweep.
