@@ -2,8 +2,8 @@
 name: Data Model Specification
 description: Data classes, fields, enums, linking lifecycle, sync fields — schema reference for BudgeTrak (Firestore-native sync, no clocks)
 type: reference
+originSessionId: ca028513-626b-45e8-ad1c-a1863966bd91
 ---
-
 # Data Model Specification
 
 > Sync moved to Firestore-native per-field encryption on 2026-03-23 (v2.1). All `_clock` / Lamport fields are gone. The only sync metadata on data classes is `deviceId` + `deleted`. Field-level changes are pushed via Firestore `update()` and ordered by server-assigned `updatedAt`.
@@ -13,10 +13,12 @@ type: reference
 | Enum | Values |
 |------|--------|
 | TransactionType | EXPENSE, INCOME |
-| RepeatType | DAYS, WEEKS, BI_WEEKLY, MONTHS, BI_MONTHLY, ANNUAL |
+| RepeatType | DAYS, WEEKS, BI_WEEKLY (hidden from new-entry dropdown — see note below), MONTHS, BI_MONTHLY, ANNUAL |
 | BudgetPeriod | DAILY, WEEKLY, MONTHLY |
 | IncomeMode | FIXED, ACTUAL, ACTUAL_ADJUST |
 | SuperchargeMode | REDUCE_CONTRIBUTIONS, ACHIEVE_SOONER (savings goals) |
+
+**BI_WEEKLY repeat-type note**: the enum value is fully supported by `BudgetCalculator` (occurrence generation, annual-occurrence math) and is rendered as "Every 2 Weeks" wherever an existing RE/IS uses it (RecurringExpensesScreen.kt:214/657, BudgetConfigScreen.kt:707/732). However, the **new-entry dropdowns filter it out** (RecurringExpensesScreen.kt:748 + BudgetConfigScreen.kt:726 — both `RepeatType.entries.filter { it != RepeatType.BI_WEEKLY }`), so users can only create a biweekly schedule via `WEEKS` with `repeatInterval = 2`. Existing biweekly entries (legacy data, restored backups, sync imports) continue to display and recur normally.
 
 ## Transaction (`data/Transaction.kt`)
 
