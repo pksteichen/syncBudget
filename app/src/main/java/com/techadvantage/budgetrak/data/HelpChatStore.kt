@@ -11,6 +11,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.time.LocalDate
 import java.util.UUID
 
 data class HelpChatMessage(
@@ -34,6 +35,13 @@ object HelpChatStore {
     private const val FILE_NAME = "help_chat.json"
     private const val TTL_MS = 48L * 60 * 60 * 1000  // 48 hours
 
+    // Per-tier daily Gemini-reply caps. Counted against SUCCESSFUL replies
+    // only — transient failures don't burn the user's quota. Reset at local
+    // midnight (system default zone).
+    const val DAILY_CAP_FREE = 10
+    const val DAILY_CAP_PAID = 25
+    const val DAILY_CAP_SUBSCRIBER = 50
+
     private val _messages = MutableStateFlow<List<HelpChatMessage>>(emptyList())
     val messages: StateFlow<List<HelpChatMessage>> = _messages.asStateFlow()
 
@@ -50,7 +58,67 @@ object HelpChatStore {
 
     private val _lastUploadedCount = MutableStateFlow(0)
 
+    // Daily-cap state. `_dailyCount` is the number of successful Gemini
+    // replies received today; `_dailyResetEpochDay` is the LocalDate epoch
+    // day on which `_dailyCount` was last reset. Both persist to the same
+    // JSON file as messages so a crash mid-day doesn't lose the cap state.
+    private val _dailyCount = MutableStateFlow(0)
+    val dailyCount: StateFlow<Int> = _dailyCount.asStateFlow()
+    private val _dailyResetEpochDay = MutableStateFlow(0L)
+
     fun isDirty(): Boolean = _messages.value.size > _lastUploadedCount.value
+
+    /**
+     * Daily cap for this device's current tier. Subscriber beats Paid beats
+     * Free. Reads SharedPreferences directly so the dialog doesn't have to
+     * plumb the tier flags through.
+     */
+    fun getDailyCap(context: Context): Int {
+        val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        val isSub = prefs.getBoolean("isSubscriber", false)
+        val isPaid = prefs.getBoolean("isPaidUser", false)
+        return when {
+            isSub  -> DAILY_CAP_SUBSCRIBER
+            isPaid -> DAILY_CAP_PAID
+            else   -> DAILY_CAP_FREE
+        }
+    }
+
+    /**
+     * Reset the daily counter when the local date has changed since the
+     * last successful reply. Caller must hold [mutex]; we don't persist
+     * here because the caller will persist on its own write path.
+     */
+    private fun maybeResetCounterLocked() {
+        val today = LocalDate.now().toEpochDay()
+        if (_dailyResetEpochDay.value != today) {
+            _dailyCount.value = 0
+            _dailyResetEpochDay.value = today
+        }
+    }
+
+    /** Number of replies still allowed today for the current tier. */
+    suspend fun remainingToday(context: Context): Int {
+        mutex.withLock {
+            maybeResetCounterLocked()
+            return (getDailyCap(context) - _dailyCount.value).coerceAtLeast(0)
+        }
+    }
+
+    /** Returns true iff a fresh Send is allowed under today's cap. */
+    suspend fun canSendToday(context: Context): Boolean = remainingToday(context) > 0
+
+    /**
+     * Bump the daily counter after a SUCCESSFUL Gemini reply. Resets on day
+     * rollover before bumping so the count starts from 0 each local day.
+     */
+    suspend fun incrementDailyCount(context: Context) {
+        mutex.withLock {
+            maybeResetCounterLocked()
+            _dailyCount.value += 1
+            withContext(Dispatchers.IO) { persistLocked(context) }
+        }
+    }
 
     private val mutex = Mutex()
     @Volatile private var loaded: Boolean = false
@@ -92,12 +160,23 @@ object HelpChatStore {
                         )
                     }
                 }
+                // Daily-cap state survives message pruning — a user who hit
+                // their cap and waited 48 h for messages to age out still
+                // shouldn't get a free bonus reply via prune.
+                _dailyCount.value = obj.optInt("dailyCount", 0)
+                _dailyResetEpochDay.value = obj.optLong("dailyResetEpochDay", 0L)
                 if (msgs.isEmpty()) {
                     _chatId.value = null
                     _messages.value = emptyList()
                     _lastUploadAt.value = 0L
                     _lastUploadedCount.value = 0
-                    file.delete()
+                    // Daily-cap state survives the local wipe — we only
+                    // delete the file when message AND cap state are stale.
+                    if (_dailyCount.value == 0) {
+                        file.delete()
+                    } else {
+                        persistLocked(context)
+                    }
                 } else {
                     _chatId.value = id
                     _messages.value = msgs
@@ -137,8 +216,14 @@ object HelpChatStore {
             _chatId.value = null
             _lastUploadAt.value = 0L
             _lastUploadedCount.value = 0
+            // Daily count is INTENTIONALLY preserved across Clear so the
+            // cap can't be bypassed by repeatedly resetting the chat.
             withContext(Dispatchers.IO) {
-                File(context.filesDir, FILE_NAME).delete()
+                if (_dailyCount.value == 0) {
+                    File(context.filesDir, FILE_NAME).delete()
+                } else {
+                    persistLocked(context)
+                }
             }
         }
     }
@@ -172,6 +257,8 @@ object HelpChatStore {
         obj.put("messages", arr)
         obj.put("lastUploadAt", _lastUploadAt.value)
         obj.put("lastUploadedCount", _lastUploadedCount.value)
+        obj.put("dailyCount", _dailyCount.value)
+        obj.put("dailyResetEpochDay", _dailyResetEpochDay.value)
         file.writeText(obj.toString())
     }
 }

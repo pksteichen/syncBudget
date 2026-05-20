@@ -1,5 +1,7 @@
 package com.techadvantage.budgetrak.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,12 +41,12 @@ import androidx.compose.ui.unit.dp
 import com.techadvantage.budgetrak.data.HelpChatMessage
 import com.techadvantage.budgetrak.data.HelpChatStore
 import com.techadvantage.budgetrak.data.HelpChatUploader
+import com.techadvantage.budgetrak.data.ai.HelpChatGeminiService
 import com.techadvantage.budgetrak.ui.strings.LocalStrings
 import com.techadvantage.budgetrak.ui.theme.AdAwareDialog
 import com.techadvantage.budgetrak.ui.theme.DialogHeader
 import com.techadvantage.budgetrak.ui.theme.DialogPrimaryButton
 import com.techadvantage.budgetrak.ui.theme.DialogSecondaryButton
-import com.techadvantage.budgetrak.ui.theme.LocalAppToast
 import com.techadvantage.budgetrak.ui.theme.LocalSyncBudgetColors
 import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrows
 import com.techadvantage.budgetrak.ui.theme.dialogFooterColor
@@ -57,20 +59,32 @@ fun HelpChatDialog(
 ) {
     val S = LocalStrings.current
     val customColors = LocalSyncBudgetColors.current
-    val toastState = LocalAppToast.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     val messages by HelpChatStore.messages.collectAsState()
+    val dailyCount by HelpChatStore.dailyCount.collectAsState()
     var input by remember { mutableStateOf("") }
+    var isThinking by remember { mutableStateOf(false) }
 
     val historyScroll = rememberScrollState()
-    val canSend by remember { derivedStateOf { input.isNotBlank() } }
+    // Cap state — recomputes whenever dailyCount changes, AND whenever the
+    // dialog recomposes after midnight (the underlying store rolls the
+    // counter forward inside canSendToday/remainingToday at next send).
+    val dailyCap = remember(dailyCount) { HelpChatStore.getDailyCap(context) }
+    val limitReached by remember(dailyCount, dailyCap) {
+        derivedStateOf { dailyCount >= dailyCap }
+    }
+    val canSend by remember {
+        derivedStateOf { input.isNotBlank() && !isThinking && !limitReached }
+    }
 
     LaunchedEffect(Unit) { HelpChatStore.load(context) }
 
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) historyScroll.animateScrollTo(historyScroll.maxValue)
+    LaunchedEffect(messages.size, isThinking) {
+        if (messages.isNotEmpty() || isThinking) {
+            historyScroll.animateScrollTo(historyScroll.maxValue)
+        }
     }
 
     val textFieldColors = OutlinedTextFieldDefaults.colors(
@@ -123,6 +137,17 @@ fun HelpChatDialog(
                                 )
                             }
                         }
+                        if (isThinking) {
+                            ChatMessageRow(
+                                msg = HelpChatMessage(
+                                    timestamp = 0L,
+                                    fromUser = false,
+                                    text = S.helpChat.thinkingLabel,
+                                ),
+                                youLabel = S.helpChat.youLabel,
+                                botLabel = S.helpChat.botLabel,
+                            )
+                        }
                     }
                     PulsingScrollArrows(
                         scrollState = historyScroll,
@@ -142,12 +167,14 @@ fun HelpChatDialog(
                     OutlinedTextField(
                         value = input,
                         onValueChange = { input = it },
+                        enabled = !limitReached,
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 88.dp, max = 88.dp),
                         placeholder = {
                             Text(
-                                text = S.helpChat.inputHint,
+                                text = if (limitReached) S.helpChat.dailyLimitHint
+                                       else S.helpChat.inputHint,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                             )
                         },
@@ -171,7 +198,15 @@ fun HelpChatDialog(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         DialogSecondaryButton(onClick = {
-                            toastState.show("Email support — coming soon")
+                            launchEmail(
+                                context = context,
+                                subject = S.helpChat.emailSubject,
+                                intro = S.helpChat.emailBodyIntro,
+                                youLabel = S.helpChat.youLabel,
+                                botLabel = S.helpChat.botLabel,
+                                messages = messages,
+                                chatId = HelpChatStore.chatId.value,
+                            )
                         }) {
                             Text(S.helpChat.btnEmail)
                         }
@@ -202,21 +237,36 @@ fun HelpChatDialog(
                         DialogPrimaryButton(
                             onClick = {
                                 val trimmed = input.trim()
-                                if (trimmed.isNotEmpty()) {
+                                if (trimmed.isNotEmpty() && !isThinking) {
                                     val ctx = context
-                                    scope.launch {
-                                        HelpChatStore.addMessage(ctx, fromUser = true, text = trimmed)
-                                        // Backend wiring lands in a later
-                                        // phase; append a placeholder bot
-                                        // reply so the UI shell can be
-                                        // exercised end-to-end.
-                                        HelpChatStore.addMessage(
-                                            ctx,
-                                            fromUser = false,
-                                            text = "(AI backend not yet connected)",
-                                        )
-                                    }
+                                    val errorReply = S.helpChat.errorReply
                                     input = ""
+                                    isThinking = true
+                                    scope.launch {
+                                        HelpChatStore.addMessage(
+                                            ctx, fromUser = true, text = trimmed,
+                                        )
+                                        val result = HelpChatGeminiService.reply(
+                                            context = ctx,
+                                            history = HelpChatStore.messages.value,
+                                            latestUserMessage = trimmed,
+                                        )
+                                        val replyText = result.getOrElse { errorReply }
+                                        HelpChatStore.addMessage(
+                                            ctx, fromUser = false, text = replyText,
+                                        )
+                                        // Only successful Gemini replies
+                                        // count against the daily cap —
+                                        // transient failures don't burn
+                                        // the user's quota.
+                                        if (result.isSuccess) {
+                                            HelpChatStore.incrementDailyCount(ctx)
+                                        }
+                                        isThinking = false
+                                        // Fire-and-forget upload: debounced
+                                        // 5-min window per HelpChatUploader.
+                                        HelpChatUploader.uploadIfStale(ctx)
+                                    }
                                 }
                             },
                             enabled = canSend,
@@ -261,4 +311,51 @@ private fun ChatMessageRow(msg: HelpChatMessage, youLabel: String, botLabel: Str
             }
         }
     }
+}
+
+/**
+ * Open the user's email client with a prefilled help-chat follow-up. The
+ * full transcript is appended after [intro]; the chatId is included as
+ * the last line so Tech Advantage support can look up the Firestore doc
+ * (assuming the user previously granted consent for upload).
+ *
+ * mailto: bodies have a practical length limit (~4 KB on most Android
+ * clients). We truncate at 3500 chars to leave headroom for the URL
+ * encoding overhead — if the chat is longer, we replace the middle with
+ * a marker and let support pull the rest from Firestore.
+ */
+private fun launchEmail(
+    context: android.content.Context,
+    subject: String,
+    intro: String,
+    youLabel: String,
+    botLabel: String,
+    messages: List<HelpChatMessage>,
+    chatId: String?,
+) {
+    val transcript = buildString {
+        append(intro)
+        append("\n\n")
+        messages.forEach { m ->
+            val role = if (m.fromUser) youLabel else botLabel
+            append(role).append(": ").append(m.text).append("\n\n")
+        }
+        if (chatId != null) {
+            append("[chat-id: ").append(chatId).append("]")
+        }
+    }
+    val capped = if (transcript.length > 3500) {
+        transcript.substring(0, 3500) + "\n\n[…transcript truncated…]"
+    } else {
+        transcript
+    }
+    val uri = Uri.parse(
+        "mailto:support@techadvantageapps.com" +
+            "?subject=" + Uri.encode(subject) +
+            "&body=" + Uri.encode(capped)
+    )
+    val intent = Intent(Intent.ACTION_SENDTO, uri).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    runCatching { context.startActivity(intent) }
 }
