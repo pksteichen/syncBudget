@@ -6,7 +6,7 @@ type: project
 
 # Help Chat assistant — progress + TODO
 
-Branch: `feature/help-chat` (off `dev`). Last commit `473d746` (2026-05-19).
+Branch: `feature/help-chat` (off `dev`). Tip: `38b73cd` — a merge of dev's v2.10.30 release (Android 15 edge-to-edge cleanup) into the branch on 2026-05-19; the Help Chat code shipped in `473d746` + memory updates in `208669a` are preserved through the merge. Keep the branch periodically rebased on or merged from dev so subsequent releases don't accumulate drift.
 
 ## Goal
 An in-app help chat that answers configuration / budgeting / how-to / error-message questions, grounded on a hand-curated knowledge base. Reduces support email volume; provides 24/7 instant guidance.
