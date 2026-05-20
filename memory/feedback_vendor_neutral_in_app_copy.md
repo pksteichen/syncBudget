@@ -29,14 +29,14 @@ When writing or reviewing **user-facing** UI text — consent dialogs, help scre
 - **Memory files**: like this one — developer notes naming the vendor is fine.
 - **Comments in code**: free to be specific (e.g., `GeminiHttpClient`).
 
-## Known still-non-compliant strings (audit, 2026-05-20)
+## Audit history
 
-These were spotted during the consent-dialog wording change but the user has NOT yet asked them to be updated. Flag in any future session that touches them; do NOT silently change them without confirming scope first:
+- **2026-05-20 part 1**: `consentBody` (Help Chat consent dialog) and `reviewPromptText` reworded EN + ES.
+- **2026-05-20 part 2**: `aiCsvCategorizeHelpBody` scrubbed EN + ES — "Google's Gemini AI" → "our AI service", "Google's servers" → "the AI provider's servers", "deleted by Google" → "deleted as soon as the request completes". No remaining user-facing strings name an AI vendor (verified via `grep -niE "gemini|google.{0,3}ai"` over EnglishStrings.kt + SpanishStrings.kt).
 
-- `EnglishStrings.aiCsvCategorizeHelpBody` (line ~250) — names "Google's Gemini AI", mentions "Google's servers" multiple times, and "the AI provider".
-- `SpanishStrings.aiCsvCategorizeHelpBody` — Spanish mirror of the above.
+## Don't point users to the Privacy Policy from in-app copy
 
-The CSV-categorize help may have legitimate transparency reasons to be more specific (it's about a different data flow — bank transaction merchants — and the help text is opt-in disclosure for that feature). Verify with the user before generalizing.
+Related design choice from the same 2026-05-20 conversation: when writing privacy-adjacent copy, DO NOT include "See our Privacy Policy for the full list of processors" or similar pointers in the in-app text. Curious users will find the Privacy Policy via Settings or the standard channels; explicit pointers add noise without adding meaningful transparency.
 
 ## Cross-references
 
