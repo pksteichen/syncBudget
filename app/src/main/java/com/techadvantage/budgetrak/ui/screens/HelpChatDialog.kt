@@ -190,13 +190,24 @@ fun HelpChatDialog(
                         .background(MaterialTheme.colorScheme.surface)
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                 ) {
+                    // Grow the field when the limit-reached hint is
+                    // showing — the warning text is ~5 lines in Spanish
+                    // (which runs ~20% longer than English) and would
+                    // clip in the normal 3-line height. The field is
+                    // disabled in that state anyway, so giving it more
+                    // vertical room costs the user nothing.
+                    val limitFieldHeight = 160.dp
+                    val normalFieldHeight = 88.dp
                     OutlinedTextField(
                         value = input,
                         onValueChange = { input = it },
                         enabled = !limitReached,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 88.dp, max = 88.dp),
+                            .heightIn(
+                                min = if (limitReached) limitFieldHeight else normalFieldHeight,
+                                max = if (limitReached) limitFieldHeight else normalFieldHeight,
+                            ),
                         placeholder = {
                             Text(
                                 text = if (limitReached) S.helpChat.dailyLimitHint
@@ -204,8 +215,8 @@ fun HelpChatDialog(
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                             )
                         },
-                        maxLines = 3,
-                        minLines = 3,
+                        maxLines = if (limitReached) 6 else 3,
+                        minLines = if (limitReached) 5 else 3,
                         colors = textFieldColors,
                         shape = RoundedCornerShape(8.dp),
                     )
