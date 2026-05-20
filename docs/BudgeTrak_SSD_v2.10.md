@@ -2320,7 +2320,7 @@ Bar is naive repackaging only — smali patching strips the check easily. Layer 
 | androidx.core:core-ktx | 1.13.1 |
 | androidx.lifecycle:lifecycle-runtime-ktx | 2.8.6 |
 | androidx.lifecycle:lifecycle-viewmodel-compose | 2.8.6 |
-| androidx.activity:activity-compose | 1.9.2 |
+| androidx.activity:activity-compose | 1.9.3 (Termux debug) / 1.10.1 (CI release) — bifurcated via the same `localTermux` flag used for sdkVersion; 1.10.x is needed for `enableEdgeToEdge` to emit the modern cutout-mode constant but requires compileSdk 35 (breaks Termux's aapt2). See v2.10.30 release notes + `memory/feedback_play_console_deprecated_api_warnings.md`. |
 | androidx.compose.ui / ui-graphics / material3 / material-icons-extended / animation | BOM managed |
 | com.google.firebase:firebase-bom | 32.7.0 |
 | firebase-auth / firestore / storage / messaging / database | BOM managed |
@@ -2332,7 +2332,7 @@ Bar is naive repackaging only — smali patching strips the check easily. Layer 
 | junit:junit (test) | 4.13.2 |
 | org.json:json (test) | 20231013 |
 
-Do NOT upgrade `core-ktx` past 1.13.1 or Compose BOM past 2024.09.03 — newer versions require `compileSdk 35`.
+Do NOT upgrade `core-ktx` past 1.13.1 or Compose BOM past 2024.09.03 — newer versions require `compileSdk 35`. If a library needs a higher version in the shipped AAB than Termux can build (e.g., `activity-compose 1.10+`), bifurcate via the existing `localTermux` flag: `val activityComposeVersion = if (localTermux) "1.9.3" else "1.10.1"`. Local debug stays on the older version, CI builds the modern one into the released AAB. See `memory/feedback_play_console_deprecated_api_warnings.md`.
 
 ### 27.4 Gradle Properties
 

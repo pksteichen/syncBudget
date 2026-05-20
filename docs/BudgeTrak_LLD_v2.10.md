@@ -97,7 +97,7 @@ Cloud Storage:
 
 ### Build Configuration
 
-Kotlin 2.0.21, JVM 17, Gradle 8.9, AGP 8.7.3, compileSdk/targetSdk 34, minSdk 28. Full dependency / version table: SSD §27.
+Kotlin 2.0.21, JVM 17, Gradle 8.9, AGP 8.7.3, compileSdk/targetSdk 35 (34 in Termux via `localTermux` flag), minSdk 28. Full dependency / version table: SSD §27.
 
 ## 2. Application Classes
 

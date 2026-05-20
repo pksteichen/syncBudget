@@ -25,6 +25,7 @@
 ## Dependencies (committed = compileSdk 35; Termux works at 34)
 - AGP 8.7.3, Gradle 8.9, Kotlin 2.0.21, Compose BOM 2024.09.03, core-ktx 1.13.1, lifecycle 2.8.6, Firebase BOM 32.7.0, work-runtime-ktx 2.9.1, documentfile 1.0.1.
 - Do NOT bump core-ktx ≥ 1.15 or Compose BOM ≥ 2024.12.01 — both require compileSdk 35 unconditionally and would break the Termux debug-build path.
+- **activity-compose is bifurcated (v2.10.30+)**: `app/build.gradle.kts` reads the same `localTermux` property used for sdkVersion and selects `androidx.activity:activity-compose:1.9.3` for local Termux debug builds vs `1.10.1` for CI release AABs. The 1.10.x line requires compileSdk 35 (breaks Termux's aapt2 v2.19), but is needed in the shipped AAB so `enableEdgeToEdge` emits `LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS` instead of the deprecated `SHORT_EDGES` constant. Without the bifurcation, Play Console flags "deprecated APIs for edge-to-edge" and "edge-to-edge may not display for all users" on every release.
 
 ## Architecture
 - Single `MainActivity.kt` (~2.6 K lines — router, lifecycle, wrappers) + `MainViewModel.kt` (~3.2 K lines — state, business logic, sync lifecycle, background loops).
@@ -170,6 +171,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [BigQuery service account](reference_bigquery_service_account.md) — `tools/query-crashlytics.js` reads via SA key at `~/.config/budgetrak/sa-key.json` (roles: bigquery.jobUser + bigquery.dataViewer on `sync-23ce9`). Avoids Firebase CLI RAPT re-auth.
 - [Gemini API key — restrictions + rotation gotcha](reference_gemini_api_key.md) — raw-HTTP path (since 2026-05-18) manually attaches X-Android-Package/X-Android-Cert; standalone Gemini SDK didn't, leaving the restriction silently no-op. Debug entry uses `com.techadvantage.budgetrak.debug` package. New keys require SA binding before API restriction.
 - [Android-app key restrictions need X-Android-Package + X-Android-Cert](feedback_android_cert_headers_for_google_apis.md) — rule for any Google API: SDK auto-attach varies; raw HTTP needs manual attach via PackageManager.getPackageInfo; `.debug` package suffix is a common gotcha.
+- [Play Console "deprecated APIs" warnings are bytecode static analysis](feedback_play_console_deprecated_api_warnings.md) — fix the library version, not your code; bifurcate library version via `localTermux` flag if the fix needs higher compileSdk than Termux can build.
 - [Play Store refund workflow + email template](reference_refund_workflow.md) — canned reply asking for Order ID; Play Console hides buyer identity, search by Order ID only; <48h refunds are self-service in Play Store.
 - [AI feature UX — explicit trigger, tier per-feature](feedback_ai_feature_ux.md) — OCR sub-only; CSV categorization Paid+Sub; OCR prefill always overwrites scalars and preserves cat selection when pre-selected; CSV payload is merchant+amount only (no date).
 - [Share-intent routing when dialogs are open](feedback_share_intent_routing.md) — block with toast for non-transaction dialogs, absorb into open transaction dialog, fall through to new Add dialog otherwise; multi-share supported.
