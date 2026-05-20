@@ -17,6 +17,13 @@ plugins {
 // AABs leave the flag unset and build against 35.
 val localTermux = project.hasProperty("localTermux")
 val sdkVersion = if (localTermux) 34 else 35
+// activity-compose 1.10+ requires compileSdk 35 (breaks Termux) but is the
+// version that emits LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS instead of
+// LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES (deprecated in Android 15).
+// Use 1.9.3 in Termux debug builds, 1.10.1 in CI release AABs — the AAB
+// shipped to Play Console then has the modern API and the deprecated-API
+// warning clears. Both versions are runtime-compatible at minSdk 28.
+val activityComposeVersion = if (localTermux) "1.9.3" else "1.10.1"
 
 android {
     namespace = "com.techadvantage.budgetrak"
@@ -29,8 +36,8 @@ android {
         // versionName format: MAJOR.MINOR.PP (third segment is zero-padded
         // 00-99 to leave 100 patch slots per minor for extensive debugging
         // cycles before bumping minor).
-        versionCode = 45
-        versionName = "2.10.29"
+        versionCode = 46
+        versionName = "2.10.30"
     }
 
     signingConfigs {
@@ -137,7 +144,7 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
-    implementation("androidx.activity:activity-compose:1.9.2")
+    implementation("androidx.activity:activity-compose:$activityComposeVersion")
 
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")

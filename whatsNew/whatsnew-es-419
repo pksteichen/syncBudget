@@ -1,5 +1,3 @@
 Novedades en BudgeTrak:
-• Restaurados el escaneo de recibos y la categorización IA de CSV — quedaron bloqueados por un cambio reciente en la API de Google
-• El botón eliminar del visor de fotos queda por encima del botón Atrás en Android 16 / One UI 8
-• Flechas de desplazamiento añadidas a los diálogos Vincular a Recurrente / Amortización / Ingreso / Meta de Ahorro
-• Etiqueta Gasto/Ingreso refinada
+• Actualización de compatibilidad con Android 15: bibliotecas internas refrescadas para que las barras del sistema y áreas de gestos se muestren correctamente
+• La pantalla de carga ahora respeta los diseños de borde a borde

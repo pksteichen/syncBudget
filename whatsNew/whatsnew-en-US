@@ -1,5 +1,3 @@
 What's new in BudgeTrak:
-• AI receipt scan and CSV auto-categorize restored — a Google API policy change had blocked them
-• Photo viewer delete button now clears the system back button on Android 16 / One UI 8
-• Scroll arrows added to the Link-to-RE / Amortization / Income / Savings Goal pickers
-• Expense/Income toggle label refined
+• Compatibility update for Android 15 — internal libraries refreshed so system bars and gesture areas display correctly on the latest Android
+• Loading screen now respects edge-to-edge device layouts
