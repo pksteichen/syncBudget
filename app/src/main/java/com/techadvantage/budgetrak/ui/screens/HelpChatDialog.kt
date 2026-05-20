@@ -222,7 +222,11 @@ fun HelpChatDialog(
                     )
                 }
 
-                // Footer button bar — Email (left) + Exit + Clear + Send (right).
+                // Footer button bar — Exit + Clear + Email grouped on
+                // the left, Send pinned to the right. Exit and Clear use
+                // the muted Secondary theme (BudgeTrak's "Cancel and
+                // similar" style); Email and Send both use the Primary
+                // affirmative theme, distinguished by position + label.
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Box(
                     modifier = Modifier
@@ -234,20 +238,6 @@ fun HelpChatDialog(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        DialogSecondaryButton(onClick = {
-                            launchEmail(
-                                context = context,
-                                subject = S.helpChat.emailSubject,
-                                intro = S.helpChat.emailBodyIntro,
-                                youLabel = S.helpChat.youLabel,
-                                botLabel = S.helpChat.botLabel,
-                                messages = messages,
-                                chatId = HelpChatStore.chatId.value,
-                            )
-                        }) {
-                            Text(S.helpChat.btnEmail)
-                        }
-                        Spacer(modifier = Modifier.weight(1f))
                         DialogSecondaryButton(onClick = { onDismissRequest() }) {
                             Text(S.helpChat.btnExit)
                         }
@@ -271,6 +261,20 @@ fun HelpChatDialog(
                             Text(S.helpChat.btnClear)
                         }
                         Spacer(modifier = Modifier.width(8.dp))
+                        DialogPrimaryButton(onClick = {
+                            launchEmail(
+                                context = context,
+                                subject = S.helpChat.emailSubject,
+                                intro = S.helpChat.emailBodyIntro,
+                                youLabel = S.helpChat.youLabel,
+                                botLabel = S.helpChat.botLabel,
+                                messages = messages,
+                                chatId = HelpChatStore.chatId.value,
+                            )
+                        }) {
+                            Text(S.helpChat.btnEmail)
+                        }
+                        Spacer(modifier = Modifier.weight(1f))
                         DialogPrimaryButton(
                             onClick = {
                                 val trimmed = input.trim()
