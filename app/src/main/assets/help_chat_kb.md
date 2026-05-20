@@ -1731,12 +1731,11 @@ the bot:
 - Features or improvements you wish existed (so we know what to
   build next).
 
-Conversations are saved briefly so the development team can review
-them. The bot won't promise that any specific change will be made,
-but your feedback genuinely reaches the people who decide what to
-work on next. When you share feedback, the bot will thank you,
-acknowledge what you said so you know it understood, and let you
-know the team will see it.
+When you share feedback, the bot will thank you, acknowledge what
+you said so you know it understood, and let you know it will pass
+your feedback on to the development team. It won't promise that any
+specific change will be made, but your feedback genuinely reaches
+the people who decide what to work on next.
 
 It can't help with:
 - General personal-finance advice (whether to invest, what bank to

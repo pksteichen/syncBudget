@@ -75,6 +75,27 @@ An in-app help chat that answers configuration / budgeting / how-to / error-mess
 - `app/src/main/assets/help_chat_kb.md` — ~75 KB (1744 lines, ~21 K input tokens) replacing the original stub on 2026-05-19 (commit `885fffa`).
 - `HelpChatPromptBuilder.kt` v2 emits an explicit `preamble + suffix` assembly so Google's implicit prompt cache fires. Preamble (system prompt + 8 rules + KB) is byte-identical across all devices and turns; the variable per-turn content (history + latest user message) goes in the suffix. Locale interpolation was dropped (it fragmented the cache per-device); the system prompt's rule 5 now relies on matching the user's message language. Full rationale + future explicit-caching plan: [`feedback_gemini_prompt_caching.md`](feedback_gemini_prompt_caching.md).
 - **Per-call cost monitoring shipped 2026-05-20**: `GeminiHttpClient.generate` now takes a `usageCallback` parameter; all three Gemini call sites (Help Chat, OCR, CSV categorize) fire the `ai_call_metrics` Firebase Analytics event with feature label + prompt/cached/output token counts + pre-computed cache_hit_pct. Query in Firebase Analytics or via the existing BigQuery export. See the Monitoring section of [`feedback_gemini_prompt_caching.md`](feedback_gemini_prompt_caching.md) for cadence + thresholds + a starter BigQuery query.
+
+### Sentiment scoring + Play Store review prompt (2026-05-20)
+
+The Help Chat now does double duty: every Gemini reply also includes a 1-10 sentiment score for the user's latest message, computed by the model (1 = clearly negative — angry, confused, frustrated; 5 = neutral / pure factual question; 9-10 = unmistakable enthusiasm). The score is **internal** — never shown to the user, never mentioned by the bot in its visible reply. See `HelpChatPromptBuilder` rule 9 for the scale + clamping behavior.
+
+How the score flows:
+- `HelpChatGeminiService.reply(...)` now returns `Result<HelpChatReply>` with `text` + `sentiment` (clamped 1-10, defaults to 5 on missing/malformed). The response schema gained the `sentiment` INTEGER field.
+- `HelpChatMessage` gained two nullable/default fields: `sentiment: Int?` and `isReviewPrompt: Boolean`. Bot messages from successful Gemini calls carry the sentiment that was attached to the user message that prompted them. The JSON persistence uses short field names `s` (sentiment) and `r` (isReviewPrompt) to keep the file compact.
+- `HelpChatUploader` prefixes the bot's `x` field with `[N] ` in the Firestore log when sentiment is set AND stores the score as a separate queryable `s` field. The `[N]` prefix is for at-a-glance Firestore-console review; the `s` field is for BigQuery slicing ("show me all 9-10 turns this week" → audit sentiment accuracy).
+- The in-app dialog DOES NOT display the score. Local `text` stays clean.
+
+Play Store review prompt (gated on `SENTIMENT_REVIEW_THRESHOLD = 9` and a 2-day debounce):
+- After a successful reply with sentiment ≥ 9, the dialog appends a SECOND bot message containing the localized `reviewPromptText`. The message is flagged `isReviewPrompt = true` and renders with an accent-tinted bubble; the entire bubble is `clickable` to open the Play Store listing (`market://details?id=…` with `https://play.google.com/...` web fallback for degoogled devices, debug suffix stripped so debug builds also link to the production listing).
+- Debounce lives in **SharedPreferences** (`app_prefs.helpChatReviewPromptAt`, epoch ms), NOT the chat JSON, so it survives Clear and the 48 h message prune — the user can't bypass it by resetting the chat. `HelpChatStore.shouldShowReviewPrompt(ctx, sentiment)` and `markReviewPromptShown(ctx)` are the helpers.
+- The review-prompt message is NOT a Gemini call — it carries no sentiment, doesn't burn daily quota, and skips the `[N]` log prefix on upload (sentiment is null, isReviewPrompt is true).
+
+Why this design:
+- "I'll pass on your feedback" wording (rule 8) replaced the older "the development team reviews these conversations" — sounds less like surveillance and is more honest about the workflow (we periodically have Claude summarize logs rather than read every word).
+- Sentiment + the `[N]` prefix gives us a low-effort audit channel for "how well is Gemini judging tone?" without us building a custom rating UI.
+- The 2-day debounce protects against the worst-case "user is being polite in three consecutive turns, gets three review nags in two minutes" failure mode.
+- Threshold of 9 (not 8) keeps the prompt rare — only unmistakable enthusiasm triggers it. Casual "thanks" should score 7-8 and not trip it.
 - Structure: big picture → glossary (Available Cash, set-aside, remembered amount, delete-vs-unlink, tiers) → screen tour of all 12 functional screens → money-math callouts (income modes, period rollover, set-aside math, savings floor, amortization, Supercharge, linking, auto-categorize, duplicate detection) → 12 step-by-step task recipes → error/warning explanations → tier reference → scope boundary.
 - Synthesized from 5 parallel Explore-agent cluster sweeps (Dashboard/Sim/Calendar, Transactions/Amortization/CSV, RE/IS/SG, Settings/BudgetConfig/Backup, SYNC/Receipts/Widget/Themes/Billing). Each agent read code + help screen + matching memory specs + SSD/LLD sections, returned a UI inventory, money-math callouts, and a drift list.
 - Drift fixes (BI_WEEKLY misrepresentation + SECURESYNC_CSV display-name clarification) landed in separate commits per source file (`7493a96` memory, `d5d3a09` LLD, `9418a41` SSD).
