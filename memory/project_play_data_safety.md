@@ -119,6 +119,13 @@ originSessionId: 911fd8f0-4c5a-4a6d-a592-a304d4d2704a
 - **MASVS L1 audit completed**: pre-survey gate "independent security review" flips to Yes.
 - **Privacy policy edits**: any change to `#data-deletion`, third-party services table, or the diagnostic-data section should prompt an audit of this form for consistency.
 
+## Navigating to the form (Play Console)
+
+In the compact-sidebar Play Console UI (no top-level "Policy" group), Data safety is buried at:
+**BudgeTrak → Monitor and improve → Policy and programs → App content → Data safety**
+
+It is NOT under Dashboard, Publishing overview, Test and release, or the "Show more" expansion on Dashboard — go directly via Monitor and improve.
+
 ## Where the answers live
 
 - **Privacy policy** (must stay consistent): `https://techadvantagesupport.github.io/privacy` — repo `techadvantagesupport.github.io`, file `privacy.md`.

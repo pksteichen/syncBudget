@@ -167,6 +167,8 @@ object TranslationContext {
         "privacySection" to "Section heading on the Settings screen for privacy-related controls. Single word, noun.",
         "crashReports" to "Checkbox label to toggle whether the app sends anonymous crash reports to the developers via Firebase Crashlytics. Phrase 'Send crash reports'.",
         "crashReportsDesc" to "Short helper text shown under the crash reports checkbox. Briefly explains what the toggle does and reassures the user that no financial information is sent. Should encourage users to leave the toggle on, but kept friendly and non-pressuring.",
+        "helpChatConsent" to "Checkbox label for the Help Chat data-processing consent. Default unchecked on install; auto-checks when the user taps Accept on the consent dialog the first time they open the chat. Unchecking revokes consent and causes the consent dialog to re-appear on next chat use. Phrase should mention transmitting/storing messages per the Privacy Policy and the dual purpose (answering questions + quality assurance / feedback review).",
+        "helpChatConsentDesc" to "Helper text under the Help Chat consent checkbox. Explains that the toggle is REQUIRED to use the chat at all, that messages are sent anonymously to the AI service for replies, and that transcripts may be stored for up to 7 days for accuracy/abuse review.",
         "categories" to "Section header for the list of transaction categories (like Food, Transport, etc.). Noun, plural.",
         "charted" to "Column header in the categories table. Means 'included in the spending chart/graph'. Past participle of 'to chart' (to plot on a graph) — not navigation charts.",
         "widget" to "Column header in the categories table. Controls whether a category appears in the home screen widget's quick transaction dialog.",
@@ -258,7 +260,7 @@ object TranslationContext {
         "aiCsvCategorizeLabel" to "Checkbox label in Settings for enabling AI-powered categorization of bank-CSV imports. Paid and Subscriber tiers only.",
         "aiCsvCategorizeSubtitle" to "Small gray subtitle under the AI CSV categorization checkbox explaining what the toggle does.",
         "aiCsvCategorizeHelpTitle" to "Section title on the Transactions help page describing the AI CSV categorization feature.",
-        "aiCsvCategorizeHelpBody" to "Help page body explaining how AI CSV categorization works, the on-device/AI hybrid, data-in-transit encryption, no-retention promise, and that the user can turn it off. Multi-paragraph with \\n\\n between paragraphs.",
+        "aiCsvCategorizeHelpBody" to "Help page body explaining how AI CSV categorization works: the on-device/AI hybrid (on-device learns first, AI only fills gaps), data-in-transit encryption (HTTPS), no-retention promise (deleted as soon as the request completes), the explicit list of things the AI never sees (account, balances, other transactions, receipt photos, transaction dates), and that the user can turn it off. Multi-paragraph with \\n\\n between paragraphs. **Vendor-neutral copy**: do NOT name the vendor (Gemini, Google) — use \"our AI service\" / \"the AI provider\". Do NOT include a pointer to the Privacy Policy — users curious enough will find it themselves. See feedback_vendor_neutral_in_app_copy.md.",
         "sharedImageProcessFailed" to "Toast shown when an image shared from another app fails to process into a receipt photo.",
         // Auto Capitalize
         "autoCapitalize" to "Settings checkbox label for the auto-capitalize feature that reformats merchant and description text into Title Case as the user types. Verb phrase used as a setting name.",
@@ -761,6 +763,9 @@ object TranslationContext {
         "welcomeBody" to "Help text introducing BudgeTrak as a privacy-first budgeting app that shows how much you can safely spend.",
         "dailyBudgetNumberTitle" to "Help section title explaining the large number on the main display.",
         "dailyBudgetNumberBody" to "Help text explaining that the large number is Available Cash — the amount you can spend without jeopardizing bills or goals.",
+        "chatbotIntroTitle" to "Section title for the Help Chat Assistant introduction at the top of the Dashboard Help page (sits between the Welcome card and the Solari Display section). Friendly + inviting; mentions chat / helper / assistant. Short — fits a single line on narrow phones.",
+        "chatbotIntroBody" to "Body text introducing the in-app Help Chat Assistant. Two paragraphs (separated by \\n\\n). Paragraph 1 describes the helper role: opens via the chatbot icon at the top-right of any help page, answers questions about how BudgeTrak works, explains numbers on screen, walks through tasks. Paragraph 2 describes the FEEDBACK role: it's also a place to tell us what you love OR what you wish it did, and feature suggestions / feedback are passed to the development team for review. Keep both paragraphs short and warm.",
+        "chatbotIntroDemoCaption" to "Short caption next to the chatbot icon in the visual demo strip on the Dashboard Help page. The strip shows the icon on the left and a large up-right arrow on the right pointing at the actual chatbot icon in the page's top app bar. Caption goes between them. Should tell the user to tap the icon in the top-right corner. Include the \\u2197 arrow character at the end so the text echoes the visual arrow.",
         "solariDisplayTitle" to "Help section title for the Solari-style flip display (inspired by train station departure boards).",
         "solariDisplayBody" to "Help text describing the Solari display as a split-flap display showing two key pieces of information.",
         "availableCashTitle" to "Help section title for the main number on the display: Available Cash.",
@@ -1677,5 +1682,32 @@ object TranslationContext {
         "deleteBody" to "Help text describing the Delete behaviour: only shows for customs; permanently drops the entry; active selection falls back to the corresponding built-in default if the deleted entry was active.",
         "savingTitle" to "Help section title for storage semantics (local-only, backup-included, not synced).",
         "savingBody" to "Help text explaining auto-save, local-only storage, inclusion in encrypted backups, and deliberate non-sharing across SYNC group devices so each device can have its own look."
+    )
+
+    // ── Help Chat Strings ──
+
+    val helpChat = mapOf(
+        "openIconDesc" to "Accessibility description (contentDescription) for the chatbot icon in the top app bar of the Dashboard Help screen — tapping it opens the in-app Help Chat dialog.",
+        "title" to "Dialog title shown in the colored header of the Help Chat dialog.",
+        "inputHint" to "Placeholder hint text inside the 3-line input field at the bottom of the Help Chat dialog. Encourages the user to type a question. Use the localized ellipsis (\\u2026).",
+        "emptyBody" to "Body text shown in the chat history area when there are no messages yet. Briefly invites the user to ask a BudgeTrak how-to question and mentions Email as the human-fallback. Keep tone neutral about how the bot answers — until the comprehensive knowledge base ships, do NOT claim the bot is trained on the help pages.",
+        "btnEmail" to "Label for the Email action button in the Help Chat dialog footer. Opens an email-support fallback (wired later).",
+        "btnExit" to "Label for the Exit action button in the Help Chat dialog footer. Dismisses the dialog without clearing the chat history — equivalent to the system back button. History persists locally and re-populates on next open.",
+        "btnClear" to "Label for the Clear/Restart action button in the Help Chat dialog footer. Uploads the current chat to Firebase (anonymous, 7-day TTL) and clears the local buffer, starting a fresh chat with a new chat ID.",
+        "btnSend" to "Label for the Send action button in the Help Chat dialog footer. Submits the current input to the chatbot.",
+        "youLabel" to "Short label prefixed to user-authored chat messages in the history (e.g. \"You: …\"). Used in the v1 UI shell; later AI phase may switch to bubble UI without label.",
+        "botLabel" to "Short label prefixed to bot-authored chat messages in the history (e.g. \"Bot: …\"). Used in the v1 UI shell; later AI phase may switch to bubble UI without label.",
+        "thinkingLabel" to "Short transient label shown in place of a bot reply while the Gemini call is in flight. Should suggest waiting (e.g. \"Thinking…\"). Use the localized ellipsis (\\u2026).",
+        "errorReply" to "Bot-authored message displayed when the Gemini call fails (network down, timeout, quota, malformed response). Tone: apologetic, brief, actionable. Must mention retry-ability and point the user at the Email button so they have a path forward.",
+        "dailyLimitHint" to "Replacement placeholder shown inside the input field when the user has hit their tier's daily Help Chat cap (Free 10 / Paid 25 / Subscriber 50). Must encourage waiting for tomorrow OR tapping Email, AND note that Paid/Subscriber tiers get more messages per day. Send button is disabled at this point.",
+        "emailSubject" to "Subject line prefilled into the user's email client when they tap the Email button in the Help Chat dialog. Sent to support@techadvantageapps.com. Should mention BudgeTrak Help Chat so support can route the message.",
+        "emailBodyIntro" to "First line of the prefilled email body when the user taps the Email button in the Help Chat dialog. The chat transcript is appended below this intro. Tone: brief, polite, makes clear this is a human follow-up to an AI conversation.",
+        "reviewPromptText" to "Bot-authored message inserted into the chat history (as a SECOND bot message after a regular reply) when the model scored the user's latest message at 9 or 10 sentiment AND the last review prompt was shown more than 2 days ago. Tone: warm, NOT pushy, single short paragraph. Open directly with the ask (\"If you have a moment, would you consider…\") — do NOT preface with another thank-you (the previous bot reply already thanked them). Must mention: asks politely about leaving a Play Store review, explains positive reviews help reach new people who could benefit, and tells the user to TAP THIS MESSAGE to open the listing. No exclamation parade — restraint reads better than enthusiasm here.",
+        "consentTitle" to "Title of the one-time consent dialog shown the first time the user opens the Help Chat (or any time after they've revoked consent). Use a colon or em-dash separator and the word 'Consent' so the legal nature is obvious — this is the regulator-facing screen.",
+        "consentBody" to "Body of the Help Chat consent dialog. MUST cover: (1) typed messages are sent to OUR AI service (do NOT name the vendor — keep it vendor-neutral; the privacy policy is the place where Gemini is named), (2) anonymous transcripts may be stored on our servers up to 7 days for accuracy + abuse review, (3) no account/financial/contact info is sent, (4) accepting confirms they've reviewed the Privacy Policy and agree, (5) consent can be revoked any time in Settings → Privacy. Use \\n\\n for paragraph breaks. Use \\u2192 for the arrow.",
+        "consentLink" to "Clickable link text inside the consent dialog that opens the Privacy Policy URL in the user's browser. Short, descriptive phrase — e.g. 'View Privacy Policy'.",
+        "consentUrl" to "Absolute https URL of the Privacy Policy. SAME value in all locales — Pages site is monolingual today. Do not translate.",
+        "consentCancel" to "Label for the Cancel button on the Help Chat consent dialog. Tapping returns the user to the help page without enabling chat or recording consent.",
+        "consentAccept" to "Label for the Accept button on the Help Chat consent dialog. Tapping persists consent (sets the Settings → Privacy checkbox) and opens the chat dialog."
     )
 }

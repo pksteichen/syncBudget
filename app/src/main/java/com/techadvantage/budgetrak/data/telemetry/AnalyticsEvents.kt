@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Bundle
 import com.google.firebase.analytics.ktx.analytics
 import com.google.firebase.ktx.Firebase
+import com.techadvantage.budgetrak.data.ocr.GeminiHttpClient
 
 /**
  * Firebase Analytics event logging.
@@ -23,6 +24,9 @@ import com.google.firebase.ktx.Firebase
  *                         measures how much the user had to correct.
  *  - health_beacon      — daily heartbeat with sync + inventory diagnostics;
  *                         migrated from the HEALTH_BEACON Crashlytics non-fatal.
+ *  - ai_call_metrics    — fires on every successful Gemini call; lets us
+ *                         track implicit-cache hit ratio + per-feature
+ *                         token cost in Firebase Analytics / BigQuery.
  *
  * Actual crash reports, consistency non-fatals, and other abnormal-state
  * signals stay in Crashlytics — that's still the right tool for those.
@@ -100,5 +104,55 @@ object AnalyticsEvents {
             putLong("pl_count", plCount.toLong())
         }
         logIfEnabled(context, "health_beacon", b)
+    }
+
+    /**
+     * Fires on every successful Gemini API call across all features
+     * (Help Chat, receipt OCR, CSV auto-categorize). Lets us track the
+     * implicit-cache hit ratio per feature, per day, per region in
+     * Firebase Analytics + BigQuery — without which "did caching
+     * actually help us this month?" is a guess.
+     *
+     * Params (anonymous; no merchant text, no transaction values, no
+     * chat content — just counts):
+     *  - feature:           "help_chat" / "ocr" / "csv_categorize" — which
+     *                       call site fired. Used to slice the hit ratio
+     *                       per feature (Help Chat will dominate hits;
+     *                       OCR has no stable preamble so should hit near
+     *                       0% — that's expected, not a problem).
+     *  - model:             the Gemini model name (e.g.
+     *                       "gemini-2.5-flash-lite"). Future-proofs the
+     *                       data if we ever swap models per feature.
+     *  - prompt_tokens:     total input tokens billed to the call.
+     *  - cached_tokens:     subset of `prompt_tokens` that hit Google's
+     *                       implicit cache (priced at $0.01/M vs $0.10/M).
+     *                       Zero means a full-price miss.
+     *  - output_tokens:     completion tokens billed at $0.40/M.
+     *  - cache_hit_pct:     `cached_tokens * 100 / prompt_tokens`, stored
+     *                       as an integer 0-100 for easy bucketing in
+     *                       Analytics dashboards.
+     *
+     * See `feedback_gemini_prompt_caching.md` for monitoring ritual.
+     */
+    fun logAiCallMetrics(
+        context: Context,
+        feature: String,
+        model: String,
+        usage: GeminiHttpClient.UsageMetadata,
+    ) {
+        val hitPct = if (usage.promptTokens > 0) {
+            (usage.cachedTokens * 100L) / usage.promptTokens
+        } else {
+            0L
+        }
+        val b = Bundle().apply {
+            putString("feature", feature)
+            putString("model", model)
+            putLong("prompt_tokens", usage.promptTokens.toLong())
+            putLong("cached_tokens", usage.cachedTokens.toLong())
+            putLong("output_tokens", usage.outputTokens.toLong())
+            putLong("cache_hit_pct", hitPct)
+        }
+        logIfEnabled(context, "ai_call_metrics", b)
     }
 }

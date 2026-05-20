@@ -136,6 +136,8 @@ fun SettingsScreen(
     onAiCsvCategorizeChange: (Boolean) -> Unit = {},
     crashlyticsEnabled: Boolean = true,
     onCrashlyticsEnabledChange: (Boolean) -> Unit = {},
+    helpChatConsent: Boolean = false,
+    onHelpChatConsentChange: (Boolean) -> Unit = {},
     matchDays: Int = 7,
     onMatchDaysChange: (Int) -> Unit = {},
     matchPercent: Double = 1.0,
@@ -934,6 +936,36 @@ fun SettingsScreen(
                     }
                     Text(
                         text = S.settings.crashReportsDesc,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
+                        modifier = Modifier.padding(start = 48.dp, end = 16.dp, bottom = 4.dp)
+                    )
+                }
+            }
+
+            // Help Chat consent checkbox — required to use the chatbot.
+            // Auto-checks when the user accepts the in-chat consent dialog;
+            // unchecking here revokes consent so the dialog re-appears on
+            // next chat open.
+            item {
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = helpChatConsent,
+                            onCheckedChange = onHelpChatConsentChange,
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = MaterialTheme.colorScheme.primary,
+                                uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                            )
+                        )
+                        Text(
+                            text = S.settings.helpChatConsent,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                    Text(
+                        text = S.settings.helpChatConsentDesc,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
                         modifier = Modifier.padding(start = 48.dp, end = 16.dp, bottom = 4.dp)

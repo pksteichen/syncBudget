@@ -823,6 +823,21 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
+                // `HelpChatHost` wraps the routing block so every help
+                // screen shares one Help-Chat opener + state machine.
+                // The top-bar chatbot icon (`HelpChatTopBarAction`) and
+                // any in-page CTA both call `LocalHelpChatOpener.current`,
+                // which this host provides. The chat + consent dialogs
+                // render at this host's scope so dismissing them returns
+                // the user to whichever help page they came from (no
+                // navigation work needed — Compose dialogs are overlays).
+                com.techadvantage.budgetrak.ui.screens.HelpChatHost(
+                    helpChatConsent = vm.helpChatConsent,
+                    onGrantHelpChatConsent = {
+                        vm.helpChatConsent = true
+                        vm.prefs.edit().putBoolean("helpChatConsent", true).apply()
+                    },
+                ) {
                 // `key(vm.dataReloadVersion) { … }` forces the screen-routing
                 // subtree to unmount and remount whenever a wholesale reload
                 // happens (full-backup restore, SYNC join-snapshot apply).
@@ -1274,7 +1289,7 @@ class MainActivity : ComponentActivity() {
                     "dashboard_help" -> DashboardHelpScreen(
                         onBack = { vm.currentScreen = "main" },
                         scrollTarget = vm.dashboardHelpScrollTo,
-                        onScrollTargetConsumed = { vm.dashboardHelpScrollTo = null }
+                        onScrollTargetConsumed = { vm.dashboardHelpScrollTo = null },
                     )
                     "settings_help" -> SettingsHelpScreen(
                         onBack = { vm.currentScreen = "settings" }
@@ -1382,7 +1397,7 @@ class MainActivity : ComponentActivity() {
                                 vm.dashboardHelpScrollTo = null
                             },
                             scrollTarget = vm.dashboardHelpScrollTo,
-                            onScrollTargetConsumed = { vm.dashboardHelpScrollTo = null }
+                            onScrollTargetConsumed = { vm.dashboardHelpScrollTo = null },
                         )
                     }
                 }
@@ -1407,6 +1422,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+                } // HelpChatHost
               } // run {} inside SyncBudgetTheme's content slot
             } // SyncBudgetTheme
             } // CompositionLocalProvider(LocalShareBlockingDialogRegistrar)
@@ -2318,6 +2334,11 @@ class MainActivity : ComponentActivity() {
                     com.google.firebase.analytics.FirebaseAnalytics.getInstance(this)
                         .setAnalyticsCollectionEnabled(newValue)
                 } catch (_: Exception) {}
+            },
+            helpChatConsent = vm.helpChatConsent,
+            onHelpChatConsentChange = { newValue ->
+                vm.helpChatConsent = newValue
+                vm.prefs.edit().putBoolean("helpChatConsent", newValue).apply()
             },
             categories = vm.activeCategories,
             transactions = vm.activeTransactions,

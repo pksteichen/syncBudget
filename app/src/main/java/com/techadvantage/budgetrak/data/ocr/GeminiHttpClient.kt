@@ -44,6 +44,20 @@ object GeminiHttpClient {
     class HttpError(val status: Int, body: String) : IOException("HTTP $status: ${body.take(500)}")
 
     /**
+     * Per-call token usage from Gemini's response `usageMetadata` block.
+     * `cachedTokens` is present (>0) when Google's implicit prompt cache
+     * fired; zero / absent means a full-price input billing for the whole
+     * prompt. Callers pipe this to [com.techadvantage.budgetrak.data.telemetry.AnalyticsEvents.logAiCallMetrics]
+     * so the cache hit ratio is queryable in Firebase Analytics / BigQuery.
+     */
+    data class UsageMetadata(
+        val promptTokens: Int,
+        val cachedTokens: Int,
+        val outputTokens: Int,
+        val totalTokens: Int,
+    )
+
+    /**
      * Generate JSON content from a prompt + optional image. Returns the
      * model's `text` field as a string (the JSON document matching the
      * schema). Throws on HTTP error or empty response.
@@ -54,7 +68,8 @@ object GeminiHttpClient {
         prompt: String,
         schema: JSONObject,
         imageBytes: ByteArray? = null,
-        temperature: Float = 0f
+        temperature: Float = 0f,
+        usageCallback: (UsageMetadata) -> Unit = {},
     ): String = withContext(Dispatchers.IO) {
         val parts = JSONArray()
         if (imageBytes != null) {
@@ -90,8 +105,36 @@ object GeminiHttpClient {
             if (!response.isSuccessful) {
                 throw HttpError(response.code, responseBody)
             }
+            // Surface usage to the caller BEFORE returning so an exception
+            // in the analytics callback doesn't lose the text result. We
+            // wrap the callback in a try/catch — telemetry must never fail
+            // the call site.
+            extractUsageMetadata(responseBody)?.let { usage ->
+                try { usageCallback(usage) } catch (_: Exception) { /* swallow */ }
+            }
             extractText(responseBody)
         }
+    }
+
+    /**
+     * Parse the optional `usageMetadata` block from a Gemini response.
+     * Returns null if the block is missing (older API, unusual response
+     * shapes); the caller treats null as "no usage data, skip telemetry."
+     */
+    private fun extractUsageMetadata(responseBody: String): UsageMetadata? {
+        val root = runCatching { JSONObject(responseBody) }.getOrNull() ?: return null
+        val u = root.optJSONObject("usageMetadata") ?: return null
+        val prompt = u.optInt("promptTokenCount", -1)
+        val output = u.optInt("candidatesTokenCount", 0)
+        val cached = u.optInt("cachedContentTokenCount", 0)
+        val total = u.optInt("totalTokenCount", prompt + output)
+        if (prompt < 0) return null
+        return UsageMetadata(
+            promptTokens = prompt,
+            cachedTokens = cached,
+            outputTokens = output,
+            totalTokens = total,
+        )
     }
 
     private fun extractText(responseBody: String): String {

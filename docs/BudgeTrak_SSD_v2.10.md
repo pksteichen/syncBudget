@@ -551,7 +551,7 @@ File: `future_expenditures.json` (legacy name). Repository migrates legacy field
 |---|---|---|
 | DAYS | startDate + repeatInterval | Every 3 days from Jan 1 |
 | WEEKS | startDate + repeatInterval | Every 2 weeks |
-| BI_WEEKLY | startDate (14-day gap) | Every other week |
+| BI_WEEKLY | startDate (14-day gap) | Every other week. **Hidden from the new-entry dropdowns** in `RecurringExpensesScreen.kt:748` and `BudgetConfigScreen.kt:726`; users wanting a biweekly schedule pick `WEEKS` with `repeatInterval = 2`. The enum value is kept for migration / legacy data / sync-imported entries, which display as "Every 2 Weeks" and recur normally via `BudgetCalculator`. |
 | MONTHS | monthDay1 + repeatInterval | 15th of each month |
 | BI_MONTHLY | monthDay1 + monthDay2 | 1st and 15th |
 | ANNUAL | monthDay1 + startDate | Yearly |
@@ -1965,7 +1965,7 @@ cash, redraws.
 | RepeatType | DAYS, WEEKS, BI_WEEKLY, MONTHS, BI_MONTHLY, ANNUAL |
 | IncomeMode | FIXED, ACTUAL, ACTUAL_ADJUST |
 | SuperchargeMode | REDUCE_CONTRIBUTIONS, ACHIEVE_SOONER |
-| BankFormat | GENERIC_CSV, US_BANK, SECURESYNC_CSV |
+| BankFormat | GENERIC_CSV, US_BANK, SECURESYNC_CSV (display name "BudgeTrak CSV Save File"; enum name preserved per `feedback_preserve_persistence_names`) |
 | ImportStage | FORMAT_SELECTION, PARSING, PARSE_ERROR, DUPLICATE_CHECK, COMPLETE |
 
 All sync metadata is `deviceId` + `deleted` only. Per-field CRDT clocks were removed when sync switched to Firestore-native per-field encryption; no data class carries `_clock` fields.

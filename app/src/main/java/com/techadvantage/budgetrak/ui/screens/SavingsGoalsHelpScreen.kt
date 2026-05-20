@@ -68,6 +68,7 @@ fun SavingsGoalsHelpScreen(onBack: () -> Unit) {
                         )
                     }
                 },
+                actions = { HelpChatTopBarAction() },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = customColors.headerBackground
                 )

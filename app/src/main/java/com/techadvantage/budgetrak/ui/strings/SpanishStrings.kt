@@ -150,6 +150,8 @@ object SpanishStrings : AppStrings {
         privacySection = "Privacidad",
         crashReports = "Enviar informes de errores y datos de uso an\u00f3nimos",
         crashReportsDesc = "Ay\u00fadanos a detectar y corregir errores compartiendo datos an\u00f3nimos de fallos y de uso. No se env\u00eda ninguna informaci\u00f3n financiera.",
+        helpChatConsent = "Permitir que el chatbot transmita y almacene tus mensajes seg\u00fan la Pol\u00edtica de Privacidad para responder a tus preguntas y para control de calidad y revisi\u00f3n de comentarios",
+        helpChatConsentDesc = "Necesario para usar el Chat de Ayuda dentro de la app. Tus mensajes se env\u00edan de forma an\u00f3nima a nuestro servicio de IA para generar respuestas, y las transcripciones pueden almacenarse en nuestros servidores hasta 7 d\u00edas para revisi\u00f3n de precisi\u00f3n y abuso.",
         categories = "Categor\u00edas",
         charted = "Gr\u00e1fica",
         widget = "Widget",
@@ -245,7 +247,7 @@ object SpanishStrings : AppStrings {
         aiCsvCategorizeLabel = "Categorizaci\u00f3n CSV con IA",
         aiCsvCategorizeSubtitle = "Usa IA para categorizar transacciones importadas desde un CSV bancario.",
         aiCsvCategorizeHelpTitle = "Categorizaci\u00f3n CSV con IA",
-        aiCsvCategorizeHelpBody = "Cuando est\u00e1 activada, BudgeTrak env\u00eda el nombre del comerciante y el importe de las transacciones reci\u00e9n importadas desde un CSV bancario a la IA Gemini de Google para elegir la mejor categor\u00eda. La fecha de la transacci\u00f3n NO se env\u00eda.\n\nBudgeTrak ya aprende de tus transacciones anteriores en el dispositivo; la IA solo interviene con comerciantes desconocidos que el emparejador local no puede resolver con confianza. Con\u00e9ctate a Wi-Fi o datos m\u00f3viles antes de importar para obtener los mejores resultados.\n\nTus datos se cifran en tr\u00e1nsito (HTTPS) y Google los elimina al completar la solicitud \u2014 no se guarda nada en los servidores de Google. El proveedor de IA nunca ve tu cuenta, tus saldos, otras transacciones, las fotos de recibos ni las fechas de ninguna transacci\u00f3n.\n\nDesact\u00edvalo cuando quieras para volver al emparejador local de BudgeTrak \u00fanicamente.",
+        aiCsvCategorizeHelpBody = "Cuando est\u00e1 activada, BudgeTrak env\u00eda el nombre del comerciante y el importe de las transacciones reci\u00e9n importadas desde un CSV bancario a nuestro servicio de IA para elegir la mejor categor\u00eda. La fecha de la transacci\u00f3n NO se env\u00eda.\n\nBudgeTrak ya aprende de tus transacciones anteriores en el dispositivo; la IA solo interviene con comerciantes desconocidos que el emparejador local no puede resolver con confianza. Con\u00e9ctate a Wi-Fi o datos m\u00f3viles antes de importar para obtener los mejores resultados.\n\nTus datos se cifran en tr\u00e1nsito (HTTPS) y se eliminan en cuanto se completa la solicitud \u2014 no se guarda nada en los servidores del proveedor de IA. El servicio de IA nunca ve tu cuenta, tus saldos, otras transacciones, las fotos de recibos ni las fechas de ninguna transacci\u00f3n.\n\nDesact\u00edvalo cuando quieras para volver al emparejador local de BudgeTrak \u00fanicamente.",
         sharedImageProcessFailed = "No se pudo leer la imagen compartida",
         dataManagementSection = "Gesti\u00f3n de Datos",
         activeTransactionsTally = { count, threshold -> "Transacciones activas: %,d / %,d".format(count, threshold) },
@@ -718,6 +720,15 @@ object SpanishStrings : AppStrings {
             "que puedes gastar ahora mismo sin poner en riesgo tus facturas, metas de ahorro ni " +
             "compromisos financieros. Pi\u00e9nsalo como la respuesta a la pregunta que todos se hacen: " +
             "\"\u00bfCu\u00e1nto me puedo permitir gastar hoy?\"",
+        chatbotIntroTitle = "Chatea con nuestro asistente",
+        chatbotIntroBody = "Toca el \u00edcono del chatbot en la esquina superior derecha de cualquier p\u00e1gina " +
+            "de ayuda para empezar una conversaci\u00f3n. El asistente puede responder preguntas sobre c\u00f3mo " +
+            "funciona BudgeTrak, explicar por qu\u00e9 un n\u00famero en tu pantalla se ve as\u00ed, y guiarte " +
+            "paso a paso en las tareas comunes.\n\n" +
+            "Tambi\u00e9n es un buen lugar para contarnos qu\u00e9 te encanta de BudgeTrak o qu\u00e9 te " +
+            "gustar\u00eda que hiciera. Las sugerencias y comentarios se env\u00edan al equipo de " +
+            "desarrollo para su revisi\u00f3n.",
+        chatbotIntroDemoCaption = "Toca aqu\u00ed arriba \u2197",
         solariDisplayTitle = "La pantalla Solari",
         solariDisplayBody = "La pieza central de la app es la pantalla tipo Solari \u2014 inspirada en los " +
             "tableros de solapas de las estaciones de tren y aeropuertos. Muestra dos datos clave:",
@@ -2098,5 +2109,34 @@ object SpanishStrings : AppStrings {
             "pero deliberadamente NO se comparten entre los dispositivos de un grupo SYNC. As\u00ed puedes " +
             "usar un aspecto diferente en cada uno de tus dispositivos mientras compartes los mismos " +
             "datos de presupuesto.",
+    )
+
+    override val helpChat = HelpChatStrings(
+        openIconDesc = "Abrir chat de ayuda",
+        title = "Chat de ayuda",
+        inputHint = "Haz una pregunta sobre BudgeTrak\u2026",
+        emptyBody = "Preg\u00fantale lo que quieras sobre c\u00f3mo funciona BudgeTrak. El chatbot har\u00e1 lo posible por ayudarte; si no puede, pulsa Correo para contactar con una persona.",
+        btnEmail = "Correo",
+        btnExit = "Salir",
+        btnClear = "Borrar",
+        btnSend = "Enviar",
+        youLabel = "T\u00fa",
+        botLabel = "Bot",
+        thinkingLabel = "Pensando\u2026",
+        errorReply = "Lo siento, no he podido conectar con el servicio de ayuda. Comprueba tu conexi\u00f3n e int\u00e9ntalo de nuevo, o pulsa Correo para contactar con una persona.",
+        dailyLimitHint = "Has alcanzado el l\u00edmite diario del chat. Vuelve a intentarlo ma\u00f1ana o pulsa Correo para contactar con soporte. Los usuarios Pago y Suscriptores tienen m\u00e1s mensajes al d\u00eda.",
+        emailSubject = "Chat de ayuda de BudgeTrak \u2014 seguimiento",
+        emailBodyIntro = "He tenido una conversaci\u00f3n con el Chat de ayuda de BudgeTrak y me gustar\u00eda un seguimiento de una persona. Transcripci\u00f3n a continuaci\u00f3n.",
+        reviewPromptText = "Si tienes un momento, \u00bfconsiderar\u00edas dejarle a BudgeTrak una rese\u00f1a en Play Store? Las rese\u00f1as positivas nos ayudan a llegar a m\u00e1s personas a las que la app les pueda servir. Toca este mensaje para abrir la ficha.",
+        consentTitle = "Chat de ayuda \u2014 Consentimiento",
+        consentBody = "Para responder a tus preguntas, el Chat de Ayuda env\u00eda tus mensajes a nuestro servicio de IA. " +
+            "Las transcripciones an\u00f3nimas tambi\u00e9n pueden almacenarse en nuestros servidores hasta 7 d\u00edas para revisar la precisi\u00f3n y detectar abusos. " +
+            "No se env\u00eda informaci\u00f3n de cuenta, datos financieros ni datos de contacto.\n\n" +
+            "Al tocar Aceptar, confirmas que has revisado la Pol\u00edtica de Privacidad y aceptas este procesamiento. " +
+            "Puedes revocar el consentimiento en cualquier momento en Ajustes \u2192 Privacidad.",
+        consentLink = "Ver Pol\u00edtica de Privacidad",
+        consentUrl = "https://techadvantagesupport.github.io/privacy",
+        consentCancel = "Cancelar",
+        consentAccept = "Aceptar",
     )
 }

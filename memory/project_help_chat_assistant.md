@@ -1,98 +1,153 @@
 ---
-name: Help Chat assistant — planned future feature
-description: AI-powered in-app help chat (Gemini), grounded on a curated knowledge base, with daily limit + off-topic refusal + email escape; logs land in Firestore with 7-day TTL for periodic accuracy/abuse review.
+name: Help Chat assistant — feature in progress
+description: AI-powered in-app help chat (Gemini), grounded on a curated knowledge base, with daily limit + off-topic refusal + email escape. UI shell + persistence + Firestore upload + Gemini wiring + daily caps + email escape + comprehensive KB (~75 KB) all shipped on feature/help-chat 2026-05-19; only cost-ceiling Cloud Function + manual QA remain before merge to dev.
 type: project
+originSessionId: ca028513-626b-45e8-ad1c-a1863966bd91
 ---
+# Help Chat assistant — progress + TODO
 
-# Help Chat assistant — future TODO
+Branch: `feature/help-chat` (off `dev`). Tip: `2b8af8c` — memory checkpoint for the comprehensive KB. Recent code commits: `885fffa` comprehensive KB (~75 KB, 1744 lines), `2f44e40` Gemini Send + daily caps + email, `7493a96`/`d5d3a09`/`9418a41` BI_WEEKLY drift fixes (memory + LLD + SSD), `38b73cd` merge of v2.10.30 from dev, `473d746` UI shell. Keep the branch periodically rebased on or merged from dev so subsequent releases don't accumulate drift.
 
 ## Goal
-An in-app help chat that answers configuration / budgeting / how-to / error-message questions for users, grounded on a hand-curated knowledge base. Reduces support email volume; provides 24/7 instant guidance.
+An in-app help chat that answers configuration / budgeting / how-to / error-message questions, grounded on a hand-curated knowledge base. Reduces support email volume; provides 24/7 instant guidance.
 
 **Why:** Users hit common questions (period configuration, sync setup, "why is my budget negative", AI quirks). Email round-trips are slow and don't scale. A scoped LLM with a good knowledge base can deflect most.
 
-**How to apply:** Build after the post-merge stabilization of the custom-themes feature. Not a near-term blocker. Reuse the existing Gemini raw-HTTP plumbing (already in use for OCR + CSV categorization).
+---
 
-## Architecture sketch
+## ✅ Shipped this session (2026-05-19)
 
-**Model**: Gemini 2.5 Flash-Lite. ~1M context window, ~$0.075 per million input tokens. Fast enough for a chat-style UX. Already integrated via the app's Android-cert-restricted API key (see `reference_gemini_api_key.md`).
+### UI shell
+- **Chatbot icon** in Dashboard Help app bar (`ic_chatbot.png`, tintable black-on-alpha).
+- **`HelpChatDialog`** — AdAware, fills available vertical space, scrollable history + PulsingScrollArrows + 3-line pinned input + footer with Email / Exit / Clear / Send. Send currently appends a placeholder bot reply for UI testing.
+- **`HelpChatConsentDialog`** — title, scrollable body, underlined "View Privacy Policy" link (opens `ACTION_VIEW`), Cancel + Accept. Accept persists consent + opens chat; Cancel returns to help page.
 
-**Knowledge base**: single markdown asset in `res/raw/` (or assets/) covering:
-- Configuration (budget periods, reset day/hour, currency, income mode)
-- Budgeting concepts (safe budget, savings goals, amortization, accelerated)
-- How-to recipes for common tasks (set up SYNC, import bank CSV, restore backup)
-- Error messages and remedies (permission denied, conflict warnings, sync repair)
-- Limits / paid-vs-subscriber distinctions
+### Local persistence
+- **`HelpChatStore`** (`data/HelpChatStore.kt`) — JSON file at `filesDir/help_chat.json`. State: `messages`, `chatId` (UUID v4, generated on first message), `lastUploadAt`, `lastUploadedCount`. Load on dialog open prunes messages > 48 h old.
+- **`HelpChatMessage`** data class — timestamp, fromUser, text.
 
-Build step regenerates the KB from existing help-page strings + a handwritten supplement file. Keeps drift low.
+### Server upload
+- **`HelpChatUploader`** (`data/HelpChatUploader.kt`) — writes to Firestore `helpChatLogs/{chatId}` via `SetOptions.merge()`. Two entry points:
+  - `uploadIfStale(ctx)` — 5-min debounce + dirty-gated, called on dialog dismiss.
+  - `uploadNow(ctx, chatId, messages)` — explicit, called by Clear with snapshot capture before local wipe.
+- Anonymous Firebase Auth sign-in inline for solo users (no SYNC).
+- Try/catch + 15 s timeout + DEBUG-only `Log.w` on failure.
+- Doc payload includes `expireAt = now + 7 days` as the TTL trigger field.
 
-**System prompt**: strict scoping. Refuses off-topic with a canned response. Tells the model to answer only from the provided KB; "I don't know — try the email button below" otherwise. Temperature 0.1–0.2.
+### Settings + consent persistence
+- **`vm.helpChatConsent`** Boolean pref (`helpChatConsent`, default false).
+- **Settings → Privacy** checkbox: "Allow Chatbot to transmit and store your messages…" with descriptive subtitle. Default unchecked on install; auto-checks via the consent dialog; unchecking revokes consent so the dialog re-appears on next chat open.
 
-**Multi-turn context**: each call sends KB + full chat history. At ~5K KB + ~200 tokens/turn, a 20-turn conversation is still well under context limits.
+### Backend wiring
+- **Anonymous Auth provider** enabled on `sync-23ce9` (Firebase Identity Toolkit API).
+- **`firestore.rules`** deployed (ruleset `f9ffebde-4584-479c-9f55-db712b73a8e5`) — `helpChatLogs/{chatId}` allows `get/create/update` if authenticated, `list/delete` forbidden. 128-bit UUID doc IDs prevent enumeration.
+- **Firestore TTL policy** configured on `helpChatLogs.expireAt`, status = Serving.
+- Placeholder doc `helpChatLogs/ttl_bootstrap_placeholder` written with past `expireAt` to surface the collection group in the TTL picker; will self-delete on next sweep.
 
-**Daily limit**: store `helpChatCount` + `helpChatResetDay` in `app_prefs`. Reset at local midnight (matching the period-refresh logic). Suggested caps:
-- Free: 10 turns/day
-- Paid: 25/day
-- Subscriber: 50/day
+### Disclosure
+- **Privacy policy** updated at `techadvantagesupport.github.io/privacy` (EN + ES) — new "Help Chat Assistant" subsection under AI-Assisted Features, Gemini row in third-party table expanded, Authentication section notes anonymous sign-in for solo users, Your Rights bullet added for revoking consent, Data Retention adds 7-day server + 48-hour local entries.
+- **Play Console Data Safety form** updated — added Messages → Other in-app messages (Optional, App functionality + Fraud-prevention + Analytics); User IDs description expanded to cover anonymous sign-in triggered by Help Chat consent. Submitted for review 2026-05-19.
 
-Hard cap protects against billing surprises. Cap exceeded → soft block with link to the email escape.
+### Strings + translation context
+- New `HelpChatStrings` data class added to all four strings files (AppStrings/EnglishStrings/SpanishStrings/TranslationContext). Covers icon descr, chat UI, consent dialog body+link+buttons.
+- New `SettingsStrings.helpChatConsent` + `helpChatConsentDesc` for the Privacy-section checkbox.
 
-**Email escape hatch**: `Intent.ACTION_SENDTO` to `techadvantagesupport@gmail.com` with:
-- Subject prefilled with chat session topic (last user message excerpt).
-- Body prefilled with the chat transcript so context isn't lost.
+---
 
-**UI**: separate ChatScreen reached from Settings → Help section, plus a button at the bottom of each Help page ("Ask a question"). Standard SyncBudgetTheme styling. Daily count visible in the header. Email button anchored at the bottom of the chat.
+## ✅ Shipped 2026-05-19 evening (commit `2f44e40`)
 
-## Privacy
+### Gemini integration
+- `data/ai/HelpChatGeminiService.kt` — raw HTTP via existing `GeminiHttpClient`, mirrors `AiCategorizerService` pattern. Model `gemini-2.5-flash-lite`, temperature 0.2, JSON schema `{ reply: string }`. Transient retry (429/5xx, network), 30 s timeout, Crashlytics on terminal failure.
+- `data/ai/HelpChatPromptBuilder.kt` — system prompt with strict on-topic scoping, off-topic refusal + email-escape pointer, language matching (`Locale.getDefault().toLanguageTag()` hint + latest-user-message signal), 10-turn history window, KB injected verbatim between `<<<KB ... KB>>>` markers.
+- Send wiring in `HelpChatDialog`: append user msg → "Thinking…" bot row → call service → append real reply (or `errorReply` on failure) → bump daily count (success only) → `uploadIfStale`. Send disabled while in-flight.
 
-- Per-chat consent dialog (NOT just first-time). User taps "Start chat" → modal explains queries leave the device, are sent to Gemini, may be logged for review (see below), and the limit. User must accept each session.
-- Never auto-include PII (transactions, amounts, merchant names). Only what the user types is sent.
-- The app's privacy policy gets a new section covering help-chat data flow before this ships.
-- Spanish disclosure mirrors English; both go through the four-file ritual.
+### Daily-limit logic
+- `HelpChatStore` gained `dailyCount` + `dailyResetEpochDay` (`LocalDate.now().toEpochDay()`), persisted in the same `help_chat.json`. Caps: **Free 10 / Paid 25 / Subscriber 50** as `DAILY_CAP_*` constants.
+- `getDailyCap(context)` reads `isPaidUser`/`isSubscriber` directly from `app_prefs` (no VM plumbing). `canSendToday` / `remainingToday` / `incrementDailyCount` rotate the counter at local midnight.
+- Counter survives Clear (no bypass via reset) and survives the 48 h message prune (no free reply by waiting).
+- Cap-reached UX: input disabled, placeholder swaps to `dailyLimitHint` ("…try tomorrow, or tap Email. Paid users and Subscribers get more chats per day"), Send greyed out.
 
-## Chat log persistence (review-driven KB improvement)
+### Email escape hatch (replaces toast stub)
+- `launchEmail` private helper in `HelpChatDialog.kt` opens `ACTION_SENDTO mailto:support@techadvantageapps.com` (NOTE: `techadvantageapps.com`, NOT the global `techadvantagesupport@gmail.com` — this is the Help Chat-specific support address) with prefilled subject (`emailSubject` string) and body (`emailBodyIntro` + transcript + `[chat-id: <uuid>]` footer for Firestore cross-reference).
+- Body capped at 3500 chars; longer chats append `[…transcript truncated…]` and rely on support pulling the rest from the 7-day Firestore log.
 
-**Storage**: Firestore collection `helpChatLogs/{anonChatId}` where `anonChatId` is a fresh UUID per chat session (not tied to deviceId for review log access). Each doc holds:
-- `startedAt`: server timestamp
-- `language`: "en" or "es"
-- `tier`: "free" / "paid" / "subscriber"
-- `turns`: array of `{role: "user"|"assistant", content: String, at: timestamp}`
+### Comprehensive knowledge base + cache-friendly prompt assembly
+- `app/src/main/assets/help_chat_kb.md` — ~75 KB (1744 lines, ~21 K input tokens) replacing the original stub on 2026-05-19 (commit `885fffa`).
+- `HelpChatPromptBuilder.kt` v2 emits an explicit `preamble + suffix` assembly so Google's implicit prompt cache fires. Preamble (system prompt + 8 rules + KB) is byte-identical across all devices and turns; the variable per-turn content (history + latest user message) goes in the suffix. Locale interpolation was dropped (it fragmented the cache per-device); the system prompt's rule 5 now relies on matching the user's message language. Full rationale + future explicit-caching plan: [`feedback_gemini_prompt_caching.md`](feedback_gemini_prompt_caching.md).
+- **Per-call cost monitoring shipped 2026-05-20**: `GeminiHttpClient.generate` now takes a `usageCallback` parameter; all three Gemini call sites (Help Chat, OCR, CSV categorize) fire the `ai_call_metrics` Firebase Analytics event with feature label + prompt/cached/output token counts + pre-computed cache_hit_pct. Query in Firebase Analytics or via the existing BigQuery export. See the Monitoring section of [`feedback_gemini_prompt_caching.md`](feedback_gemini_prompt_caching.md) for cadence + thresholds + a starter BigQuery query.
 
-**Retention**: 7-day TTL via Firestore TTL policy on a `expiresAt` field set at insert time (now + 7 days). Logs auto-purge.
+### Sentiment scoring + Play Store review prompt (2026-05-20)
 
-**Security rules**: `helpChatLogs` is write-only for clients; only the dev account (or a Cloud Function) can read. Don't add admin-read for sync group admins.
+The Help Chat now does double duty: every Gemini reply also includes a 1-10 sentiment score for the user's latest message, computed by the model (1 = clearly negative — angry, confused, frustrated; 5 = neutral / pure factual question; 9-10 = unmistakable enthusiasm). The score is **internal** — never shown to the user, never mentioned by the bot in its visible reply. See `HelpChatPromptBuilder` rule 9 for the scale + clamping behavior.
 
-**Periodic review loop**: Claude reads recent logs on request (`gh` or BigQuery export, similar to the Crashlytics tool pattern). Looks for:
-1. Wrong / incomplete answers → update KB or system prompt.
-2. Off-topic chatter that slipped through the scope filter → tighten the system prompt or add canned refusals for the new pattern.
-3. Repeated questions on topics the KB doesn't cover → expand KB.
-4. Abuse patterns (single user firing many off-topic queries) → adjust daily limit or add per-deviceId hashing for stricter throttling.
+How the score flows:
+- `HelpChatGeminiService.reply(...)` now returns `Result<HelpChatReply>` with `text` + `sentiment` (clamped 1-10, defaults to 5 on missing/malformed). The response schema gained the `sentiment` INTEGER field.
+- `HelpChatMessage` gained two nullable/default fields: `sentiment: Int?` and `isReviewPrompt: Boolean`. Bot messages from successful Gemini calls carry the sentiment that was attached to the user message that prompted them. The JSON persistence uses short field names `s` (sentiment) and `r` (isReviewPrompt) to keep the file compact.
+- `HelpChatUploader` prefixes the bot's `x` field with `[N] ` in the Firestore log when sentiment is set AND stores the score as a separate queryable `s` field. The `[N]` prefix is for at-a-glance Firestore-console review; the `s` field is for BigQuery slicing ("show me all 9-10 turns this week" → audit sentiment accuracy).
+- The in-app dialog DOES NOT display the score. Local `text` stays clean.
 
-User explicitly OKs writing logs as part of the per-chat consent. The disclosure must call this out plainly.
+Play Store review prompt (gated on `SENTIMENT_REVIEW_THRESHOLD = 9` and a 2-day debounce):
+- After a successful reply with sentiment ≥ 9, the dialog appends a SECOND bot message containing the localized `reviewPromptText`. The message is flagged `isReviewPrompt = true` and renders with an accent-tinted bubble; the entire bubble is `clickable` to open the Play Store listing (`market://details?id=…` with `https://play.google.com/...` web fallback for degoogled devices, debug suffix stripped so debug builds also link to the production listing).
+- Debounce lives in **SharedPreferences** (`app_prefs.helpChatReviewPromptAt`, epoch ms), NOT the chat JSON, so it survives Clear and the 48 h message prune — the user can't bypass it by resetting the chat. `HelpChatStore.shouldShowReviewPrompt(ctx, sentiment)` and `markReviewPromptShown(ctx)` are the helpers.
+- The review-prompt message is NOT a Gemini call — it carries no sentiment, doesn't burn daily quota, and skips the `[N]` log prefix on upload (sentiment is null, isReviewPrompt is true).
 
-## Cost ceiling
+Why this design:
+- "I'll pass on your feedback" wording (rule 8) replaced the older "the development team reviews these conversations" — sounds less like surveillance and is more honest about the workflow (we periodically have Claude summarize logs rather than read every word).
+- Sentiment + the `[N]` prefix gives us a low-effort audit channel for "how well is Gemini judging tone?" without us building a custom rating UI.
+- The 2-day debounce protects against the worst-case "user is being polite in three consecutive turns, gets three review nags in two minutes" failure mode.
+- Threshold of 9 (not 8) keeps the prompt rare — only unmistakable enthusiasm triggers it. Casual "thanks" should score 7-8 and not trip it.
+- Structure: big picture → glossary (Available Cash, set-aside, remembered amount, delete-vs-unlink, tiers) → screen tour of all 12 functional screens → money-math callouts (income modes, period rollover, set-aside math, savings floor, amortization, Supercharge, linking, auto-categorize, duplicate detection) → 12 step-by-step task recipes → error/warning explanations → tier reference → scope boundary.
+- Synthesized from 5 parallel Explore-agent cluster sweeps (Dashboard/Sim/Calendar, Transactions/Amortization/CSV, RE/IS/SG, Settings/BudgetConfig/Backup, SYNC/Receipts/Widget/Themes/Billing). Each agent read code + help screen + matching memory specs + SSD/LLD sections, returned a UI inventory, money-math callouts, and a drift list.
+- Drift fixes (BI_WEEKLY misrepresentation + SECURESYNC_CSV display-name clarification) landed in separate commits per source file (`7493a96` memory, `d5d3a09` LLD, `9418a41` SSD).
+- KB is English-only — the system prompt's language-matching rule handles Spanish queries via in-context translation.
 
-At Flash-Lite pricing:
+### Strings
+- Added `thinkingLabel`, `errorReply`, `dailyLimitHint`, `emailSubject`, `emailBodyIntro` (5-string addition across the 4-file ritual). `emptyBody` reworded to drop "trained on the help pages" claim until the real KB lands.
+
+---
+
+## 🚧 TODO before merge to dev
+
+### Cost ceiling Cloud Function
+- Checks total daily Gemini calls against a project-level quota; serves a static "service temporarily unavailable, please email" past the threshold. Daily caps in the app are the first defense; this is the second.
+- Particularly relevant now that the comprehensive KB makes each turn ~5–8 K input tokens (~$0.0006–$0.0008/turn at Standard pricing). A runaway loop or prompt-injection that echoes the KB back could each cost ~$0.10; the server guard catches what the daily caps miss.
+
+### Manual QA on-device
+- Solo user flow: consent → chat → upload → 7-day TTL sweep.
+- SYNC user flow: consent → existing auth → upload.
+- Daily-cap rollover: hit Free cap (10), verify Send disabled + placeholder swap; advance device clock by 1 day; verify cap resets.
+- Email escape: confirm `mailto:support@techadvantageapps.com` opens with transcript + chat-id footer prefilled.
+- Off-topic refusal: ask non-BudgeTrak question; verify polite refusal + email pointer.
+- Comprehensive-KB validation: ask questions across income modes, delete-vs-unlink, set-aside math, SYNC member limit, etc.; verify answers are grounded in the KB.
+
+### Tests + manual QA
+- Solo user flow: consent → anonymous sign-in → upload → 7-day TTL sweep.
+- SYNC user flow: consent → existing auth → upload.
+- Consent revocation: uncheck in Settings → next chat open re-shows consent dialog.
+- Clear button: uploads then wipes (offline path: wipes anyway, no upload).
+- 48-hour local prune on load.
+
+### Merge to dev
+After backend wiring + KB + daily limits land and manual QA passes, merge `feature/help-chat` → `dev` and ship through the alpha track.
+
+---
+
+## Design choices locked in
+
+- **Per-device consent in Settings**, not per-chat — friction tradeoff. The consent dialog appears once (or after revocation), persists via the Settings checkbox. The privacy policy + GDPR-style explicit-Accept satisfies the legal bar.
+- **Anonymous transcript storage** — no Firebase UID, device ID, IP, name, or email stored alongside transcripts. Random 128-bit chatId is the only identifier. Privacy policy emphasizes this.
+- **7-day server TTL via `expireAt` field**, recomputed on every upload — active chats keep refreshing the window; idle chats auto-expire.
+- **48-hour local prune** — even without Clear, messages older than 48 h drop from the local buffer on next load.
+- **Solo users included** — anonymous Firebase auth bootstraps automatically when needed. No SYNC requirement.
+
+## Open questions / deferred
+- Gate behind Paid from day one? (lower abuse risk, lower user value — currently planned as all-tiers with daily-limit differentiation).
+- Voice input — out of scope for v1.
+- Crashlytics linkage — link a chat session to a recent crash if any? — deferred.
+- Vertex AI Abuse Monitoring opt-out (enterprise-only currently) — would let us flip Messages declaration to "Ephemeral: Yes". Soft trigger noted in `project_play_data_safety.md`.
+
+## Cost ceiling (Flash-Lite pricing as of 2026-04)
 - ~5K KB tokens + ~500 tokens per turn = ~$0.0004/turn input
 - Output: ~300 tokens × $0.30/M = ~$0.0001/turn output
 - Per conversation (5 turns): ~$0.002
-
-At 100K users firing 5 turns/day each: ~$200/day. The daily limit + per-tier caps make this manageable; if growth makes it uncomfortable, gate the chat behind Paid.
-
-Hard billing safety: a Cloud Function checks total daily Gemini calls against a project-level quota; cuts off at the threshold and serves a static "service temporarily unavailable, please email" message.
-
-## Open questions / deferred
-- Whether to gate behind Paid from day one (lower abuse risk, lower user value).
-- Whether to integrate with Crashlytics (link a chat session to a recent crash if any).
-- Whether to support voice input (likely no — out of scope for v1).
-- Spanish quality: KB is bilingual or English-only with a translation step at inference?
-
-## Prerequisites before starting
-1. The custom-themes feature is stable on dev (✅ as of 2026-05-19).
-2. Help-page content audit / cleanup so the KB has accurate source material (mostly done).
-3. Privacy policy draft update reviewed.
-4. Firestore TTL policy + security rules for `helpChatLogs` written.
-5. Cloud Function billing-quota guard prototyped.
-
-## Why not derivable from code
-This file documents intent and design constraints for work that hasn't started. None of it lives in the codebase yet.
+- At 100K users firing 5 turns/day each: ~$200/day. Daily-limit caps make this manageable.

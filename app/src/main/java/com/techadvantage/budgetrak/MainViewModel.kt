@@ -246,6 +246,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var autoCapitalize by mutableStateOf(prefs.getBoolean("autoCapitalize", true))
     var aiCsvCategorizeEnabled by mutableStateOf(prefs.getBoolean("aiCsvCategorizeEnabled", false))
     var crashlyticsEnabled by mutableStateOf(prefs.getBoolean("crashlyticsEnabled", true))
+    // Explicit opt-in for the Help Chat assistant — default false on
+    // install. Set true when the user accepts the consent dialog; cleared
+    // when they uncheck the Privacy-section checkbox in Settings. Gates
+    // both the AI-API send and the Firestore transcript upload.
+    var helpChatConsent by mutableStateOf(prefs.getBoolean("helpChatConsent", false))
 
     // ── Backup State ──
     var backupsEnabled by mutableStateOf(backupPrefs.getBoolean("backups_enabled", false))

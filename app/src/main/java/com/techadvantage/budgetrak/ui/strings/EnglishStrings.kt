@@ -150,6 +150,8 @@ object EnglishStrings : AppStrings {
         privacySection = "Privacy",
         crashReports = "Send crash reports and anonymous usage data",
         crashReportsDesc = "Help us catch and fix bugs by sharing anonymous crash and usage data. No financial information is sent.",
+        helpChatConsent = "Allow Chatbot to transmit and store your messages per the Privacy Policy to answer your questions and for quality assurance and feedback review",
+        helpChatConsentDesc = "Required to use the in-app Help Chat. Your typed messages are sent anonymously to our AI service to generate replies, and transcripts may be stored on our servers for up to 7 days for accuracy and abuse review.",
         categories = "Categories",
         charted = "Charted",
         widget = "Widget",
@@ -245,7 +247,7 @@ object EnglishStrings : AppStrings {
         aiCsvCategorizeLabel = "AI CSV categorization",
         aiCsvCategorizeSubtitle = "Use AI to categorize transactions imported from a bank CSV.",
         aiCsvCategorizeHelpTitle = "AI CSV Categorization",
-        aiCsvCategorizeHelpBody = "When enabled, BudgeTrak sends the merchant name and amount of newly-imported bank transactions to Google's Gemini AI to pick the best-matching category for each one. The transaction date is NOT sent.\n\nBudgeTrak already learns from your past transactions on-device; the AI only gets involved for unfamiliar merchants where the on-device matcher can't be confident. Connect to Wi-Fi or mobile data before importing for best results.\n\nYour data is encrypted in transit (HTTPS) and deleted by Google when the request completes — nothing is stored on Google's servers. The AI provider never sees your account, your balances, other transactions, receipt photos, or the dates of any transactions.\n\nTurn this off at any time to fall back to BudgeTrak's on-device matcher only.",
+        aiCsvCategorizeHelpBody = "When enabled, BudgeTrak sends the merchant name and amount of newly-imported bank transactions to our AI service to pick the best-matching category for each one. The transaction date is NOT sent.\n\nBudgeTrak already learns from your past transactions on-device; the AI only gets involved for unfamiliar merchants where the on-device matcher can't be confident. Connect to Wi-Fi or mobile data before importing for best results.\n\nYour data is encrypted in transit (HTTPS) and is deleted as soon as the request completes — nothing is retained on the AI provider's servers. The AI service never sees your account, your balances, other transactions, receipt photos, or the dates of any transactions.\n\nTurn this off at any time to fall back to BudgeTrak's on-device matcher only.",
         sharedImageProcessFailed = "Could not read shared image",
         dataManagementSection = "Data Management",
         activeTransactionsTally = { count, threshold -> "Active transactions: %,d / %,d".format(count, threshold) },
@@ -719,6 +721,13 @@ object EnglishStrings : AppStrings {
             "you can spend right now without jeopardizing your bills, savings goals, or " +
             "financial commitments. Think of it as the answer to the question everyone asks: " +
             "\"How much can I afford to spend?\"",
+        chatbotIntroTitle = "Chat With Our Helper",
+        chatbotIntroBody = "Tap the chatbot icon at the top-right of any help page to start a conversation. " +
+            "The assistant can answer questions about how BudgeTrak works, explain why a number on your " +
+            "screen looks the way it does, and walk you through common tasks step-by-step.\n\n" +
+            "It's also a great place to tell us what you love about BudgeTrak \u2014 or what you wish " +
+            "it did. Feature suggestions and feedback are passed along to the development team for review.",
+        chatbotIntroDemoCaption = "Tap up here \u2197",
         solariDisplayTitle = "The Solari Display",
         solariDisplayBody = "The centerpiece of the dashboard is the Solari-style flip display \u2014 inspired by the " +
             "split-flap departure boards found in train stations and airports. It shows two " +
@@ -2106,5 +2115,34 @@ object EnglishStrings : AppStrings {
             "stored locally \u2014 they're included in your encrypted backups (Settings \u2192 Backups) " +
             "but are deliberately NOT shared between SYNC group devices. That way you can use a " +
             "different look on each of your devices while still sharing the same budget data.",
+    )
+
+    override val helpChat = HelpChatStrings(
+        openIconDesc = "Open Help Chat",
+        title = "Help Chat",
+        inputHint = "Ask a question about BudgeTrak\u2026",
+        emptyBody = "Ask anything about how BudgeTrak works. The chatbot will do its best to help \u2014 if it can't, tap Email to reach a human.",
+        btnEmail = "Email",
+        btnExit = "Exit",
+        btnClear = "Clear",
+        btnSend = "Send",
+        youLabel = "You",
+        botLabel = "Bot",
+        thinkingLabel = "Thinking\u2026",
+        errorReply = "Sorry, I couldn't reach the help service. Check your connection and try again, or tap Email to reach a human.",
+        dailyLimitHint = "You've reached today's chat limit. Try again tomorrow, or tap Email to reach support. Paid users and Subscribers get more chats per day.",
+        emailSubject = "BudgeTrak Help Chat \u2014 follow-up",
+        emailBodyIntro = "I had a chat with the BudgeTrak Help Chat and would like a follow-up from a human. Transcript below.",
+        reviewPromptText = "If you have a moment, would you consider leaving BudgeTrak a review on the Play Store? Positive reviews help us reach new people who could benefit from the app. Tap this message to open the listing.",
+        consentTitle = "Help Chat \u2014 Consent",
+        consentBody = "To answer your questions, the Help Chat sends your typed messages to our AI service. " +
+            "Anonymous transcripts may also be stored on our servers for up to 7 days so we can review accuracy and check for abuse. " +
+            "No account information, financial data, or contact details are sent.\n\n" +
+            "By tapping Accept, you confirm you have reviewed the Privacy Policy and agree to this processing. " +
+            "You can revoke consent any time in Settings \u2192 Privacy.",
+        consentLink = "View Privacy Policy",
+        consentUrl = "https://techadvantagesupport.github.io/privacy",
+        consentCancel = "Cancel",
+        consentAccept = "Accept",
     )
 }

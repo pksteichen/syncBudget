@@ -30,6 +30,8 @@ git config --global --add safe.directory '/storage/emulated/0/Download/Tech Adva
 - Branding changes (logo, name) also live here.
 - Homepage content changes (e.g. when adding a second product beyond BudgeTrak).
 
+**Pushing is authorized**: when the user asks for a privacy/homepage edit, Claude is expected to **commit and push** the change all the way to `origin/main` as part of the same turn — same workflow as the BudgeTrak `/push` command, just on this other repo. No separate confirmation needed; this is part of the task, not a "shared infrastructure" action that requires asking first. Push goes to `main` directly (this repo has no `dev` branch). Follow the standard commit-message style: short subject (`privacy: …` or `homepage: …`), bulleted body, `Co-Authored-By` trailer.
+
 **How to access**:
 ```
 cd "/storage/emulated/0/Download/Tech Advantage Pages"
@@ -41,7 +43,7 @@ git commit -m "privacy: ..."
 git push origin main
 ```
 
-**In-app references**: as of 2026-04-27, the privacy policy URL is NOT hardcoded anywhere in the app source (verified by grep). It only appears in the Play Store listing field, which is set when the app is published.
+**In-app references**: as of 2026-05-19, the privacy policy URL `https://techadvantagesupport.github.io/privacy` is referenced once in the app source — in `HelpChatStrings.consentUrl` (English + Spanish strings files), opened from the Help Chat consent dialog's "View Privacy Policy" link. Also present in the Play Store listing field. **If the URL ever changes, update `EnglishStrings.kt` + `SpanishStrings.kt` in lockstep** (single value, same in both locales — the Pages site is monolingual at the top level and dispatches to `/es/privacy` via an in-page button).
 
 ## Legacy repo (kept alive for redirect)
 

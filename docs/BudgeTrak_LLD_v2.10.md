@@ -660,7 +660,7 @@ Implementation note: encoded as 16-bit mono PCM RIFF WAV, written to `cacheDir/c
 |---|---|
 | DAYS | Every N days from start date |
 | WEEKS | Every N weeks from start date |
-| BI_WEEKLY | Every 14 days from start date |
+| BI_WEEKLY | Every 14 days from start date. **Hidden from the new-entry dropdowns** in `RecurringExpensesScreen.kt:748` and `BudgetConfigScreen.kt:726` (`.filter { it != RepeatType.BI_WEEKLY }`); users wanting a biweekly schedule pick `WEEKS` with `repeatInterval = 2`. Existing BI_WEEKLY entries (legacy data, restored backups, sync imports) display as "Every 2 Weeks" and recur normally via `BudgetCalculator`. |
 | MONTHS | Every N months on `monthDay1` |
 | BI_MONTHLY | Twice per month on `monthDay1` + `monthDay2` |
 | ANNUAL | Once per year |
