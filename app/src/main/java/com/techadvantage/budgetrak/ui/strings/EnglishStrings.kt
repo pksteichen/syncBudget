@@ -2130,6 +2130,7 @@ object EnglishStrings : AppStrings {
         botLabel = "Bot",
         thinkingLabel = "Thinking\u2026",
         errorReply = "Sorry, I couldn't reach the help service. Check your connection and try again, or tap Email to reach a human.",
+        serviceCeilingReached = "Help Chat is taking a short break today. Please try again tomorrow, or tap Email to reach a human at support.",
         dailyLimitHint = "You've reached today's chat limit. Try again tomorrow, or tap Email to reach support. Paid users and Subscribers get more chats per day.",
         emailSubject = "BudgeTrak Help Chat \u2014 follow-up",
         emailBodyIntro = "I had a chat with the BudgeTrak Help Chat and would like a follow-up from a human. Transcript below.",

@@ -495,3 +495,138 @@ exports.verifyPurchase = onCall(
     }
   }
 );
+
+// ─── 7. Help Chat cost ceiling ─────────────────────────────────────────
+
+/**
+ * Project-wide daily call ceiling for AI-assisted features. Defense in
+ * depth on top of the per-device daily caps inside the app:
+ *
+ *   - In-app caps (HelpChatStore.canSendToday) protect against ordinary
+ *     legitimate-user friction; they're trustable only if the app is
+ *     unmodified.
+ *   - This function bounds total project spend regardless of client
+ *     behavior — tampered APKs, extracted API keys, runaway loops in
+ *     a future code change, coordinated emulator-farm abuse, etc.
+ *     all hit the same Firestore counter and the same ceiling.
+ *
+ * Counts SUCCESSFUL increments (transactional). Resets daily at 00:00
+ * UTC by comparing `date` field. Ceiling is read from
+ * `quotaConfig/{feature}.dailyCeiling` so it can be tuned in the
+ * Firebase Console without redeploying.
+ *
+ * Fail-open contract: clients treat a function-side error / timeout
+ * as "allowed" and proceed to the Gemini call. The cost ceiling is a
+ * defense-in-depth measure, not a hard gate — a function outage must
+ * not brick the chat for users. The per-device daily caps still
+ * apply.
+ *
+ * Threshold guidance (Help Chat):
+ *   - Worst-case cost per call (all cache miss): ~$0.0023
+ *   - Best-case cost per call (full cache hit):  ~$0.0003
+ *   - At default 10,000/day:  $3-$23/day worst-case bound.
+ *   - Tune via `quotaConfig/helpChat.dailyCeiling` as user base grows.
+ *
+ * Extensibility: the `feature` arg lets us add OCR and CSV gates later
+ * without forking the function. Each feature has its own counter +
+ * config doc.
+ */
+const QUOTA_DEFAULT_CEILING = {
+  help_chat: 10000,
+  ocr: 500,
+  csv_categorize: 2000,
+};
+
+function todayUtcDateString() {
+  const now = new Date();
+  const y = now.getUTCFullYear();
+  const m = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(now.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function secondsToNextUtcMidnight() {
+  const now = new Date();
+  const nextMidnight = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate() + 1
+  );
+  return Math.max(0, Math.floor((nextMidnight - now.getTime()) / 1000));
+}
+
+exports.checkChatQuota = onCall(
+  {
+    region: 'us-central1',
+    enforceAppCheck: true,
+  },
+  async (request) => {
+    const feature = request.data && request.data.feature;
+    if (typeof feature !== 'string' || feature.length === 0) {
+      throw new HttpsError('invalid-argument', 'feature required');
+    }
+    const defaultCeiling = QUOTA_DEFAULT_CEILING[feature];
+    if (defaultCeiling === undefined) {
+      throw new HttpsError(
+        'invalid-argument',
+        `unknown feature "${feature}"; expected one of: ${Object.keys(QUOTA_DEFAULT_CEILING).join(', ')}`
+      );
+    }
+
+    const counterRef = db().doc(`quotaCounters/${feature}`);
+    const configRef = db().doc(`quotaConfig/${feature}`);
+
+    try {
+      const result = await db().runTransaction(async (txn) => {
+        const [counterSnap, configSnap] = await Promise.all([
+          txn.get(counterRef),
+          txn.get(configRef),
+        ]);
+        const today = todayUtcDateString();
+        const ceiling =
+          configSnap.exists && Number.isFinite(configSnap.data().dailyCeiling)
+            ? Number(configSnap.data().dailyCeiling)
+            : defaultCeiling;
+
+        let count = 0;
+        if (counterSnap.exists && counterSnap.data().date === today) {
+          count = Number(counterSnap.data().count) || 0;
+        }
+
+        if (count >= ceiling) {
+          // Don't increment past the ceiling — leave the counter at
+          // the cap so it stays interpretable in the console.
+          return {
+            allowed: false,
+            count,
+            ceiling,
+            reason: 'daily_ceiling_reached',
+            retryAfterSeconds: secondsToNextUtcMidnight(),
+          };
+        }
+
+        txn.set(counterRef, {
+          date: today,
+          count: count + 1,
+          lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        return { allowed: true, count: count + 1, ceiling };
+      });
+      return result;
+    } catch (e) {
+      console.error(
+        `checkChatQuota(${feature}) transaction failed: ${e.message}`
+      );
+      // Fail-open: an internal transaction error must not block users.
+      // The in-app daily cap still bounds per-device usage. We log so
+      // ongoing issues are visible in Cloud Function logs.
+      return {
+        allowed: true,
+        count: -1,
+        ceiling: defaultCeiling,
+        reason: 'gate_error_failed_open',
+      };
+    }
+  }
+);

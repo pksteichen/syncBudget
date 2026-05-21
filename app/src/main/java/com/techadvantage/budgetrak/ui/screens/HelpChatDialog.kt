@@ -281,6 +281,7 @@ fun HelpChatDialog(
                                 if (trimmed.isNotEmpty() && !isThinking) {
                                     val ctx = context
                                     val errorReply = S.helpChat.errorReply
+                                    val ceilingReply = S.helpChat.serviceCeilingReached
                                     val reviewPromptText = S.helpChat.reviewPromptText
                                     input = ""
                                     isThinking = true
@@ -328,10 +329,26 @@ fun HelpChatDialog(
                                                 HelpChatStore.markReviewPromptShown(ctx)
                                             }
                                         } else {
+                                            // Distinguish the project-wide
+                                            // cost-ceiling refusal from a
+                                            // generic network/Gemini error
+                                            // — the user-visible message
+                                            // differs (no "retry" prompt
+                                            // when the ceiling is the
+                                            // problem; that won't help
+                                            // until tomorrow). All other
+                                            // failure modes get the
+                                            // standard error reply.
+                                            val failureCause = result.exceptionOrNull()
+                                            val text = if (failureCause is HelpChatGeminiService.QuotaCeilingReached) {
+                                                ceilingReply
+                                            } else {
+                                                errorReply
+                                            }
                                             HelpChatStore.addMessage(
                                                 context = ctx,
                                                 fromUser = false,
-                                                text = errorReply,
+                                                text = text,
                                             )
                                         }
                                         isThinking = false

@@ -44,6 +44,20 @@ object HelpChatGeminiService {
         val sentiment: Int,
     )
 
+    /**
+     * Sentinel exception returned in [Result.failure] when the
+     * project-wide daily ceiling (`checkChatQuota` Cloud Function) has
+     * been hit. The dialog distinguishes this from other failure modes
+     * to show the user a different (ceiling-specific) message instead
+     * of the generic network-error reply.
+     *
+     * Daily count [count] is purely informational; the user-visible
+     * message doesn't expose it.
+     */
+    class QuotaCeilingReached(val count: Int, val ceiling: Int) : RuntimeException(
+        "Help Chat daily ceiling reached: $count of $ceiling"
+    )
+
     private val schema: JSONObject = JSONObject()
         .put("type", "OBJECT")
         .put("description", "Help Chat assistant reply + sentiment score")
@@ -75,6 +89,19 @@ object HelpChatGeminiService {
         return try {
             if (BuildConfig.GEMINI_API_KEY.isBlank()) {
                 return Result.failure(IllegalStateException("GEMINI_API_KEY missing"))
+            }
+            // Project-wide cost ceiling. Atomically increments a Firestore
+            // counter; returns Denied when the day's total is at/over
+            // the configured ceiling (default 10,000 calls/day, tunable
+            // via `quotaConfig/helpChat.dailyCeiling` in the Firebase
+            // Console). Fail-open inside the gate — function down or
+            // unreachable returns Allowed with sentinel count=-1 so
+            // we never brick the chat on a function outage.
+            val decision = HelpChatQuotaGate.check(HelpChatQuotaGate.Features.HELP_CHAT)
+            if (decision is HelpChatQuotaGate.Decision.Denied) {
+                return Result.failure(
+                    QuotaCeilingReached(count = decision.count, ceiling = decision.ceiling)
+                )
             }
             val priorHistory = history.dropLast(1)  // drop the just-added user message
             val prompt = buildHelpChatPrompt(context, priorHistory, latestUserMessage)

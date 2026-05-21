@@ -2124,6 +2124,7 @@ object SpanishStrings : AppStrings {
         botLabel = "Bot",
         thinkingLabel = "Pensando\u2026",
         errorReply = "Lo siento, no he podido conectar con el servicio de ayuda. Comprueba tu conexi\u00f3n e int\u00e9ntalo de nuevo, o pulsa Correo para contactar con una persona.",
+        serviceCeilingReached = "El Chat de Ayuda est\u00e1 tomando un breve descanso hoy. Vuelve a intentarlo ma\u00f1ana o pulsa Correo para contactar con una persona de soporte.",
         dailyLimitHint = "Has alcanzado el l\u00edmite diario del chat. Vuelve a intentarlo ma\u00f1ana o pulsa Correo para contactar con soporte. Los usuarios Pago y Suscriptores tienen m\u00e1s mensajes al d\u00eda.",
         emailSubject = "Chat de ayuda de BudgeTrak \u2014 seguimiento",
         emailBodyIntro = "He tenido una conversaci\u00f3n con el Chat de ayuda de BudgeTrak y me gustar\u00eda un seguimiento de una persona. Transcripci\u00f3n a continuaci\u00f3n.",

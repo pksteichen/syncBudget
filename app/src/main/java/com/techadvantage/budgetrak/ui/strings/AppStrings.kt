@@ -1702,6 +1702,7 @@ data class HelpChatStrings(
     val botLabel: String,
     val thinkingLabel: String,
     val errorReply: String,
+    val serviceCeilingReached: String,
     val dailyLimitHint: String,
     val emailSubject: String,
     val emailBodyIntro: String,
